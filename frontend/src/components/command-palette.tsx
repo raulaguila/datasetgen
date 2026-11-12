@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, KeyRound, Package, Search, User as UserIcon, UserRound, type LucideIcon } from "lucide-react";
+import { Bell, Database, KeyRound, Search, User as UserIcon, UserRound, type LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { products, roles, users } from "@/lib/api/endpoints";
+import { collections, roles, users } from "@/lib/api/endpoints";
 import { useMe } from "@/lib/context/me";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useI18n } from "@/lib/i18n/provider";
@@ -55,18 +55,18 @@ export function CommandPalette() {
     users.list({ page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((u) => ({ href: `/admin/users/${u.id}`, label: u.name, hint: u.email, icon: UserIcon }))));
   const roleHits = useHits("roles", q, search && can(user, "roles", "read"), (signal) =>
     roles.list({ page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((x) => ({ href: `/admin/roles/${x.id}`, label: x.name, hint: t("nav.roles"), icon: KeyRound }))));
-  const productHits = useHits("products", q, search && can(user, "products", "read"), (signal) =>
-    products.list({ page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((p) => ({ href: `/products/${p.id}`, label: p.name, hint: t("nav.products"), icon: Package }))));
+  const collectionHits = useHits("collections", q, search && can(user, "collections", "read"), (signal) =>
+    collections.list({ page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((c) => ({ href: `/collections/${c.id}`, label: c.name, hint: t("nav.collections"), icon: Database }))));
 
   const needle = text.trim().toLowerCase();
   const pages: Hit[] = [...MAIN_NAV, ...ADMIN_NAV, ...EXTRA]
-    .filter((item) => !item.needs || can(user, ...item.needs))
+    .filter((item) => !("template" in item) && (!item.needs || can(user, ...item.needs)))
     .map((item) => ({ href: item.href, label: t(item.key), icon: item.icon }))
     .filter((hit) => hit.label.toLowerCase().includes(needle));
-  const hits = [...pages, ...(userHits.data ?? []), ...(roleHits.data ?? []), ...(productHits.data ?? [])];
+  const hits = [...pages, ...(userHits.data ?? []), ...(roleHits.data ?? []), ...(collectionHits.data ?? [])];
   const current = Math.min(active, hits.length - 1);
   // While the typed text waits for the debounce or a search is in flight, "nothing found" would be a guess.
-  const searching = text.trim().length >= 2 && (text.trim() !== q || userHits.isFetching || roleHits.isFetching || productHits.isFetching);
+  const searching = text.trim().length >= 2 && (text.trim() !== q || userHits.isFetching || roleHits.isFetching || collectionHits.isFetching);
 
   const changeOpen = (next: boolean) => {
     setOpen(next);

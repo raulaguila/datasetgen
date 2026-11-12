@@ -7,6 +7,9 @@ interface UIState {
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
   setSidebar: (collapsed: boolean) => void;
+  /** The collection the sidebar shows, the last one opened. */
+  collectionId: string | null;
+  setCollection: (id: string | null) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -15,6 +18,8 @@ export const useUIStore = create<UIState>()(
       sidebarCollapsed: false,
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setSidebar: (collapsed) => set({ sidebarCollapsed: collapsed }),
+      collectionId: null,
+      setCollection: (id) => set({ collectionId: id }),
     }),
     { name: "ui" },
   ),

@@ -10,6 +10,9 @@ COPY bin/backend bin/admin ./
 
 RUN chmod +x backend admin
 
+# Uploads go here. A new named volume takes this owner, so nobody can write to it.
+RUN mkdir -p /data/files && chown 65534:65534 /data/files
+
 USER nobody
 
 ENTRYPOINT [ "/usr/bin/dumb-init", "--" ]

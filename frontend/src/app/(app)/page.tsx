@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Lock, UserRoundPlus, type LucideIcon } from "lucide-react";
 import { PageBody, PageHeader, useFormatDate } from "@/components/bits";
 import { Card } from "@/components/ui/card";
-import { audit, products, roles, users } from "@/lib/api/endpoints";
+import { audit, collections, roles, users } from "@/lib/api/endpoints";
 import { targetHref } from "@/lib/audit";
 import type { UserCounts } from "@/lib/api/types";
 import type { MessageKey } from "@/lib/i18n/messages";
@@ -23,7 +23,7 @@ const userCounts = (pick: (c: UserCounts) => number): Total => ({ key: ["users",
 
 // One row of each list is enough: the total comes back in the pagination.
 const totals: Record<string, Total> = {
-  "/products": { key: ["products", "total"], fn: () => products.list({ page: 1, limit: 1 }), pick: listTotal },
+  "/collections": { key: ["collections", "total"], fn: () => collections.list({ page: 1, limit: 1 }), pick: listTotal },
   "/admin/users": userCounts((c) => c.total),
   "/admin/roles": { key: ["roles", "list", "total"], fn: () => roles.list({ page: 1, limit: 1 }), pick: listTotal },
 };

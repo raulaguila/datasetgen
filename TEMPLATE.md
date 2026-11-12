@@ -24,7 +24,7 @@ lives in `frontend/src/lib/brand.ts` and the mark in `frontend/src/components/br
 
 ## Add a module
 
-`products` is the reference. `make module NAME=invoice` (in `backend/`, with
+`products` is the reference. Its screens stay in the code but out of the menu, the home cards and the search (`template: true` in `frontend/src/lib/navigation.ts`); a copied module drops that flag and shows up. `make module NAME=invoice` (in `backend/`, with
 `PLURAL=` when the plural is not the name plus "s") copies it into a new module:
 migration, domain, ports, use case, repository, handler, tests and web screens,
 with the wiring lines added next to the products ones and the Swagger spec

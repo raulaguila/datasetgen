@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type Form from "@rjsf/core";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -23,6 +23,7 @@ import { useUnsavedGuard } from "@/lib/hooks/use-unsaved-guard";
 import { useI18n } from "@/lib/i18n/provider";
 import { can } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
+import { useUIStore } from "@/lib/store/ui";
 
 /** Create when `record` is null, edit otherwise. The server checks the data against the schema. */
 function RecordForm({ collection, record, editable }: { collection: Collection; record: DataRecord | null; editable: boolean }) {
@@ -123,6 +124,9 @@ export default function RecordPage() {
   const collectionId = creating ? fromQuery : record?.collection_id;
   const parent = useQuery({ queryKey: ["collections", "detail", collectionId], queryFn: () => collections.get(collectionId!), enabled: !!collectionId });
   const collection = parent.data;
+  // The sidebar follows the collection this record belongs to.
+  const setCollection = useUIStore((st) => st.setCollection);
+  useEffect(() => { if (collection) setCollection(collection.id); }, [collection, setCollection]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const editable = can(user, "records", creating ? "create" : "update");
   useCrumb(creating ? t("records.new") : t("records.record"));

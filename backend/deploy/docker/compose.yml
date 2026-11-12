@@ -5,18 +5,6 @@ include:
 
 services:
 
-  # The backend runs as nobody; a fresh named volume is owned by root. This
-  # one-shot step hands the uploads directory to nobody before the backend starts.
-  files-init:
-
-    container_name: dataset_files_init
-    image: dataset_backend:${SYS_VERSION}
-    user: "0:0"
-    entrypoint: ["chown", "65534:65534", "/data/files"]
-    restart: "no"
-    volumes:
-      - files_volume:/data/files
-
   backend:
 
     container_name: dataset_backend
@@ -59,8 +47,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      files-init:
-        condition: service_completed_successfully
 
   mailer:
 

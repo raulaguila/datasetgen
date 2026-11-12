@@ -203,7 +203,8 @@ func repeatLines(path string, anchors []string, n names) error {
 		for _, a := range anchors {
 			if strings.Contains(line, a) && !found[a] {
 				found[a] = true
-				out.WriteString(n.apply(line))
+				// The copy is a real module: it drops the example's hidden flag.
+				out.WriteString(strings.Replace(n.apply(line), ", template: true", "", 1))
 			}
 		}
 	}

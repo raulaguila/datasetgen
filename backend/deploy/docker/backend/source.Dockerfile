@@ -30,6 +30,9 @@ WORKDIR /opt/dataset
 # Secrets via compose env_file — do not copy config/.env into the image.
 COPY --from=builder /opt/dataset/bin/backend /opt/dataset/bin/admin ./
 
+# Uploads go here. A new named volume takes this owner, so nobody can write to it.
+RUN mkdir -p /data/files && chown 65534:65534 /data/files
+
 USER nobody
 
 ENTRYPOINT [ "/usr/bin/dumb-init", "--" ]
