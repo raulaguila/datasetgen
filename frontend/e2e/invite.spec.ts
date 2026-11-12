@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { choosePassword, invite, login, strongPassword, uniqueEmail , guestPage } from "./helpers";
+import { choosePassword, invite, login, strongPassword, formAlert, guestPage, uniqueEmail } from "./helpers";
 
 test("an invited person activates the account and signs in", async ({ page, browser }) => {
   const email = uniqueEmail("invite");
@@ -26,7 +26,7 @@ test("an activation link works only once", async ({ page, browser }) => {
     await choosePassword(guest, strongPassword);
     await guest.getByRole("button", { name: "Ativar conta" }).click();
     if (attempt === 1) await expect(guest.getByText("Conta ativada")).toBeVisible();
-    else await expect(guest.getByRole("alert").filter({ hasText: /\S/ })).toBeVisible();
+    else await expect(guest.locator(formAlert)).toBeVisible();
     await guest.close();
   }
 });
@@ -51,7 +51,7 @@ test("an admin hands over a new activation link and the old one stops working", 
   await old.goto(first);
   await choosePassword(old, strongPassword);
   await old.getByRole("button", { name: "Ativar conta" }).click();
-  await expect(old.getByRole("alert").filter({ hasText: /\S/ })).toBeVisible(); // the form error, not the empty route announcer
+  await expect(old.locator(formAlert)).toBeVisible();
   await old.close();
 
   const guest = await guestPage(browser);

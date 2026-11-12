@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { admin, login } from "./helpers";
+import { admin, formAlert, login } from "./helpers";
 
 // These start signed out; signing out here must not end the shared admin session.
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -9,7 +9,7 @@ test("a wrong password keeps the person on the login page", async ({ page }) => 
   await page.getByLabel("E-mail").fill(admin.email);
   await page.getByLabel("Senha", { exact: true }).fill("not the password at all");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toBeVisible();
+  await expect(page.locator(formAlert)).toBeVisible();
   await expect(page).toHaveURL(/\/login/);
 });
 

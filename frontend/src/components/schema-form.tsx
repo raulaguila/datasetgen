@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { SchemaIssue } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/provider";
 import { LOCALES, messages, type Locale } from "@/lib/i18n/messages";
-import { schemaValidator } from "@/lib/schema-validator";
+import { schemaValidator, type Translate } from "@/lib/schema-validator";
 
 // The default theme draws glyphicon fonts this app does not load; these use lucide.
 function iconButton(Icon: typeof Plus, variant: "outline" | "ghost" | "destructive" = "ghost") {
@@ -33,14 +33,16 @@ const templates = {
 };
 
 // One validator per language; the failed keyword picks the message (schema.error.*).
-const validators = Object.fromEntries(
-  LOCALES.map(({ value }) => [value, schemaValidator((keyword) => (messages[value] as Record<string, string>)[`schema.error.${keyword}`])]),
-) as Record<Locale, ValidatorType>;
+const translators = Object.fromEntries(
+  LOCALES.map(({ value }) => [value, (keyword: string) => (messages[value] as Record<string, string>)[`schema.error.${keyword}`]]),
+) as Record<Locale, Translate>;
+const validators = Object.fromEntries(LOCALES.map(({ value }) => [value, schemaValidator(translators[value])])) as Record<Locale, ValidatorType>;
 
 /** Turns the server's issues (JSON pointers) into errors shown under each field. */
-export function issueErrors(issues: SchemaIssue[]): ErrorSchema {
+export function issueErrors(issues: SchemaIssue[], translate: Translate = () => undefined): ErrorSchema {
   const root: Record<string, unknown> = {};
-  for (const { path, message } of issues) {
+  for (const { path, keyword, message: raw } of issues) {
+    const message = (keyword && translate(keyword)) || raw;
     let node = root;
     for (const part of path.split("/").slice(1)) {
       const key = part.replace(/~1/g, "/").replace(/~0/g, "~");
@@ -70,22 +72,24 @@ export function uiFor(schema: unknown): UiSchema {
  * A form generated from a collection's JSON Schema. Before saving, the page calls
  * formRef.current.validateForm() and turns on liveValidate: a re-render would
  * otherwise drop the errors. The server checks again; its issues come back
- * through extraErrors.
+ * through `issues`.
  */
-export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec", formRef, extraErrors, liveValidate }: {
+export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec", formRef, issues, liveValidate }: {
   schema: Record<string, unknown>;
   data: unknown;
   disabled?: boolean;
   onChange?: (data: unknown) => void;
   idPrefix?: string;
   formRef?: Ref<Form>;
-  extraErrors?: ErrorSchema;
+  /** Rules the server refused, shown under their fields. */
+  issues?: SchemaIssue[];
   /** Keep errors on screen across re-renders, updating as the user types. */
   liveValidate?: boolean;
 }) {
   const { locale } = useI18n();
   // The page has its own save bar; the form never submits by itself.
   const uiSchema = useMemo(() => ({ ...uiFor(schema), "ui:submitButtonOptions": { norender: true } }), [schema]);
+  const extraErrors = useMemo(() => (issues?.length ? issueErrors(issues, translators[locale]) : undefined), [issues, locale]);
   return (
     <Form
       ref={formRef}

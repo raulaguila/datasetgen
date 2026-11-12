@@ -168,6 +168,8 @@ export interface DataRecord {
 /** One broken schema rule; path is a JSON pointer into the record data. */
 export interface SchemaIssue {
   path: string;
+  /** The failed rule, such as "required"; the form translates by it. */
+  keyword?: string;
   message: string;
 }
 

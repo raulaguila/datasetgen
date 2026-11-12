@@ -40,3 +40,6 @@ export async function choosePassword(page: Page, password: string) {
 
 /** A page with no session: the config hands every new page the admin's. */
 export const guestPage = (browser: Browser) => browser.newPage({ locale: "pt-BR", storageState: { cookies: [], origins: [] } });
+
+/** The page's own error, not Next's route announcer (also role="alert", and titled in production builds). */
+export const formAlert = '[role="alert"]:not(#__next-route-announcer__)';

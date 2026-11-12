@@ -1,6 +1,6 @@
 module github.com/raulaguila/dataset
 
-go 1.26.10
+go 1.26.11
 
 require (
 	github.com/godeh/dotenvgo v0.6.0

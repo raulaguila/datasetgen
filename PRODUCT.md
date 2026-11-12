@@ -8,28 +8,27 @@
 
 ## Stack
 
-- Language / runtime: Go (`go.mod` module `github.com/raulaguila/dataset`, Go 1.26.x)
+- Language / runtime: Go (`go.mod` module `github.com/raulaguila/dataset`, Go 1.26.11)
 - HTTP: Fiber v3
 - Datastore: PostgreSQL 17 (schemas `usr`, `sys`, `app`; golang-migrate)
+- Schema validation: `santhosh-tekuri/jsonschema/v6` on the server (`pkg/schema`), `@cfworker/json-schema` in the browser (no `eval`, so it runs under the production CSP)
 - Auth crypto: Ed25519 JWT (access/refresh), Argon2id passwords (PHC), SHA-256 for refresh `jti` and email tokens
 - SMTP: configured through environment variables; email tokens sealed with AES-GCM (`pkg/aescrypt`); mailer consumes the Postgres outbox with fenced leases, retries and a restricted database role
 - Deploy: Docker Compose (`dataset_backend`, `dataset_mailer`, `dataset_postgres`)
 
 ## Users
 
-Unknown — confirm before designing to that constraint.
-
-Hypothesis from purpose: applications and operators that need identity (register/login/session) and RBAC; not confirmed as named customers or first-party apps.
+The owner, building datasets alone, plus a few invited collaborators. First use: a catalog of Habbo wireds (name, how it works, parameters, examples) to fine-tune a local model that answers "how do I build X with wireds?".
 
 ## Product Purpose
 
-Provide identity and authentication for clients: account lifecycle (pending → activate → active), session-based JWT access/refresh with rotation and reuse detection, session management by the user, password reset, live RBAC (resource × CRUD), role/permission/member management, user administration, user preferences, in-app security notifications, and email delivery via Postgres outbox.
+Build structured datasets for AI training: collections with a user-defined JSON Schema (draft 2020-12 by default), records validated against it on every write, a form generated from the schema, and later (planned) training-example generation, versioned JSONL export, RAG and fine-tune runs. Underneath, the identity base provides account lifecycle (pending → activate → active), session-based JWT access/refresh with rotation and reuse detection, session management by the user, password reset, live RBAC (resource × CRUD), role/permission/member management, user administration, user preferences, in-app security notifications, and email delivery via Postgres outbox.
 
 Operational success (not measured SLOs): password login requires an active account or an expired lock that can be cleared; a lock does not invalidate existing sessions or prevent refresh. Disabling an account revokes its sessions. Passwords and token plaintext are never stored; HTTP never echoes login `failure_kind`; authz does not trust JWT permission claims.
 
 ## Positioning
 
-**Is:** a focused dataset/identity service with hexagonal layout, identity schema `usr`, system outbox `sys`, and a small example domain module `app.product` to exercise RBAC.
+**Is:** a dataset-building platform with hexagonal layout: collections and records in `app.collection` / `app.record`, identity schema `usr`, system outbox `sys`, and the example module `app.product` kept as the `make module` template.
 
 **Is not (v1):** multi-tenant SMTP catalog, product commerce platform, ABAC/instance-level authz, or a general dashboard — explicitly out of scope vs copying “hexago” extras without a decision.
 
@@ -76,7 +75,7 @@ Known expensive-by-design paths (qualitative): Argon2id verify on login; authz P
 - `.specs/architecture/decisions/ADR-001` … `ADR-004` (hexagonal, identity schema, secrets, RBAC)
 - `.specs/features/identity/*`, `mailer/outbox.md`, `products/requirements.md`
 - `.specs/existing/overview.md`, `existing/infrastructure/schema.md`
-- Code: `cmd/backend`, `internal/core/usecase/auth`, `internal/adapter/inbound/http/rest`, migrations `000001`–`000004`
+- Code: `cmd/backend`, `internal/core/usecase/auth`, `internal/adapter/inbound/http/rest`, migrations `000001`–`000007`, `pkg/schema`, `internal/core/usecase/collection`, `internal/core/usecase/record`
 
 ## Product Principles
 

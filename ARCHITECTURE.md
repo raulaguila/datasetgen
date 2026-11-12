@@ -6,7 +6,7 @@
 
 The Go service lives in `backend/` (its own `go.mod`, `Makefile`, config and Docker files) and the Next.js app in `frontend/`; paths such as `cmd/backend` or `config/.env` below are relative to `backend/`.
 
-**Confirmed.** Dataset runs as two long-lived processes plus Postgres: `cmd/backend` serves Fiber HTTP (health, auth, sessions, preferences, notifications, permissions, roles, users and products CRUD); `cmd/mailer` claims `sys.outbox` rows under a 10-minute lease (`SKIP LOCKED`), opens the sealed token and sends SMTP. `cmd/admin` handles operator actions. `frontend/` is a Next.js BFF: it keeps the tokens in a signed httpOnly cookie, forwards API calls with the bearer and sends the client IP as `X-Real-IP`, which the backend accepts only from the web container's fixed address (`API_TRUSTED_PROXIES`). Composition wires use cases to Postgres. Product constraints live in `PRODUCT.md`; surface briefs in `.keel/surfaces/`.
+**Confirmed.** Dataset runs as two long-lived processes plus Postgres: `cmd/backend` serves Fiber HTTP (health, auth, sessions, preferences, notifications, permissions, roles, users, collections, records and products CRUD); `cmd/mailer` claims `sys.outbox` rows under a 10-minute lease (`SKIP LOCKED`), opens the sealed token and sends SMTP. `cmd/admin` handles operator actions. `frontend/` is a Next.js BFF: it keeps the tokens in a signed httpOnly cookie, forwards API calls with the bearer and sends the client IP as `X-Real-IP`, which the backend accepts only from the web container's fixed address (`API_TRUSTED_PROXIES`). Composition wires use cases to Postgres. Product constraints live in `PRODUCT.md`; surface briefs in `.keel/surfaces/`.
 
 ## Boundaries
 
@@ -26,13 +26,13 @@ core/domain → stdlib only
 |----------|-------------|--------|
 | `internal/core` | — | Domain + ports + use cases; no Fiber/GORM/config |
 | `adapter/inbound/http/rest` | — | DTOs, route map, `apperror`→HTTP |
-| `adapter/outbound/persistence/postgres` | `usr.*`, `sys.outbox`, `app.product` | GORM/`Exec`; `Store` = TxManager + UnitOfWork |
+| `adapter/outbound/persistence/postgres` | `usr.*`, `sys.outbox`, `app.product`, `app.collection`, `app.record` | GORM/`Exec`; `Store` = TxManager + UnitOfWork |
 | `frontend/` | session cookie only | Next.js; never reaches Postgres, holds no signing key |
 | `cmd/mailer` | outbox claim → SMTP | Poll 2s, batch 10; terminal fail after 14 attempts or smtp_disabled |
 
 **Sacred (product + ADR):** JWT must not carry permission claims; authz loads live from the DB on each check. Plaintext passwords / refresh JTIs / email tokens must not be stored.
 
-**Authorization (confirmed):** Authorizer is applied on `/v1/products`, `/v1/permissions`, `/v1/roles`, `/v1/users` and `/v1/audit`; own-account routes live under `/v1/me`, use Bearer and queries scoped to the authenticated user; `/v1/auth` keeps only the token and sign-up flows. Roles are managed at runtime under `/v1/roles`. Protected roles (`is_superuser` or a `*` grant) cannot be changed there and `GET /v1/roles` does not list them: full access changes only through `cmd/admin`, and the API never grants `*`. Holding `roles:update` lets someone change any unprotected role, including their own. Users with a protected role get the same treatment under `/v1/users`: not listed, 403 by id, changed only through `cmd/admin`. Nobody disables their own account. Enable puts an account back to `active`, or `pending` if it never set a password; sessions do not come back.
+**Authorization (confirmed):** Authorizer is applied on `/v1/collections`, `/v1/records`, `/v1/products`, `/v1/permissions`, `/v1/roles`, `/v1/users` and `/v1/audit`; own-account routes live under `/v1/me`, use Bearer and queries scoped to the authenticated user; `/v1/auth` keeps only the token and sign-up flows. Roles are managed at runtime under `/v1/roles`. Protected roles (`is_superuser` or a `*` grant) cannot be changed there and `GET /v1/roles` does not list them: full access changes only through `cmd/admin`, and the API never grants `*`. Holding `roles:update` lets someone change any unprotected role, including their own. Users with a protected role get the same treatment under `/v1/users`: not listed, 403 by id, changed only through `cmd/admin`. Nobody disables their own account. Enable puts an account back to `active`, or `pending` if it never set a password; sessions do not come back.
 
 ## Data
 
@@ -40,13 +40,15 @@ core/domain → stdlib only
 
 | Store | Role | Consistency notes |
 |-------|------|-------------------|
-| PostgreSQL schemas `usr`, `sys`, `app` | Source of truth | Single DB; migrations 000001–000004 |
+| PostgreSQL schemas `usr`, `sys`, `app` | Source of truth | Single DB; migrations 000001–000007 |
 
 **`usr` ownership (backend auth and account use cases):** users, credentials, sessions, email tokens, login attempts, role assignment, preferences, notifications; RBAC reader uses `vw_user_effective_permissions` + `is_superuser`.
 
 **`sys.outbox`:** backend INSERT on register / password-reset; mailer claims `pending` → `processing` (lease in `available_at`, ownership in `claim_id`; a crashed claim returns and stale confirmations are rejected) → `sent`/`failed`. Tokens stay AES-GCM sealed with `SMTP_MASTER_KEY` and leave the row when done. `sys.fn_cleanup()` (daily via pg_cron) drops history older than 30 days.
 
-**`app.product`:** owned by backend product use case (CRUD).
+**`app.product`:** owned by backend product use case (CRUD); kept as the template `make module` copies.
+
+**`app.collection` / `app.record`:** a collection holds a JSON Schema in a `json` column, not `jsonb`: jsonb sorts object keys by length, and the key order of `properties` is the field order of the generated form. A record's `data` is `jsonb` (≤ 256 KB), checked by `pkg/schema` inside the write transaction after reading the schema `FOR SHARE`, so a concurrent schema change waits. A schema change does not revalidate stored records (marked `shortcut:`). Deleting a collection with records fails on the foreign key (`RESOURCE_IN_USE`). The record list returns a preview (top-level plain values, strings cut to 120 characters); `GET /v1/records/{id}` returns the full data. Granting any `records` action also grants `collections:read`, since records are listed and edited on the collection screen. In the browser, `frontend/src/lib/schema-validator.ts` validates with `@cfworker/json-schema`: ajv compiles with `new Function`, which the production CSP blocks.
 
 **Database roles:** migrations run as the owner (`POSTGRES_USER`). Backend and `cmd/admin` connect as `dataset_app` (`POSTGRES_APP_USER`), which reads and writes rows in `usr`, `sys` and `app` and cannot change the schema. The mailer uses `dataset_mailer` (`POSTGRES_MAILER_USER`): SELECT on outbox and UPDATE on delivery columns only. It cannot access identity or products, insert messages, delete them, or change their purpose. Migrations create the roles and grants. After successful migration, `make migrate-up` enables both logins and sets their passwords from `config/.env` in a single transaction; secrets are not stored in versioned SQL.
 

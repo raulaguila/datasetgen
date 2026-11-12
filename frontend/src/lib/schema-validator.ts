@@ -42,11 +42,20 @@ export function toRjsfErrors(units: OutputUnit[], translate: Translate): RJSFVal
 }
 
 export function schemaValidator(translate: Translate): ValidatorType {
+  // Building a Validator walks the whole schema; live validation runs on every
+  // key press, so keep one per (root, sub-schema) pair while those objects live.
+  const cache = new WeakMap<object, WeakMap<object, Validator>>();
   const run = (schema: RJSFSchema, data: unknown, root: RJSFSchema = schema) => {
-    // Sub-schemas rjsf checks may $ref the root's definitions; carry them along.
-    const { definitions, $defs } = root as { definitions?: unknown; $defs?: unknown };
-    const full = { ...(definitions ? { definitions } : {}), ...($defs ? { $defs } : {}), ...(schema as object) } as Schema;
-    return new Validator(full, draftOf(root), false).validate(data);
+    let byRoot = cache.get(root);
+    if (!byRoot) cache.set(root, (byRoot = new WeakMap()));
+    let validator = byRoot.get(schema);
+    if (!validator) {
+      // Sub-schemas rjsf checks may $ref the root's definitions; carry them along.
+      const { definitions, $defs } = root as { definitions?: unknown; $defs?: unknown };
+      const full = { ...(definitions ? { definitions } : {}), ...($defs ? { $defs } : {}), ...(schema as object) } as Schema;
+      byRoot.set(schema, (validator = new Validator(full, draftOf(root), false)));
+    }
+    return validator.validate(data);
   };
   return {
     validateFormData(formData, schema): ValidationData<unknown> {

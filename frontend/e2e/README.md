@@ -2,7 +2,7 @@
 
 Playwright drives the real screens against a real backend. The flows are the
 ones a regression would hurt most: sign-in, invite and activation, password
-reset, and saving a role's permissions.
+reset, saving a role's permissions, and a collection whose records follow its schema.
 
 ## What the run needs
 
@@ -26,5 +26,8 @@ Every run invites new people with unique addresses, so a database can be reused.
 E2E_ADMIN_EMAIL=admin@example.test E2E_ADMIN_PASSWORD='…' pnpm e2e
 ```
 
-The config starts `next dev` on port 3101 (`E2E_PORT`) pointed at the backend,
-or reuses one already running there.
+The config builds the app and starts `next start` on port 3101 (`E2E_PORT`)
+pointed at the backend, or reuses a server already running there. The
+production build matters: it sends the real Content-Security-Policy, which
+`next dev` relaxes (a validator that needed `eval` broke only in production).
+`E2E_DEV=1` runs `next dev` instead, for a faster loop while writing a test.

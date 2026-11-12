@@ -19,10 +19,12 @@ export default defineConfig({
     { name: "chromium", dependencies: ["setup"], use: { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" } },
   ],
   webServer: {
-    command: `pnpm exec next dev -p ${port}`,
+    // The production build by default: it carries the real CSP (no 'unsafe-eval'),
+    // which next dev relaxes. E2E_DEV=1 trades that for a faster local loop.
+    command: process.env.E2E_DEV ? `pnpm exec next dev -p ${port}` : `pnpm exec next build && pnpm exec next start -p ${port}`,
     port,
     reuseExistingServer: !process.env.CI,
     env: { API_URL: process.env.E2E_API_URL ?? "http://127.0.0.1:9990" },
-    timeout: 120_000,
+    timeout: 300_000,
   },
 });

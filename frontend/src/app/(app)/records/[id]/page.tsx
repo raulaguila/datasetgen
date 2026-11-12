@@ -11,7 +11,7 @@ import { DangerZone, FormSection, FormSections, PageBody, PageHeader, SaveBar, u
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
-import { SchemaForm, issueErrors } from "@/components/schema-form";
+import { SchemaForm } from "@/components/schema-form";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api/client";
@@ -88,7 +88,7 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
     <form noValidate onSubmit={(e) => { e.preventDefault(); submit(false); }}>
       <FormSections>
         <FormSection title={t("records.data")} description={t("records.data_desc")}>
-          <SchemaForm schema={collection.schema ?? {}} data={data} disabled={!editable} onChange={setData} formRef={formRef} liveValidate={checked} extraErrors={issues.length ? issueErrors(issues) : undefined} />
+          <SchemaForm schema={collection.schema ?? {}} data={data} disabled={!editable} onChange={setData} formRef={formRef} liveValidate={checked} issues={issues} />
         </FormSection>
         {editable && (dirty || !record) && (
           <SaveBar

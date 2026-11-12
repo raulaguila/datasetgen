@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/raulaguila/dataset/pkg/apperror"
@@ -28,7 +29,11 @@ func TestValidate(t *testing.T) {
 	if !apperror.IsCode(err, apperror.CodeValidationFailed) {
 		t.Fatalf("invalid: %v", err)
 	}
-	if issues := err.(*apperror.Error).Details["issues"].([]Issue); len(issues) < 3 {
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) {
+		t.Fatalf("want *apperror.Error, got %T", err)
+	}
+	if issues := appErr.Details["issues"].([]Issue); len(issues) < 3 {
 		t.Fatalf("want one issue per broken rule, got %+v", issues)
 	}
 }
@@ -55,5 +60,21 @@ func TestValidateAssertsFormat(t *testing.T) {
 	}
 	if err := Validate(s, []byte(`{"dia":"ontem"}`)); !apperror.IsCode(err, apperror.CodeValidationFailed) {
 		t.Fatalf("bad date accepted: %v", err)
+	}
+}
+
+func TestRequiredPointsAtTheMissingField(t *testing.T) {
+	s, err := Compile([]byte(`{"type":"object","properties":{"ps":{"type":"array","items":{"required":["a/b","tipo"]}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var appErr *apperror.Error
+	if !errors.As(Validate(s, []byte(`{"ps":[{}]}`)), &appErr) {
+		t.Fatal("want a validation error")
+	}
+	got := appErr.Details["issues"].([]Issue)
+	want := []Issue{{Path: "/ps/0/a~1b", Keyword: "required", Message: "missing property"}, {Path: "/ps/0/tipo", Keyword: "required", Message: "missing property"}}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("issues %+v", got)
 	}
 }

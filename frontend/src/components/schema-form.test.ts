@@ -16,6 +16,14 @@ describe("uiFor", () => {
 });
 
 describe("issueErrors", () => {
+  it("translates by keyword and keeps the server text otherwise", () => {
+    const pt = (k: string) => ({ required: "Campo obrigatório." })[k];
+    expect(issueErrors([{ path: "/nome", keyword: "required", message: "missing property" }, { path: "/dia", keyword: "x-unknown", message: "raw" }], pt)).toEqual({
+      nome: { __errors: ["Campo obrigatório."] },
+      dia: { __errors: ["raw"] },
+    });
+  });
+
   it("puts each server issue under its field", () => {
     expect(issueErrors([{ path: "/parametros/0", message: "falta nome" }, { path: "", message: "raiz" }])).toEqual({
       __errors: ["raiz"],

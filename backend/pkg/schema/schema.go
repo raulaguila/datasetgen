@@ -5,11 +5,16 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/santhosh-tekuri/jsonschema/v6/kind"
 
 	"github.com/raulaguila/dataset/pkg/apperror"
 )
+
+// pointerEscape writes a property name as one JSON pointer segment (RFC 6901).
+var pointerEscape = strings.NewReplacer("~", "~0", "/", "~1")
 
 const (
 	location  = "mem://schema.json"
@@ -18,7 +23,8 @@ const (
 
 // Issue is one failed rule, pointing at the value that broke it.
 type Issue struct {
-	Path    string `json:"path"` // JSON pointer into the document, "" for the root
+	Path    string `json:"path"`    // JSON pointer into the document, "" for the root
+	Keyword string `json:"keyword"` // the failed rule, such as "required"; clients translate by it
 	Message string `json:"message"`
 }
 
@@ -68,10 +74,25 @@ func Validate(compiled *jsonschema.Schema, raw []byte) error {
 	}
 	issues := []Issue{}
 	for _, unit := range ve.BasicOutput().Errors {
-		if unit.Error == nil || len(issues) == maxIssues {
+		if unit.Error == nil {
 			continue
 		}
-		issues = append(issues, Issue{Path: unit.InstanceLocation, Message: unit.Error.String()})
+		path := unit.Error.Kind.KeywordPath()
+		keyword := ""
+		if len(path) > 0 {
+			keyword = path[len(path)-1]
+		}
+		// "required" fails on the parent object; point at each missing field instead.
+		if r, ok := unit.Error.Kind.(*kind.Required); ok {
+			for _, name := range r.Missing {
+				issues = append(issues, Issue{Path: unit.InstanceLocation + "/" + pointerEscape.Replace(name), Keyword: keyword, Message: "missing property"})
+			}
+			continue
+		}
+		issues = append(issues, Issue{Path: unit.InstanceLocation, Keyword: keyword, Message: unit.Error.String()})
+	}
+	if len(issues) > maxIssues {
+		issues = issues[:maxIssues]
 	}
 	return apperror.New(apperror.CodeValidationFailed, "data does not match the collection schema").
 		WithField("data").WithDetails("issues", issues)

@@ -1,6 +1,6 @@
 # Dataset
 
-Identity service in Go: registration, login, sessions, role-based permissions and account data, with a products CRUD as an example of a protected resource. `cmd/backend` serves HTTP, `cmd/mailer` sends email from the outbox, `cmd/admin` is the operator CLI, all under `backend/`, and `frontend/` is the Next.js app. See [ARCHITECTURE.md](ARCHITECTURE.md) for how it fits together, [PRODUCT.md](PRODUCT.md) for its constraints and [TEMPLATE.md](TEMPLATE.md) to start a new project from it or add a module.
+Platform for building datasets to train and fine-tune AI models. Each collection defines its own record format as a JSON Schema; records are checked against it in the browser and again on the server, so the data that reaches training is valid. Login, sessions, role-based permissions and audit come from the identity base this project started from; the products CRUD stays as the template `make module` copies. `cmd/backend` serves HTTP, `cmd/mailer` sends email from the outbox, `cmd/admin` is the operator CLI, all under `backend/`, and `frontend/` is the Next.js app. See [ARCHITECTURE.md](ARCHITECTURE.md) for how it fits together, [PRODUCT.md](PRODUCT.md) for its constraints and [TEMPLATE.md](TEMPLATE.md) to start a new project from it or add a module.
 
 ## Layout
 
