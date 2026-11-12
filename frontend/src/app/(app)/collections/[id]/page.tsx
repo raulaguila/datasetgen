@@ -122,7 +122,8 @@ function CollectionForm({ collection, editable }: { collection: Collection | nul
   };
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+    // noValidate: required fields in the preview are a demo, not part of this save.
+    <form noValidate onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
       <FormSections>
         <FormSection title={t("collections.details")} description={t("collections.details_desc")}>
           <div className="space-y-4">

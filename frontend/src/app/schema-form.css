@@ -17,10 +17,11 @@
 .rjsf .form-control:disabled { opacity: 0.6; cursor: not-allowed; }
 .rjsf .checkbox label { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
 .rjsf .array-item-list { display: grid; gap: 0.5rem; }
-.rjsf .array-item { display: flex; gap: 0.5rem; align-items: flex-start; border: 1px solid var(--border); border-radius: 0.75rem; padding: 0.75rem; }
-.rjsf .array-item > :first-child { flex: 1; min-width: 0; }
+/* rjsf v6 names items .rjsf-array-item; the list also carries .row, kept out of the .row rule below. */
+.rjsf .rjsf-array-item { display: flex; gap: 0.5rem; align-items: flex-start; border: 1px solid var(--border); border-radius: 0.75rem; padding: 0.75rem; }
+.rjsf .rjsf-array-item > :first-child { flex: 1; min-width: 0; }
 .rjsf .array-item-toolbox .btn-group { display: flex; gap: 0.125rem; }
-.rjsf .row { display: flex; justify-content: flex-end; }
+.rjsf .row:not(.array-item-list) { display: flex; justify-content: flex-end; }
 .rjsf .row > p { margin: 0; }
 .rjsf .error-detail { list-style: none; margin: 0; padding: 0; font-size: 0.8125rem; color: var(--destructive); }
 .rjsf .hidden { display: none; }

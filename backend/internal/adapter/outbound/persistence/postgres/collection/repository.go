@@ -119,7 +119,7 @@ func (r *Repository) SchemaForWrite(ctx context.Context, id string) (json.RawMes
 func (r *Repository) Create(ctx context.Context, c *domain.Collection) error {
 	var m row
 	err := r.db.WithContext(ctx).Raw(`
-		INSERT INTO app.collection (name, description, schema) VALUES (?, ?, ?::jsonb)
+		INSERT INTO app.collection (name, description, schema) VALUES (?, ?, ?::json)
 		RETURNING `+columns, c.Name, c.Description, string(c.Schema)).Take(&m).Error
 	if err != nil {
 		return shared.WrapError(err, "collection")
@@ -139,7 +139,7 @@ func (r *Repository) Update(ctx context.Context, id string, patch domain.Collect
 		UPDATE app.collection
 		SET name = COALESCE(?::text, name),
 		    description = COALESCE(?::text, description),
-		    schema = COALESCE(?::jsonb, schema),
+		    schema = COALESCE(?::json, schema),
 		    version = version + 1
 		WHERE id = ? AND (?::integer IS NULL OR version = ?)
 		RETURNING `+columns, patch.Name, patch.Description, schema, id, patch.Version, patch.Version).Find(&rows).Error

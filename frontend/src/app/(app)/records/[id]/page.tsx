@@ -34,6 +34,7 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<SchemaIssue[]>([]);
   const formRef = useRef<Form>(null);
+  const [checked, setChecked] = useState(false); // errors follow the typing once a save was tried
   const dirty = JSON.stringify(data) !== JSON.stringify(record?.data ?? {});
   useUnsavedGuard(editable && dirty, t("roles.leave_unsaved"));
   const back = `/collections/${collection.id}`;
@@ -62,11 +63,13 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
     setVersion(record.version);
     setError(null);
     setIssues([]);
+    setChecked(false);
   };
 
   // The browser checks first, so broken fields light up without a round trip.
   const submit = (again: boolean) => {
     setIssues([]);
+    setChecked(true);
     if (!formRef.current?.validateForm()) return setError(t("records.invalid"));
     setError(null);
     save.mutate(undefined, {
@@ -74,16 +77,18 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
         if (!again) return router.push(back);
         // Entering a batch: stay on a blank form for the next record.
         setData({});
+        setChecked(false);
         window.scrollTo({ top: 0, behavior: "smooth" });
       },
     });
   };
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); submit(false); }}>
+    // noValidate: the browser's own bubbles would cut in before validateForm shows errors per field.
+    <form noValidate onSubmit={(e) => { e.preventDefault(); submit(false); }}>
       <FormSections>
         <FormSection title={t("records.data")} description={t("records.data_desc")}>
-          <SchemaForm schema={collection.schema ?? {}} data={data} disabled={!editable} onChange={setData} formRef={formRef} extraErrors={issues.length ? issueErrors(issues) : undefined} />
+          <SchemaForm schema={collection.schema ?? {}} data={data} disabled={!editable} onChange={setData} formRef={formRef} liveValidate={checked} extraErrors={issues.length ? issueErrors(issues) : undefined} />
         </FormSection>
         {editable && (dirty || !record) && (
           <SaveBar

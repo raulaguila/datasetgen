@@ -39,6 +39,10 @@ func TestCollectionRecordsFollowTheSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The schema comes back as written: field order drives the generated form.
+	if got, err := collections.Get(ctx, wired.ID); err != nil || string(got.Schema) != wiredSchema {
+		t.Fatalf("schema changed on the way back: %s, %v", got.Schema, err)
+	}
 	if _, err := collections.Create(ctx, input.CreateCollectionCommand{Name: "Wired", Schema: json.RawMessage(`{}`)}); !apperror.IsCode(err, apperror.CodeAlreadyExists) {
 		t.Fatalf("duplicate name: %v", err)
 	}

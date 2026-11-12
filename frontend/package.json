@@ -14,12 +14,11 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
+    "@cfworker/json-schema": "4.1.1",
     "@rjsf/core": "6.11.0",
     "@rjsf/utils": "6.11.0",
     "@rjsf/validator-ajv8": "6.11.0",
     "@tanstack/react-query": "^5.105.0",
-    "ajv": "8.20.0",
-    "ajv-i18n": "4.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.63.0",

@@ -1,16 +1,14 @@
 "use client";
 
 import Form from "@rjsf/core";
-import type { ErrorSchema, IconButtonProps, RJSFSchema, UiSchema } from "@rjsf/utils";
-import validator, { customizeValidator } from "@rjsf/validator-ajv8";
-import Ajv2020 from "ajv/dist/2020";
-import localizePt from "ajv-i18n/localize/pt-BR";
+import type { ErrorSchema, IconButtonProps, RJSFSchema, UiSchema, ValidatorType } from "@rjsf/utils";
 import { useMemo, type Ref } from "react";
 import { ArrowDown, ArrowUp, Copy, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { SchemaIssue } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/provider";
-import type { Locale } from "@/lib/i18n/messages";
+import { LOCALES, messages, type Locale } from "@/lib/i18n/messages";
+import { schemaValidator } from "@/lib/schema-validator";
 
 // The default theme draws glyphicon fonts this app does not load; these use lucide.
 function iconButton(Icon: typeof Plus, variant: "outline" | "ghost" | "destructive" = "ghost") {
@@ -34,19 +32,10 @@ const templates = {
   },
 };
 
-// The server defaults to draft 2020-12 and honours $schema; mirror that here,
-// with ajv's messages in the app language.
-const validators = {
-  "pt-BR": { legacy: customizeValidator({}, localizePt), modern: customizeValidator({ AjvClass: Ajv2020 }, localizePt) },
-  "en-US": { legacy: validator, modern: customizeValidator({ AjvClass: Ajv2020 }) },
-};
-
-/** Picks the validator for the schema's draft and drops $schema, which ajv cannot resolve offline. */
-export function forDraft(schema: Record<string, unknown>, locale: Locale = "en-US") {
-  const { $schema, ...rest } = schema;
-  const legacy = typeof $schema === "string" && !$schema.includes("2020-12") && !$schema.includes("2019-09");
-  return { schema: rest as RJSFSchema, validator: validators[locale][legacy ? "legacy" : "modern"] };
-}
+// One validator per language; the failed keyword picks the message (schema.error.*).
+const validators = Object.fromEntries(
+  LOCALES.map(({ value }) => [value, schemaValidator((keyword) => (messages[value] as Record<string, string>)[`schema.error.${keyword}`])]),
+) as Record<Locale, ValidatorType>;
 
 /** Turns the server's issues (JSON pointers) into errors shown under each field. */
 export function issueErrors(issues: SchemaIssue[]): ErrorSchema {
@@ -78,11 +67,12 @@ export function uiFor(schema: unknown): UiSchema {
 }
 
 /**
- * A form generated from a collection's JSON Schema. The page calls
- * formRef.current.validateForm() before saving to show broken rules under each
- * field; the server checks again and its issues come back through extraErrors.
+ * A form generated from a collection's JSON Schema. Before saving, the page calls
+ * formRef.current.validateForm() and turns on liveValidate: a re-render would
+ * otherwise drop the errors. The server checks again; its issues come back
+ * through extraErrors.
  */
-export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec", formRef, extraErrors }: {
+export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec", formRef, extraErrors, liveValidate }: {
   schema: Record<string, unknown>;
   data: unknown;
   disabled?: boolean;
@@ -90,24 +80,26 @@ export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec",
   idPrefix?: string;
   formRef?: Ref<Form>;
   extraErrors?: ErrorSchema;
+  /** Keep errors on screen across re-renders, updating as the user types. */
+  liveValidate?: boolean;
 }) {
   const { locale } = useI18n();
-  const draft = useMemo(() => forDraft(schema, locale), [schema, locale]);
   // The page has its own save bar; the form never submits by itself.
-  const uiSchema = useMemo(() => ({ ...uiFor(draft.schema), "ui:submitButtonOptions": { norender: true } }), [draft.schema]);
+  const uiSchema = useMemo(() => ({ ...uiFor(schema), "ui:submitButtonOptions": { norender: true } }), [schema]);
   return (
     <Form
       ref={formRef}
       className="rjsf"
-      schema={draft.schema}
+      schema={schema as RJSFSchema}
       uiSchema={uiSchema}
       formData={data}
-      validator={draft.validator}
+      validator={validators[locale]}
       templates={templates}
       disabled={disabled}
       noHtml5Validate
       showErrorList={false}
       extraErrors={extraErrors}
+      liveValidate={liveValidate}
       idPrefix={idPrefix}
       onChange={(e) => onChange?.(e.formData)}
       // The outer page form owns submit; a nested form element would be invalid HTML.
