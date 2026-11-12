@@ -9,6 +9,7 @@ import (
 
 // RecordRepository persists app.record.
 type RecordRepository interface {
+	// List returns one page; each Data holds only top-level plain values, strings cut to 120 characters.
 	List(ctx context.Context, filter domain.RecordFilter) ([]domain.Record, int64, error)
 	FindByID(ctx context.Context, id string) (*domain.Record, error)
 	Create(ctx context.Context, r *domain.Record) error

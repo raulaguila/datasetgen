@@ -42,6 +42,13 @@ func (m row) toDomain() domain.Record {
 
 const columns = "id, collection_id, data::text AS data, version, created_at, updated_at"
 
+// preview keeps the top-level plain values of data, strings cut to 120 characters:
+// the list screen shows a one-line summary, so arrays, objects and long text stay behind.
+const preview = `(SELECT coalesce(jsonb_object_agg(key, CASE WHEN jsonb_typeof(value) = 'string'
+	THEN to_jsonb(left(value #>> '{}', 120)) ELSE value END), '{}')
+	FROM jsonb_each(CASE WHEN jsonb_typeof(data) = 'object' THEN data ELSE '{}' END)
+	WHERE jsonb_typeof(value) IN ('string', 'number', 'boolean'))::text`
+
 // shortcut: search is a trigram ILIKE over the whole JSON text, so keys match too;
 // move to full-text or per-field filters when collections hold tens of thousands of records.
 func (r *Repository) List(ctx context.Context, filter domain.RecordFilter) ([]domain.Record, int64, error) {
@@ -61,7 +68,7 @@ func (r *Repository) List(ctx context.Context, filter domain.RecordFilter) ([]do
 		direction = "ASC"
 	}
 	var rows []row
-	err := matching().Select(columns).Order("created_at " + direction + ", id " + direction).
+	err := matching().Select("id, collection_id, " + preview + " AS data, version, created_at, updated_at").Order("created_at " + direction + ", id " + direction).
 		Offset(filter.Page.Offset()).Limit(filter.Page.Limit).Find(&rows).Error
 	if err != nil {
 		return nil, 0, shared.WrapError(err, "record")

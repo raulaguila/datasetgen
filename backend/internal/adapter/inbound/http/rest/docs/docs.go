@@ -2117,6 +2117,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Each item's data is a preview: only its top-level strings, numbers and booleans, strings cut to 120 characters. GET /v1/records/{id} returns the full data.",
                 "produces": [
                     "application/json"
                 ],

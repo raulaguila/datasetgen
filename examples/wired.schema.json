@@ -9,7 +9,7 @@
       "title": "Categoria",
       "enum": ["gatilho", "efeito", "condicao", "extra", "seletor"]
     },
-    "descricao": { "type": "string", "title": "Como funciona" },
+    "descricao": { "type": "string", "title": "Como funciona", "maxLength": 5000 },
     "parametros": {
       "type": "array",
       "title": "Parâmetros",
@@ -32,7 +32,7 @@
         "required": ["cenario"],
         "properties": {
           "cenario": { "type": "string", "title": "Cenário" },
-          "explicacao": { "type": "string", "title": "Explicação" }
+          "explicacao": { "type": "string", "title": "Explicação", "maxLength": 5000 }
         }
       }
     }

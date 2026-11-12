@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -10,7 +11,7 @@ import { DangerZone, FieldNote, FormSection, FormSections, PageBody, PageHeader,
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
-import { SchemaForm } from "@/components/schema-form";
+import { FieldBuilder } from "@/components/field-builder";
 import { ListSkeleton } from "@/components/skeletons";
 import { TablePagination } from "@/components/table-pagination";
 import { Button } from "@/components/ui/button";
@@ -42,21 +43,30 @@ const STARTER = {
 
 const pretty = (v: unknown) => JSON.stringify(v, null, 2);
 
-/** The schema text as an object, or null while it is not a JSON object. */
-function parseSchema(text: string): Record<string, unknown> | null {
+// The form generator (rjsf + ajv) is the heaviest code on the page; load it only for the preview.
+const SchemaForm = dynamic(() => import("@/components/schema-form").then((m) => m.SchemaForm), { ssr: false, loading: () => <ListSkeleton rows={2} /> });
+
+/** The schema text as an object, or why it is not one (the parser's message names the position). */
+function parseSchema(text: string): { schema: Record<string, unknown> | null; error?: string } {
   try {
     const v: unknown = JSON.parse(text);
-    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
-  } catch {
-    return null;
+    return v && typeof v === "object" && !Array.isArray(v) ? { schema: v as Record<string, unknown> } : { schema: null };
+  } catch (err) {
+    return { schema: null, error: err instanceof Error ? err.message : undefined };
   }
 }
 
-/** A short line for a record: its first few plain values, in schema order. */
-function summarize(data: unknown): string {
+/**
+ * A short line for a record: its first few plain values in schema order. The list
+ * answers a preview (plain values only), stored by jsonb in key-length order.
+ */
+function summarize(data: unknown, schema: Record<string, unknown> | undefined): string {
   if (!data || typeof data !== "object") return JSON.stringify(data);
-  const parts = Object.values(data as Record<string, unknown>).filter((v) => ["string", "number", "boolean"].includes(typeof v) && v !== "");
-  return parts.slice(0, 3).join(" · ") || JSON.stringify(data);
+  const values = data as Record<string, unknown>;
+  const order = Object.keys((schema?.properties as Record<string, unknown> | undefined) ?? {});
+  const keys = [...order.filter((k) => k in values), ...Object.keys(values).filter((k) => !order.includes(k))];
+  const parts = keys.map((k) => values[k]).filter((v) => ["string", "number", "boolean"].includes(typeof v) && v !== "");
+  return parts.slice(0, 3).join(" · ") || "—";
 }
 
 function CollectionForm({ collection, editable }: { collection: Collection | null; editable: boolean }) {
@@ -69,7 +79,11 @@ function CollectionForm({ collection, editable }: { collection: Collection | nul
   const [schemaText, setSchemaText] = useState(original);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(collection?.version);
-  const schema = useMemo(() => parseSchema(schemaText), [schemaText]);
+  const parsed = useMemo(() => parseSchema(schemaText), [schemaText]);
+  const schema = parsed.schema;
+  // The preview rebuilds once typing pauses, not on every key.
+  const previewText = useDebounced(schemaText);
+  const preview = useMemo(() => parseSchema(previewText).schema, [previewText]);
   const [previewData, setPreviewData] = useState<unknown>({});
   const schemaChanged = schemaText !== original;
   const dirty = collection
@@ -125,6 +139,7 @@ function CollectionForm({ collection, editable }: { collection: Collection | nul
         </FormSection>
         <FormSection title={t("collections.schema")} description={t("collections.schema_desc")} wide>
           <div className="space-y-2">
+            {editable && <FieldBuilder schema={schema} onAdd={(next) => setSchemaText(pretty(next))} />}
             <textarea
               id="c-schema"
               data-slot="textarea"
@@ -138,11 +153,11 @@ function CollectionForm({ collection, editable }: { collection: Collection | nul
               onChange={(e) => setSchemaText(e.target.value)}
               className="w-full rounded-lg border border-input bg-card px-3 py-2 font-mono text-xs leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive"
             />
-            <FieldNote id="c-schema-note" error={!schema ? t("collections.schema_invalid") : undefined} hint={collection && schemaChanged ? t("collections.schema_change_hint") : undefined} />
+            <FieldNote id="c-schema-note" error={!schema ? [t("collections.schema_invalid"), parsed.error].filter(Boolean).join(": ") : undefined} hint={collection && schemaChanged ? t("collections.schema_change_hint") : undefined} />
           </div>
         </FormSection>
         <FormSection title={t("collections.preview")} description={t("collections.preview_desc")}>
-          {schema && <SchemaForm key={schemaText} schema={schema} data={previewData} onChange={setPreviewData} idPrefix="preview" />}
+          {preview && <SchemaForm key={previewText} schema={preview} data={previewData} onChange={setPreviewData} idPrefix="preview" />}
         </FormSection>
         {editable && (dirty || !collection) && (
           <SaveBar
@@ -209,7 +224,7 @@ function RecordList({ collection }: { collection: Collection }) {
                   {items.map((r) => (
                     <TableRow key={r.id} className="cursor-pointer" onClick={() => router.push(`/records/${r.id}`)}>
                       <TableCell data-label={t("records.record")} data-cell="name" className="w-full max-w-0">
-                        <Link href={`/records/${r.id}`} className="block truncate font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{summarize(r.data)}</Link>
+                        <Link href={`/records/${r.id}`} className="block truncate font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{summarize(r.data, collection.schema)}</Link>
                       </TableCell>
                       <TableCell data-label={t("common.updated_at")} data-cell="date" className="text-muted-foreground">{format(r.updated_at)}</TableCell>
                     </TableRow>

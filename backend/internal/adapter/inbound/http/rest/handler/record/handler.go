@@ -59,6 +59,7 @@ func toDTO(r domain.Record) recordDTO {
 }
 
 // @Summary List the records of one collection
+// @Description Each item's data is a preview: only its top-level strings, numbers and booleans, strings cut to 120 characters. GET /v1/records/{id} returns the full data.
 // @Tags Records
 // @Produce json
 // @Param collection_id query string true "Collection ID"

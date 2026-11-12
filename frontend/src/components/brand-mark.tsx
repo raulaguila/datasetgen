@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-/** Shield with a keyhole; inherits the current color. */
+/** A stack of data disks; inherits the current color. */
 export function BrandMark({ className, size = 20 }: { className?: string; size?: number }) {
   return (
     <svg
@@ -14,7 +14,7 @@ export function BrandMark({ className, size = 20 }: { className?: string; size?:
     >
       <path
         fillRule="evenodd"
-        d="M24 3 6 10v12c0 11.5 7.7 20.6 18 23 10.3-2.4 18-11.5 18-23V10L24 3Zm0 13a5 5 0 0 0-2.5 9.33V33h5v-7.67A5 5 0 0 0 24 16Z"
+        d="M24 7c8.8 0 16 2.7 16 6s-7.2 6-16 6-16-2.7-16-6 7.2-6 16-6ZM8 16c0 3.3 7.2 6 16 6s16-2.7 16-6v8c0 3.3-7.2 6-16 6s-16-2.7-16-6Zm0 11c0 3.3 7.2 6 16 6s16-2.7 16-6v8c0 3.3-7.2 6-16 6s-16-2.7-16-6Z"
       />
     </svg>
   );

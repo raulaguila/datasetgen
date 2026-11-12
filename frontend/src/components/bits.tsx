@@ -149,7 +149,7 @@ export function FormSections({ danger = false, children }: { danger?: boolean; c
  * last child of FormSections, `footer` makes it the card's footer; otherwise it
  * sits inside its section. `submit` makes Save the form's submit button, so Enter saves.
  */
-export function SaveBar({ label, error, saving, canSave, saveLabel, discardLabel, onSave, onDiscard, submit = false, footer = false }: {
+export function SaveBar({ label, error, saving, canSave, saveLabel, discardLabel, onSave, onDiscard, submit = false, footer = false, extra }: {
   label: string;
   error?: string | null;
   saving: boolean;
@@ -160,6 +160,8 @@ export function SaveBar({ label, error, saving, canSave, saveLabel, discardLabel
   onDiscard: () => void;
   submit?: boolean;
   footer?: boolean;
+  /** Another action, drawn between discard and save. */
+  extra?: React.ReactNode;
 }) {
   return (
     <div
@@ -174,6 +176,7 @@ export function SaveBar({ label, error, saving, canSave, saveLabel, discardLabel
       <span className="flex-1 text-sm font-medium">{label}</span>
       {error && <div className="basis-full"><FormError message={error} /></div>}
       <Button type="button" variant="ghost" disabled={saving} onClick={onDiscard}>{discardLabel}</Button>
+      {extra}
       <Button type={submit ? "submit" : "button"} disabled={saving || !canSave} onClick={submit ? undefined : onSave}>
         {saving && <Loader2 className="size-4 animate-spin" />}
         {saveLabel}

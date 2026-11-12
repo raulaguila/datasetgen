@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import type Form from "@rjsf/core";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
@@ -10,7 +11,7 @@ import { DangerZone, FormSection, FormSections, PageBody, PageHeader, SaveBar, u
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
-import { SchemaForm } from "@/components/schema-form";
+import { SchemaForm, issueErrors } from "@/components/schema-form";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api/client";
@@ -32,6 +33,7 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
   const [version, setVersion] = useState(record?.version);
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<SchemaIssue[]>([]);
+  const formRef = useRef<Form>(null);
   const dirty = JSON.stringify(data) !== JSON.stringify(record?.data ?? {});
   useUnsavedGuard(editable && dirty, t("roles.leave_unsaved"));
   const back = `/collections/${collection.id}`;
@@ -45,7 +47,6 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
       void client.invalidateQueries({ queryKey: ["records", collection.id] });
       void client.invalidateQueries({ queryKey: ["collections"] });
       toast.success(t("common.saved"));
-      router.push(back);
     },
     onError: (err) => {
       const found = err instanceof ApiError && err.code === "VALIDATION_FAILED" ? (err.details?.issues as SchemaIssue[] | undefined) : undefined;
@@ -63,18 +64,26 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
     setIssues([]);
   };
 
+  // The browser checks first, so broken fields light up without a round trip.
+  const submit = (again: boolean) => {
+    setIssues([]);
+    if (!formRef.current?.validateForm()) return setError(t("records.invalid"));
+    setError(null);
+    save.mutate(undefined, {
+      onSuccess: () => {
+        if (!again) return router.push(back);
+        // Entering a batch: stay on a blank form for the next record.
+        setData({});
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      },
+    });
+  };
+
   return (
-    <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+    <form onSubmit={(e) => { e.preventDefault(); submit(false); }}>
       <FormSections>
         <FormSection title={t("records.data")} description={t("records.data_desc")}>
-          <SchemaForm schema={collection.schema ?? {}} data={data} disabled={!editable} onChange={setData} />
-          {issues.length > 0 && (
-            <ul className="mt-4 space-y-1 rounded-lg border border-destructive/40 p-3 text-sm" role="alert">
-              {issues.map((i, n) => (
-                <li key={n}><code className="font-mono text-xs text-muted-foreground">{i.path || "/"}</code> {i.message}</li>
-              ))}
-            </ul>
-          )}
+          <SchemaForm schema={collection.schema ?? {}} data={data} disabled={!editable} onChange={setData} formRef={formRef} extraErrors={issues.length ? issueErrors(issues) : undefined} />
         </FormSection>
         {editable && (dirty || !record) && (
           <SaveBar
@@ -87,6 +96,7 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
             saveLabel={t(record ? "common.save" : "common.create")}
             discardLabel={t(record ? "common.discard" : "common.cancel")}
             onDiscard={discard}
+            extra={!record && <Button type="button" variant="outline" disabled={save.isPending} onClick={() => submit(true)}>{t("records.save_and_new")}</Button>}
           />
         )}
       </FormSections>

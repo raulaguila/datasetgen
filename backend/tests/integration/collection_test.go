@@ -3,6 +3,7 @@ package integration_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres"
@@ -52,13 +53,17 @@ func TestCollectionRecordsFollowTheSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := records.Create(ctx, input.CreateRecordCommand{CollectionID: wired.ID, Data: json.RawMessage(`{"nome":"Teleportar","categoria":"efeito"}`)}); err != nil {
+	if _, err := records.Create(ctx, input.CreateRecordCommand{CollectionID: wired.ID, Data: json.RawMessage(`{"nome":"Teleportar","categoria":"efeito","descricao":"` + strings.Repeat("a", 200) + `","exemplos":[{"cenario":"x"}]}`)}); err != nil {
 		t.Fatal(err)
 	}
 
 	items, total, err := records.List(ctx, domain.RecordFilter{CollectionID: wired.ID, Search: "teleport"})
 	if err != nil || total != 1 || len(items) != 1 {
 		t.Fatalf("search: %v of %d, %v", items, total, err)
+	}
+	// The list carries a preview: plain values only, long text cut.
+	if want := `{"nome": "Teleportar", "categoria": "efeito", "descricao": "` + strings.Repeat("a", 120) + `"}`; string(items[0].Data) != want {
+		t.Fatalf("preview %s", items[0].Data)
 	}
 
 	// An edit based on an old version is a conflict; the current one lands.
