@@ -112,3 +112,12 @@ export const COLLECTION_ICONS: Record<string, LucideIcon> = {
   "wrench": Wrench,
   "zap": Zap,
 };
+
+/** The picker's categories; together they hold every slug once (collection-icons.test.ts). */
+export const COLLECTION_ICON_GROUPS: { id: "work" | "talk" | "places" | "objects" | "symbols"; slugs: string[] }[] = [
+  { id: "work", slugs: ["database", "chart-column", "file-text", "book-open", "bookmark", "code", "cpu", "brain", "bug", "wrench", "hammer", "key", "shield", "scale", "calendar", "bell"] },
+  { id: "talk", slugs: ["message-square", "languages", "mic", "music", "camera", "image", "palette", "users", "graduation-cap", "lightbulb"] },
+  { id: "places", slugs: ["globe", "map-pin", "compass", "anchor", "building", "store", "shopping-bag", "leaf", "cloud", "coffee"] },
+  { id: "objects", slugs: ["box", "package", "gem", "gamepad-2", "puzzle", "rocket"] },
+  { id: "symbols", slugs: ["star", "heart", "sparkles", "wand-sparkles", "zap", "flame", "flag", "target", "trophy", "award"] },
+];
