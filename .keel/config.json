@@ -1,0 +1,7 @@
+{
+  "hook": { "enabled": true },
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": ["**/node_modules/**", "**/vendor/**", "**/dist/**", "**/tests/fixtures/**"]
+  }
+}

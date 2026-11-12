@@ -1,0 +1,33 @@
+# Dedicated Air profile for the mailer worker.
+# Run with: air -c air.mailer.toml
+
+#:schema https://json.schemastore.org/any.json
+
+root = "."
+tmp_dir = "tmp/dev-mailer"
+env_files = ["config/.env"]
+
+[build]
+pre_cmd = ["mkdir -p ./tmp/dev-mailer/bin ./tmp/dev-mailer/gocache ./tmp/dev-mailer/gotmp"]
+cmd = "GOCACHE=$(pwd)/tmp/dev-mailer/gocache GOTMPDIR=$(pwd)/tmp/dev-mailer/gotmp go build -o ./tmp/dev-mailer/bin/mailer ./cmd/mailer/main.go"
+entrypoint = ["./tmp/dev-mailer/bin/mailer"]
+
+include_dir = ["cmd/mailer", "config", "internal", "pkg"]
+include_ext = ["go", "tpl", "tmpl", "html", "yaml", "yml", "sql", "toml"]
+include_file = ["go.mod", "go.sum", "air.mailer.toml", "config/.env"]
+
+exclude_dir = ["tmp", "bin", "deploy/docker", "api"]
+exclude_regex = ["_test\\.go$"]
+exclude_unchanged = true
+
+delay = 300
+stop_on_error = true
+send_interrupt = true
+kill_delay = "500ms"
+log = "air.mailer.log"
+
+[log]
+time = true
+
+[misc]
+clean_on_exit = true

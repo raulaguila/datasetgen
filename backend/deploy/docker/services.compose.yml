@@ -1,0 +1,54 @@
+name: dataset
+
+volumes:
+
+  postgres_volume:
+    name: dataset_pg_volume
+
+  files_volume:
+    name: dataset_files_volume
+
+networks:
+
+  dataset_network:
+    name: dataset_network
+    driver: bridge
+    # A fixed range lets the web container keep the address the backend trusts.
+    ipam:
+      config:
+        - subnet: ${DOCKER_SUBNET:-172.30.97.0/24}
+
+services:
+
+  postgres:
+
+    container_name: dataset_postgres
+    image: dataset_postgres
+    hostname: postgres
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile
+    restart: always
+    volumes:
+      - postgres_volume:/var/lib/postgresql/data
+    command: >
+      postgres
+      -p ${POSTGRES_PORT}
+      -c shared_preload_libraries='pg_cron'
+      -c cron.database_name='${POSTGRES_BASE}'
+    ports:
+      - 127.0.0.1:${POSTGRES_PORT}:${POSTGRES_PORT}  # host tools only; never publish publicly
+    environment:
+      - TZ=${TZ}
+      - POSTGRES_DB=${POSTGRES_BASE}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASS}
+    healthcheck:
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_BASE} -p ${POSTGRES_PORT}'" ]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 1s
+      start_interval: 2s
+    networks:
+      - dataset_network

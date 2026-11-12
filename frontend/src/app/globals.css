@@ -1,0 +1,349 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "./interface.css";
+@import "./schema-form.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-content: var(--content);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-ibm-plex-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-heading: var(--font-ibm-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Fixed Thoth cobalt; legacy personal accent preferences remain stored. */
+  --accent-h: 266;
+
+  /* Keep the shared brand-fill contract with a single cobalt color. */
+  --gradient-brand: linear-gradient(
+    135deg,
+    oklch(0.514480 0.176592 265.697500),
+    oklch(0.514480 0.176592 265.697500)
+  );
+  --brand-foreground: oklch(0.99 0 0);
+  --brand-panel: var(--gradient-brand);
+
+  /* Semantic neutral ladder: chrome → canvas → cards → interaction states.
+     Opaque levels make hover/selection readable on every surface. */
+  --background: oklch(0.984152 0.003413 247.857544);
+  --content: oklch(0.984152 0.003413 247.857544);
+  --foreground: oklch(0.279495 0.036848 260.030984);
+  --card: oklch(1.000000 0.000000 89.875563);
+  --card-foreground: oklch(0.279495 0.036848 260.030984);
+  --popover: oklch(1.000000 0.000000 89.875563);
+  --popover-foreground: oklch(0.279495 0.036848 260.030984);
+  /* Brand accent drives primary + ring. */
+  --primary: oklch(0.514480 0.176592 265.697500);
+  --primary-foreground: oklch(1 0 0);
+  /* Primary as text on its own 16% tint (active nav); darker for AA headroom. */
+  --primary-strong: oklch(0.45 0.18 266);
+  --secondary: oklch(0.959257 0.006870 247.896436);
+  --secondary-foreground: oklch(0.279495 0.036848 260.030984);
+  --muted: oklch(0.959257 0.006870 247.896436);
+  --muted-foreground: oklch(0.445533 0.037447 257.280836);
+  /* shadcn --accent is a neutral hover surface (not the brand accent). */
+  --accent: oklch(0.947049 0.009702 252.812502);
+  --accent-foreground: oklch(0.279495 0.036848 260.030984);
+  --destructive: oklch(0.49 0.18 25);
+  --success: oklch(0.44 0.12 150);
+  --warn: oklch(0.44 0.09 65);
+  --info: oklch(0.46 0.12 240);
+  --border: oklch(0.89 0.014 255);
+  --input: oklch(0.6 0.034 257);
+  --input-fill: oklch(.94 .005 226);
+  --ring: oklch(0.58 0.16 var(--accent-h));
+  --radius: 0.625rem;
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.279495 0.036848 260.030984);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: oklch(0.947049 0.009702 252.812502);
+  --sidebar-accent-foreground: oklch(0.279495 0.036848 260.030984);
+  --sidebar-border: oklch(0.89 0.014 255);
+  --sidebar-ring: oklch(0.58 0.16 var(--accent-h));
+
+  /* Density tokens (comfortable defaults; compact overrides below). */
+  --space-page: 1.25rem;
+  --space-page-y: 1rem;
+  --space-section: 1.25rem;
+  --space-list: 0.75rem;
+  --space-card: 1.25rem;
+  --space-row: 0.5rem;
+  --control-h: 2rem;
+  --control-h-sm: 1.75rem;
+  --control-h-lg: 2.25rem;
+  --nav-item-h: 2.25rem;
+  --nav-pad-y: 0.5rem;
+  --nav-gap: 0.25rem;
+  --header-h: 3.5rem;
+  --table-cell-px: 1rem;
+  --table-cell-py: 0.75rem;
+  --table-head-py: 0.75rem;
+}
+
+.dark {
+  /* Dark palette: chrome stays deepest; rows, menus and hover states climb
+     the ladder enough to remain distinguishable from the content canvas. */
+  --gradient-brand: linear-gradient(
+    135deg,
+    oklch(0.747312 0.129614 272.266084),
+    oklch(0.747312 0.129614 272.266084)
+  );
+  /* The brand panel stays deep in dark mode: the light primary would glare. Buttons keep --gradient-brand. */
+  --brand-panel: linear-gradient(135deg, oklch(0.36 0.12 268), oklch(0.28 0.09 270));
+  --brand-foreground: oklch(0.96 0.01 270);
+  --background: oklch(.18 0 0);
+  --content: oklch(.18 0 0);
+  --foreground: oklch(.94 0 0);
+  --card: oklch(.25 0 0);
+  --card-foreground: oklch(.94 0 0);
+  --popover: oklch(.27 0 0);
+  --popover-foreground: oklch(.94 0 0);
+  --primary: oklch(0.747312 0.129614 272.266084);
+  --primary-foreground: oklch(0.187396 0.012644 270.658583);
+  --primary-strong: var(--primary);
+  --secondary: oklch(.29 0 0);
+  --secondary-foreground: oklch(.94 0 0);
+  --muted: oklch(.29 0 0);
+  --muted-foreground: oklch(.77 0 0);
+  --accent: oklch(.32 0 0);
+  --accent-foreground: oklch(.94 0 0);
+  --destructive: oklch(0.80 0.12 22);
+  --success: oklch(0.80 0.12 150);
+  --warn: oklch(0.82 0.11 75);
+  --info: oklch(0.80 0.10 240);
+  --border: oklch(.40 0 0);
+  --input: oklch(.62 0 0);
+  --input-fill: oklch(.40 0 0);
+  --ring: oklch(0.70 0.15 var(--accent-h));
+  --sidebar: oklch(.21 0 0);
+  --sidebar-foreground: oklch(.94 0 0);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: oklch(.32 0 0);
+  --sidebar-accent-foreground: oklch(.94 0 0);
+  --sidebar-border: oklch(.40 0 0);
+  --sidebar-ring: oklch(0.70 0.15 var(--accent-h));
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+    scroll-padding-top: var(--header-h);
+  }
+  h1, h2, h3 {
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+  }
+  :where(button, a, summary, [role="button"]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+  :where(input, textarea)::placeholder {
+    color: var(--muted-foreground);
+    opacity: 1;
+  }
+}
+/* Slim,files,audit). */
+*{
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--foreground) 18%, transparent) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--foreground) 18%, transparent);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Appearance prefs: density + border-radius (Dolphin-style data attrs). */
+html[data-density="compact"] {
+  --space-page: 1rem;
+  --space-page-y: 0.75rem;
+  --space-section: 0.75rem;
+  --space-list: 0.5rem;
+  --space-card: 0.875rem;
+  --space-row: 0.375rem;
+  --control-h: 1.75rem;
+  --control-h-sm: 1.5rem;
+  --control-h-lg: 2rem;
+  --nav-item-h: 2rem;
+  --nav-pad-y: 0.375rem;
+  --nav-gap: 0.125rem;
+  --header-h: 2.75rem;
+  --table-cell-px: 0.75rem;
+  --table-cell-py: 0.375rem;
+  --table-head-py: 0.625rem;
+}
+
+html[data-radius="sharp"] {
+  --radius: 0.125rem;
+}
+html[data-radius="subtle"] {
+  --radius: 0.375rem;
+}
+html[data-radius="default"] {
+  --radius: 0.625rem;
+}
+html[data-radius="rounded"] {
+  --radius: 1rem;
+}
+html[data-density="compact"][data-radius="sharp"] {
+  --radius: 0;
+}
+html[data-density="compact"][data-radius="subtle"] {
+  --radius: 0.25rem;
+}
+html[data-density="compact"][data-radius="default"] {
+  --radius: 0.5rem;
+}
+html[data-density="compact"][data-radius="rounded"] {
+  --radius: 0.75rem;
+}
+
+.page-pad {
+  padding: var(--space-page);
+  min-width: 0;
+}
+
+/* Coarse and narrow screens need touch targets even in compact density.
+   Desktop density remains unchanged; labels/citations retain inline flow. */
+@media (max-width: 767px), (pointer: coarse) {
+  :root, html[data-density="compact"] {
+    --control-h: 2.75rem;
+    --control-h-sm: 2.75rem;
+    --control-h-lg: 2.75rem;
+    --nav-item-h: 2.75rem;
+    --header-h: 3.5rem;
+  }
+  :where(button:not([data-citation], [data-slot="checkbox"], [role="switch"]), [role="button"], [data-slot="button"], [data-slot="select-trigger"], [data-slot="dropdown-select-trigger"], [data-slot="dropdown-menu-trigger"], [data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="select-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="tabs-trigger"], summary) {
+    min-height: 2.75rem;
+  }
+  :where(button[aria-label]:not([data-citation], [data-slot="checkbox"], [role="switch"]), [data-slot="dropdown-menu-trigger"][aria-label]) {
+    min-width: 2.75rem;
+  }
+  [data-slot="tabs-list"] {
+    min-height: 3.125rem;
+  }
+  [data-slot="checkbox"]::after {
+    inset: -14px;
+  }
+  [role="switch"]::after {
+    content: "";
+    position: absolute;
+    inset: -12px -4px;
+  }
+  :where([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="dropdown-select-trigger"]) {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 767px) {
+  :root, html[data-density="compact"] {
+    --space-page: 1rem;
+  }
+}
+
+[data-slot="sheet-content"] {
+  max-height: 100dvh;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+[data-slot="sheet-content"]:is([data-side="left"], [data-side="right"]) {
+  height: 100dvh;
+}
+[data-slot="dialog-content"] {
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Pre-hydration sidebar state: the inline script in layout.tsx adds
+   .sidebar-collapsed to <html> before first paint so the sidebar doesn't
+   flash open. AppShell removes the class after React mounts. */
+html.sidebar-collapsed aside[data-sidebar] {
+  width: 4rem;
+}
+html.sidebar-collapsed aside[data-sidebar] [data-sidebar-label] {
+  display: none;
+}
+html.sidebar-collapsed aside[data-sidebar] [data-sidebar-mark] {
+  display: inline-flex;
+}
+html.sidebar-collapsed aside[data-sidebar] [data-sidebar-padding] {
+  padding-inline: 0.5rem;
+}
+html.sidebar-collapsed aside[data-sidebar] :is([data-sidebar-link], [data-sidebar-switcher]) {
+  justify-content: center;
+  padding-inline: 0;
+}
+html.sidebar-collapsed aside[data-sidebar] [data-sidebar-switcher-content] {
+  flex: initial;
+  justify-content: center;
+}
+html.sidebar-collapsed aside[data-sidebar] [data-sidebar-link]::before {
+  display: none;
+}
+html.sidebar-collapsed aside[data-sidebar] [data-sidebar-toggle-icon] {
+  rotate: none;
+}

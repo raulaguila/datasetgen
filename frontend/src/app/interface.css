@@ -1,0 +1,515 @@
+/* V9 presentation over the existing semantic tokens and native components. */
+
+:root {
+  --rail-surface: var(--sidebar);
+  --rail-border: var(--border)
+}
+.dark {
+  --rail-surface: var(--sidebar);
+  --rail-border: var(--border)
+}
+.app-frame {
+  height: 100dvh;
+  min-width: 0
+}
+.app-shell {
+  height: 100%;
+  padding: 16px;
+  gap: 20px;
+  background: var(--background)
+}
+.app-page {
+  min-width: 0
+}
+/* New composition over the current semantic tokens. Root rem scale stays at 16px. */
+[hidden] {
+  display: none!important
+}
+h1,h2,h3 {
+  text-wrap: balance
+}
+h1 {
+  letter-spacing: -.02em
+}
+button,a,input,select,textarea {
+  touch-action: manipulation
+}
+.app-frame header.sticky {
+  border: 0;
+  background: var(--background);
+  height: 48px;
+  padding-inline: 4px;
+  margin-bottom: 12px;
+  min-width: 0;
+  gap: 8px
+}
+.app-frame header.sticky > div:first-child {
+  flex: 1
+}
+.app-frame #main-content {
+  background: var(--content);
+  scrollbar-gutter: stable;
+  min-height: 0
+}
+.app-page [data-ui-page-header] {
+  border: 0;
+  padding-top: 12px;
+  padding-bottom: 20px
+}
+.app-page [data-ui-page-header] h1 {
+  font-size: 25px
+}
+.app-page [data-ui-page-header] p {
+  max-width: 75ch;
+  font-size: 13px
+}
+.app-page [data-slot=table-container] {
+  border-radius: min(10px,calc(var(--radius)*1))
+}
+/* Inside a card the card rounds the corners; rounding here would cut the last row above the pagination. */
+.app-page [data-slot=card] [data-slot=table-container] {
+  border-radius: 0
+}
+.app-page [data-slot=button] {
+  box-shadow: none
+}
+.app-page [data-slot=badge] {
+  font-weight: 500
+}
+/* One boundary after navigation; section borders continue only between content groups. */
+[data-slot=tabs][data-orientation=horizontal] {
+  flex-direction: column
+}
+[data-slot=tabs-list] {
+  height: auto;
+  min-height: 44px;
+  padding: 0;
+  gap: 12px;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  align-items: stretch
+}
+[data-slot=tabs-trigger] {
+  min-height: 44px;
+  height: auto;
+  padding: 10px 6px;
+  flex: none;
+  border-radius: 0;
+  border: 0;
+  position: relative;
+  overflow: visible
+}
+[data-slot=tabs-list][data-variant=line] {
+  width: 100%;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 2px
+}
+[data-slot=tabs-list][data-variant=line] [data-slot=tabs-trigger][data-active] {
+  color: var(--primary)
+}
+[data-slot=tabs-list][data-variant=line] [data-slot=tabs-trigger]:after {
+  inset: auto 0 -2px;
+  height: 2px;
+  width: auto;
+  border-radius: 0
+}
+[data-slot=tabs-list][data-variant=line] [data-slot=tabs-trigger][data-active]:after {
+  opacity: 1
+}
+[data-slot=tabs-content] {
+  margin-top: 16px
+}
+.app-page [data-slot=tabs-content]>section:first-child {
+  border-top: 0;
+  padding-top: 0
+}
+/* Keep the actual accessible auth inputs, controls and validation; compact the layout. */
+@media(max-width:767px) {
+.app-frame header.sticky {
+  height: 56px;
+  padding: 0;
+  margin-bottom: 8px
+}
+.app-page [data-ui-page-header] {
+  padding-block: 12px
+}
+.app-page [data-ui-page-header] h1 {
+  font-size: 23px
+}
+[data-ui-message-lane],[data-ui-composer-lane] {
+  padding-left: 8px;
+  padding-right: 8px
+}
+.app-page [data-slot=tabs-trigger] {
+  font-size: 13px;
+  min-height: 44px
+}
+.app-page [data-slot=tabs-list] {
+  gap: 8px
+}
+}
+@media(prefers-reduced-motion:reduce) {
+*,*::before,*::after {
+  scroll-behavior: auto!important;
+  transition: none!important;
+  animation: none!important
+}
+}
+[data-ui-auth-layout] {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100dvh;
+  width: 100%;
+}
+
+[data-ui-auth-card] {
+  flex-shrink: 0;
+  display: block;
+  width: calc(100% - 32px);
+  max-width: 1000px;
+  margin: 16px auto;
+  border: 1px solid var(--border);
+  border-radius: min(16px,calc(var(--radius)*1.6));
+  overflow: hidden
+}
+[data-ui-auth-brand-strip] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  padding: 16px;
+  background: var(--card);
+  color: var(--foreground)
+}
+[data-ui-auth-form] {
+  min-width: 0;
+  padding: 24px
+}
+[data-ui-auth-card] h1 {
+  font-size: 25px;
+  line-height: 1.3
+}
+@media(min-width:1024px) {
+[data-ui-auth-card] {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,.65fr)
+}
+[data-ui-auth-brand-strip] {
+  display: none
+}
+[data-ui-auth-form] {
+  padding: 32px
+}
+}
+@media(max-width:767px) {
+[data-ui-auth-card] {
+  width: calc(100% - 16px);
+  margin: 8px auto
+}
+[data-ui-auth-card] h1 {
+  font-size: 23px
+}
+}
+@media(max-width:767px),(pointer:coarse) {
+[data-slot=tabs-list] {
+  min-height: 50px
+}
+}
+/* Workspace rail mirrors the reference: 64/256 px, project avatars and footer controls. */
+[data-ui-workspace-rail] {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 8px;
+  width: 256px;
+  height: 100%;
+  min-height: 0;
+  padding: 16px 12px;
+  border: 1px solid var(--rail-border);
+  border-radius: 28px;
+  background: var(--rail-surface);
+  color: var(--foreground)
+}
+[data-ui-workspace-rail][data-collapsed] {
+  width: 64px;
+  padding-inline: 8px
+}
+.rail-brand {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+  height: 64px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rail-border)
+}
+.rail-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  scrollbar-width: none
+}
+.rail-body::-webkit-scrollbar { display:none; }
+.rail-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  min-width: 0;
+  min-height: 48px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  text-decoration: none;
+  text-align: left
+}
+.rail-item:hover {
+  background: var(--accent);
+  color: var(--foreground)
+}
+.rail-item[aria-current=true],.rail-item[data-active] {
+  background: color-mix(in oklab,var(--primary) 16%,transparent);
+  color: var(--primary-strong)
+}
+.rail-item:focus-visible,.rail-brand:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px
+}
+.rail-create {
+  margin-top: 4px;
+  width: 100%
+}
+.rail-main { display: flex; flex-direction: column; }
+.rail-main .rail-item[aria-current=page] {
+  background: color-mix(in oklab,var(--primary) 16%,transparent);
+  color: var(--primary-strong)
+}
+.rail-footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rail-border)
+}
+/* Enlarge only the artwork; rail targets keep their size. */
+:is(.rail-create, .rail-toggle, .rail-administration) > svg:not(.rail-admin-chevron) {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.rail-toggle {
+  width: 100%
+}
+[data-ui-workspace-rail][data-collapsed] .rail-item {
+  justify-content: center;
+  padding-inline: 0;
+  gap: 0
+}
+[data-ui-workspace-rail][data-mobile] {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  padding-top: 28px
+}
+@media(max-width:767px) {
+[data-ui-workspace-rail]:not([data-mobile]) {
+  display: none
+}
+}
+/* Floating panels retain their existing focus, close, resize and scrolling behavior. */
+[data-slot=sheet-content][data-side=right],[data-slot=sheet-content][data-side=left] {
+  inset-block: 16px;
+  height: calc(100dvh - 32px);
+  max-height: calc(100dvh - 32px);
+  border: 1px solid var(--border);
+  border-radius: min(16px,calc(var(--radius)*1.6));
+  box-shadow: none;
+  overflow: clip
+}
+[data-slot=sheet-content][data-side=right] {
+  right: 16px;
+  left: auto
+}
+[data-slot=sheet-content][data-side=left] {
+  left: 16px;
+  right: auto
+}
+@media(max-width:767px) {
+[data-slot=sheet-content][data-side=right],[data-slot=sheet-content][data-side=left] {
+  inset-block: 8px;
+  width: calc(100vw - 16px);
+  height: calc(100dvh - 16px);
+  max-height: calc(100dvh - 16px);
+  max-width: calc(100vw - 16px)
+}
+[data-slot=sheet-content][data-side=right] {
+  right: 8px
+}
+[data-slot=sheet-content][data-side=left] {
+  left: 8px
+}
+}
+/* Breadcrumbs retain the workspace and current section; destinations live in the rail. */
+
+/* Keep persisted collapse visible before hydration, including tablet widths. */
+.rail-brand-mark { display: none; }
+[data-ui-workspace-rail][data-collapsed] .rail-brand-mark { display: inline-flex; }
+[data-ui-workspace-rail][data-collapsed] .rail-brand-wordmark { display: none; }
+html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) { width: 64px; padding-inline: 8px; }
+html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item > span,
+html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-brand-wordmark { display: none; }
+html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-brand-mark { display: inline-flex; }
+html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { justify-content: center; padding-inline: 0; gap: 0; }
+@media (min-width:768px) and (max-width:1023px) {
+  [data-ui-workspace-rail]:not([data-mobile]) { width:64px; padding-inline:8px; }
+  [data-ui-workspace-rail]:not([data-mobile]) .rail-item > span,
+  [data-ui-workspace-rail]:not([data-mobile]) .rail-brand-wordmark { display:none; }
+  [data-ui-workspace-rail]:not([data-mobile]) .rail-brand-mark { display:inline-flex; }
+  [data-ui-workspace-rail]:not([data-mobile]) .rail-item { justify-content:center; padding-inline:0; gap:0; }
+}
+
+/* Administration is workspace-scoped; the compact rail opens the same links. */
+.rail-admin {
+  --rail-admin-row-h:44px;
+  --rail-current-bg:var(--primary);
+  --rail-current-fg:var(--primary-foreground);
+  --rail-item-hover-bg:color-mix(in oklab,var(--primary) 12%,var(--sidebar));
+  --rail-item-hover-fg:var(--primary);
+  --rail-parent-bg:color-mix(in oklab,var(--primary) 16%,var(--sidebar));
+  --rail-parent-hover-bg:color-mix(in oklab,var(--primary) 20%,var(--sidebar));
+}
+.rail-admin {
+  position:relative;
+  margin-top:12px;
+  padding-top:16px;
+}
+.rail-admin-group + .rail-admin-group { margin-top:4px; }
+.rail-admin::before { content:""; position:absolute; top:0; left:0; right:0; margin-inline:auto; width:calc(100% - 16px); height:1px; background:var(--rail-border); }
+.rail-admin-group{ position:relative; isolation:isolate; border-radius:calc(var(--rail-admin-row-h)/2) calc(var(--rail-admin-row-h)/2) min(12px,calc(var(--radius)*1.6)) min(12px,calc(var(--radius)*1.6)); }
+/* Inset only the painted surface; links keep their full touch and focus areas. */
+.rail-admin-group[data-open]::before{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  pointer-events:none;
+  inset:calc(var(--rail-admin-row-h)/2) var(--rail-submenu-inset,8px) 0;
+  border-radius:inherit;
+  background:color-mix(in oklab,var(--primary) 8%,var(--sidebar));
+}
+.rail-admin-group[data-open] > .rail-administration { background:var(--rail-parent-bg); }
+.rail-admin nav {
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  padding:4px;
+  margin-top:4px;
+}
+.rail-admin .rail-administration { width:100%; font-size:14px; }
+.rail-administration > span { color:var(--foreground); font-weight:500; }
+.rail-admin-chevron { margin-left:auto; transition:transform 150ms ease-out; }
+.rail-administration[aria-expanded=true] .rail-admin-chevron { transform:rotate(180deg); }
+.rail-admin .rail-item { font-size:13px; min-height:var(--rail-admin-row-h); height:auto; white-space:normal; }
+.rail-administration[data-active] { background:var(--rail-parent-bg,var(--accent)); color:var(--primary-strong); }
+.rail-admin .rail-item:hover { background:var(--rail-item-hover-bg,var(--accent)); color:var(--rail-item-hover-fg,var(--foreground)); }
+.rail-admin .rail-administration[data-active] { color:var(--primary-strong); }
+.rail-admin .rail-administration:hover { background:var(--rail-parent-hover-bg,var(--accent)); }
+.rail-admin .rail-item[aria-current=page] { background:transparent; color:var(--primary-strong); font-weight:600; }
+.rail-admin .rail-item[aria-current=page]:focus-visible { outline-color:var(--rail-current-focus,var(--ring)); outline-offset:var(--rail-current-focus-offset,-2px); }
+/* Table headings keep their rhythm even when body rows are compact. */
+.app-page th { min-height:40px; height:44px; padding:10px 16px; font-size:13px; line-height:20px; font-weight:600; }
+.app-page thead { background:var(--muted); }
+/* Circular targets use equal dimensions in every collapsed-rail state. */
+:is([data-ui-workspace-rail][data-collapsed], html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile])) .rail-item {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  margin-inline: auto;
+  border-radius: 50%;
+}
+@media (min-width:768px) and (max-width:1023px) {
+  [data-ui-workspace-rail]:not([data-mobile]) .rail-item {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    margin-inline: auto;
+    border-radius: 50%;
+  }
+}
+
+
+:is([data-ui-workspace-rail][data-collapsed], html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile])) .rail-admin::before { width:28px; }
+@media (min-width:768px) and (max-width:1023px) { [data-ui-workspace-rail]:not([data-mobile]) .rail-admin::before { width:28px; } }
+
+/* Keep the settings subgroup readable inside the narrow rail without shrinking touch targets. */
+:is([data-ui-workspace-rail][data-collapsed], html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile])) .rail-admin nav { padding:4px 0; }
+@media (min-width:768px) and (max-width:1023px) { [data-ui-workspace-rail]:not([data-mobile]) .rail-admin nav { padding:4px 0; } }
+
+/* The compact submenu leaves room around the selected icon. */
+:is([data-ui-workspace-rail][data-collapsed],html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile])) .rail-admin-group { --rail-submenu-inset:4px; border-radius:999px; }
+@media (min-width:768px) and (max-width:1023px) { [data-ui-workspace-rail]:not([data-mobile]) .rail-admin-group { --rail-submenu-inset:4px; border-radius:999px; } }
+
+/* One icon treatment for both rail widths; labels retain their own readable color. */
+.rail-admin nav .rail-item { padding-block:4px; gap:8px; }
+.rail-admin nav .rail-item:hover { background:transparent; }
+.rail-admin nav .rail-item > svg {
+  box-sizing:border-box;
+  overflow:visible;
+  width:32px;
+  height:32px;
+  padding:6px;
+  margin-inline:2px;
+  border-radius:50%;
+  flex-shrink:0;
+}
+.rail-admin nav .rail-item:hover > svg { background:var(--rail-item-hover-bg); }
+.rail-admin nav .rail-item[aria-current=page] > svg { background:var(--rail-current-bg); color:var(--rail-current-fg); }
+/* The inner focus ring stays inside the filled circle when labels are hidden. */
+:is([data-ui-workspace-rail][data-collapsed], html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile])) {
+  --rail-current-focus:var(--primary-foreground);
+  --rail-current-focus-offset:-8px;
+}
+@media (min-width:768px) and (max-width:1023px) {
+  [data-ui-workspace-rail]:not([data-mobile]) {
+    --rail-current-focus:var(--primary-foreground);
+    --rail-current-focus-offset:-8px;
+  }
+}
+
+
+@media (max-width: 1023px) {
+  table[data-responsive] { display: block; min-width: 0 !important; }
+  table[data-responsive] thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  table[data-responsive] tbody { display: block; }
+  table[data-responsive] tbody tr { display: grid; grid-template-columns: minmax(0,1fr); padding: 12px; gap: 8px; }
+  table[data-responsive] td { display: block; width: auto; max-width: none; padding: 0; text-align: left; overflow-wrap: anywhere; white-space: normal; }
+  table[data-responsive] td::before { content: attr(data-label); display: block; margin-bottom: 3px; font-size: 13px; color: var(--muted-foreground); }
+  table[data-responsive] td:not([data-label])::before { display: none; }
+  table[data-responsive] td .truncate { white-space: normal; overflow-wrap: anywhere; }
+  /* Compact cards: name and status on top, then a secondary line, then date and a count; no repeated labels.
+     The name links to the record, so the action column goes away. */
+  table[data-compact] tbody tr { grid-template-columns: minmax(0,1fr) auto; gap: 2px 12px; }
+  table[data-compact] tbody tr:has(> td:first-child [role=checkbox]) { grid-template-columns: auto minmax(0,1fr) auto; }
+  table[data-compact] td::before { display: none; }
+  table[data-compact] td:first-child:has([role=checkbox]) { grid-row: 1 / 4; grid-column: 1; align-self: center; }
+  table[data-compact] td[data-cell=name] { grid-row: 1; grid-column: -3 / -2; }
+  table[data-compact] td[data-cell=status] { grid-row: 1; grid-column: -2 / -1; }
+  table[data-compact] td[data-cell=sub] { grid-row: 2; grid-column: -3 / -1; font-size: 13px; }
+  table[data-compact] td[data-cell=date] { grid-row: 3; grid-column: -3 / -2; font-size: 12px; }
+  table[data-compact] tbody tr:not(:has(> td[data-cell=meta])) td[data-cell=date] { grid-column: -3 / -1; }
+  table[data-compact] td[data-cell=meta] { grid-row: 3; grid-column: -2 / -1; font-size: 12px; color: var(--muted-foreground); }
+  table[data-compact] td[data-cell=detail] { grid-row: 4; grid-column: -3 / -1; font-size: 12px; }
+  table[data-compact] td[data-cell=action] { display: none; }
+}
+
+/* The first group sits under the brand, which already draws a divider. */
+.rail-body > .rail-admin:first-child { margin-top:0; padding-top:4px; }
+.rail-body > .rail-admin:first-child::before { display:none; }

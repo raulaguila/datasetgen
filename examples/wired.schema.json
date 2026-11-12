@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "title": "Wired",
+  "required": ["nome", "categoria", "descricao"],
+  "properties": {
+    "nome": { "type": "string", "title": "Nome", "minLength": 1 },
+    "categoria": {
+      "type": "string",
+      "title": "Categoria",
+      "enum": ["gatilho", "efeito", "condicao", "extra", "seletor"]
+    },
+    "descricao": { "type": "string", "title": "Como funciona" },
+    "parametros": {
+      "type": "array",
+      "title": "Parâmetros",
+      "items": {
+        "type": "object",
+        "required": ["nome", "tipo"],
+        "properties": {
+          "nome": { "type": "string", "title": "Nome" },
+          "tipo": { "type": "string", "title": "Tipo", "enum": ["numero", "texto", "selecao", "mobis", "booleano"] },
+          "valores": { "type": "string", "title": "Valores possíveis", "description": "Faixa (ex.: 0 a 100) ou opções separadas por vírgula" },
+          "padrao": { "type": "string", "title": "Valor padrão" }
+        }
+      }
+    },
+    "exemplos": {
+      "type": "array",
+      "title": "Exemplos de uso",
+      "items": {
+        "type": "object",
+        "required": ["cenario"],
+        "properties": {
+          "cenario": { "type": "string", "title": "Cenário" },
+          "explicacao": { "type": "string", "title": "Explicação" }
+        }
+      }
+    }
+  }
+}

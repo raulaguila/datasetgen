@@ -1,0 +1,24 @@
+# Beyond the defaults: security, swallowed errors and unclosed resources.
+version: "2"
+linters:
+  enable:
+    - gosec
+    - bodyclose
+    - errorlint
+    - nilerr
+    - sqlclosecheck
+    - gocyclo
+  exclusions:
+    rules:
+      # Tests read fixtures by path and drop response bodies on purpose.
+      - path: _test\.go
+        linters: [gosec, bodyclose]
+      # Error code names such as INVALID_CREDENTIALS are not credentials.
+      - path: pkg/apperror/error\.go
+        text: G101
+      # Fixed CSS and JS of the Swagger page, mounted only outside production.
+      - path: internal/adapter/inbound/http/rest/swagger\.go
+        text: G203
+      # Argon2 lengths are bounds-checked on the lines above the conversion.
+      - path: pkg/password/password\.go
+        text: G115

@@ -1,0 +1,42 @@
+# Web stack. Joins the backend network, so start the backend stack first
+# (make compose-build in backend/).
+name: dataset_web
+
+services:
+
+  web:
+
+    container_name: dataset_web
+    image: dataset_web:${WEB_VERSION:-dev}
+    hostname: web
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: always
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3005/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    ports:
+      - ${WEB_PORT:-3006}:3005
+    env_file: ../config/.env
+    environment:
+      - API_URL=http://backend:${API_PORT:-9977}
+      - SESSION_SECRET=${SESSION_SECRET:?Set SESSION_SECRET in frontend/config/.env (make init)}
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      dataset_network:
+        # The backend trusts X-Real-IP only from this address (its WEB_IP).
+        ipv4_address: ${WEB_IP:-172.30.97.10}
+
+networks:
+
+  dataset_network:
+    name: dataset_network
+    external: true

@@ -1,0 +1,26 @@
+/* Generated record forms (@rjsf/core default markup), drawn like the app's own fields. */
+.rjsf { display: grid; gap: 1rem; }
+.rjsf fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 1rem; }
+.rjsf fieldset fieldset { border-left: 2px solid var(--border); padding-left: 1rem; }
+.rjsf legend { font-weight: 600; font-size: 0.9375rem; margin-bottom: 0.25rem; }
+.rjsf .form-group { display: grid; gap: 0.375rem; min-width: 0; }
+.rjsf .control-label { font-size: 0.875rem; font-weight: 500; }
+.rjsf .required { color: var(--destructive); margin-left: 0.125rem; }
+.rjsf .field-description, .rjsf .help-block { font-size: 0.8125rem; color: var(--muted-foreground); margin: 0; }
+.rjsf .form-control {
+  height: var(--control-h); width: 100%; min-width: 0; border-radius: 0.5rem;
+  border: 1px solid var(--input); background: var(--card); padding: 0.25rem 0.625rem;
+  font-size: 0.875rem; outline: none; transition: border-color 0.15s;
+}
+.rjsf textarea.form-control { height: auto; min-height: 6rem; padding: 0.5rem 0.625rem; }
+.rjsf .form-control:focus-visible { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent); }
+.rjsf .form-control:disabled { opacity: 0.6; cursor: not-allowed; }
+.rjsf .checkbox label { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
+.rjsf .array-item-list { display: grid; gap: 0.5rem; }
+.rjsf .array-item { display: flex; gap: 0.5rem; align-items: flex-start; border: 1px solid var(--border); border-radius: 0.75rem; padding: 0.75rem; }
+.rjsf .array-item > :first-child { flex: 1; min-width: 0; }
+.rjsf .array-item-toolbox .btn-group { display: flex; gap: 0.125rem; }
+.rjsf .row { display: flex; justify-content: flex-end; }
+.rjsf .row > p { margin: 0; }
+.rjsf .error-detail { list-style: none; margin: 0; padding: 0; font-size: 0.8125rem; color: var(--destructive); }
+.rjsf .hidden { display: none; }

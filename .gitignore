@@ -1,0 +1,39 @@
+# Track source, documentation, and configuration by default.
+# Ignore only generated artifacts, secrets, and machine-local files.
+
+# OS and editor files
+**/.DS_Store
+**/Thumbs.db
+**/.idea/
+**/.vscode/
+**/*.swp
+**/*.swo
+
+# Local environment and secrets
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.sample
+!**/.env.template
+**/*.pem
+**/*.key
+
+# Uploaded files of the local storage driver
+backend/data/
+
+# Build outputs and temporary files
+**/bin/
+**/tmp/
+**/dist/
+**/*.test
+**/*.out
+**/cover.out
+**/coverage.html
+**/*.zip
+**/*.log
+**/__debug_bin*
+
+# Agent files
+**/.codex
+**/.claude/
+**/.cursor/

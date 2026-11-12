@@ -1,0 +1,103 @@
+name: dataset
+
+include:
+  - services.compose.yml
+
+services:
+
+  # The backend runs as nobody; a fresh named volume is owned by root. This
+  # one-shot step hands the uploads directory to nobody before the backend starts.
+  files-init:
+
+    container_name: dataset_files_init
+    image: dataset_backend:${SYS_VERSION}
+    user: "0:0"
+    entrypoint: ["chown", "65534:65534", "/data/files"]
+    restart: "no"
+    volumes:
+      - files_volume:/data/files
+
+  backend:
+
+    container_name: dataset_backend
+    image: dataset_backend:${SYS_VERSION}
+    hostname: backend
+    build:
+      context: ../..
+      dockerfile: deploy/docker/backend/${BASE:-source}.Dockerfile
+    restart: always
+    stop_grace_period: 40s
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:$${API_PORT}/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    ports:
+      - ${API_PORT}:${API_PORT}
+    tty: true
+    env_file: ../../config/.env
+    environment:
+      - TZ=${TZ}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=${POSTGRES_APP_USER:-${POSTGRES_USER}}
+      - POSTGRES_PASS=${POSTGRES_APP_PASS:-${POSTGRES_PASS}}
+      - POSTGRES_APP_PASS= # already in POSTGRES_PASS above
+      - POSTGRES_MAILER_PASS= # do not inherit the mailer credential from env_file
+      - GOMEMLIMIT=400MiB  # GC pressure before the container limit
+      # Only the web BFF (frontend/deploy/compose.yml) may set the client IP; the gateway may not.
+      - API_TRUSTED_PROXIES=${WEB_IP:-172.30.97.10}
+      - STORAGE_LOCAL_DIR=/data/files  # used when STORAGE_DRIVER is local
+    volumes:
+      - files_volume:/data/files
+    deploy:
+      resources:
+        limits:
+          memory: 512M  # 4 Argon2 hashes at 64 MiB + buffers
+    networks:
+      - dataset_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      files-init:
+        condition: service_completed_successfully
+
+  mailer:
+
+    container_name: dataset_mailer
+    image: dataset_mailer:${SYS_VERSION}
+    hostname: mailer
+    build:
+      context: ../..
+      dockerfile: deploy/docker/mailer/${BASE:-source}.Dockerfile
+    restart: always
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9091/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    tty: true
+    env_file: ../../config/.env
+    environment:
+      - TZ=${TZ}
+      - SYS_SERVICE=mailer
+      - ACCESS_TOKEN=new  # replaces the real signing keys: this process issues no token
+      - REFRESH_TOKEN=new
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=${POSTGRES_MAILER_USER:-dataset_mailer}
+      - POSTGRES_PASS=${POSTGRES_MAILER_PASS:?Set POSTGRES_MAILER_PASS and run make migrate-up}
+      - POSTGRES_APP_PASS= # do not inherit the backend credential from env_file
+      - POSTGRES_URL=host=postgres user=${POSTGRES_MAILER_USER:-dataset_mailer} password=${POSTGRES_MAILER_PASS:?Set POSTGRES_MAILER_PASS} dbname=${POSTGRES_BASE} port=${POSTGRES_PORT} sslmode=disable
+      - POSTGRES_MAX_CONNS=5  # sends one email at a time
+      - GOMEMLIMIT=100MiB
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - dataset_network
+    depends_on:
+      postgres:
+        condition: service_healthy
