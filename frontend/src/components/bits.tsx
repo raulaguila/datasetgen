@@ -49,10 +49,10 @@ export function PageBody({ children, className }: { children: React.ReactNode; c
 }
 
 const STATUS_CLS: Record<UserStatus, string> = {
-  active: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300",
-  pending: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
-  locked: "bg-red-500/15 text-red-800 dark:text-red-300",
-  disabled: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300",
+  active: "bg-success/15 text-success",
+  pending: "bg-warn/15 text-warn",
+  locked: "bg-destructive/15 text-destructive",
+  disabled: "bg-muted-foreground/15 text-muted-foreground",
 };
 
 export function StatusBadge({ status }: { status: UserStatus }) {
@@ -87,13 +87,25 @@ export function useFormatDate() {
   return (iso: string) => new Date(iso).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
 }
 
-/** The red box a form shows above its fields when the server refuses it. */
+/** "3 h ago" in the user's language, with the full date and time for a tooltip. */
+export function useRelativeTime() {
+  const { locale } = useI18n();
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  return (iso: string) => {
+    const secs = (Date.parse(iso) - Date.now()) / 1000;
+    const steps: [Intl.RelativeTimeFormatUnit, number][] = [["year", 31536000], ["month", 2592000], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]];
+    const [unit, size] = steps.find(([, s]) => Math.abs(secs) >= s) ?? ["second", 1];
+    return { rel: unit === "second" ? rtf.format(0, "minute") : rtf.format(Math.round(secs / size), unit), abs: new Date(iso).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) };
+  };
+}
+
 /** Under a field: its rule or hint while fine, in red once the value breaks a rule. */
 export function FieldNote({ id, error, hint }: { id: string; error?: string | null; hint?: string }) {
   if (!error && !hint) return null;
   return <p id={id} className={cn("text-xs", error ? "text-destructive" : "text-muted-foreground")}>{error || hint}</p>;
 }
 
+/** The red box a form shows above its fields when the server refuses it. */
 export function FormError({ message }: { message: string | null }) {
   if (!message) return null;
   return (

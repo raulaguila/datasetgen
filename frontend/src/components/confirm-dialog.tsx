@@ -1,5 +1,6 @@
 "use client";
 
+import { FormError } from "@/components/bits";
 import { useRef, useState } from "react";
 import { errorMessage } from "@/lib/errors";
 import {
@@ -10,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/provider";
 
@@ -68,7 +70,7 @@ export function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        <FormError message={error} />
         <DialogFooter>
           <Button variant="ghost" disabled={pending} onClick={() => changeOpen(false)}>
             {cancel}
@@ -78,6 +80,7 @@ export function ConfirmDialog({
             disabled={pending}
             onClick={() => void submit()}
           >
+            {pending && <Loader2 className="size-4 animate-spin" />}
             {pending ? t("common.confirming") : confirm}
           </Button>
         </DialogFooter>

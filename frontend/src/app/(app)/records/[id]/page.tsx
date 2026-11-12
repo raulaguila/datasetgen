@@ -5,11 +5,11 @@ import { useEffect, useRef, useState } from "react";
 import type Form from "@rjsf/core";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { DangerZone, FormSection, FormSections, PageBody, PageHeader, SaveBar, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
+import { recordTitle } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
 import { RecordHistory } from "@/components/record-history";
 import { SchemaForm } from "@/components/schema-form";
@@ -130,16 +130,16 @@ export default function RecordPage() {
   useEffect(() => { if (collection) setCollection(collection.id); }, [collection, setCollection]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const editable = roleAllows(collection?.role, "editor");
-  useCrumb(creating ? t("records.new") : t("records.record"), collection && { label: collection.name, href: `/collections/${collection.id}` });
+  // Named by its first text value, as lists show it; the id when it has none.
+  const title = creating ? t("records.new") : record ? recordTitle(collection?.schema ?? null, record.data) ?? `${t("records.record")} ${record.id.slice(0, 8)}` : t("records.record");
+  useCrumb(title, collection && { label: collection.name, href: `/collections/${collection.id}` });
   const failed = detail.error ?? parent.error;
-  const back = collection && <Button variant="ghost" nativeButton={false} render={<Link href={`/collections/${collection.id}`} />}><ArrowLeft className="size-4" />{collection.name}</Button>;
 
   return (
     <>
       <PageHeader
-        title={creating ? t("records.new") : t("records.record")}
+        title={title}
         description={record && `${t("common.updated_at")} ${format(record.updated_at)}`}
-        action={back}
       />
       <PageBody>
         {loading || (!creating && detail.isPending) || (!!collectionId && parent.isPending) ? (

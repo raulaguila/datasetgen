@@ -8,13 +8,14 @@ import { toast } from "sonner";
 import { FormSection, FormSections, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
-import { fieldsOf } from "@/components/field-builder";
+import { fieldsOf, recordTitle } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { collections } from "@/lib/api/endpoints";
 import type { Collection, QualityReport, RecordFix } from "@/lib/api/types";
 import { errorMessage } from "@/lib/errors";
@@ -50,7 +51,7 @@ function BulkFix({ collection, report, onDone }: { collection: Collection; repor
     onDone();
   };
   const canDelete = report.status === "done" && report.version === report.current_version && report.invalid_count > 0;
-  const selectCls = "h-9 w-full rounded-lg border border-input bg-card px-2 text-sm dark:bg-transparent";
+  const ops: Record<RecordFix["op"], string> = { set_default: t("fix.op.set_default"), rename: t("fix.op.rename"), remove: t("fix.op.remove") };
 
   return (
     <FormSections>
@@ -58,11 +59,12 @@ function BulkFix({ collection, report, onDone }: { collection: Collection; repor
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (ready) setConfirm("fix"); }}>
           <div className="space-y-2">
             <Label htmlFor="fix-op">{t("fix.op")}</Label>
-            <select id="fix-op" className={selectCls} value={op} onChange={(e) => setOp(e.target.value as RecordFix["op"])}>
-              <option value="set_default">{t("fix.op.set_default")}</option>
-              <option value="rename">{t("fix.op.rename")}</option>
-              <option value="remove">{t("fix.op.remove")}</option>
-            </select>
+            <Select value={op} items={ops} onValueChange={(v) => setOp(v as RecordFix["op"])}>
+              <SelectTrigger id="fix-op" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(ops).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="fix-field">{t(op === "rename" ? "fix.from" : "fix.field")}</Label>
@@ -129,10 +131,7 @@ function Quality({ collection }: { collection: Collection }) {
     const text = t(`quality.issue.${keyword}` as MessageKey);
     return text.startsWith("quality.issue.") ? message : text;
   };
-  const preview = (id: string, data: Record<string, unknown>) => {
-    const first = [...labels.keys()].map((k) => data?.[k]).find((v) => typeof v === "string" && v);
-    return typeof first === "string" ? first : `${t("records.record")} ${id.slice(0, 8)}`;
-  };
+  const preview = (id: string, data: Record<string, unknown>) => recordTitle(collection.schema ?? null, data) ?? `${t("records.record")} ${id.slice(0, 8)}`;
 
   if (q.isPending) return <ListSkeleton rows={3} />;
   if (q.isError) return <QueryErrorState error={q.error} onRetry={() => void q.refetch()} />;
@@ -197,7 +196,7 @@ export default function CollectionQualityPage() {
     <CollectionPage section="collections.tab.quality">
       {(collection) => roleAllows(collection.role, "editor")
         ? <Quality collection={collection} />
-        : <EmptyState icon={ListChecks} title={t("error.forbidden")} />}
+        : <EmptyState icon={ListChecks} title={t("error.forbidden")} description={t("quality.editors_only")} />}
     </CollectionPage>
   );
 }

@@ -20,7 +20,7 @@ export default function CollectionSettingsPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
-    <CollectionPage section="collections.tab.general">
+    <CollectionPage section="collections.general_settings">
       {(collection) => (
         <div className="space-y-6">
           <CollectionForm key={collection.id} collection={collection} parts={["details"]} />

@@ -49,10 +49,19 @@ test("a collection's records follow its fields", async ({ page }) => {
   await expect(page.getByText("Campo obrigatório.")).toHaveCount(0);
   await save.click();
   await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
-  // One column per field, named after it.
-  await expect(page.getByRole("columnheader")).toHaveText(["Nome", "Categoria", "Nota", /Atualizado/]);
+  // One column per field, named after it, after the selection box.
+  await expect(page.getByRole("columnheader")).toHaveText(["", "Nome", "Categoria", "Nota", "Criado em"]);
   const row = page.getByRole("row").filter({ hasText: "Ao clicar" });
-  await expect(row.getByRole("cell")).toHaveText(["Ao clicar", "gatilho", "—", /\d/]);
+  await expect(row.getByRole("cell")).toHaveText(["", "Ao clicar", "gatilho", "—", /\d/]);
+  // A choice field filters through a select inside the filter popover.
+  await page.getByRole("button", { name: "Filtros" }).click();
+  await page.getByLabel("Categoria").click();
+  await page.getByRole("option", { name: "gatilho" }).click();
+  await page.getByRole("button", { name: "Aplicar" }).click();
+  await expect(page.getByRole("button", { name: "Remover filtro: Categoria" })).toBeVisible();
+  await expect(row).toBeVisible();
+  await expect(page).toHaveURL(/filter=/);
+  await page.getByRole("button", { name: "Remover filtro: Categoria" }).click();
 
   // Fields live in their own section; changing them with records stored warns.
   await page.getByRole("link", { name: "Campos" }).click();

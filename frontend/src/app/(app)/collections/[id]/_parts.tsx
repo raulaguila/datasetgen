@@ -16,6 +16,7 @@ import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api/client";
 import { collections, records } from "@/lib/api/endpoints";
 import type { Collection } from "@/lib/api/types";
@@ -30,14 +31,15 @@ import { useCrumb } from "@/lib/store/crumb";
 import { useUIStore } from "@/lib/store/ui";
 import { collectionName, description as descriptionRule, ready } from "@/lib/validation";
 
-const STARTER = {
+/** The fields a new collection starts with, named in the user's language. */
+const starter = (t: (k: MessageKey) => string) => ({
   type: "object",
   required: ["title"],
   properties: {
-    title: { type: "string", title: "Título" },
-    notes: { type: "string", title: "Notas" },
+    title: { type: "string", title: t("collections.starter_title") },
+    notes: { type: "string", title: t("collections.starter_notes") },
   },
-};
+});
 
 const pretty = (v: unknown) => JSON.stringify(v, null, 2);
 
@@ -68,7 +70,12 @@ export function useRecordCount(collectionId: string | undefined, enabled = true)
  * Loads the collection in the URL and frames one of its sections: the header with
  * its name, loading and missing states, and the sidebar's current collection.
  */
-export function CollectionPage({ section, children }: { section: MessageKey; children: (collection: Collection) => React.ReactNode }) {
+export function CollectionPage({ section, action, children }: {
+  section: MessageKey;
+  /** The section's main action, drawn in the header as on every other page. */
+  action?: (collection: Collection) => React.ReactNode;
+  children: (collection: Collection) => React.ReactNode;
+}) {
   const { t } = useI18n();
   const { loading } = useMe();
   const { id } = useParams<{ id: string }>();
@@ -81,7 +88,7 @@ export function CollectionPage({ section, children }: { section: MessageKey; chi
 
   return (
     <>
-      <PageHeader title={t(section)} description={collection ? t("collections.section_of").replace("{section}", t(section)).replace("{name}", collection.name) : undefined} />
+      <PageHeader title={t(section)} description={collection ? t("collections.section_of").replace("{section}", t(section)).replace("{name}", collection.name) : undefined} action={collection && action?.(collection)} />
       <PageBody>
         {loading || detail.isPending ? (
           <ListSkeleton rows={3} />
@@ -109,7 +116,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
   const client = useQueryClient();
   const editable = collection ? roleAllows(collection.role, "owner") : can(user, "collections", "create");
   const recordCount = useRecordCount(collection?.id, parts.includes("fields") && editable);
-  const original = pretty(collection?.schema ?? STARTER);
+  const original = pretty(collection?.schema ?? starter(t));
   const [name, setName] = useState(collection?.name ?? "");
   const [desc, setDesc] = useState(collection?.description ?? "");
   const [icon, setIcon] = useState(collection?.icon ?? "");
@@ -177,7 +184,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
               </div>
               <div className="space-y-2">
                 <Label htmlFor="c-desc">{t("collections.description")}</Label>
-                <textarea id="c-desc" data-slot="textarea" rows={2} maxLength={2000} aria-invalid={!!descriptionRule(desc)} disabled={!editable} value={desc} onChange={(e) => setDesc(e.target.value)} className="w-full rounded-lg border border-input bg-card px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                <Textarea id="c-desc" rows={2} maxLength={2000} aria-invalid={!!descriptionRule(desc)} disabled={!editable} value={desc} onChange={(e) => setDesc(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <IconPicker value={icon} onChange={setIcon} label={t("collections.icon")} noneLabel={t("collections.icon_none")} disabled={!editable} />
@@ -196,7 +203,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
               <div className="min-w-0 space-y-4">
                 <FieldsEditor schema={schema} editable={editable} onChange={(next) => setSchemaText(pretty(next))} />
-                {warning && <p role="status" className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">{warning}</p>}
+                {warning && <p role="status" className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-sm">{warning}</p>}
                 <details className="group rounded-lg border" open={!schema || undefined}>
                   <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
                     <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
@@ -204,9 +211,8 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                   </summary>
                   <div className="space-y-2 border-t p-3">
                     <p className="text-xs text-muted-foreground">{t("collections.schema_desc")}</p>
-                    <textarea
+                    <Textarea
                       id="c-schema"
-                      data-slot="textarea"
                       aria-label={t("collections.schema")}
                       aria-invalid={!schema}
                       aria-describedby="c-schema-note"
@@ -215,7 +221,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                       disabled={!editable}
                       value={schemaText}
                       onChange={(e) => setSchemaText(e.target.value)}
-                      className="w-full rounded-lg border border-input bg-card px-3 py-2 font-mono text-xs leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive"
+                      className="px-3 font-mono text-xs leading-relaxed md:text-xs"
                     />
                     <FieldNote id="c-schema-note" error={!schema ? [t("collections.schema_invalid"), parsed.error].filter(Boolean).join(": ") : undefined} />
                   </div>

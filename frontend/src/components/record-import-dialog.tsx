@@ -1,8 +1,9 @@
 "use client";
 
+import { FormError } from "@/components/bits";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileUp } from "lucide-react";
+import { FileUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -121,7 +122,7 @@ export function RecordImportDialog({ collectionId, open, onOpenChange }: { colle
             disabled={!!busy}
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void check(f); }}
           />
-          {busy && <p role="status" className="text-sm text-muted-foreground">{busy}</p>}
+          {busy && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />{busy}</p>}
           {checked && !busy && (
             <div role="status" className="space-y-2 text-sm">
               <p>
@@ -144,11 +145,12 @@ export function RecordImportDialog({ collectionId, open, onOpenChange }: { colle
               )}
             </div>
           )}
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          <FormError message={error} />
         </div>
         <DialogFooter>
           <Button variant="ghost" disabled={!!busy} onClick={() => close(false)}>{t("common.cancel")}</Button>
           <Button disabled={!canSend} onClick={() => void send()}>
+            {busy && checked && <Loader2 className="size-4 animate-spin" />}
             {t("import.send").replace("{n}", String(checked?.valid ?? 0))}
           </Button>
         </DialogFooter>

@@ -64,7 +64,8 @@ test("records come in, go out and keep their history", async ({ page }) => {
   // Quality runs in the background; a bulk fix then a new check.
   await page.goto(records.replace(/$/, "/quality"));
   await expect(page.getByText("Todos os registros seguem os campos atuais.")).toBeVisible({ timeout: 15_000 });
-  await page.getByLabel("O que fazer").selectOption("rename");
+  await page.getByLabel("O que fazer").click();
+  await page.getByRole("option", { name: "Renomear o campo" }).click();
   await page.getByLabel("Nome atual").fill("title");
   await page.getByLabel("Novo nome").fill("titulo");
   await page.getByRole("button", { name: "Aplicar" }).click();

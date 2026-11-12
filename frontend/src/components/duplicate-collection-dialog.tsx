@@ -1,9 +1,11 @@
 "use client";
 
+import { FormError } from "@/components/bits";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -58,11 +60,11 @@ export function DuplicateCollectionDialog({ source, onClose }: { source: Collect
             <Checkbox checked={withRecords} onCheckedChange={(v) => setWithRecords(v === true)} />
             {t("duplicate.records").replace("{n}", String(source.record_count ?? 0))}
           </label>
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          <FormError message={error} />
         </form>
         <DialogFooter>
           <Button variant="ghost" disabled={busy} onClick={onClose}>{t("common.cancel")}</Button>
-          <Button type="submit" form="dup-form" disabled={busy || !!rule}>{t("duplicate.submit")}</Button>
+          <Button type="submit" form="dup-form" disabled={busy || !!rule}>{busy && <Loader2 className="size-4 animate-spin" />}{t("duplicate.submit")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

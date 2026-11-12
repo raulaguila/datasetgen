@@ -275,7 +275,7 @@ function UserDetail({ id }: { id: string }) {
         ) : (
           <>
           {blocked && (
-            <div role="status" className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+            <div role="status" className="flex items-start gap-3 rounded-lg border border-warn/40 bg-warn/10 px-4 py-3 text-sm text-warn">
               <ShieldAlert className="mt-0.5 size-4 shrink-0" />
               <span>{t("users.login_blocked")}</span>
             </div>

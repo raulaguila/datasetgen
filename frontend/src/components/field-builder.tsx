@@ -59,6 +59,13 @@ export function typeOf(p: unknown): FieldType | undefined {
 const propsOf = (schema: Schema) => (schema.properties ?? {}) as Props;
 const requiredOf = (schema: Schema) => (Array.isArray(schema.required) ? (schema.required as string[]) : []);
 
+/** The first plain text value a record has, in field order, to name it in lists and titles. */
+export function recordTitle(schema: Schema | null, data: unknown): string | undefined {
+  const obj = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  const v = fieldsOf(schema).filter((r) => !r.advanced).map((r) => obj[r.key]).find((x) => typeof x === "string" && x.trim());
+  return typeof v === "string" ? v : undefined;
+}
+
 export function fieldsOf(schema: Schema | null): FieldRow[] {
   if (!schema) return [];
   const required = requiredOf(schema);

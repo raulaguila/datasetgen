@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { FormSection, FormSections, useFormatDate } from "@/components/bits";
 import { ConfirmDialog, ConfirmationError } from "@/components/confirm-dialog";
 import { fieldsOf } from "@/components/field-builder";
+import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api/client";
 import { records } from "@/lib/api/endpoints";
@@ -47,7 +48,7 @@ export function RecordHistory({ collection, record, editable }: { collection: Co
     <FormSections>
       <FormSection title={t("history.title")} description={t("history.desc")}>
         {list.isPending ? (
-          <p className="text-sm text-muted-foreground">…</p>
+          <ListSkeleton rows={2} />
         ) : items.length === 0 ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground"><History className="size-4" />{t("history.empty")}</p>
         ) : (

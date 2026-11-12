@@ -102,7 +102,7 @@ function ProfileHeader() {
 }
 
 const STRENGTH: MessageKey[] = ["password.weak", "password.weak", "password.fair", "password.good", "password.strong"];
-const STRENGTH_CLS = ["bg-red-500", "bg-red-500", "bg-amber-500", "bg-lime-500", "bg-emerald-500"];
+const STRENGTH_CLS = ["bg-destructive", "bg-destructive", "bg-warn", "bg-success/70", "bg-success"];
 
 function StrengthMeter({ password }: { password: string }) {
   const { t } = useI18n();

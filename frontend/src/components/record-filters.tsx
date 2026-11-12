@@ -7,9 +7,13 @@ import { type FieldRow } from "@/components/field-builder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n/provider";
 
 export type FieldFilters = Record<string, string | number | boolean>;
+
+/** The "any value" choice; real values are never this. */
+const ANY = "\u0000any";
 
 const FILTERABLE = new Set(["string", "text", "number", "integer", "boolean", "enum"]);
 
@@ -53,16 +57,18 @@ export function RecordFilters({ fields, value, onChange }: { fields: FieldRow[];
     const id = `flt-${r.key}`;
     const v = draft[r.key] ?? "";
     const set = (x: string) => setDraft((d) => ({ ...d, [r.key]: x }));
-    const selectCls = "h-9 w-full rounded-lg border border-input bg-card px-2 text-sm dark:bg-transparent";
     if (r.field.type === "boolean" || r.field.type === "enum") {
       const options = r.field.type === "boolean"
         ? [["true", t("common.yes")], ["false", t("common.no")]]
         : r.field.options.split(",").map((o) => o.trim()).filter(Boolean).map((o) => [o, o]);
+      const items: Record<string, string> = { [ANY]: t("filters.any"), ...Object.fromEntries(options) };
       return (
-        <select id={id} className={selectCls} value={v} onChange={(e) => set(e.target.value)}>
-          <option value="">{t("filters.any")}</option>
-          {options.map(([val, text]) => <option key={val} value={val}>{text}</option>)}
-        </select>
+        <Select value={v || ANY} items={items} onValueChange={(x) => set(x === ANY ? "" : String(x))}>
+          <SelectTrigger id={id} className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(items).map(([val, text]) => <SelectItem key={val} value={val}>{text}</SelectItem>)}
+          </SelectContent>
+        </Select>
       );
     }
     const numeric = r.field.type === "number" || r.field.type === "integer";
@@ -100,9 +106,9 @@ export function RecordFilters({ fields, value, onChange }: { fields: FieldRow[];
       {active > 0 && (
         <ul className="flex basis-full flex-wrap gap-1.5" aria-label={t("filters.active")}>
           {Object.entries(value).map(([k, v]) => (
-            <li key={k} className="flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2.5 pr-1 text-xs">
+            <li key={k} className="flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2.5 pr-0.5 text-xs">
               <span><span className="text-muted-foreground">{label(k)}:</span> {show(v)}</span>
-              <button type="button" className="rounded-full p-0.5 hover:bg-accent" aria-label={`${t("filters.remove")}: ${label(k)}`} onClick={() => remove(k)}><X className="size-3" /></button>
+              <button type="button" className="grid size-6 place-items-center rounded-full hover:bg-accent" aria-label={`${t("filters.remove")}: ${label(k)}`} onClick={() => remove(k)}><X className="size-3" /></button>
             </li>
           ))}
         </ul>

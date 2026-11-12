@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { FileJson, ListChecks, ListTree, Plus, UserCog } from "lucide-react";
-import { avatarStyle, initials, useFormatDate } from "@/components/bits";
-import { fieldsOf } from "@/components/field-builder";
+import { Plus } from "lucide-react";
+import { avatarStyle, initials, useFormatDate, useRelativeTime } from "@/components/bits";
+import { recordTitle } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ListSkeleton } from "@/components/skeletons";
 import { Badge } from "@/components/ui/badge";
@@ -31,11 +31,11 @@ function lastDays(): string[] {
   return out;
 }
 
-function Stat({ label, value, hint, href }: { label: string; value: React.ReactNode; hint?: string; href?: string }) {
+function Stat({ label, value, hint, href, title }: { label: string; value: React.ReactNode; hint?: string; href?: string; title?: string }) {
   const body = (
     <>
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 font-heading text-2xl font-semibold tabular-nums">{value}</p>
+      <p className="mt-1 truncate font-heading text-2xl font-semibold tabular-nums" title={title}>{value}</p>
       {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
     </>
   );
@@ -45,6 +45,7 @@ function Stat({ label, value, hint, href }: { label: string; value: React.ReactN
 function Overview({ collection }: { collection: Collection }) {
   const { t, locale } = useI18n();
   const format = useFormatDate();
+  const relative = useRelativeTime();
   const base = `/collections/${collection.id}`;
   const editor = roleAllows(collection.role, "editor");
   const owner = roleAllows(collection.role, "owner");
@@ -53,7 +54,6 @@ function Overview({ collection }: { collection: Collection }) {
   const invalid = quality.data?.status === "done" && !stale ? quality.data.invalid_count : null;
   const recent = useQuery({ queryKey: ["records", collection.id, "recent"], queryFn: ({ signal }) => records.list({ collection_id: collection.id, page: 1, limit: 5 }, signal) });
   const number = new Intl.NumberFormat(locale);
-  const firstField = fieldsOf(collection.schema ?? null).find((r) => !r.advanced && r.field.type !== "strings")?.key;
 
   if (stats.isPending) return <ListSkeleton rows={4} />;
   if (stats.isError) return <QueryErrorState error={stats.error} onRetry={() => void stats.refetch()} />;
@@ -72,12 +72,12 @@ function Overview({ collection }: { collection: Collection }) {
         {editor && (
           <Stat
             label={t("overview.invalid")}
-            value={invalid === null ? "…" : number.format(invalid)}
+            value={invalid === null ? "—" : number.format(invalid)}
             hint={invalid === 0 ? t("overview.all_valid") : invalid === null ? t("quality.running") : undefined}
             href={`${base}/quality`}
           />
         )}
-        <Stat label={t("overview.last_update")} value={<span className="text-base">{s.last_update ? format(s.last_update) : t("overview.never")}</span>} />
+        <Stat label={t("overview.last_update")} value={s.last_update ? relative(s.last_update).rel : t("overview.never")} title={s.last_update ? format(s.last_update) : undefined} />
       </div>
 
       <Card className="gap-3 p-4">
@@ -120,13 +120,11 @@ function Overview({ collection }: { collection: Collection }) {
           ) : (
             <ul className="divide-y">
               {recent.data.items.map((r) => {
-                const data = (r.data ?? {}) as Record<string, unknown>;
-                const v = firstField ? data[firstField] : undefined;
-                const text = v === undefined || v === null || v === "" ? `${t("records.record")} ${r.id.slice(0, 8)}` : String(v);
+                const text = recordTitle(collection.schema ?? null, r.data) ?? `${t("records.record")} ${r.id.slice(0, 8)}`;
                 return (
                   <li key={r.id} className="flex items-center gap-3 px-4 py-2.5">
                     <Link href={`/records/${r.id}`} className="min-w-0 flex-1 truncate text-sm font-medium hover:underline">{text}</Link>
-                    <span className="shrink-0 text-xs text-muted-foreground">{format(r.updated_at)}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{format(r.created_at)}</span>
                   </li>
                 );
               })}
@@ -154,25 +152,27 @@ function Overview({ collection }: { collection: Collection }) {
         </Card>
       </div>
 
-      <Card className="gap-3 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-heading text-base font-semibold">{t("overview.quick_actions")}</h2>
-          <span className="text-sm text-muted-foreground">
-            {t("overview.your_role")}: {collection.role && <Badge variant="secondary">{t(`members.role.${collection.role}`)}</Badge>}
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {editor && <Button nativeButton={false} render={<Link href={`/records/new?collection=${collection.id}`} />}><Plus className="size-4" />{t("records.new")}</Button>}
-          <Button variant="outline" nativeButton={false} render={<Link href={base} />}><FileJson className="size-4" />{t("collections.tab.records")}</Button>
-          <Button variant="outline" nativeButton={false} render={<Link href={`${base}/fields`} />}><ListTree className="size-4" />{t("collections.tab.fields")}</Button>
-          {editor && <Button variant="outline" nativeButton={false} render={<Link href={`${base}/quality`} />}><ListChecks className="size-4" />{t("collections.tab.quality")}</Button>}
-          {owner && <Button variant="outline" nativeButton={false} render={<Link href={`${base}/members`} />}><UserCog className="size-4" />{t("collections.tab.members")}</Button>}
-        </div>
-      </Card>
     </div>
   );
 }
 
+/** Your role, and the one action worth a shortcut here: the sidebar already lists the sections. */
+function OverviewActions({ collection }: { collection: Collection }) {
+  const { t } = useI18n();
+  return (
+    <>
+      {collection.role && <Badge variant="secondary">{t("overview.your_role")}: {t(`members.role.${collection.role}`)}</Badge>}
+      {roleAllows(collection.role, "editor") && (
+        <Button nativeButton={false} render={<Link href={`/records/new?collection=${collection.id}`} />}><Plus className="size-4" />{t("records.new")}</Button>
+      )}
+    </>
+  );
+}
+
 export default function CollectionOverviewPage() {
-  return <CollectionPage section="collections.tab.overview">{(collection) => <Overview collection={collection} />}</CollectionPage>;
+  return (
+    <CollectionPage section="collections.tab.overview" action={(c) => <OverviewActions collection={c} />}>
+      {(collection) => <Overview collection={collection} />}
+    </CollectionPage>
+  );
 }

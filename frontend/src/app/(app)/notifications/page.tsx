@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 const ICON: Record<Notification["level"], { icon: typeof Info; cls: string }> = {
   info: { icon: Info, cls: "bg-primary/10 text-primary" },
-  warning: { icon: AlertTriangle, cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+  warning: { icon: AlertTriangle, cls: "bg-warn/15 text-warn" },
   critical: { icon: OctagonAlert, cls: "bg-destructive/10 text-destructive" },
 };
 

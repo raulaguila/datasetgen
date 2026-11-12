@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Copy, Database, FileJson, ListTree, LogOut, MoreVertical, Plus, Search, Settings2, Star, Trash2, UserCog, Users, X } from "lucide-react";
 import { toast } from "sonner";
-import { PageHeader } from "@/components/bits";
+import { PageHeader, useRelativeTime } from "@/components/bits";
 import { CollectionAvatar } from "@/components/collection-avatar";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DuplicateCollectionDialog } from "@/components/duplicate-collection-dialog";
@@ -30,18 +30,6 @@ const LIMIT = 100;
 
 function byActivity(a: Collection, b: Collection): number {
   return (Date.parse(b.last_activity ?? b.updated_at) || 0) - (Date.parse(a.last_activity ?? a.updated_at) || 0) || a.name.localeCompare(b.name);
-}
-
-/** "3 h ago" in the locale, with the full date for the tooltip. */
-function useRelative() {
-  const { locale } = useI18n();
-  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
-  return (iso: string) => {
-    const secs = (Date.parse(iso) - Date.now()) / 1000;
-    const steps: [Intl.RelativeTimeFormatUnit, number][] = [["year", 31536000], ["month", 2592000], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]];
-    const [unit, size] = steps.find(([, s]) => Math.abs(secs) >= s) ?? ["second", 1];
-    return { rel: unit === "second" ? rtf.format(0, "minute") : rtf.format(Math.round(secs / size), unit), abs: new Date(iso).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) };
-  };
 }
 
 interface RowProps {
@@ -164,7 +152,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode[]
 function Row({ c, pinned, current, onPin, onRemove, onDuplicate }: RowProps) {
   const { t, locale } = useI18n();
   const router = useRouter();
-  const relative = useRelative();
+  const relative = useRelativeTime();
   const number = new Intl.NumberFormat(locale);
   const base = `/collections/${c.id}`;
   const open = () => router.push(`${base}/overview`);
@@ -216,7 +204,7 @@ function Row({ c, pinned, current, onPin, onRemove, onDuplicate }: RowProps) {
             <DropdownMenuItem onClick={() => router.push(base)}><FileJson className="size-4" aria-hidden />{t("collections.tab.records")}</DropdownMenuItem>
             {owner && <>
               <DropdownMenuItem onClick={() => router.push(`${base}/members`)}><UserCog className="size-4" aria-hidden />{t("collections.tab.members")}</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push(`${base}/settings`)}><Settings2 className="size-4" aria-hidden />{t("collections.tab.settings")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push(`${base}/settings`)}><Settings2 className="size-4" aria-hidden />{t("collections.general_settings")}</DropdownMenuItem>
             </>}
             {onDuplicate && <DropdownMenuItem onClick={() => onDuplicate(c)}><Copy className="size-4" aria-hidden />{t("duplicate.title")}</DropdownMenuItem>}
             {(c.member !== false || (owner && !c.record_count)) && <DropdownMenuSeparator />}

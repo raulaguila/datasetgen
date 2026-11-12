@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2, UserPlus, Users } from "lucide-react";
+import { Trash2, UserPlus, Users, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { FieldNote, FormSection, FormSections, IconAction, initials, avatarStyle } from "@/components/bits";
+import { FieldNote, FormSection, FormSections, IconAction, initials, avatarStyle, FormError } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -32,12 +32,12 @@ function useRoleItems() {
   return Object.fromEntries(ROLES.map((r) => [r, t(`members.role.${r}`)]));
 }
 
-function RoleSelect({ value, label, disabled, onChange }: { value: MemberRole; label: string; disabled?: boolean; onChange: (r: MemberRole) => void }) {
+function RoleSelect({ id, value, label, disabled, onChange }: { id?: string; value: MemberRole; label: string; disabled?: boolean; onChange: (r: MemberRole) => void }) {
   const { t } = useI18n();
   const items = useRoleItems();
   return (
     <Select value={value} items={items} disabled={disabled} onValueChange={(v) => onChange(v as MemberRole)}>
-      <SelectTrigger className="w-36" aria-label={label}><SelectValue /></SelectTrigger>
+      <SelectTrigger id={id} className="w-36" aria-label={id ? undefined : label}><SelectValue /></SelectTrigger>
       <SelectContent>
         {ROLES.map((r) => (
           <SelectItem key={r} value={r}>
@@ -105,12 +105,12 @@ function AddMember({ collection }: { collection: Collection }) {
           )}
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-2">
-              <Label>{t("members.role")}</Label>
-              <RoleSelect value={role} label={t("members.role")} onChange={setRole} />
+              <Label htmlFor="m-role">{t("members.role")}</Label>
+              <RoleSelect id="m-role" value={role} label={t("members.role")} onChange={setRole} />
             </div>
-            <Button type="submit" disabled={!canAdd || add.isPending}><UserPlus className="size-4" />{t(needName ? "members.invite" : "members.add")}</Button>
+            <Button type="submit" disabled={!canAdd || add.isPending}>{add.isPending ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}{t(needName ? "members.invite" : "members.add")}</Button>
           </div>
-          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          <FormError message={error} />
           {link && (
             <div className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
               <p>{t("users.activation_link")}</p>
@@ -150,6 +150,10 @@ function MemberList({ collection }: { collection: Collection }) {
   if (items.length === 0) return <EmptyState icon={Users} title={t("members.empty")} />;
   return (
     <Card className="gap-0 overflow-hidden p-0">
+      <div className="border-b px-4 py-3">
+        <h2 className="font-heading text-base font-semibold">{t("members.list_title")} <span className="font-normal tabular-nums text-muted-foreground">({items.length})</span></h2>
+        <p className="text-sm text-muted-foreground">{t("members.list_desc")}</p>
+      </div>
       <ul aria-label={t("collections.tab.members")} className="divide-y">
         {items.map((m) => (
           <li key={m.user_id} className="flex flex-wrap items-center gap-3 px-4 py-3">
