@@ -3,6 +3,7 @@ package output
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
 )
@@ -38,6 +39,13 @@ type CollectionRepository interface {
 	// Stats is the overview: totals, records created per day in tz over the last
 	// days, and the most active contributors in that window.
 	Stats(ctx context.Context, id, tz string, days int) (*domain.CollectionStats, error)
+	// Quality is the latest check of the collection, nil when it never ran.
+	Quality(ctx context.Context, id string, withIDs bool) (*domain.QualityRun, error)
+	// StartQuality marks a check as running and reports whether it did: false
+	// while another check started less than stale ago is still running.
+	StartQuality(ctx context.Context, id string, schemaVersion int, stale time.Duration) (bool, error)
+	// FinishQuality stores the result of the running check.
+	FinishQuality(ctx context.Context, id string, run domain.QualityRun) error
 	// Owners counts the collection's owner members.
 	Owners(ctx context.Context, id string) (int64, error)
 }

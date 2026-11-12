@@ -70,6 +70,8 @@ func NewFiles(cfg config.StorageConfig) output.FileStore {
 func NewJobs(res *infra.Resources, log *logger.Logger) *jobs.Worker {
 	handlers := map[string]policy.JobHandler{}
 	maps.Copy(handlers, product.Jobs(log))
+	store := postgres.NewStore(res.PostgresDB)
+	maps.Copy(handlers, collection.Jobs(store.Collections(), store.Records()))
 	return &jobs.Worker{
 		Repo:     job.NewRepository(res.PostgresDB),
 		Handlers: handlers,

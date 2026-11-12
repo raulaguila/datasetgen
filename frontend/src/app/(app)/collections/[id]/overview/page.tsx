@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { collections, records } from "@/lib/api/endpoints";
 import type { Collection } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/provider";
+import { useQuality } from "@/lib/hooks/use-quality";
 import { roleAllows } from "@/lib/permissions";
 import { CollectionPage } from "../_parts";
 
@@ -48,7 +49,8 @@ function Overview({ collection }: { collection: Collection }) {
   const editor = roleAllows(collection.role, "editor");
   const owner = roleAllows(collection.role, "owner");
   const stats = useQuery({ queryKey: ["collections", "stats", collection.id], queryFn: ({ signal }) => collections.stats(collection.id, signal) });
-  const quality = useQuery({ queryKey: ["collections", "quality", collection.id, collection.version], queryFn: ({ signal }) => collections.quality(collection.id, signal), enabled: editor });
+  const { q: quality, stale } = useQuality(collection, editor);
+  const invalid = quality.data?.status === "done" && !stale ? quality.data.invalid_count : null;
   const recent = useQuery({ queryKey: ["records", collection.id, "recent"], queryFn: ({ signal }) => records.list({ collection_id: collection.id, page: 1, limit: 5 }, signal) });
   const number = new Intl.NumberFormat(locale);
   const firstField = fieldsOf(collection.schema ?? null).find((r) => !r.advanced && r.field.type !== "strings")?.key;
@@ -70,8 +72,8 @@ function Overview({ collection }: { collection: Collection }) {
         {editor && (
           <Stat
             label={t("overview.invalid")}
-            value={quality.data ? number.format(quality.data.invalid_count) : "…"}
-            hint={quality.data && quality.data.invalid_count === 0 ? t("overview.all_valid") : undefined}
+            value={invalid === null ? "…" : number.format(invalid)}
+            hint={invalid === 0 ? t("overview.all_valid") : invalid === null ? t("quality.running") : undefined}
             href={`${base}/quality`}
           />
         )}

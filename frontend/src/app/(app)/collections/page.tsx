@@ -3,11 +3,12 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Database, FileJson, ListTree, LogOut, MoreVertical, Plus, Search, Settings2, Star, Trash2, UserCog, Users, X } from "lucide-react";
+import { ArrowRight, Copy, Database, FileJson, ListTree, LogOut, MoreVertical, Plus, Search, Settings2, Star, Trash2, UserCog, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/bits";
 import { CollectionAvatar } from "@/components/collection-avatar";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DuplicateCollectionDialog } from "@/components/duplicate-collection-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ListSkeleton } from "@/components/skeletons";
@@ -49,6 +50,8 @@ interface RowProps {
   current: boolean;
   onPin: () => void;
   onRemove: (c: Collection, kind: "leave" | "delete") => void;
+  /** Set when the caller may create collections. */
+  onDuplicate?: (c: Collection) => void;
 }
 
 export default function CollectionsPage() {
@@ -66,6 +69,8 @@ export default function CollectionsPage() {
   const storedId = useUIStore((s) => s.collectionId);
   const setCollection = useUIStore((s) => s.setCollection);
   const [removing, setRemoving] = useState<{ c: Collection; kind: "leave" | "delete" } | null>(null);
+  const [duplicating, setDuplicating] = useState<Collection | null>(null);
+  const canCreate = can(user, "collections", "create");
 
   const all = list.data?.items ?? [];
   const term = q.trim().toLocaleLowerCase();
@@ -115,13 +120,14 @@ export default function CollectionsPage() {
           groups.map(([title, items]) => items.length > 0 && (
             <Group key={title} title={t(title)}>
               {items.sort(byActivity).map((c) => (
-                <Row key={c.id} c={c} pinned={isPinned(c)} current={storedId === c.id} onPin={() => togglePin(c.id)} onRemove={(c, kind) => setRemoving({ c, kind })} />
+                <Row key={c.id} c={c} pinned={isPinned(c)} current={storedId === c.id} onPin={() => togglePin(c.id)} onRemove={(c, kind) => setRemoving({ c, kind })} onDuplicate={canCreate ? setDuplicating : undefined} />
               ))}
             </Group>
           ))
         )}
       </div>
 
+      {duplicating && <DuplicateCollectionDialog source={duplicating} onClose={() => setDuplicating(null)} />}
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
@@ -155,7 +161,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode[]
   );
 }
 
-function Row({ c, pinned, current, onPin, onRemove }: RowProps) {
+function Row({ c, pinned, current, onPin, onRemove, onDuplicate }: RowProps) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const relative = useRelative();
@@ -212,6 +218,7 @@ function Row({ c, pinned, current, onPin, onRemove }: RowProps) {
               <DropdownMenuItem onClick={() => router.push(`${base}/members`)}><UserCog className="size-4" aria-hidden />{t("collections.tab.members")}</DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push(`${base}/settings`)}><Settings2 className="size-4" aria-hidden />{t("collections.tab.settings")}</DropdownMenuItem>
             </>}
+            {onDuplicate && <DropdownMenuItem onClick={() => onDuplicate(c)}><Copy className="size-4" aria-hidden />{t("duplicate.title")}</DropdownMenuItem>}
             {(c.member !== false || (owner && !c.record_count)) && <DropdownMenuSeparator />}
             {c.member !== false && <DropdownMenuItem variant="destructive" onClick={() => onRemove(c, "leave")}><LogOut className="size-4" aria-hidden />{t("collections.leave")}</DropdownMenuItem>}
             {owner && !c.record_count && <DropdownMenuItem variant="destructive" onClick={() => onRemove(c, "delete")}><Trash2 className="size-4" aria-hidden />{t("collections.delete")}</DropdownMenuItem>}

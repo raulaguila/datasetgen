@@ -53,7 +53,22 @@ func (s *Service) AddMember(ctx context.Context, cmd input.AddMemberCommand) (*i
 			}
 			return err
 		}
-		return policy.Audit(ctx, uow, "collection.member_add", cmd.CollectionID, map[string]any{"user_id": userID, "role": cmd.Role})
+		if err := policy.Audit(ctx, uow, "collection.member_add", cmd.CollectionID, map[string]any{"user_id": userID, "role": cmd.Role}); err != nil {
+			return err
+		}
+		if userID == reqctx.Actor(ctx) {
+			return nil
+		}
+		c, err := uow.Collections().FindByID(ctx, cmd.CollectionID)
+		if err != nil {
+			return err
+		}
+		// Shown at the next sign-in for an invited account.
+		return uow.Notifications().Create(ctx, &domain.Notification{
+			UserID: userID, Level: domain.NotificationInfo, Kind: domain.NotifyCollectionAdded,
+			Params: map[string]string{"collection": c.Name, "collection_id": c.ID, "role": string(cmd.Role)},
+			Title:  "Added to a collection", Message: "You were added to " + c.Name + " as " + string(cmd.Role) + ".",
+		})
 	})
 	if err != nil {
 		return nil, err

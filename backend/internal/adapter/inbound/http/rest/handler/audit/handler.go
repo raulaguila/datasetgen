@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -131,19 +130,10 @@ func auditCSV(records []domain.AuditRecord) ([]byte, error) {
 			return nil, err
 		}
 		_ = w.Write([]string{
-			r.CreatedAt.UTC().Format(time.RFC3339), r.Action, cell(r.ActorName), cell(r.ActorEmail), r.ActorID,
-			cell(r.TargetLabel), r.TargetID, cell(string(details)), cell(r.RequestID),
+			r.CreatedAt.UTC().Format(time.RFC3339), r.Action, mapper.CSVCell(r.ActorName), mapper.CSVCell(r.ActorEmail), r.ActorID,
+			mapper.CSVCell(r.TargetLabel), r.TargetID, mapper.CSVCell(string(details)), mapper.CSVCell(r.RequestID),
 		})
 	}
 	w.Flush()
 	return buf.Bytes(), w.Error()
-}
-
-// cell keeps a spreadsheet from running user text as a formula: names and
-// emails come from users, and "=HYPERLINK(...)" would otherwise be live.
-func cell(s string) string {
-	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
-		return "'" + s
-	}
-	return s
 }

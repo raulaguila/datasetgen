@@ -71,7 +71,7 @@ export interface Notification {
   id: string;
   level: "info" | "warning" | "critical";
   /** Translate by this; title and message are the English fallback. */
-  kind?: "new_login" | "account_locked" | "session_reused" | "password_reset" | "password_changed";
+  kind?: "new_login" | "account_locked" | "session_reused" | "password_reset" | "password_changed" | "collection_added";
   params?: Record<string, string>;
   title: string;
   message: string;
@@ -177,14 +177,42 @@ export interface CollectionStats {
 }
 
 /** Stored records that no longer match the collection's schema. */
+/** The latest background check of a collection's records against its schema. */
 export interface QualityReport {
+  status: "none" | "running" | "done" | "failed";
+  /** The collection version checked; below current_version the check is stale. */
   version: number;
+  current_version: number;
   checked: number;
   invalid_count: number;
   /** The first 100, with the rules each breaks. */
   invalid: { id: string; data: Record<string, unknown>; updated_at: string; issues: { path: string; keyword: string; message: string }[] }[];
-  /** The check stopped at 50 000 records. */
+  /** The check stopped at 500 000 records. */
   truncated: boolean;
+  error?: string;
+  started_at?: string;
+  finished_at?: string;
+}
+
+/** A bulk change to every record: set_default fills a missing field, rename moves it, remove drops it. */
+export interface RecordFix {
+  op: "set_default" | "rename" | "remove";
+  field: string;
+  to?: string;
+  value?: unknown;
+}
+
+export interface RecordVersion {
+  version: number;
+  data: unknown;
+  saved_at: string;
+}
+
+export interface ImportResult {
+  created: number;
+  invalid: number;
+  /** index is the record's position in that batch. */
+  errors: { index: number; issues: SchemaIssue[] }[];
 }
 
 export type MemberRole = "owner" | "editor" | "viewer";

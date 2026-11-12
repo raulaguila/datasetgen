@@ -41,20 +41,25 @@ type AddMemberResult struct {
 	ActivationToken string
 }
 
-// QualityReport lists the stored records that no longer match the schema.
-type QualityReport struct {
-	Version      int // the collection version checked against
-	Checked      int
-	InvalidCount int
-	Invalid      []InvalidRecord // the first 100
-	Truncated    bool            // stopped before the end of the collection
+// QualityState is the latest quality check (nil when it never ran) and the
+// collection's current version: a check of an older version is stale.
+type QualityState struct {
+	Run            *domain.QualityRun
+	CurrentVersion int
 }
 
+// InvalidRecord is one entry of QualityRun.Invalid, stored as JSON.
 type InvalidRecord struct {
-	ID        string
-	Data      json.RawMessage
-	UpdatedAt time.Time
-	Issues    []schema.Issue
+	ID        string          `json:"id"`
+	Data      json.RawMessage `json:"data"`
+	UpdatedAt time.Time       `json:"updated_at"`
+	Issues    []schema.Issue  `json:"issues"`
+}
+
+type DuplicateCollectionCommand struct {
+	ID      string
+	Name    string
+	Records bool // copy the records too
 }
 
 // CollectionService is the inbound port for collections and their schemas.
@@ -73,7 +78,15 @@ type CollectionService interface {
 	RemoveMember(ctx context.Context, id, userID string) error
 	// AuditLog is the collection's audit log (owners); Quality checks its records against the schema (editors).
 	AuditLog(ctx context.Context, id string, filter domain.AuditFilter) ([]domain.AuditRecord, int64, error)
-	Quality(ctx context.Context, id string) (*QualityReport, error)
+	// Quality is the latest check; StartQuality queues a new one unless one is running (editors).
+	Quality(ctx context.Context, id string) (*QualityState, error)
+	StartQuality(ctx context.Context, id string) (*QualityState, error)
+	// Fix applies a bulk change to the records' data (editors); DeleteInvalid deletes the
+	// records the latest check found invalid and nobody changed since (editors).
+	Fix(ctx context.Context, id string, fix domain.RecordFix) (int64, error)
+	DeleteInvalid(ctx context.Context, id string) (int, error)
+	// Duplicate copies a collection the caller can read into a new one they own.
+	Duplicate(ctx context.Context, cmd DuplicateCollectionCommand) (*domain.Collection, error)
 	// Stats is the overview of the last 30 days, days counted in tz (an IANA name; "" is UTC). Every member.
 	Stats(ctx context.Context, id, tz string) (*domain.CollectionStats, error)
 	// Leave removes the caller from the collection; the last owner cannot leave.

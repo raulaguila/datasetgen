@@ -11,6 +11,7 @@ import { DangerZone, FormSection, FormSections, PageBody, PageHeader, SaveBar, u
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
+import { RecordHistory } from "@/components/record-history";
 import { SchemaForm } from "@/components/schema-form";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
@@ -148,7 +149,11 @@ export default function RecordPage() {
         ) : failed || !collection ? (
           <QueryErrorState error={failed} onRetry={() => { void detail.refetch(); void parent.refetch(); }} />
         ) : (
-          <RecordForm key={record?.id ?? "new"} collection={collection} record={record ?? null} editable={editable} />
+          <>
+            {/* Keyed by version: a restore elsewhere on the page reloads the form. */}
+            <RecordForm key={record ? `${record.id}:${record.version}` : "new"} collection={collection} record={record ?? null} editable={editable} />
+            {record && <RecordHistory collection={collection} record={record} editable={editable} />}
+          </>
         )}
         {record && editable && (
           <DangerZone description={t("records.delete_hint")} label={t("records.delete")} onClick={() => setConfirmDelete(true)} />

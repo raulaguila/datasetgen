@@ -47,6 +47,9 @@ func (s *Service) List(ctx context.Context, filter domain.RecordFilter) ([]domai
 	if err := validate.Sort(&sort, &filter.Order, []string{"created_at"}, "created_at", "desc"); err != nil {
 		return nil, 0, err
 	}
+	if err := checkMatch(filter.Match); err != nil {
+		return nil, 0, err
+	}
 	filter.Page = domain.NewPage(filter.Page.Number, filter.Page.Limit)
 	if _, err := policy.CollectionRole(ctx, s.Collections, filter.CollectionID, domain.RoleViewer); err != nil {
 		return nil, 0, err

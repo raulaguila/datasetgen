@@ -4,21 +4,26 @@ import Link from "next/link";
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { FileJson, Plus, Search } from "lucide-react";
+import { Download, FileJson, FileUp, Plus, Search } from "lucide-react";
+import { toast } from "sonner";
 import { PageBody, PageHeader, useFormatDate } from "@/components/bits";
 import { EmptyState } from "@/components/empty-state";
 import { fieldsOf } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
+import { RecordFilters, filterableFields, type FieldFilters } from "@/components/record-filters";
+import { RecordImportDialog } from "@/components/record-import-dialog";
 import { ListSkeleton } from "@/components/skeletons";
 import { TablePagination } from "@/components/table-pagination";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { records } from "@/lib/api/endpoints";
 import type { Collection } from "@/lib/api/types";
 import { useMe } from "@/lib/context/me";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
@@ -37,10 +42,13 @@ function RecordList({ collection }: { collection: Collection }) {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<FieldFilters>({});
+  const [importing, setImporting] = useState(false);
   const q = searchTerm(useDebounced(search.trim()));
+  const filter = Object.keys(filters).length ? JSON.stringify(filters) : undefined;
   const list = useQuery({
-    queryKey: ["records", collection.id, page, limit, q],
-    queryFn: ({ signal }) => records.list({ collection_id: collection.id, page, limit, search: q }, signal),
+    queryKey: ["records", collection.id, page, limit, q, filter],
+    queryFn: ({ signal }) => records.list({ collection_id: collection.id, page, limit, search: q, filter }, signal),
     placeholderData: keepPreviousData,
   });
   const items = list.data?.items ?? [];
@@ -48,6 +56,8 @@ function RecordList({ collection }: { collection: Collection }) {
   const show = (v: unknown) => (typeof v === "boolean" ? t(v ? "common.yes" : "common.no") : v === undefined || v === null || v === "" ? "—" : String(v));
   const canCreate = roleAllows(collection.role, "editor");
   const newButton = canCreate && <Button nativeButton={false} render={<Link href={`/records/new?collection=${collection.id}`} />}><Plus className="size-4" />{t("records.new")}</Button>;
+  const download = (format: "jsonl" | "csv", valid: boolean) =>
+    void records.export(collection.id, format, valid).catch((err) => toast.error(errorMessage(err, "common.save_failed", t)));
 
   return (
     <div className="space-y-3">
@@ -56,14 +66,29 @@ function RecordList({ collection }: { collection: Collection }) {
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input type="search" aria-label={t("common.search")} placeholder={t("records.search")} className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
         </div>
-        {newButton && <div className="ml-auto">{newButton}</div>}
+        <RecordFilters fields={filterableFields(fieldsOf(collection.schema ?? null))} value={filters} onChange={(f) => { setFilters(f); setPage(1); }} />
+        <div className="ml-auto flex flex-wrap gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="outline" />}><Download className="size-4" />{t("export.title")}</DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-56">
+              <DropdownMenuItem onClick={() => download("jsonl", false)}>{t("export.jsonl")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => download("csv", false)}>{t("export.csv")}</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => download("jsonl", true)}>{t("export.jsonl_valid")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => download("csv", true)}>{t("export.csv_valid")}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {canCreate && <Button variant="outline" onClick={() => setImporting(true)}><FileUp className="size-4" />{t("import.title")}</Button>}
+          {newButton}
+        </div>
       </div>
+      {canCreate && <RecordImportDialog collectionId={collection.id} open={importing} onOpenChange={setImporting} />}
       {list.isPending ? (
         <ListSkeleton rows={3} />
       ) : list.isError ? (
         <QueryErrorState error={list.error} onRetry={() => void list.refetch()} />
       ) : items.length === 0 ? (
-        <EmptyState icon={FileJson} title={t(q ? "common.no_results" : "records.empty")} />
+        <EmptyState icon={FileJson} title={t(q || filter ? "common.no_results" : "records.empty")} />
       ) : (
         <Card className="gap-0 overflow-hidden p-0">
           <Table data-responsive data-compact>

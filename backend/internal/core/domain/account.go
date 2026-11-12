@@ -45,6 +45,7 @@ const (
 	NotifySessionReused   = "session_reused"   // no params
 	NotifyPasswordReset   = "password_reset"   // no params
 	NotifyPasswordChanged = "password_changed" // no params
+	NotifyCollectionAdded = "collection_added" // params: collection, collection_id, role
 )
 
 // Notification is a notice shown to one user.

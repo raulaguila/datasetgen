@@ -106,3 +106,24 @@ type CollectionMember struct {
 	Role      MemberRole
 	CreatedAt time.Time
 }
+
+// QualityRun is the latest background check of a collection's records against
+// its schema (app.collection_quality).
+type QualityRun struct {
+	SchemaVersion int // the collection version checked against
+	Status        string
+	Checked       int
+	InvalidCount  int
+	Truncated     bool            // stopped at the cap before the end of the collection
+	Invalid       json.RawMessage // the first invalid records with their issues
+	InvalidIDs    []string        // every invalid record found
+	Error         string
+	StartedAt     time.Time
+	FinishedAt    *time.Time
+}
+
+const (
+	QualityRunning = "running"
+	QualityDone    = "done"
+	QualityFailed  = "failed"
+)

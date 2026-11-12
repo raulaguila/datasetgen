@@ -3,6 +3,7 @@ package record
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -57,6 +58,9 @@ func (r *Repository) List(ctx context.Context, filter domain.RecordFilter) ([]do
 		if filter.Search != "" {
 			q = q.Where("data::text ILIKE ?", shared.Contains(filter.Search))
 		}
+		if len(filter.Match) > 0 {
+			q = q.Where("data @> ?::jsonb", string(filter.Match)) // idx_app_record_data_path
+		}
 		return q
 	}
 	var total int64
@@ -102,8 +106,18 @@ func (r *Repository) Create(ctx context.Context, rec *domain.Record) error {
 }
 
 func (r *Repository) Update(ctx context.Context, id string, data json.RawMessage, version *int) (*domain.Record, error) {
+	// Save the data being replaced first. FOR UPDATE waits for a concurrent change
+	// and then reads its result, so the saved row is the one this update replaces.
+	err := r.db.WithContext(ctx).Exec(`
+		INSERT INTO app.record_version (record_id, version, data, saved_at)
+		SELECT id, version, data, updated_at FROM app.record
+		WHERE id = ? AND (?::integer IS NULL OR version = ?) FOR UPDATE
+		ON CONFLICT DO NOTHING`, id, version, version).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "record")
+	}
 	var rows []row
-	err := r.db.WithContext(ctx).Raw(`
+	err = r.db.WithContext(ctx).Raw(`
 		UPDATE app.record SET data = ?::jsonb, version = version + 1
 		WHERE id = ? AND (?::integer IS NULL OR version = ?)
 		RETURNING `+columns, string(data), id, version, version).Find(&rows).Error
@@ -166,4 +180,114 @@ func (r *Repository) Scan(ctx context.Context, collectionID, afterID string, lim
 		out = append(out, domain.Record{ID: m.ID.String(), Data: json.RawMessage(m.Data), UpdatedAt: m.UpdatedAt})
 	}
 	return out, nil
+}
+
+func (r *Repository) CreateMany(ctx context.Context, collectionID string, data []string) (int64, error) {
+	// One JSON array parameter: GORM would expand a Go slice into a list.
+	res := r.db.WithContext(ctx).Exec(`
+		INSERT INTO app.record (collection_id, data)
+		SELECT ?, d FROM jsonb_array_elements(?::jsonb) WITH ORDINALITY AS t(d, n) ORDER BY n`,
+		collectionID, "["+strings.Join(data, ",")+"]")
+	if res.Error != nil {
+		return 0, shared.WrapError(res.Error, "record")
+	}
+	return res.RowsAffected, nil
+}
+
+func (r *Repository) CopyAll(ctx context.Context, fromCollection, toCollection string) (int64, error) {
+	res := r.db.WithContext(ctx).Exec(`
+		INSERT INTO app.record (collection_id, data) SELECT ?, data FROM app.record WHERE collection_id = ? ORDER BY created_at, id`,
+		toCollection, fromCollection)
+	if res.Error != nil {
+		return 0, shared.WrapError(res.Error, "record")
+	}
+	return res.RowsAffected, nil
+}
+
+func (r *Repository) Versions(ctx context.Context, id string, limit int) ([]domain.RecordVersion, error) {
+	var rows []versionRow
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT version, data::text AS data, saved_at FROM app.record_version
+		WHERE record_id = ? ORDER BY version DESC LIMIT ?`, id, limit).Find(&rows).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "record")
+	}
+	out := make([]domain.RecordVersion, 0, len(rows))
+	for _, m := range rows {
+		out = append(out, domain.RecordVersion{Version: m.Version, Data: json.RawMessage(m.Data), SavedAt: m.SavedAt})
+	}
+	return out, nil
+}
+
+func (r *Repository) Version(ctx context.Context, id string, version int) (json.RawMessage, error) {
+	var m versionRow
+	err := r.db.WithContext(ctx).Raw(`SELECT data::text AS data FROM app.record_version WHERE record_id = ? AND version = ?`, id, version).Take(&m).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "record version")
+	}
+	return json.RawMessage(m.Data), nil
+}
+
+type versionRow struct {
+	Version int       `gorm:"column:version"`
+	Data    []byte    `gorm:"column:data"`
+	SavedAt time.Time `gorm:"column:saved_at"`
+}
+
+// Fix applies one bulk change. Each op picks only the records it changes and
+// saves their current data as a version first. jsonb_exists stands in for the
+// ? operator, which GORM would read as a placeholder.
+// shortcut: one transaction over every matching record; batch it when
+// collections reach hundreds of thousands of records.
+func (r *Repository) Fix(ctx context.Context, collectionID string, fix domain.RecordFix) (int64, error) {
+	var where, set string
+	var whereArgs, setArgs []any
+	switch fix.Op {
+	case domain.FixSetDefault:
+		where, whereArgs = "jsonb_typeof(data) = 'object' AND NOT jsonb_exists(data, ?)", []any{fix.Field}
+		set, setArgs = "data || jsonb_build_object(?::text, ?::jsonb)", []any{fix.Field, string(fix.Value)}
+	case domain.FixRename:
+		where, whereArgs = "jsonb_exists(data, ?) AND NOT jsonb_exists(data, ?)", []any{fix.Field, fix.To}
+		set, setArgs = "(data - ?::text) || jsonb_build_object(?::text, data -> ?::text)", []any{fix.Field, fix.To, fix.Field}
+	case domain.FixRemove:
+		where, whereArgs = "jsonb_exists(data, ?)", []any{fix.Field}
+		set, setArgs = "data - ?::text", []any{fix.Field}
+	default:
+		return 0, apperror.New(apperror.CodeInvalidInput, "unknown fix").WithField("op")
+	}
+	var ids []string
+	err := r.db.WithContext(ctx).Raw(`
+		INSERT INTO app.record_version (record_id, version, data, saved_at)
+		SELECT id, version, data, updated_at FROM app.record WHERE collection_id = ? AND `+where+` FOR UPDATE
+		ON CONFLICT DO NOTHING RETURNING record_id::text`, append([]any{collectionID}, whereArgs...)...).Find(&ids).Error
+	if err != nil {
+		return 0, shared.WrapError(err, "record")
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	res := r.db.WithContext(ctx).Exec(`UPDATE app.record SET data = `+set+`, version = version + 1
+		WHERE id IN (SELECT jsonb_array_elements_text(?::jsonb)::uuid)`, append(setArgs, jsonList(ids))...)
+	if res.Error != nil {
+		return 0, shared.WrapError(res.Error, "record")
+	}
+	return res.RowsAffected, nil
+}
+
+func (r *Repository) DeleteListed(ctx context.Context, collectionID string, ids []string, unchangedSince time.Time) ([]string, error) {
+	var deleted []string
+	err := r.db.WithContext(ctx).Raw(`
+		DELETE FROM app.record WHERE collection_id = ? AND updated_at <= ?
+			AND id IN (SELECT jsonb_array_elements_text(?::jsonb)::uuid)
+		RETURNING id::text`, collectionID, unchangedSince, jsonList(ids)).Find(&deleted).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "record")
+	}
+	return deleted, nil
+}
+
+// jsonList passes ids as one JSON array parameter; GORM would expand a slice.
+func jsonList(ids []string) string {
+	b, _ := json.Marshal(ids) // strings always marshal
+	return string(b)
 }

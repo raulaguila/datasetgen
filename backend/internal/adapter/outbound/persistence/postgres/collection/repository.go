@@ -360,3 +360,73 @@ func (r *Repository) Stats(ctx context.Context, id, tz string, days int) (*domai
 	}
 	return out, nil
 }
+
+type qualityRow struct {
+	SchemaVersion int        `gorm:"column:schema_version"`
+	Status        string     `gorm:"column:status"`
+	Checked       int        `gorm:"column:checked"`
+	InvalidCount  int        `gorm:"column:invalid_count"`
+	Truncated     bool       `gorm:"column:truncated"`
+	Invalid       []byte     `gorm:"column:invalid"`
+	InvalidIDs    []byte     `gorm:"column:invalid_ids"`
+	Error         string     `gorm:"column:error"`
+	StartedAt     time.Time  `gorm:"column:started_at"`
+	FinishedAt    *time.Time `gorm:"column:finished_at"`
+}
+
+func (r *Repository) Quality(ctx context.Context, id string, withIDs bool) (*domain.QualityRun, error) {
+	ids := "'[]'"
+	if withIDs { // up to the scan cap of uuids: only the delete reads them
+		ids = "array_to_json(invalid_ids)::text"
+	}
+	var rows []qualityRow
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT schema_version, status, checked, invalid_count, truncated, invalid::text AS invalid, `+ids+` AS invalid_ids,
+			error, started_at, finished_at FROM app.collection_quality WHERE collection_id = ?`, id).Find(&rows).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "collection")
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	m := rows[0]
+	var invalidIDs []string
+	if err := json.Unmarshal(m.InvalidIDs, &invalidIDs); err != nil {
+		return nil, err
+	}
+	return &domain.QualityRun{
+		SchemaVersion: m.SchemaVersion, Status: m.Status, Checked: m.Checked, InvalidCount: m.InvalidCount, Truncated: m.Truncated,
+		Invalid: json.RawMessage(m.Invalid), InvalidIDs: invalidIDs, Error: m.Error, StartedAt: m.StartedAt, FinishedAt: m.FinishedAt,
+	}, nil
+}
+
+func (r *Repository) StartQuality(ctx context.Context, id string, schemaVersion int, stale time.Duration) (bool, error) {
+	var started []string
+	err := r.db.WithContext(ctx).Raw(`
+		INSERT INTO app.collection_quality (collection_id, schema_version, status) VALUES (?, ?, 'running')
+		ON CONFLICT (collection_id) DO UPDATE SET schema_version = EXCLUDED.schema_version, status = 'running',
+			error = '', started_at = now(), finished_at = NULL
+		WHERE app.collection_quality.status <> 'running' OR app.collection_quality.started_at < now() - ?::interval
+		RETURNING collection_id::text`, id, schemaVersion, stale.String()).Find(&started).Error
+	if err != nil {
+		return false, shared.WrapError(err, "collection")
+	}
+	return len(started) > 0, nil
+}
+
+func (r *Repository) FinishQuality(ctx context.Context, id string, run domain.QualityRun) error {
+	invalid := string(run.Invalid)
+	if invalid == "" {
+		invalid = "[]"
+	}
+	ids, err := json.Marshal(append([]string{}, run.InvalidIDs...))
+	if err != nil {
+		return err
+	}
+	err = r.db.WithContext(ctx).Exec(`
+		UPDATE app.collection_quality SET status = ?, checked = ?, invalid_count = ?, truncated = ?, invalid = ?::jsonb,
+			invalid_ids = ARRAY(SELECT jsonb_array_elements_text(?::jsonb)::uuid), error = ?, finished_at = now()
+		WHERE collection_id = ?`,
+		run.Status, run.Checked, run.InvalidCount, run.Truncated, invalid, string(ids), run.Error, id).Error
+	return shared.WrapError(err, "collection")
+}

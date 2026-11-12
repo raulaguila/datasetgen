@@ -89,6 +89,12 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Collection, error
 }
 
 func (s *Service) Create(ctx context.Context, cmd input.CreateCollectionCommand) (*domain.Collection, error) {
+	return s.create(ctx, cmd, nil)
+}
+
+// create runs then, when set, in the creating transaction; its details join the audit entry.
+func (s *Service) create(ctx context.Context, cmd input.CreateCollectionCommand,
+	then func(ctx context.Context, uow output.UnitOfWork, c *domain.Collection) (map[string]any, error)) (*domain.Collection, error) {
 	name, err := normalizeName(cmd.Name)
 	if err != nil {
 		return nil, err
@@ -117,7 +123,15 @@ func (s *Service) Create(ctx context.Context, cmd input.CreateCollectionCommand)
 			return err
 		}
 		c.Role = domain.RoleOwner
-		return policy.Audit(ctx, uow, "collection.create", c.ID, map[string]any{"name": c.Name})
+		details := map[string]any{}
+		if then != nil {
+			var err error
+			if details, err = then(ctx, uow, c); err != nil {
+				return err
+			}
+		}
+		details["name"] = c.Name
+		return policy.Audit(ctx, uow, "collection.create", c.ID, details)
 	})
 	if err != nil {
 		return nil, err

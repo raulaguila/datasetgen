@@ -16,6 +16,9 @@ import type {
   MemberRole,
   QualityReport,
   DataRecord,
+  ImportResult,
+  RecordFix,
+  RecordVersion,
   Resource,
   Role,
   Session,
@@ -131,6 +134,12 @@ export const collections = {
     apiFetch<Paged<AuditRecord>>(`/v1/collections/${id(collectionId)}/audit${query(p)}`, { signal }),
   /** Checks every record against the current schema (editors and owners). */
   quality: (collectionId: string, signal?: AbortSignal) => apiFetch<QualityReport>(`/v1/collections/${id(collectionId)}/quality`, { signal }),
+  /** Queues a background check unless one is running. */
+  startQuality: (collectionId: string) => apiFetch<QualityReport>(`/v1/collections/${id(collectionId)}/quality`, { method: "POST" }),
+  fix: (collectionId: string, fix: RecordFix) => apiFetch<{ count: number }>(`/v1/collections/${id(collectionId)}/fix`, { method: "POST", json: fix }),
+  deleteInvalid: (collectionId: string) => apiFetch<{ count: number }>(`/v1/collections/${id(collectionId)}/delete-invalid`, { method: "POST" }),
+  duplicate: (collectionId: string, name: string, withRecords: boolean) =>
+    apiFetch<Collection>(`/v1/collections/${id(collectionId)}/duplicate`, { method: "POST", json: { name, records: withRecords } }),
   stats: (collectionId: string, signal?: AbortSignal) =>
     apiFetch<CollectionStats>(`/v1/collections/${id(collectionId)}/stats${query({ tz: Intl.DateTimeFormat().resolvedOptions().timeZone })}`, { signal }),
   leave: (collectionId: string) => apiFetch<void>(`/v1/collections/${id(collectionId)}/leave`, { method: "POST" }),
@@ -138,8 +147,17 @@ export const collections = {
 };
 
 export const records = {
-  list: (p: { collection_id: string; page: number; limit: number; search?: string; order?: SortOrder }, signal?: AbortSignal) =>
+  /** filter: a JSON object of top-level fields and exact values. */
+  list: (p: { collection_id: string; page: number; limit: number; search?: string; order?: SortOrder; filter?: string }, signal?: AbortSignal) =>
     apiFetch<Paged<DataRecord>>(`/v1/records${query(p)}`, { signal }),
+  versions: (recordId: string, signal?: AbortSignal) => apiFetch<{ items: RecordVersion[] }>(`/v1/records/${id(recordId)}/versions`, { signal }),
+  restore: (recordId: string, version: number, current_version?: number) =>
+    apiFetch<DataRecord>(`/v1/records/${id(recordId)}/restore`, { method: "POST", json: { version, current_version } }),
+  /** One batch of a file import; dry_run only checks. */
+  importBatch: (body: { collection_id: string; records: unknown[]; dry_run?: boolean; skip_invalid?: boolean }) =>
+    apiFetch<ImportResult>("/v1/records/import", { method: "POST", json: body }),
+  export: (collection_id: string, format: "jsonl" | "csv", valid: boolean) =>
+    apiDownload(`/v1/records/export${query({ collection_id, format, valid: valid || undefined })}`, `records.${format}`),
   get: (recordId: string) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`),
   create: (collection_id: string, data: unknown) => apiFetch<DataRecord>("/v1/records", { method: "POST", json: { collection_id, data } }),
   update: (recordId: string, data: unknown, version?: number) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`, { method: "PATCH", json: { data, version } }),

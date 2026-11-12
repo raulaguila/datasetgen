@@ -11,6 +11,9 @@ type RecordFilter struct {
 	Page         Page
 	Search       string // matched against the JSON text of data
 	Order        string // created_at asc or desc
+	// Match keeps records whose data contains this JSON object (data @> Match),
+	// so {"category": "trigger"} filters on one field's exact value.
+	Match json.RawMessage
 }
 
 // Record is one entry of a collection (app.record).
@@ -22,3 +25,24 @@ type Record struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
+
+// RecordVersion is a record's data as it was before a change replaced it.
+type RecordVersion struct {
+	Version int
+	Data    json.RawMessage
+	SavedAt time.Time // when this version was written
+}
+
+// RecordFix is one bulk change to the data of a collection's records.
+type RecordFix struct {
+	Op    string          // set_default, rename or remove
+	Field string          // the field changed; the old name for rename
+	To    string          // rename only: the new name
+	Value json.RawMessage // set_default only: the value given to records without the field
+}
+
+const (
+	FixSetDefault = "set_default"
+	FixRename     = "rename"
+	FixRemove     = "remove"
+)

@@ -4,7 +4,7 @@ import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, ChevronDown, ChevronRight, Plus, Settings } from "lucide-react";
+import { Activity, ChevronDown, ChevronRight, Plus, Settings, Star } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { CollectionAvatar } from "@/components/collection-avatar";
 import { BrandWordmark } from "@/components/brand-wordmark";
@@ -154,6 +154,7 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
                       <Link href={`/collections/${c.id}/overview`} className="rail-item rail-workspace" aria-label={c.name} title={c.name} aria-current={selected ? "true" : undefined} onClick={() => enterGroup("collection")}>
                         <CollectionAvatar collection={c} className="rail-avatar" />
                         {!compact && <span className="rail-workspace-copy"><strong>{c.name}</strong><span>{count(c.record_count)}</span></span>}
+                        {!compact && pinned.includes(c.id) && <Star className="rail-pin" fill="currentColor" aria-label={t("collections.pinned")} />}
                       </Link>
                     ))}
                     {selected && open.includes("collection") && (

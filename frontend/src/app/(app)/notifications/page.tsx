@@ -29,7 +29,12 @@ function useNotificationText() {
   const format = useFormatDate();
   return (n: Notification) => {
     if (!n.kind) return { title: n.title, message: n.message };
-    const params: Record<string, string> = { ...n.params, until: n.params?.until ? format(n.params.until) : "" };
+    const role = n.params?.role;
+    const params: Record<string, string> = {
+      ...n.params,
+      until: n.params?.until ? format(n.params.until) : "",
+      role: role === "owner" || role === "editor" || role === "viewer" ? t(`members.role.${role}`) : role ?? "",
+    };
     const fill = (key: string) => t(key as MessageKey).replace(/\{(\w+)\}/g, (_, k: string) => params[k] ?? "");
     return { title: fill(`notifications.kind.${n.kind}.title`), message: fill(`notifications.kind.${n.kind}.message`) };
   };

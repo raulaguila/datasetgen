@@ -1,6 +1,7 @@
 package collection
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -37,6 +38,10 @@ func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
 	r.Delete("/:id/members/:userId", h.RemoveMember)
 	r.Get("/:id/audit", h.AuditLog)
 	r.Get("/:id/quality", h.Quality)
+	r.Post("/:id/quality", h.StartQuality)
+	r.Post("/:id/fix", h.Fix)
+	r.Post("/:id/delete-invalid", h.DeleteInvalid)
+	r.Post("/:id/duplicate", middleware.Require(authz, domain.ResourceCollections, domain.ActionCreate), h.Duplicate)
 	r.Get("/:id/stats", h.Stats)
 	r.Post("/:id/leave", h.Leave)
 }
@@ -447,15 +452,36 @@ type issueDTO struct {
 }
 
 type qualityDTO struct {
-	Version      int                `json:"version"`
-	Checked      int                `json:"checked"`
-	InvalidCount int                `json:"invalid_count"`
-	Invalid      []invalidRecordDTO `json:"invalid"`
-	// Truncated means the check stopped at 50 000 records.
-	Truncated bool `json:"truncated"`
+	// Status is none (never ran), running, done or failed.
+	Status string `json:"status" enums:"none,running,done,failed"`
+	// Version is the collection version checked; a lower one than current_version is stale.
+	Version        int                `json:"version"`
+	CurrentVersion int                `json:"current_version"`
+	Checked        int                `json:"checked"`
+	InvalidCount   int                `json:"invalid_count"`
+	Invalid        []invalidRecordDTO `json:"invalid"`
+	// Truncated means the check stopped at 500 000 records.
+	Truncated  bool       `json:"truncated"`
+	Error      string     `json:"error,omitempty"`
+	StartedAt  *time.Time `json:"started_at,omitempty"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
 }
 
-// @Summary Check every record against the collection's current schema; editors and owners
+func toQualityDTO(st *input.QualityState) (qualityDTO, error) {
+	out := qualityDTO{Status: "none", CurrentVersion: st.CurrentVersion, Invalid: []invalidRecordDTO{}}
+	if r := st.Run; r != nil {
+		out.Status, out.Version, out.Checked, out.InvalidCount = r.Status, r.SchemaVersion, r.Checked, r.InvalidCount
+		out.Truncated, out.Error, out.StartedAt, out.FinishedAt = r.Truncated, r.Error, &r.StartedAt, r.FinishedAt
+		if len(r.Invalid) > 0 {
+			if err := json.Unmarshal(r.Invalid, &out.Invalid); err != nil { // stored with the same keys
+				return out, err
+			}
+		}
+	}
+	return out, nil
+}
+
+// @Summary The latest check of the records against the current schema; editors and owners
 // @Tags Collections
 // @Produce json
 // @Param id path string true "Collection ID"
@@ -467,19 +493,127 @@ type qualityDTO struct {
 // @Failure 429 {object} mapper.errorBody
 // @Router /v1/collections/{id}/quality [get]
 func (h *Handler) Quality(c fiber.Ctx) error {
-	report, err := h.svc.Quality(c.Context(), c.Params("id"))
+	return h.writeQuality(c, h.svc.Quality)
+}
+
+// @Summary Start a check of the records in the background, unless one is running; editors and owners
+// @Tags Collections
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Security BearerAuth
+// @Success 200 {object} qualityDTO
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/{id}/quality [post]
+func (h *Handler) StartQuality(c fiber.Ctx) error {
+	return h.writeQuality(c, h.svc.StartQuality)
+}
+
+func (h *Handler) writeQuality(c fiber.Ctx, get func(context.Context, string) (*input.QualityState, error)) error {
+	st, err := get(c.Context(), c.Params("id"))
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
-	out := qualityDTO{Version: report.Version, Checked: report.Checked, InvalidCount: report.InvalidCount, Truncated: report.Truncated, Invalid: make([]invalidRecordDTO, 0, len(report.Invalid))}
-	for _, r := range report.Invalid {
-		issues := make([]issueDTO, 0, len(r.Issues))
-		for _, i := range r.Issues {
-			issues = append(issues, issueDTO(i))
-		}
-		out.Invalid = append(out.Invalid, invalidRecordDTO{ID: r.ID, Data: r.Data, UpdatedAt: r.UpdatedAt, Issues: issues})
+	out, err := toQualityDTO(st)
+	if err != nil {
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(out)
+}
+
+type fixDTO struct {
+	Op    string          `json:"op" enums:"set_default,rename,remove"`
+	Field string          `json:"field"`
+	To    string          `json:"to"`
+	Value json.RawMessage `json:"value" swaggertype:"object"`
+}
+
+type countDTO struct {
+	Count int64 `json:"count"`
+}
+
+// @Summary Change the data of every record at once; editors and owners
+// @Description set_default gives field the value in records without it; rename moves field to "to" where "to" is free; remove drops field. Records are not checked against the schema; each changed record keeps its previous version.
+// @Tags Collections
+// @Accept json
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Param body body fixDTO true "The change"
+// @Security BearerAuth
+// @Success 200 {object} countDTO "records changed"
+// @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/{id}/fix [post]
+func (h *Handler) Fix(c fiber.Ctx) error {
+	var body fixDTO
+	if err := c.Bind().Body(&body); err != nil {
+		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
+	}
+	n, err := h.svc.Fix(c.Context(), c.Params("id"), domain.RecordFix{Op: body.Op, Field: body.Field, To: body.To, Value: body.Value})
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	return c.JSON(countDTO{Count: n})
+}
+
+// @Summary Delete the records the latest quality check found invalid; editors and owners
+// @Description Records changed after that check started are kept. 409 when the check is missing, unfinished or of older fields.
+// @Tags Collections
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Security BearerAuth
+// @Success 200 {object} countDTO "records deleted"
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 409 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/{id}/delete-invalid [post]
+func (h *Handler) DeleteInvalid(c fiber.Ctx) error {
+	n, err := h.svc.DeleteInvalid(c.Context(), c.Params("id"))
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	return c.JSON(countDTO{Count: int64(n)})
+}
+
+type duplicateDTO struct {
+	Name    string `json:"name" example:"Wired (copy)"`
+	Records bool   `json:"records"`
+}
+
+// @Summary Copy a collection into a new one the caller owns
+// @Description Copies name (or the one given), description, icon and fields, and the records when asked. Members are not copied.
+// @Tags Collections
+// @Accept json
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Param body body duplicateDTO true "Copy"
+// @Security BearerAuth
+// @Success 201 {object} collectionDTO
+// @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/{id}/duplicate [post]
+func (h *Handler) Duplicate(c fiber.Ctx) error {
+	var body duplicateDTO
+	if err := c.Bind().Body(&body); err != nil {
+		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
+	}
+	created, err := h.svc.Duplicate(c.Context(), input.DuplicateCollectionCommand{ID: c.Params("id"), Name: body.Name, Records: body.Records})
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	out := toDTO(*created)
+	out.RecordCount = &created.RecordCount
+	return c.Status(fiber.StatusCreated).JSON(out)
 }
 
 type statsDTO struct {

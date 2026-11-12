@@ -187,7 +187,7 @@ func TestCollectionMembersDecideAccess(t *testing.T) {
 	// A platform admin (here: a role granting '*') sees and owns every collection.
 	adminID := e.userID(t, outsiderAddr)
 	if err := testDB.Exec(`
-		WITH ro AS (INSERT INTO usr.usr_role (name) VALUES ('full-` + adminID[:8] + `') RETURNING id),
+		WITH ro AS (INSERT INTO usr.usr_role (name) VALUES ('full-`+adminID[:8]+`') RETURNING id),
 		     p AS (INSERT INTO usr.usr_role_permission (role_id, resource, actions) SELECT id, '*', 15 FROM ro)
 		INSERT INTO usr.usr_user_role (user_id, role_id) SELECT ?, id FROM ro`, adminID).Error; err != nil {
 		t.Fatal(err)
@@ -261,10 +261,30 @@ func TestCollectionAuditAndQuality(t *testing.T) {
 	if _, err := collections.Update(owner, input.UpdateCollectionCommand{ID: c.ID, Schema: json.RawMessage(`{"type":"object","required":["nome"],"properties":{"nome":{"type":"string"}}}`)}); err != nil {
 		t.Fatal(err)
 	}
-	report, err := collections.Quality(helper, c.ID)
-	if err != nil || report.Checked != 1 || report.InvalidCount != 1 || len(report.Invalid) != 1 || report.Invalid[0].Issues[0].Keyword != "required" {
+	report := runQuality(helper, t, collections, c.ID)
+	var invalid []input.InvalidRecord
+	if err := json.Unmarshal(report.Invalid, &invalid); err != nil || report.Checked != 1 || report.InvalidCount != 1 ||
+		len(invalid) != 1 || invalid[0].Issues[0].Keyword != "required" {
 		t.Fatalf("quality: %+v, %v", report, err)
 	}
+}
+
+// runQuality starts a check and runs its job the way the worker would.
+func runQuality(ctx context.Context, t *testing.T, collections *collection.Service, id string) *domain.QualityRun {
+	t.Helper()
+	st, err := collections.StartQuality(ctx, id)
+	if err != nil || st.Run == nil || st.Run.Status != domain.QualityRunning {
+		t.Fatalf("start quality: %+v, %v", st, err)
+	}
+	payload, _ := json.Marshal(map[string]string{"id": id})
+	if err := collection.Jobs(collections.Repo, collections.Records)[collection.JobQuality](context.Background(), payload); err != nil {
+		t.Fatal(err)
+	}
+	st, err = collections.Quality(ctx, id)
+	if err != nil || st.Run.Status != domain.QualityDone {
+		t.Fatalf("quality after job: %+v, %v", st, err)
+	}
+	return st.Run
 }
 
 // Overview stats, a member leaving and the curated icon.
@@ -324,3 +344,114 @@ func TestCollectionStatsLeaveAndIcon(t *testing.T) {
 }
 
 func ignore2[A, B any](_ A, _ B, err error) error { return err }
+
+// toolsEnv is a collection with a required "nome" and an enum "cat", owned by
+// owner, with helper as editor.
+func toolsEnv(t *testing.T) (collections *collection.Service, records *record.Service, c *domain.Collection, owner, helper context.Context) {
+	t.Helper()
+	e := newEnv(t)
+	collections, records = collectionServices(e)
+	ownerAddr, helperAddr := e.activeUser(t), e.activeUser(t)
+	owner = reqctx.WithActor(context.Background(), e.userID(t, ownerAddr))
+	helperID := e.userID(t, helperAddr)
+	helper = reqctx.WithActor(context.Background(), helperID)
+	c, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Tools", Schema: json.RawMessage(
+		`{"type":"object","required":["nome"],"properties":{"nome":{"type":"string"},"cat":{"enum":["a","b"]}}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := collections.AddMember(owner, input.AddMemberCommand{CollectionID: c.ID, Email: helperAddr, Role: domain.RoleEditor}); err != nil {
+		t.Fatal(err)
+	}
+	var notices int64
+	testDB.Raw(`SELECT count(*) FROM usr.usr_notification WHERE user_id = ? AND kind = 'collection_added'`, helperID).Scan(&notices)
+	if notices != 1 {
+		t.Fatalf("member notice: %d", notices)
+	}
+	return collections, records, c, owner, helper
+}
+
+// Import checks before writing; filters match exact values; an edit keeps a
+// version and restoring it adds one more.
+func TestRecordImportFiltersAndVersions(t *testing.T) {
+	_, records, c, _, helper := toolsEnv(t)
+	batch := []json.RawMessage{json.RawMessage(`{"nome":"x","cat":"a"}`), json.RawMessage(`{"nome":"y","cat":"b"}`), json.RawMessage(`{"cat":"a"}`)}
+	res, err := records.Import(helper, input.ImportRecordsCommand{CollectionID: c.ID, Records: batch, DryRun: true})
+	if err != nil || res.Created != 0 || res.Invalid != 1 || res.Errors[0].Index != 2 {
+		t.Fatalf("dry run: %+v, %v", res, err)
+	}
+	if res, err = records.Import(helper, input.ImportRecordsCommand{CollectionID: c.ID, Records: batch}); err != nil || res.Created != 0 {
+		t.Fatalf("all or nothing: %+v, %v", res, err)
+	}
+	if res, err = records.Import(helper, input.ImportRecordsCommand{CollectionID: c.ID, Records: batch, SkipInvalid: true}); err != nil || res.Created != 2 {
+		t.Fatalf("skip invalid: %+v, %v", res, err)
+	}
+
+	page := domain.NewPage(1, 10)
+	list, total, err := records.List(helper, domain.RecordFilter{CollectionID: c.ID, Page: page, Match: json.RawMessage(`{"cat":"a"}`)})
+	if err != nil || total != 1 || len(list) != 1 {
+		t.Fatalf("filter: %d %v", total, err)
+	}
+	wantCode(t, ignore2(records.List(helper, domain.RecordFilter{CollectionID: c.ID, Page: page, Match: json.RawMessage(`{"cat":["a"]}`)})), apperror.CodeInvalidInput)
+
+	// An edit keeps the old data as a version, and restoring it is one more version.
+	id := list[0].ID
+	if _, err := records.Update(helper, input.UpdateRecordCommand{ID: id, Data: json.RawMessage(`{"nome":"changed","cat":"a"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	versions, err := records.Versions(helper, id)
+	if err != nil || len(versions) != 1 || versions[0].Version != 1 {
+		t.Fatalf("versions: %+v, %v", versions, err)
+	}
+	two := 2
+	restored, err := records.Restore(helper, input.RestoreRecordCommand{ID: id, Version: 1, CurrentVersion: &two})
+	if err != nil || restored.Version != 3 || !strings.Contains(string(restored.Data), `"x"`) {
+		t.Fatalf("restore: %+v, %v", restored, err)
+	}
+	wantCode(t, ignore(records.Restore(helper, input.RestoreRecordCommand{ID: id, Version: 1, CurrentVersion: &two})), apperror.CodeConflict)
+
+	exp, err := records.Export(helper, c.ID, false)
+	if err != nil || len(exp.Records) != 2 {
+		t.Fatalf("export: %+v, %v", exp, err)
+	}
+
+}
+
+// Bulk fixes, valid-only export, deleting what the check found and duplicating.
+func TestRecordFixesAndDuplicate(t *testing.T) {
+	collections, records, c, owner, helper := toolsEnv(t)
+	batch := []json.RawMessage{json.RawMessage(`{"nome":"x","cat":"a"}`), json.RawMessage(`{"nome":"y","cat":"b"}`)}
+	if _, err := records.Import(helper, input.ImportRecordsCommand{CollectionID: c.ID, Records: batch}); err != nil {
+		t.Fatal(err)
+	}
+	// Renaming the required field leaves both records invalid until renamed back.
+	if n, err := collections.Fix(helper, c.ID, domain.RecordFix{Op: domain.FixRename, Field: "nome", To: "titulo"}); err != nil || n != 2 {
+		t.Fatalf("rename: %d, %v", n, err)
+	}
+	if n, err := collections.Fix(helper, c.ID, domain.RecordFix{Op: domain.FixSetDefault, Field: "nome", Value: json.RawMessage(`"padrão"`)}); err != nil || n != 2 {
+		t.Fatalf("set default: %d, %v", n, err)
+	}
+	if n, err := collections.Fix(helper, c.ID, domain.RecordFix{Op: domain.FixRemove, Field: "nome"}); err != nil || n != 2 {
+		t.Fatalf("remove: %d, %v", n, err)
+	}
+	wantCode(t, ignore(collections.Fix(helper, c.ID, domain.RecordFix{Op: "drop", Field: "x"})), apperror.CodeInvalidInput)
+	if exp, err := records.Export(helper, c.ID, true); err != nil || len(exp.Records) != 0 {
+		t.Fatalf("valid export: %+v, %v", exp, err)
+	}
+
+	wantCode(t, ignore(collections.DeleteInvalid(helper, c.ID)), apperror.CodeConflict) // no check yet
+	if run := runQuality(helper, t, collections, c.ID); run.InvalidCount != 2 {
+		t.Fatalf("quality: %+v", run)
+	}
+	if n, err := collections.DeleteInvalid(helper, c.ID); err != nil || n != 2 {
+		t.Fatalf("delete invalid: %d, %v", n, err)
+	}
+
+	if _, err := records.Create(owner, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{"nome":"z"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	dup, err := collections.Duplicate(helper, input.DuplicateCollectionCommand{ID: c.ID, Records: true})
+	if err != nil || dup.Name != "Tools (copy)" || dup.RecordCount != 1 || dup.Role != domain.RoleOwner {
+		t.Fatalf("duplicate: %+v, %v", dup, err)
+	}
+}

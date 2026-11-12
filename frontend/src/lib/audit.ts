@@ -6,6 +6,7 @@ export function targetHref(r: AuditRecord): string | undefined {
   if (r.action.startsWith("user.") || r.action.startsWith("admin.")) return `/admin/users/${r.target_id}`;
   if (r.action.startsWith("role.")) return `/admin/roles/${r.target_id}`;
   if (r.action.startsWith("product.") && r.action !== "product.delete") return `/products/${r.target_id}`;
+  if (r.action === "record.import") return `/collections/${r.target_id}`; // its target is the collection
   if (r.action.startsWith("record.") && r.action !== "record.delete") return `/records/${r.target_id}`; // the record page finds its collection
   if (r.action.startsWith("collection.") && r.action !== "collection.delete") return `/collections/${r.target_id}`;
 }

@@ -25,7 +25,11 @@ func New(svc input.RecordService) *Handler {
 // in the record's collection (viewer reads, editor writes).
 func (h *Handler) Routes(r fiber.Router) {
 	r.Get("/", h.List)
+	r.Get("/export", h.Export) // before /:id, which would swallow it
+	r.Post("/import", h.Import)
 	r.Get("/:id", h.Get)
+	r.Get("/:id/versions", h.Versions)
+	r.Post("/:id/restore", h.Restore)
 	r.Post("/", h.Create)
 	r.Patch("/:id", h.Update)
 	r.Post("/delete", h.Delete)
@@ -67,6 +71,7 @@ func toDTO(r domain.Record) recordDTO {
 // @Param limit query int false "Items per page, up to 100" default(20)
 // @Param search query string false "Text anywhere in the record JSON"
 // @Param order query string false "Creation order" Enums(asc, desc) default(desc)
+// @Param filter query string false "JSON object of top-level fields and exact values, up to 10, such as {\"category\":\"trigger\"}"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]recordDTO,pagination=mapper.PaginationDTO}
 // @Failure 400 {object} mapper.errorBody
@@ -80,6 +85,9 @@ func (h *Handler) List(c fiber.Ctx) error {
 		Page:         domain.NewPage(fiber.Query[int](c, "page"), fiber.Query[int](c, "limit")),
 		Search:       c.Query("search"),
 		Order:        c.Query("order"),
+	}
+	if f := c.Query("filter"); f != "" {
+		filter.Match = json.RawMessage(f) // the service checks its shape
 	}
 	items, total, err := h.svc.List(c.Context(), filter)
 	if err != nil {

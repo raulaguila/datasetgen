@@ -3,6 +3,7 @@ package output
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
 )
@@ -22,4 +23,18 @@ type RecordRepository interface {
 	// Scan returns up to limit records of the collection after afterID (by id),
 	// with id, full data and updated_at only.
 	Scan(ctx context.Context, collectionID, afterID string, limit int) ([]domain.Record, error)
+	// CreateMany inserts one record per JSON text; the caller has validated them.
+	CreateMany(ctx context.Context, collectionID string, data []string) (int64, error)
+	// CopyAll copies every record of one collection into another, as new records.
+	CopyAll(ctx context.Context, fromCollection, toCollection string) (int64, error)
+	// Versions lists the record's earlier versions, newest first.
+	Versions(ctx context.Context, id string, limit int) ([]domain.RecordVersion, error)
+	// Version is the data of one earlier version.
+	Version(ctx context.Context, id string, version int) (json.RawMessage, error)
+	// Fix applies a bulk change to the collection's records, saving a version of
+	// each record it changes, and returns how many changed.
+	Fix(ctx context.Context, collectionID string, fix domain.RecordFix) (int64, error)
+	// DeleteListed deletes the listed records of the collection that were not
+	// changed after unchangedSince, and returns the ids it deleted.
+	DeleteListed(ctx context.Context, collectionID string, ids []string, unchangedSince time.Time) ([]string, error)
 }

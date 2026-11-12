@@ -632,3 +632,6 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
   .collection-open-action { min-height:44px; }
 }
 
+
+/* A pinned collection in the sidebar: a small star after its name. */
+.rail-pin { flex-shrink:0; width:12px; height:12px; margin-inline-start:auto; color:var(--primary); }

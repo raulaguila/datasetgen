@@ -3,6 +3,7 @@ package schema
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -108,4 +109,33 @@ func Check(compiled *jsonschema.Schema, raw []byte) ([]Issue, error) {
 		issues = issues[:maxIssues]
 	}
 	return issues, nil
+}
+
+// PropertyOrder lists the top-level property names as the schema text writes
+// them; Go maps would lose the order the form shows. Nil when there are none.
+func PropertyOrder(raw []byte) []string {
+	var doc struct {
+		Properties json.RawMessage `json:"properties"`
+	}
+	if json.Unmarshal(raw, &doc) != nil || len(doc.Properties) == 0 {
+		return nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(doc.Properties))
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return nil
+	}
+	var keys []string
+	for dec.More() {
+		t, err := dec.Token()
+		if err != nil {
+			return keys
+		}
+		key, _ := t.(string)
+		keys = append(keys, key)
+		var skip json.RawMessage
+		if dec.Decode(&skip) != nil {
+			return keys
+		}
+	}
+	return keys
 }
