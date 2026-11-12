@@ -44,6 +44,7 @@ func Compile(raw []byte) (*jsonschema.Schema, error) {
 	c := jsonschema.NewCompiler()
 	c.DefaultDraft(jsonschema.Draft2020)
 	c.UseLoader(noLoader{})
+	c.AssertFormat() // 2020-12 treats format as a note by default; a dataset wants it enforced
 	if err := c.AddResource(location, doc); err != nil {
 		return nil, invalid(err.Error())
 	}

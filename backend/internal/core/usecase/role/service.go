@@ -172,6 +172,10 @@ func (s *Service) SetPermissions(ctx context.Context, roleID string, permissions
 			return nil, apperror.New(apperror.CodeInvalidInput, resource+" does not take these actions").WithField("permissions")
 		}
 	}
+	// Records are listed and edited on the collection screen, which reads the schema.
+	if permissions[domain.ResourceRecords] != 0 {
+		permissions[domain.ResourceCollections] |= domain.ActionRead
+	}
 	var updated *domain.Role
 	err = s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
 		if err := validate.ID(roleID); err != nil {

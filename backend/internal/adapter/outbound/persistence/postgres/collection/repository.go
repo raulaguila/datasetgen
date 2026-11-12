@@ -107,6 +107,15 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*domain.Collectio
 	return &c, nil
 }
 
+func (r *Repository) SchemaForWrite(ctx context.Context, id string) (json.RawMessage, error) {
+	var m row
+	err := r.db.WithContext(ctx).Raw(`SELECT schema::text AS schema FROM app.collection WHERE id = ? FOR SHARE`, id).Take(&m).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "collection")
+	}
+	return json.RawMessage(m.Schema), nil
+}
+
 func (r *Repository) Create(ctx context.Context, c *domain.Collection) error {
 	var m row
 	err := r.db.WithContext(ctx).Raw(`

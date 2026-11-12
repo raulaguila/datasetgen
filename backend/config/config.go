@@ -25,7 +25,7 @@ type LogConfig struct {
 }
 
 type APIConfig struct {
-	Port         int    `env:"API_PORT" default:"9999"`
+	Port         int    `env:"API_PORT" default:"9977"`
 	EnableLogger bool   `env:"API_LOGGER" default:"1"`
 	CorsOrigins  string `env:"CORS_ORIGINS" default:"*"`
 

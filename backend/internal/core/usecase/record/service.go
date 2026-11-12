@@ -20,7 +20,8 @@ const (
 )
 
 // Service checks every record against its collection's schema inside the
-// transaction that writes it, so a schema change cannot slip in between.
+// transaction that writes it; the schema row stays share-locked until commit,
+// so a concurrent schema change waits instead of slipping in between.
 type Service struct {
 	Repo output.RecordRepository
 	Tx   output.TxManager
@@ -132,11 +133,11 @@ func (s *Service) DeleteMany(ctx context.Context, ids []string) error {
 // shortcut: compiles the schema on every write; cache by collection id and version
 // when bulk imports make it show up in profiles.
 func checkData(ctx context.Context, uow output.UnitOfWork, collectionID string, data []byte) error {
-	c, err := uow.Collections().FindByID(ctx, collectionID)
+	raw, err := uow.Collections().SchemaForWrite(ctx, collectionID)
 	if err != nil {
 		return err
 	}
-	compiled, err := schema.Compile(c.Schema)
+	compiled, err := schema.Compile(raw)
 	if err != nil {
 		return err
 	}

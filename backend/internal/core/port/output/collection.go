@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
 )
@@ -13,6 +14,9 @@ type CollectionRepository interface {
 	// ListOptions returns collections with only id and name.
 	ListOptions(ctx context.Context, limit int) ([]domain.Collection, error)
 	FindByID(ctx context.Context, id string) (*domain.Collection, error)
+	// SchemaForWrite reads only the schema and holds a FOR SHARE lock until the
+	// transaction ends, so a schema update waits for records being checked against it.
+	SchemaForWrite(ctx context.Context, id string) (json.RawMessage, error)
 	Create(ctx context.Context, c *domain.Collection) error
 	// Update writes only the fields set in patch; with patch.Version set, a row
 	// changed since that version is a conflict.

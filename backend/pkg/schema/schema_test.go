@@ -44,3 +44,16 @@ func TestCompileRefusesBadSchemas(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateAssertsFormat(t *testing.T) {
+	s, err := Compile([]byte(`{"type":"object","properties":{"dia":{"type":"string","format":"date"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(s, []byte(`{"dia":"2026-11-12"}`)); err != nil {
+		t.Fatalf("valid date: %v", err)
+	}
+	if err := Validate(s, []byte(`{"dia":"ontem"}`)); !apperror.IsCode(err, apperror.CodeValidationFailed) {
+		t.Fatalf("bad date accepted: %v", err)
+	}
+}

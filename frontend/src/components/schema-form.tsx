@@ -2,7 +2,8 @@
 
 import Form from "@rjsf/core";
 import type { IconButtonProps, RJSFSchema, UiSchema } from "@rjsf/utils";
-import validator from "@rjsf/validator-ajv8";
+import validator, { customizeValidator } from "@rjsf/validator-ajv8";
+import Ajv2020 from "ajv/dist/2020";
 import { ArrowDown, ArrowUp, Copy, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -28,14 +29,22 @@ const templates = {
   },
 };
 
+// The server defaults to draft 2020-12 and honours $schema; mirror that here.
+const validator2020 = customizeValidator({ AjvClass: Ajv2020 });
+
+/** Picks the validator for the schema's draft and drops $schema, which ajv cannot resolve offline. */
+export function forDraft(schema: Record<string, unknown>) {
+  const { $schema, ...rest } = schema;
+  const legacy = typeof $schema === "string" && !$schema.includes("2020-12") && !$schema.includes("2019-09");
+  return { schema: rest as RJSFSchema, validator: legacy ? validator : validator2020 };
+}
+
 // The page has its own save bar; the form never submits by itself.
 const hiddenSubmit: UiSchema = { "ui:submitButtonOptions": { norender: true } };
 
 /**
  * A form generated from a collection's JSON Schema. Validation runs on the server,
  * which answers the broken rules; this only renders and collects the data.
- * shortcut: the ajv validator is draft-07, used only for rjsf's own schema resolving;
- * switch to an Ajv2020 validator if schemas start relying on 2020-12-only keywords.
  */
 export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec" }: {
   schema: Record<string, unknown>;
@@ -44,13 +53,14 @@ export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec" 
   onChange?: (data: unknown) => void;
   idPrefix?: string;
 }) {
+  const draft = forDraft(schema);
   return (
     <Form
       className="rjsf"
-      schema={schema as RJSFSchema}
+      schema={draft.schema}
       uiSchema={hiddenSubmit}
       formData={data}
-      validator={validator}
+      validator={draft.validator}
       templates={templates}
       disabled={disabled}
       noHtml5Validate

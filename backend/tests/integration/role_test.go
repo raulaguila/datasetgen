@@ -157,6 +157,11 @@ func TestRolePermissionsApplyAtOnce(t *testing.T) {
 		t.Fatalf("members %+v %d %v", members, total, err)
 	}
 
+	updated, err = svc.SetPermissions(ctx, created.ID, map[string]domain.Action{domain.ResourceRecords: domain.ActionUpdate})
+	if err != nil || updated.Permissions[domain.ResourceCollections] != domain.ActionRead {
+		t.Fatalf("records must bring collections read: %+v %v", updated, err)
+	}
+
 	wantCode(t, svc.DeleteMany(ctx, []string{created.ID}), apperror.CodeResourceInUse)
 	updated, err = svc.SetPermissions(ctx, created.ID, map[string]domain.Action{})
 	if err != nil || len(updated.Permissions) != 0 {
