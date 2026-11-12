@@ -113,7 +113,8 @@ export const products = {
 };
 
 export const collections = {
-  list: (p: { page: number; limit: number; search?: string; sort?: string; order?: SortOrder }, signal?: AbortSignal) =>
+  /** details adds member_count, field_count and last_activity, which cost a pass over members and records. */
+  list: (p: { page: number; limit: number; search?: string; sort?: string; order?: SortOrder; details?: boolean }, signal?: AbortSignal) =>
     apiFetch<Paged<Collection>>(`/v1/collections${query(p)}`, { signal }),
   get: (collectionId: string) => apiFetch<Collection>(`/v1/collections/${id(collectionId)}`),
   create: (input: CollectionInput) => apiFetch<Collection>("/v1/collections", { method: "POST", json: input }),

@@ -77,4 +77,14 @@ test("a collection's records follow its fields", async ({ page }) => {
   const members = page.getByRole("list", { name: "Membros" });
   await expect(members.getByRole("listitem").filter({ hasText: helper })).toContainText("Convite pendente");
   await expect(members.getByRole("combobox", { name: "Papel: Ajudante" })).toContainText("Editor");
+
+  // The list groups it with the caller's own collections, with its counts; a star moves it to favorites.
+  await page.goto("/collections");
+  await page.getByRole("textbox", { name: "Buscar por nome" }).fill(name);
+  const mine = page.getByRole("list", { name: "Minhas coleções" }).getByRole("listitem");
+  await expect(mine).toContainText(["1 registro"]);
+  await expect(mine).toContainText(["3 campos"]);
+  await expect(mine).toContainText(["2 membros"]);
+  await mine.getByRole("button", { name: `Fixar no topo: ${name}` }).click();
+  await expect(page.getByRole("list", { name: "Favoritas" }).getByRole("button", { name, exact: true })).toBeVisible();
 });

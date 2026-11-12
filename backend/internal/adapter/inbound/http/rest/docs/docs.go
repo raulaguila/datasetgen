@@ -616,6 +616,12 @@ const docTemplate = `{
                         "description": "Sort direction",
                         "name": "order",
                         "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Add member_count, field_count and last_activity",
+                        "name": "details",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -4818,15 +4824,25 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "field_count": {
+                    "type": "integer"
+                },
                 "icon": {
                     "type": "string"
                 },
                 "id": {
                     "type": "string"
                 },
+                "last_activity": {
+                    "type": "string"
+                },
                 "member": {
                     "description": "Member is false for a platform admin who sees the collection without belonging to it; list only.",
                     "type": "boolean"
+                },
+                "member_count": {
+                    "description": "Sent with details=true only.",
+                    "type": "integer"
                 },
                 "name": {
                     "type": "string"

@@ -14,6 +14,9 @@ type CollectionFilter struct {
 	// UserID is the caller: a member sees the collections they belong to,
 	// a platform admin sees all (as owner). Role follows from it.
 	UserID string
+	// Details adds MemberCount, FieldCount and LastActivity, which visit
+	// every member and record: only the collections screen asks for them.
+	Details bool
 }
 
 // Collection groups records that follow one JSON Schema (app.collection).
@@ -24,11 +27,15 @@ type Collection struct {
 	Schema      json.RawMessage // JSON Schema, draft 2020-12
 	Icon        string          // a curated icon slug, "" for initials
 	RecordCount int64           // filled by List only
-	Role        MemberRole      // the caller's role; filled by List and Get
-	Member      bool            // the caller is a member (a platform admin may not be); filled by List
-	Version     int
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// Filled by List with Details only.
+	MemberCount  int64
+	FieldCount   int64
+	LastActivity time.Time  // the newest change to the collection or one of its records
+	Role         MemberRole // the caller's role; filled by List and Get
+	Member       bool       // the caller is a member (a platform admin may not be); filled by List
+	Version      int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // CollectionPatch holds the fields of an update; nil keeps the stored value.

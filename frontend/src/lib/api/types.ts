@@ -154,6 +154,11 @@ export interface Collection {
   icon: string;
   /** False for a platform admin who sees it without belonging to it; list only. */
   member?: boolean;
+  /** Present in list responses asked with details only. */
+  member_count?: number;
+  field_count?: number;
+  /** The newest change to the collection or one of its records. */
+  last_activity?: string;
   /** The caller's role in this collection; a platform admin is owner everywhere. */
   role?: MemberRole;
   version: number;

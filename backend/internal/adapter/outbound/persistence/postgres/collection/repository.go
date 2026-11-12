@@ -25,23 +25,26 @@ func NewRepository(db *gorm.DB) *Repository {
 }
 
 type row struct {
-	ID          uuid.UUID `gorm:"column:id"`
-	Name        string    `gorm:"column:name"`
-	Description string    `gorm:"column:description"`
-	Icon        string    `gorm:"column:icon"`
-	Member      bool      `gorm:"column:member"`
-	Schema      []byte    `gorm:"column:schema"`
-	RecordCount int64     `gorm:"column:record_count"`
-	Role        string    `gorm:"column:role"`
-	Version     int       `gorm:"column:version"`
-	CreatedAt   time.Time `gorm:"column:created_at"`
-	UpdatedAt   time.Time `gorm:"column:updated_at"`
+	ID           uuid.UUID `gorm:"column:id"`
+	Name         string    `gorm:"column:name"`
+	Description  string    `gorm:"column:description"`
+	Icon         string    `gorm:"column:icon"`
+	Member       bool      `gorm:"column:member"`
+	Schema       []byte    `gorm:"column:schema"`
+	RecordCount  int64     `gorm:"column:record_count"`
+	MemberCount  int64     `gorm:"column:member_count"`
+	FieldCount   int64     `gorm:"column:field_count"`
+	LastActivity time.Time `gorm:"column:last_activity"`
+	Role         string    `gorm:"column:role"`
+	Version      int       `gorm:"column:version"`
+	CreatedAt    time.Time `gorm:"column:created_at"`
+	UpdatedAt    time.Time `gorm:"column:updated_at"`
 }
 
 func (m row) toDomain() domain.Collection {
 	return domain.Collection{
 		ID: m.ID.String(), Name: m.Name, Description: m.Description, Icon: m.Icon, Member: m.Member, Schema: json.RawMessage(m.Schema),
-		RecordCount: m.RecordCount, Role: domain.MemberRole(m.Role), Version: m.Version, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt,
+		RecordCount: m.RecordCount, MemberCount: m.MemberCount, FieldCount: m.FieldCount, LastActivity: m.LastActivity, Role: domain.MemberRole(m.Role), Version: m.Version, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt,
 	}
 }
 
@@ -89,7 +92,7 @@ func (r *Repository) List(ctx context.Context, filter domain.CollectionFilter) (
 	err := matching().
 		Select(`c.id, c.name, c.description, c.icon, c.version, c.created_at, c.updated_at, m.user_id IS NOT NULL AS member,
 			(SELECT count(*) FROM app.record rc WHERE rc.collection_id = c.id) AS record_count,
-			CASE WHEN `+platformAdmin+` THEN 'owner' ELSE m.role END AS role`, filter.UserID).
+			CASE WHEN `+platformAdmin+` THEN 'owner' ELSE m.role END AS role`+listDetails(filter.Details), filter.UserID).
 		Order("c." + column + " " + direction + ", c.id").
 		Offset(filter.Page.Offset()).Limit(filter.Page.Limit).Find(&rows).Error
 	if err != nil {
@@ -100,6 +103,18 @@ func (r *Repository) List(ctx context.Context, filter domain.CollectionFilter) (
 		out = append(out, m.toDomain())
 	}
 	return out, total, nil
+}
+
+// listDetails adds the aggregates behind CollectionFilter.Details.
+func listDetails(on bool) string {
+	if !on {
+		return ""
+	}
+	return `,
+		(SELECT count(*) FROM app.collection_member cm WHERE cm.collection_id = c.id) AS member_count,
+		CASE WHEN json_typeof(c.schema->'properties') = 'object'
+			THEN (SELECT count(*) FROM json_object_keys(c.schema->'properties')) ELSE 0 END AS field_count,
+		GREATEST(c.updated_at, (SELECT max(rl.updated_at) FROM app.record rl WHERE rl.collection_id = c.id)) AS last_activity`
 }
 
 func (r *Repository) ListOptions(ctx context.Context, userID string, limit int) ([]domain.Collection, error) {

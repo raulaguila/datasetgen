@@ -50,6 +50,10 @@ type collectionDTO struct {
 	RecordCount *int64          `json:"record_count,omitempty"`
 	// Member is false for a platform admin who sees the collection without belonging to it; list only.
 	Member *bool `json:"member,omitempty"`
+	// Sent with details=true only.
+	MemberCount  *int64     `json:"member_count,omitempty"`
+	FieldCount   *int64     `json:"field_count,omitempty"`
+	LastActivity *time.Time `json:"last_activity,omitempty"`
 	// Role is the caller's role here: owner, editor or viewer.
 	Role      string    `json:"role,omitempty" enums:"owner,editor,viewer"`
 	Version   int       `json:"version"`
@@ -93,6 +97,7 @@ func toDTO(c domain.Collection) collectionDTO {
 // @Param search query string false "Part of the name"
 // @Param sort query string false "Sort field" Enums(name, created_at, updated_at) default(name)
 // @Param order query string false "Sort direction" Enums(asc, desc) default(asc)
+// @Param details query bool false "Add member_count, field_count and last_activity"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]collectionDTO,pagination=mapper.PaginationDTO}
 // @Failure 400 {object} mapper.errorBody
@@ -102,10 +107,11 @@ func toDTO(c domain.Collection) collectionDTO {
 // @Router /v1/collections [get]
 func (h *Handler) List(c fiber.Ctx) error {
 	filter := domain.CollectionFilter{
-		Page:   domain.NewPage(fiber.Query[int](c, "page"), fiber.Query[int](c, "limit")),
-		Search: c.Query("search"),
-		Sort:   c.Query("sort"),
-		Order:  c.Query("order"),
+		Page:    domain.NewPage(fiber.Query[int](c, "page"), fiber.Query[int](c, "limit")),
+		Search:  c.Query("search"),
+		Sort:    c.Query("sort"),
+		Order:   c.Query("order"),
+		Details: fiber.Query[bool](c, "details"),
 	}
 	items, total, err := h.svc.List(c.Context(), filter)
 	if err != nil {
@@ -116,6 +122,9 @@ func (h *Handler) List(c fiber.Ctx) error {
 		dto := toDTO(item)
 		dto.RecordCount = &item.RecordCount
 		dto.Member = &item.Member
+		if filter.Details {
+			dto.MemberCount, dto.FieldCount, dto.LastActivity = &item.MemberCount, &item.FieldCount, &item.LastActivity
+		}
 		out = append(out, dto)
 	}
 	return c.JSON(fiber.Map{"items": out, "pagination": mapper.Pagination(filter.Page, total)})

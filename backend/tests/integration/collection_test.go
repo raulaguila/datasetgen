@@ -299,6 +299,15 @@ func TestCollectionStatsLeaveAndIcon(t *testing.T) {
 	if err != nil || st.Records != 2 || st.Members != 2 || st.LastUpdate == nil || len(st.PerDay) != 1 || st.PerDay[0].Count != 2 {
 		t.Fatalf("stats: %+v, %v", st, err)
 	}
+	// The list adds the aggregates only when asked.
+	plain, _, err := collections.List(helper, domain.CollectionFilter{Page: domain.NewPage(1, 10)})
+	if err != nil || len(plain) != 1 || plain[0].MemberCount != 0 || !plain[0].LastActivity.IsZero() {
+		t.Fatalf("plain list: %+v, %v", plain, err)
+	}
+	full, _, err := collections.List(helper, domain.CollectionFilter{Page: domain.NewPage(1, 10), Details: true})
+	if err != nil || len(full) != 1 || full[0].MemberCount != 2 || full[0].FieldCount != 0 || full[0].LastActivity.Before(*st.LastUpdate) {
+		t.Fatalf("detailed list: %+v, %v", full, err)
+	}
 	if len(st.Contributors) != 2 || st.Contributors[0].Created != 1 || st.Contributors[0].Edited != 1 {
 		t.Fatalf("contributors: %+v", st.Contributors)
 	}
