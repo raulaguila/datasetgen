@@ -13,6 +13,7 @@ import type {
   Collection,
   CollectionMember,
   MemberRole,
+  QualityReport,
   DataRecord,
   Resource,
   Role,
@@ -122,6 +123,11 @@ export const collections = {
     apiFetch<{ member: CollectionMember; invited: boolean; activation_token?: string }>(`/v1/collections/${id(collectionId)}/members`, { method: "POST", json: input }),
   setMemberRole: (collectionId: string, userId: string, role: MemberRole) =>
     apiFetch<void>(`/v1/collections/${id(collectionId)}/members/${id(userId)}`, { method: "PATCH", json: { role } }),
+  /** The collection's own audit log (owners). */
+  audit: (collectionId: string, p: { page: number; limit: number; action?: string; user_id?: string; from?: string; to?: string }, signal?: AbortSignal) =>
+    apiFetch<Paged<AuditRecord>>(`/v1/collections/${id(collectionId)}/audit${query(p)}`, { signal }),
+  /** Checks every record against the current schema (editors and owners). */
+  quality: (collectionId: string, signal?: AbortSignal) => apiFetch<QualityReport>(`/v1/collections/${id(collectionId)}/quality`, { signal }),
   removeMember: (collectionId: string, userId: string) => apiFetch<void>(`/v1/collections/${id(collectionId)}/members/${id(userId)}`, { method: "DELETE" }),
 };
 

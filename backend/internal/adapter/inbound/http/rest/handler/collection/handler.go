@@ -35,6 +35,8 @@ func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
 	r.Post("/:id/members", h.AddMember)
 	r.Patch("/:id/members/:userId", h.SetMemberRole)
 	r.Delete("/:id/members/:userId", h.RemoveMember)
+	r.Get("/:id/audit", h.AuditLog)
+	r.Get("/:id/quality", h.Quality)
 }
 
 type collectionDTO struct {
@@ -363,4 +365,102 @@ func (h *Handler) RemoveMember(c fiber.Ctx) error {
 		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// auditDTO mirrors the audit log's records (handler/audit).
+type auditDTO struct {
+	ID          string         `json:"id"`
+	CreatedAt   time.Time      `json:"created_at"`
+	ActorID     string         `json:"actor_id,omitempty"`
+	ActorName   string         `json:"actor_name,omitempty"`
+	ActorEmail  string         `json:"actor_email,omitempty"`
+	RequestID   string         `json:"request_id,omitempty"`
+	Action      string         `json:"action" example:"record.update"`
+	TargetID    string         `json:"target_id,omitempty"`
+	TargetLabel string         `json:"target_label,omitempty"`
+	Details     map[string]any `json:"details"`
+}
+
+// @Summary A collection's audit log: its changes, its records' and its members'; owners only
+// @Tags Collections
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Param page query int false "Page" default(1)
+// @Param limit query int false "Items per page, up to 100" default(20)
+// @Param action query string false "Action prefix, such as record. or collection.member"
+// @Param user_id query string false "The actor or the target"
+// @Param from query string false "From this time on (RFC 3339)"
+// @Param to query string false "Before this time (RFC 3339)"
+// @Security BearerAuth
+// @Success 200 {object} object{items=[]auditDTO,pagination=mapper.PaginationDTO}
+// @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/{id}/audit [get]
+func (h *Handler) AuditLog(c fiber.Ctx) error {
+	filter, err := mapper.AuditFilter(c, domain.NewPage(fiber.Query[int](c, "page"), fiber.Query[int](c, "limit")))
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	items, total, err := h.svc.AuditLog(c.Context(), c.Params("id"), filter)
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	out := make([]auditDTO, 0, len(items))
+	for _, r := range items {
+		out = append(out, auditDTO(r))
+	}
+	return c.JSON(fiber.Map{"items": out, "pagination": mapper.Pagination(filter.Page, total)})
+}
+
+type invalidRecordDTO struct {
+	ID        string          `json:"id"`
+	Data      json.RawMessage `json:"data" swaggertype:"object"`
+	UpdatedAt time.Time       `json:"updated_at"`
+	Issues    []issueDTO      `json:"issues"`
+}
+
+// issueDTO mirrors schema.Issue, which swag does not read.
+type issueDTO struct {
+	Path    string `json:"path"`
+	Keyword string `json:"keyword" example:"required"`
+	Message string `json:"message"`
+}
+
+type qualityDTO struct {
+	Version      int                `json:"version"`
+	Checked      int                `json:"checked"`
+	InvalidCount int                `json:"invalid_count"`
+	Invalid      []invalidRecordDTO `json:"invalid"`
+	// Truncated means the check stopped at 50 000 records.
+	Truncated bool `json:"truncated"`
+}
+
+// @Summary Check every record against the collection's current schema; editors and owners
+// @Tags Collections
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Security BearerAuth
+// @Success 200 {object} qualityDTO "invalid holds the first 100, with their issues"
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/{id}/quality [get]
+func (h *Handler) Quality(c fiber.Ctx) error {
+	report, err := h.svc.Quality(c.Context(), c.Params("id"))
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	out := qualityDTO{Version: report.Version, Checked: report.Checked, InvalidCount: report.InvalidCount, Truncated: report.Truncated, Invalid: make([]invalidRecordDTO, 0, len(report.Invalid))}
+	for _, r := range report.Invalid {
+		issues := make([]issueDTO, 0, len(r.Issues))
+		for _, i := range r.Issues {
+			issues = append(issues, issueDTO(i))
+		}
+		out.Invalid = append(out.Invalid, invalidRecordDTO{ID: r.ID, Data: r.Data, UpdatedAt: r.UpdatedAt, Issues: issues})
+	}
+	return c.JSON(out)
 }

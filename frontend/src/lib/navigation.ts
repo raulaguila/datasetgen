@@ -1,4 +1,4 @@
-import { Database, FileJson, Package, KeyRound, ListTree, ScrollText, Settings2, UserCog, Users, type LucideIcon } from "lucide-react";
+import { Database, FileJson, Package, KeyRound, ListChecks, ListTree, ScrollText, Settings2, UserCog, Users, type LucideIcon } from "lucide-react";
 import type { Action, MemberRole } from "@/lib/api/types";
 import type { MessageKey } from "@/lib/i18n/messages";
 
@@ -39,6 +39,12 @@ export interface CollectionSection {
 export const COLLECTION_NAV: CollectionSection[] = [
   { seg: "", key: "collections.tab.records", icon: FileJson },
   { seg: "/fields", key: "collections.tab.fields", icon: ListTree },
+];
+
+/** How the collection is doing, its "Monitoring" group in the sidebar. */
+export const COLLECTION_MONITORING_NAV: CollectionSection[] = [
+  { seg: "/quality", key: "collections.tab.quality", icon: ListChecks, need: "editor" },
+  { seg: "/audit", key: "collections.tab.audit", icon: ScrollText, need: "owner" },
 ];
 
 /** The collection's own administration, its "Settings" group in the sidebar. */

@@ -66,7 +66,8 @@ test("a collection's records follow its fields", async ({ page }) => {
 
   // The creator owns it: its settings group lists the members, and an email
   // without an account is invited and joins at once, pending.
-  await page.getByRole("group", { name: "Configurações" }).getByRole("link", { name: "Membros" }).click();
+  await page.getByRole("button", { name: "Configurações" }).click();
+  await page.getByRole("navigation", { name: "Configurações" }).getByRole("link", { name: "Membros" }).click();
   await expect(page).toHaveURL(/\/members$/);
   const helper = `${name}@example.test`;
   await page.getByLabel("E-mail").fill(helper);

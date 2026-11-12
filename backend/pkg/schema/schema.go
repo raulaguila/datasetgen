@@ -63,14 +63,24 @@ func Compile(raw []byte) (*jsonschema.Schema, error) {
 
 // Validate checks raw against compiled and answers VALIDATION_FAILED with the issues in details.
 func Validate(compiled *jsonschema.Schema, raw []byte) error {
+	issues, err := Check(compiled, raw)
+	if err != nil || len(issues) == 0 {
+		return err
+	}
+	return apperror.New(apperror.CodeValidationFailed, "data does not match the collection schema").
+		WithField("data").WithDetails("issues", issues)
+}
+
+// Check returns the rules raw breaks, none when it matches (at most 20).
+func Check(compiled *jsonschema.Schema, raw []byte) ([]Issue, error) {
 	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 	if err != nil {
-		return apperror.New(apperror.CodeInvalidInput, "data must be JSON").WithField("data")
+		return nil, apperror.New(apperror.CodeInvalidInput, "data must be JSON").WithField("data")
 	}
 	err = compiled.Validate(doc)
 	var ve *jsonschema.ValidationError
 	if !errors.As(err, &ve) {
-		return err
+		return nil, err
 	}
 	issues := []Issue{}
 	for _, unit := range ve.BasicOutput().Errors {
@@ -91,9 +101,11 @@ func Validate(compiled *jsonschema.Schema, raw []byte) error {
 		}
 		issues = append(issues, Issue{Path: unit.InstanceLocation, Keyword: keyword, Message: unit.Error.String()})
 	}
+	if len(issues) == 0 { // a failure must never read as a match
+		issues = append(issues, Issue{Message: ve.Error()})
+	}
 	if len(issues) > maxIssues {
 		issues = issues[:maxIssues]
 	}
-	return apperror.New(apperror.CodeValidationFailed, "data does not match the collection schema").
-		WithField("data").WithDetails("issues", issues)
+	return issues, nil
 }

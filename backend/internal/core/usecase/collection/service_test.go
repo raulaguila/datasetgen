@@ -11,7 +11,7 @@ import (
 
 // A nil repo and tx prove that bad input never reaches the database.
 func TestCreateValidation(t *testing.T) {
-	svc := New(nil, nil, nil)
+	svc := New(nil, nil, nil, nil, nil)
 	for name, cmd := range map[string]input.CreateCollectionCommand{
 		"empty name":   {Name: " ", Schema: json.RawMessage(`{}`)},
 		"bad schema":   {Name: "Wired", Schema: json.RawMessage(`{"type":"nope"}`)},
@@ -25,7 +25,7 @@ func TestCreateValidation(t *testing.T) {
 }
 
 func TestMalformedIDIsInvalidInput(t *testing.T) {
-	svc := New(nil, nil, nil)
+	svc := New(nil, nil, nil, nil, nil)
 	if _, err := svc.Get(context.Background(), "abc"); !apperror.IsCode(err, apperror.CodeInvalidInput) {
 		t.Fatalf("get: %v", err)
 	}

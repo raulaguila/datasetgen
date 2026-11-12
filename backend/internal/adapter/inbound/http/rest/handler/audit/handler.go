@@ -44,18 +44,6 @@ type recordDTO struct {
 	Details     map[string]any `json:"details"`
 }
 
-func parseTime(c fiber.Ctx, key string) (*time.Time, error) {
-	raw := c.Query(key)
-	if raw == "" {
-		return nil, nil
-	}
-	t, err := time.Parse(time.RFC3339, raw)
-	if err != nil {
-		return nil, apperror.New(apperror.CodeInvalidInput, key+" must be an RFC 3339 time").WithField(key)
-	}
-	return &t, nil
-}
-
 // @Summary List the audit log, newest first
 // @Tags Audit
 // @Produce json
@@ -73,7 +61,7 @@ func parseTime(c fiber.Ctx, key string) (*time.Time, error) {
 // @Failure 429 {object} mapper.errorBody
 // @Router /v1/audit [get]
 func (h *Handler) List(c fiber.Ctx) error {
-	filter, err := filterFrom(c, domain.NewPage(fiber.Query[int](c, "page"), fiber.Query[int](c, "limit")))
+	filter, err := mapper.AuditFilter(c, domain.NewPage(fiber.Query[int](c, "page"), fiber.Query[int](c, "limit")))
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
@@ -86,17 +74,6 @@ func (h *Handler) List(c fiber.Ctx) error {
 		out = append(out, recordDTO(r))
 	}
 	return c.JSON(fiber.Map{"items": out, "pagination": mapper.Pagination(filter.Page, total)})
-}
-
-// filterFrom reads the filters shared by the list and the export.
-func filterFrom(c fiber.Ctx, page domain.Page) (domain.AuditFilter, error) {
-	filter := domain.AuditFilter{Page: page, Action: c.Query("action"), UserID: c.Query("user_id")}
-	var err error
-	if filter.From, err = parseTime(c, "from"); err != nil {
-		return filter, err
-	}
-	filter.To, err = parseTime(c, "to")
-	return filter, err
 }
 
 // maxExport caps one file; past it the caller narrows the filters.
@@ -118,7 +95,7 @@ const maxExport = 10_000
 // @Router /v1/audit/export [get]
 func (h *Handler) Export(c fiber.Ctx) error {
 	// A one-row page first: refusing must not cost the 10000 rows.
-	filter, err := filterFrom(c, domain.Page{Number: 1, Limit: 1})
+	filter, err := mapper.AuditFilter(c, domain.Page{Number: 1, Limit: 1})
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}

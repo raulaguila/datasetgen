@@ -63,6 +63,10 @@ func (r *Repository) List(ctx context.Context, filter domain.AuditFilter) ([]dom
 		where += " AND (a.actor_id = ? OR a.target_id = ?)"
 		args = append(args, filter.UserID, filter.UserID)
 	}
+	if filter.CollectionID != "" {
+		where += " AND (a.target_id = ? OR a.details->>'collection_id' = ?)"
+		args = append(args, filter.CollectionID, filter.CollectionID)
+	}
 	if filter.From != nil {
 		where += " AND a.created_at >= ?"
 		args = append(args, *filter.From)

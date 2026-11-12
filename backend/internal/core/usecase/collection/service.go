@@ -35,14 +35,21 @@ type Inviter interface {
 // Access follows the caller's role in each collection (policy.CollectionRole).
 type Service struct {
 	Repo    output.CollectionRepository
+	Records output.RecordRepository
 	Tx      output.TxManager
 	Inviter Inviter
+	Audit   AuditReader
+}
+
+// AuditReader lists the audit log; the audit use case checks its filters.
+type AuditReader interface {
+	List(ctx context.Context, filter domain.AuditFilter) ([]domain.AuditRecord, int64, error)
 }
 
 var _ input.CollectionService = (*Service)(nil)
 
-func New(repo output.CollectionRepository, tx output.TxManager, inviter Inviter) *Service {
-	return &Service{Repo: repo, Tx: tx, Inviter: inviter}
+func New(repo output.CollectionRepository, records output.RecordRepository, tx output.TxManager, inviter Inviter, audit AuditReader) *Service {
+	return &Service{Repo: repo, Records: records, Tx: tx, Inviter: inviter, Audit: audit}
 }
 
 func (s *Service) List(ctx context.Context, filter domain.CollectionFilter) ([]domain.Collection, int64, error) {

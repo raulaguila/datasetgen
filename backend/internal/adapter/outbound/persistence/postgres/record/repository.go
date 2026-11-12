@@ -137,8 +137,33 @@ func (r *Repository) DeleteMany(ctx context.Context, ids []string) error {
 	return nil
 }
 
-func (r *Repository) CollectionIDs(ctx context.Context, ids []string) ([]string, error) {
-	var out []string
-	err := r.db.WithContext(ctx).Raw(`SELECT DISTINCT collection_id::text FROM app.record WHERE id IN ?`, ids).Find(&out).Error
-	return out, shared.WrapError(err, "record")
+func (r *Repository) CollectionsOf(ctx context.Context, ids []string) (map[string]string, error) {
+	var rows []row
+	if err := r.db.WithContext(ctx).Raw(`SELECT id, collection_id FROM app.record WHERE id IN ?`, ids).Find(&rows).Error; err != nil {
+		return nil, shared.WrapError(err, "record")
+	}
+	out := make(map[string]string, len(rows))
+	for _, m := range rows {
+		out[m.ID.String()] = m.CollectionID.String()
+	}
+	return out, nil
+}
+
+func (r *Repository) Scan(ctx context.Context, collectionID, afterID string, limit int) ([]domain.Record, error) {
+	var rows []row
+	// The zero uuid starts the scan; idx_app_record_collection_key serves the keyset.
+	if afterID == "" {
+		afterID = uuid.Nil.String()
+	}
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT id, data::text AS data, updated_at FROM app.record
+		WHERE collection_id = ? AND id > ? ORDER BY id LIMIT ?`, collectionID, afterID, limit).Find(&rows).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "record")
+	}
+	out := make([]domain.Record, 0, len(rows))
+	for _, m := range rows {
+		out = append(out, domain.Record{ID: m.ID.String(), Data: json.RawMessage(m.Data), UpdatedAt: m.UpdatedAt})
+	}
+	return out, nil
 }

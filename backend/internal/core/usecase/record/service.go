@@ -138,20 +138,25 @@ func (s *Service) DeleteMany(ctx context.Context, ids []string) error {
 		}
 	}
 	return s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
-		collections, err := uow.Records().CollectionIDs(ctx, ids)
+		owners, err := uow.Records().CollectionsOf(ctx, ids)
 		if err != nil {
 			return err
 		}
-		for _, c := range collections {
-			if err := editor(ctx, uow, c); err != nil {
-				return err
+		checked := map[string]bool{}
+		for _, c := range owners {
+			if !checked[c] {
+				if err := editor(ctx, uow, c); err != nil {
+					return err
+				}
+				checked[c] = true
 			}
 		}
 		if err := uow.Records().DeleteMany(ctx, ids); err != nil {
 			return err
 		}
 		for _, id := range ids {
-			if err := policy.Audit(ctx, uow, "record.delete", id, nil); err != nil {
+			// collection_id puts the delete in the collection's own log.
+			if err := policy.Audit(ctx, uow, "record.delete", id, map[string]any{"collection_id": owners[id]}); err != nil {
 				return err
 			}
 		}

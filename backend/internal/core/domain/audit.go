@@ -17,8 +17,11 @@ type AuditFilter struct {
 	Page   Page
 	Action string // prefix, such as "role." or "user.disable"
 	UserID string // the actor or the target
-	From   *time.Time
-	To     *time.Time // exclusive
+	// CollectionID keeps the entries about one collection: its own changes and
+	// those of its records and members (details.collection_id).
+	CollectionID string
+	From         *time.Time
+	To           *time.Time // exclusive
 }
 
 // AuditRecord is a stored AuditEntry with names to show beside the ids.

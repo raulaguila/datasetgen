@@ -114,6 +114,7 @@ func NewApplication(cfg *config.Environment, res *infra.Resources, log *logger.L
 	authSvc.Log = log
 
 	authorizer := authorize.New(permReader, output.RealClock{})
+	audit := auditsvc.New(store.Audit())
 
 	return &input.Application{
 		Health:      health.New(pgHealth),
@@ -125,7 +126,7 @@ func NewApplication(cfg *config.Environment, res *infra.Resources, log *logger.L
 		Account:     account.New(store, permReader, output.RealClock{}, NewFiles(cfg.Storage)),
 		Products:    product.New(store.Products(), store),
 		Records:     record.New(store.Records(), store.Collections(), store),
-		Collections: collection.New(store.Collections(), store, authSvc),
-		Audit:       auditsvc.New(store.Audit()),
+		Collections: collection.New(store.Collections(), store.Records(), store, authSvc, audit),
+		Audit:       audit,
 	}
 }

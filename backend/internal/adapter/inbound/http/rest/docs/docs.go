@@ -986,6 +986,118 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/collections/{id}/audit": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "A collection's audit log: its changes, its records' and its members'; owners only",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page, up to 100",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Action prefix, such as record. or collection.member",
+                        "name": "action",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "The actor or the target",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "From this time on (RFC 3339)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Before this time (RFC 3339)",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "items": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/collection.auditDTO"
+                                    }
+                                },
+                                "pagination": {
+                                    "$ref": "#/definitions/mapper.PaginationDTO"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/collections/{id}/members": {
             "get": {
                 "security": [
@@ -1267,6 +1379,63 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/collections/{id}/quality": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Check every record against the collection's current schema; editors and owners",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "invalid holds the first 100, with their issues",
+                        "schema": {
+                            "$ref": "#/definitions/collection.qualityDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/mapper.errorBody"
                         }
@@ -4488,6 +4657,43 @@ const docTemplate = `{
                 }
             }
         },
+        "collection.auditDTO": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "example": "record.update"
+                },
+                "actor_email": {
+                    "type": "string"
+                },
+                "actor_id": {
+                    "type": "string"
+                },
+                "actor_name": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "id": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "target_id": {
+                    "type": "string"
+                },
+                "target_label": {
+                    "type": "string"
+                }
+            }
+        },
         "collection.collectionDTO": {
             "type": "object",
             "properties": {
@@ -4552,6 +4758,41 @@ const docTemplate = `{
                 }
             }
         },
+        "collection.invalidRecordDTO": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "object"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "issues": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/collection.issueDTO"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "collection.issueDTO": {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string",
+                    "example": "required"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                }
+            }
+        },
         "collection.memberDTO": {
             "type": "object",
             "properties": {
@@ -4594,6 +4835,30 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                }
+            }
+        },
+        "collection.qualityDTO": {
+            "type": "object",
+            "properties": {
+                "checked": {
+                    "type": "integer"
+                },
+                "invalid": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/collection.invalidRecordDTO"
+                    }
+                },
+                "invalid_count": {
+                    "type": "integer"
+                },
+                "truncated": {
+                    "description": "Truncated means the check stopped at 50 000 records.",
+                    "type": "boolean"
+                },
+                "version": {
+                    "type": "integer"
                 }
             }
         },

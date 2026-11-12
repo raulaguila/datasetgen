@@ -6,10 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	auditrepo "github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/audit"
 	collectionrepo "github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/collection"
 	recordrepo "github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/record"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
+	auditsvc "github.com/raulaguila/dataset/internal/core/usecase/audit"
 	"github.com/raulaguila/dataset/internal/core/usecase/collection"
 	"github.com/raulaguila/dataset/internal/core/usecase/record"
 	"github.com/raulaguila/dataset/pkg/apperror"
@@ -103,7 +105,7 @@ func TestCollectionRecordsFollowTheSchema(t *testing.T) {
 
 func collectionServices(e *env) (*collection.Service, *record.Service) {
 	repo := collectionrepo.NewRepository(testDB)
-	return collection.New(repo, e.store, e.svc), record.New(recordrepo.NewRepository(testDB), repo, e.store)
+	return collection.New(repo, recordrepo.NewRepository(testDB), e.store, e.svc, auditsvc.New(auditrepo.NewRepository(testDB))), record.New(recordrepo.NewRepository(testDB), repo, e.store)
 }
 
 // Each collection is private to its members: the role decides what they may do,
@@ -208,3 +210,61 @@ func mustList(ctx context.Context, t *testing.T, svc *record.Service, collection
 	}
 	return items
 }
+
+// Monitoring: the collection's own audit log, and the records a schema change left out of format.
+func TestCollectionAuditAndQuality(t *testing.T) {
+	e := newEnv(t)
+	collections, records := collectionServices(e)
+	ownerAddr, helperAddr := e.activeUser(t), e.activeUser(t)
+	owner := reqctx.WithActor(context.Background(), e.userID(t, ownerAddr))
+	helper := reqctx.WithActor(context.Background(), e.userID(t, helperAddr))
+
+	c, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Monitorada", Schema: json.RawMessage(`{"type":"object","properties":{"nome":{"type":"string"}}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Outra", Schema: json.RawMessage(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := collections.AddMember(owner, input.AddMemberCommand{CollectionID: c.ID, Email: helperAddr, Role: domain.RoleEditor}); err != nil {
+		t.Fatal(err)
+	}
+	a, err := records.Create(helper, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{"nome":"a"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := records.Create(helper, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := records.Create(owner, input.CreateRecordCommand{CollectionID: other.ID, Data: json.RawMessage(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := records.DeleteMany(helper, []string{a.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The log holds this collection's create, member, record creates and delete; not the other one's.
+	log, total, err := collections.AuditLog(owner, c.ID, domain.AuditFilter{Page: domain.NewPage(1, 50)})
+	if err != nil || total != 5 {
+		t.Fatalf("audit: %d entries, %v: %+v", total, err, log)
+	}
+	if log[0].Action != "record.delete" {
+		t.Fatalf("newest first: %s", log[0].Action)
+	}
+	if _, _, err := collections.AuditLog(owner, c.ID, domain.AuditFilter{Action: "record.", Page: domain.NewPage(1, 50)}); err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore2(collections.AuditLog(helper, c.ID, domain.AuditFilter{})), apperror.CodeForbidden)
+
+	// Making "nome" required leaves the {} record out of format.
+	if _, err := collections.Update(owner, input.UpdateCollectionCommand{ID: c.ID, Schema: json.RawMessage(`{"type":"object","required":["nome"],"properties":{"nome":{"type":"string"}}}`)}); err != nil {
+		t.Fatal(err)
+	}
+	report, err := collections.Quality(helper, c.ID)
+	if err != nil || report.Checked != 1 || report.InvalidCount != 1 || len(report.Invalid) != 1 || report.Invalid[0].Issues[0].Keyword != "required" {
+		t.Fatalf("quality: %+v, %v", report, err)
+	}
+}
+
+func ignore2[A, B any](_ A, _ B, err error) error { return err }

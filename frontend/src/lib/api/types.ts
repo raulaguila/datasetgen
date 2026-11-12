@@ -157,6 +157,17 @@ export interface Collection {
   updated_at: string;
 }
 
+/** Stored records that no longer match the collection's schema. */
+export interface QualityReport {
+  version: number;
+  checked: number;
+  invalid_count: number;
+  /** The first 100, with the rules each breaks. */
+  invalid: { id: string; data: Record<string, unknown>; updated_at: string; issues: { path: string; keyword: string; message: string }[] }[];
+  /** The check stopped at 50 000 records. */
+  truncated: boolean;
+}
+
 export type MemberRole = "owner" | "editor" | "viewer";
 
 export interface CollectionMember {

@@ -36,6 +36,8 @@ core/domain → stdlib only
 
 **Collection membership (confirmed):** collections and records are not governed by RBAC but by `app.collection_member` (fixed roles: `owner` changes fields, settings and members; `editor` writes records; `viewer` reads). RBAC keeps only `collections:create`. `/v1/collections` and `/v1/records` run behind Bearer and the use cases call `policy.CollectionRole` per request: a non-member gets 404 (existence does not leak), a member with too small a role 403. A platform admin (enabled `is_superuser` role or a `*` grant) sees every collection as owner. The creator becomes owner in the create transaction; a collection keeps at least one owner (member changes take a per-collection advisory lock). `POST /v1/collections/{id}/members` adds an account by email or, when none exists, invites it (`auth.Invite`, pending account) and adds it at once; the invite and the membership are two transactions (marked `shortcut:`). Collection names are no longer unique across the instance, so a hidden collection neither blocks nor reveals a name.
 
+**Collection monitoring (confirmed):** `GET /v1/collections/{id}/audit` (owners) is the audit log filtered to the collection: entries whose target is the collection (its changes and member changes) or whose `details.collection_id` names it (record create, update and delete); `idx_usr_audit_log_collection` serves the second. `GET /v1/collections/{id}/quality` (editors and owners) walks the records by id (`idx_app_record_collection_key`) in batches of 500 and checks each against the current schema with `schema.Check`, returning the count and the first 100 invalid records with their issues. It runs in the request and stops at 50 000 records (marked `shortcut:`).
+
 ## Data
 
 **Confirmed stores:**
