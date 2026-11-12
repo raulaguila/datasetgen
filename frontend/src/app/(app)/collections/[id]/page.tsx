@@ -20,7 +20,7 @@ import type { Collection } from "@/lib/api/types";
 import { useMe } from "@/lib/context/me";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useI18n } from "@/lib/i18n/provider";
-import { can } from "@/lib/permissions";
+import { roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
 import { searchTerm } from "@/lib/utils";
 import { CollectionForm, CollectionPage } from "./_parts";
@@ -32,7 +32,6 @@ function columnsOf(schema: Record<string, unknown> | undefined) {
 
 function RecordList({ collection }: { collection: Collection }) {
   const { t } = useI18n();
-  const { user } = useMe();
   const router = useRouter();
   const format = useFormatDate();
   const [page, setPage] = useState(1);
@@ -47,10 +46,9 @@ function RecordList({ collection }: { collection: Collection }) {
   const items = list.data?.items ?? [];
   const columns = columnsOf(collection.schema);
   const show = (v: unknown) => (typeof v === "boolean" ? t(v ? "common.yes" : "common.no") : v === undefined || v === null || v === "" ? "—" : String(v));
-  const canCreate = can(user, "records", "create");
+  const canCreate = roleAllows(collection.role, "editor");
   const newButton = canCreate && <Button nativeButton={false} render={<Link href={`/records/new?collection=${collection.id}`} />}><Plus className="size-4" />{t("records.new")}</Button>;
 
-  if (!can(user, "records", "read")) return <EmptyState icon={FileJson} title={t("error.forbidden")} />;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">

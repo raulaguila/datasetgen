@@ -24,7 +24,7 @@ import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useUnsavedGuard } from "@/lib/hooks/use-unsaved-guard";
 import { useI18n } from "@/lib/i18n/provider";
 import type { MessageKey } from "@/lib/i18n/messages";
-import { can } from "@/lib/permissions";
+import { can, roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
 import { useUIStore } from "@/lib/store/ui";
 import { collectionName, description as descriptionRule, ready } from "@/lib/validation";
@@ -76,11 +76,11 @@ export function CollectionPage({ section, children }: { section: MessageKey; chi
   const collection = detail.data;
   const gone = detail.error instanceof ApiError && detail.error.code === "NOT_FOUND";
   useEffect(() => setCollection(gone ? null : id), [id, gone, setCollection]);
-  useCrumb(collection && `${collection.name} · ${t(section)}`);
+  useCrumb(collection && t(section), collection && { label: collection.name, href: `/collections/${collection.id}` });
 
   return (
     <>
-      <PageHeader title={collection?.name ?? t("nav.collections")} description={collection?.description || t(section)} />
+      <PageHeader title={t(section)} description={collection ? t("collections.section_of").replace("{section}", t(section)).replace("{name}", collection.name) : undefined} />
       <PageBody>
         {loading || detail.isPending ? (
           <ListSkeleton rows={3} />
@@ -106,8 +106,8 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
   const { user } = useMe();
   const router = useRouter();
   const client = useQueryClient();
-  const editable = can(user, "collections", collection ? "update" : "create");
-  const recordCount = useRecordCount(collection?.id, parts.includes("fields") && can(user, "records", "read"));
+  const editable = collection ? roleAllows(collection.role, "owner") : can(user, "collections", "create");
+  const recordCount = useRecordCount(collection?.id, parts.includes("fields") && editable);
   const original = pretty(collection?.schema ?? STARTER);
   const [name, setName] = useState(collection?.name ?? "");
   const [desc, setDesc] = useState(collection?.description ?? "");
@@ -163,6 +163,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
     // noValidate: required fields in the preview are a demo, not part of this save.
     <form noValidate onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
       <FormSections>
+        {!editable && <p role="status" className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{t("collections.readonly")}</p>}
         {parts.includes("details") && (
           <FormSection title={t("collections.details")} description={t("collections.details_desc")}>
             <div className="space-y-4">

@@ -13,7 +13,8 @@ test("an invited person activates the account and signs in", async ({ page, brow
   await expect(guest.getByText("Conta ativada")).toBeVisible();
 
   await login(guest, email, strongPassword);
-  await expect(guest.getByRole("heading", { level: 1 })).toContainText("Olá, Pessoa");
+  // Member of no collection yet: the app opens on the (empty) collection list.
+  await expect(guest).toHaveURL(/\/collections$/);
   await guest.close();
 });
 

@@ -30,7 +30,7 @@ Operational success (not measured SLOs): password login requires an active accou
 
 **Is:** a dataset-building platform with hexagonal layout: collections and records in `app.collection` / `app.record`, identity schema `usr`, system outbox `sys`, and the example module `app.product` kept as the `make module` template.
 
-**Is not (v1):** multi-tenant SMTP catalog, product commerce platform, ABAC/instance-level authz, or a general dashboard — explicitly out of scope vs copying “hexago” extras without a decision.
+**Is not (v1):** multi-tenant SMTP catalog, product commerce platform, ABAC or instance-level authz beyond collection membership, or a general dashboard — explicitly out of scope vs copying “hexago” extras without a decision.
 
 ## Operating Context
 
@@ -67,7 +67,7 @@ Known expensive-by-design paths (qualitative): Argon2id verify on login; authz P
 - Put permissions in access JWT
 - Echo internal `failure_kind` on HTTP
 - Multi-tenant SMTP / hexago dashboard copy without explicit decision
-- Instance-level (UUID) authorization — type-level RBAC only
+- Instance-level (UUID) authorization beyond collection membership — RBAC stays type-level; collections and their records follow `app.collection_member` (owner / editor / viewer), and platform admins see all
 
 ## Evidence on Hand
 

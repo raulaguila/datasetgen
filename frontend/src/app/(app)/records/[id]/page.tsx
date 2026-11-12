@@ -21,7 +21,7 @@ import { useMe } from "@/lib/context/me";
 import { errorMessage } from "@/lib/errors";
 import { useUnsavedGuard } from "@/lib/hooks/use-unsaved-guard";
 import { useI18n } from "@/lib/i18n/provider";
-import { can } from "@/lib/permissions";
+import { roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
 import { useUIStore } from "@/lib/store/ui";
 
@@ -115,7 +115,7 @@ export default function RecordPage() {
   const router = useRouter();
   const client = useQueryClient();
   const format = useFormatDate();
-  const { user, loading } = useMe();
+  const { loading } = useMe();
   const { id } = useParams<{ id: string }>();
   const creating = id === "new";
   const fromQuery = useSearchParams().get("collection") ?? "";
@@ -128,8 +128,8 @@ export default function RecordPage() {
   const setCollection = useUIStore((st) => st.setCollection);
   useEffect(() => { if (collection) setCollection(collection.id); }, [collection, setCollection]);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const editable = can(user, "records", creating ? "create" : "update");
-  useCrumb(creating ? t("records.new") : t("records.record"));
+  const editable = roleAllows(collection?.role, "editor");
+  useCrumb(creating ? t("records.new") : t("records.record"), collection && { label: collection.name, href: `/collections/${collection.id}` });
   const failed = detail.error ?? parent.error;
   const back = collection && <Button variant="ghost" nativeButton={false} render={<Link href={`/collections/${collection.id}`} />}><ArrowLeft className="size-4" />{collection.name}</Button>;
 
@@ -150,7 +150,7 @@ export default function RecordPage() {
         ) : (
           <RecordForm key={record?.id ?? "new"} collection={collection} record={record ?? null} editable={editable} />
         )}
-        {record && can(user, "records", "delete") && (
+        {record && editable && (
           <DangerZone description={t("records.delete_hint")} label={t("records.delete")} onClick={() => setConfirmDelete(true)} />
         )}
       </PageBody>

@@ -13,7 +13,7 @@ async function addField(page: Page, name: string, opts: { required?: boolean; op
 
 // The whole path in a real browser: fields built without JSON, their order, the
 // save of a schema with required fields, errors under each field, the record
-// table, the sidebar sections and the warning when records already exist.
+// table, the sidebar sections, the warning when records already exist and members.
 test("a collection's records follow its fields", async ({ page }) => {
   const name = `e2e-${Date.now()}`;
   await page.goto("/collections/new");
@@ -32,7 +32,8 @@ test("a collection's records follow its fields", async ({ page }) => {
   // The preview's required fields stay empty: they must not block this save.
   await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
   await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: `Coleção: ${name}` })).toBeVisible();
+  // The sidebar lists it and opens its sections.
+  await expect(page.getByRole("list", { name: "Coleções" }).getByRole("link", { name })).toHaveAttribute("aria-current", "true");
 
   await page.getByRole("button", { name: "Novo registro" }).click();
   await expect(page).toHaveURL(/\/records\/new\?collection=/);
@@ -62,4 +63,17 @@ test("a collection's records follow its fields", async ({ page }) => {
   await expect(page.getByRole("status").filter({ hasText: "Esta coleção tem 1 registro(s)" })).toBeVisible();
   await page.getByRole("button", { name: "Descartar" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Esta coleção tem" })).toHaveCount(0);
+
+  // The creator owns it: its settings group lists the members, and an email
+  // without an account is invited and joins at once, pending.
+  await page.getByRole("group", { name: "Configurações" }).getByRole("link", { name: "Membros" }).click();
+  await expect(page).toHaveURL(/\/members$/);
+  const helper = `${name}@example.test`;
+  await page.getByLabel("E-mail").fill(helper);
+  await page.getByRole("button", { name: "Adicionar membro" }).click();
+  await page.getByLabel("Nome").fill("Ajudante");
+  await page.getByRole("button", { name: "Convidar" }).click();
+  const members = page.getByRole("list", { name: "Membros" });
+  await expect(members.getByRole("listitem").filter({ hasText: helper })).toContainText("Convite pendente");
+  await expect(members.getByRole("combobox", { name: "Papel: Ajudante" })).toContainText("Editor");
 });

@@ -26,6 +26,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { redirectToLogin } from "@/lib/api/client";
 import { account, notifications } from "@/lib/api/endpoints";
 import { useMe } from "@/lib/context/me";
+import { can } from "@/lib/permissions";
 import { useI18n } from "@/lib/i18n/provider";
 import { ADMIN_NAV, MAIN_NAV, isActive } from "@/lib/navigation";
 import { useCrumbStore } from "@/lib/store/crumb";
@@ -54,7 +55,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const section = [...MAIN_NAV, ...ADMIN_NAV].find((item) => isActive(pathname, item.href));
   const crumb = useCrumbStore((s) => s.label);
+  const parent = useCrumbStore((s) => s.parent);
   const count = unread.data?.unread ?? 0;
+  const admin = ADMIN_NAV.filter((item) => !item.needs || can(user, ...item.needs));
 
   return (
     <div className="app-frame">
@@ -97,7 +100,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Menu className="size-5" />
               </button>
               {/* Top-level pages already name themselves in the h1; the trail starts one level down. */}
-              {crumb && section && (
+              {crumb && parent ? (
+                <nav aria-label="breadcrumb" className="flex min-w-0 items-center gap-1.5">
+                  <Link href={parent.href} className="min-w-0 truncate font-medium hover:underline">{parent.label}</Link>
+                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span aria-current="page" className="truncate text-muted-foreground">{crumb}</span>
+                </nav>
+              ) : crumb && section && (
                 <nav aria-label="breadcrumb" className="flex min-w-0 items-center gap-1.5">
                   <Link href={section.href} className="shrink-0 text-muted-foreground hover:text-foreground">{t(section.key)}</Link>
                   <ChevronRight className="hidden size-3.5 shrink-0 text-muted-foreground sm:block" />
@@ -137,6 +146,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem render={<Link href="/profile" />}>{t("nav.profile")}</DropdownMenuItem>
+                  {admin.length > 0 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">{t("nav.admin_area")}</DropdownMenuLabel>
+                        {admin.map((item) => (
+                          <DropdownMenuItem key={item.href} render={<Link href={item.href} />}>
+                            <item.icon className="size-4" aria-hidden />
+                            {t(item.key)}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuGroup>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
                   <DropdownMenuItem onClick={() => void redirectToLogin()}>{t("common.logout")}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

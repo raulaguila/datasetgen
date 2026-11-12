@@ -1,5 +1,5 @@
-import { Database, FileJson, Package, Home, KeyRound, ListTree, ScrollText, Settings2, Users, type LucideIcon } from "lucide-react";
-import type { Action } from "@/lib/api/types";
+import { Database, FileJson, Package, KeyRound, ListTree, ScrollText, Settings2, UserCog, Users, type LucideIcon } from "lucide-react";
+import type { Action, MemberRole } from "@/lib/api/types";
 import type { MessageKey } from "@/lib/i18n/messages";
 
 export interface NavItem {
@@ -13,9 +13,8 @@ export interface NavItem {
 }
 
 export const MAIN_NAV: NavItem[] = [
-  { href: "/", key: "nav.home", icon: Home },
   { href: "/products", key: "nav.products", icon: Package, needs: ["products", "read"], template: true },
-  { href: "/collections", key: "nav.collections", icon: Database, needs: ["collections", "read"] },
+  { href: "/collections", key: "nav.collections", icon: Database },
 ];
 
 export const ADMIN_NAV: NavItem[] = [
@@ -28,9 +27,22 @@ export function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 }
 
+export interface CollectionSection {
+  seg: string;
+  key: MessageKey;
+  icon: LucideIcon;
+  /** The least role in the collection that sees it; absent means every member. */
+  need?: MemberRole;
+}
+
 /** The sections of one collection, under the collection picked in the sidebar. */
-export const COLLECTION_NAV: { seg: string; key: MessageKey; icon: LucideIcon; needs?: [resource: string, action: Action] }[] = [
-  { seg: "", key: "collections.tab.records", icon: FileJson, needs: ["records", "read"] },
+export const COLLECTION_NAV: CollectionSection[] = [
+  { seg: "", key: "collections.tab.records", icon: FileJson },
   { seg: "/fields", key: "collections.tab.fields", icon: ListTree },
-  { seg: "/settings", key: "collections.tab.settings", icon: Settings2 },
+];
+
+/** The collection's own administration, its "Settings" group in the sidebar. */
+export const COLLECTION_SETTINGS_NAV: CollectionSection[] = [
+  { seg: "/settings", key: "collections.tab.general", icon: Settings2, need: "owner" },
+  { seg: "/members", key: "collections.tab.members", icon: UserCog, need: "owner" },
 ];

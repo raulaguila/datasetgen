@@ -11,6 +11,8 @@ import type {
   Preferences,
   Product,
   Collection,
+  CollectionMember,
+  MemberRole,
   DataRecord,
   Resource,
   Role,
@@ -114,6 +116,13 @@ export const collections = {
   create: (input: CollectionInput) => apiFetch<Collection>("/v1/collections", { method: "POST", json: input }),
   update: (collectionId: string, input: Partial<CollectionInput> & { version?: number }) => apiFetch<Collection>(`/v1/collections/${id(collectionId)}`, { method: "PATCH", json: input }),
   remove: (ids: string[]) => apiFetch<void>("/v1/collections/delete", { method: "POST", json: { ids } }),
+  members: (collectionId: string) => apiFetch<{ items: CollectionMember[] }>(`/v1/collections/${id(collectionId)}/members`),
+  /** An email without an account is invited (name required) and joins at once. */
+  addMember: (collectionId: string, input: { email: string; name?: string; role: MemberRole }) =>
+    apiFetch<{ member: CollectionMember; invited: boolean; activation_token?: string }>(`/v1/collections/${id(collectionId)}/members`, { method: "POST", json: input }),
+  setMemberRole: (collectionId: string, userId: string, role: MemberRole) =>
+    apiFetch<void>(`/v1/collections/${id(collectionId)}/members/${id(userId)}`, { method: "PATCH", json: { role } }),
+  removeMember: (collectionId: string, userId: string) => apiFetch<void>(`/v1/collections/${id(collectionId)}/members/${id(userId)}`, { method: "DELETE" }),
 };
 
 export const records = {

@@ -15,7 +15,8 @@ test("a wrong password keeps the person on the login page", async ({ page }) => 
 
 test("the admin signs in and out", async ({ page }) => {
   await login(page, admin.email, admin.password);
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Olá");
+  // With no collection yet, the admin lands on the collection list.
+  await expect(page).toHaveURL(/\/collections/);
   await page.getByRole("button", { name: "Menu da conta" }).click();
   await page.getByRole("menuitem", { name: "Sair" }).click();
   await expect(page).toHaveURL(/\/login/);

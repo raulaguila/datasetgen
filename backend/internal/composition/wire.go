@@ -124,8 +124,8 @@ func NewApplication(cfg *config.Environment, res *infra.Resources, log *logger.L
 		Auth:        authSvc,
 		Account:     account.New(store, permReader, output.RealClock{}, NewFiles(cfg.Storage)),
 		Products:    product.New(store.Products(), store),
-		Records:     record.New(store.Records(), store),
-		Collections: collection.New(store.Collections(), store),
+		Records:     record.New(store.Records(), store.Collections(), store),
+		Collections: collection.New(store.Collections(), store, authSvc),
 		Audit:       auditsvc.New(store.Audit()),
 	}
 }

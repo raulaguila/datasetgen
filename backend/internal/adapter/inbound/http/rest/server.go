@@ -103,8 +103,9 @@ func New(cfg *config.Environment, app *input.Application, hits middleware.Hits, 
 	usershttp.New(app.Users, app.Auth).Routes(users, app.Authorizer)
 	roles.UserRoutes(users, app.Authorizer)
 	producthttp.New(app.Products).Routes(v1.Group("/products", token), app.Authorizer)
-	collectionhttp.New(app.Collections).Routes(v1.Group("/collections", token), app.Authorizer)
-	recordhttp.New(app.Records).Routes(v1.Group("/records", token), app.Authorizer)
+	// Collections and records check the caller's role per collection, so they need the full session check.
+	collectionhttp.New(app.Collections).Routes(v1.Group("/collections", bearer), app.Authorizer)
+	recordhttp.New(app.Records).Routes(v1.Group("/records", bearer))
 	audithttp.New(app.Audit).Routes(v1.Group("/audit", token), app.Authorizer)
 
 	return fiberApp

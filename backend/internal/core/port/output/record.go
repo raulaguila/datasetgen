@@ -17,4 +17,6 @@ type RecordRepository interface {
 	Update(ctx context.Context, id string, data json.RawMessage, version *int) (*domain.Record, error)
 	// DeleteMany deletes every listed record or, when one is missing, none.
 	DeleteMany(ctx context.Context, ids []string) error
+	// CollectionIDs returns the distinct collections the listed records belong to.
+	CollectionIDs(ctx context.Context, ids []string) ([]string, error)
 }

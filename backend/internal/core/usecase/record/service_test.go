@@ -11,7 +11,7 @@ import (
 
 // A nil repo and tx prove that bad input never reaches the database.
 func TestInputValidation(t *testing.T) {
-	svc := New(nil, nil)
+	svc := New(nil, nil, nil)
 	ctx := context.Background()
 	if _, _, err := svc.List(ctx, domain.RecordFilter{}); !apperror.IsCode(err, apperror.CodeInvalidInput) {
 		t.Errorf("list without collection: %v", err)

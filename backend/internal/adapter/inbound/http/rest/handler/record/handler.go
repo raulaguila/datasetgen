@@ -7,7 +7,6 @@ import (
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/mapper"
-	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/pkg/apperror"
@@ -22,13 +21,14 @@ func New(svc input.RecordService) *Handler {
 }
 
 // Routes expects a router already behind Bearer.
-func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
-	read := middleware.Require(authz, domain.ResourceRecords, domain.ActionRead)
-	r.Get("/", read, h.List)
-	r.Get("/:id", read, h.Get)
-	r.Post("/", middleware.Require(authz, domain.ResourceRecords, domain.ActionCreate), h.Create)
-	r.Patch("/:id", middleware.Require(authz, domain.ResourceRecords, domain.ActionUpdate), h.Update)
-	r.Post("/delete", middleware.Require(authz, domain.ResourceRecords, domain.ActionDelete), h.Delete)
+// Routes expects a router behind Bearer; the service checks the caller's role
+// in the record's collection (viewer reads, editor writes).
+func (h *Handler) Routes(r fiber.Router) {
+	r.Get("/", h.List)
+	r.Get("/:id", h.Get)
+	r.Post("/", h.Create)
+	r.Patch("/:id", h.Update)
+	r.Post("/delete", h.Delete)
 }
 
 type recordDTO struct {

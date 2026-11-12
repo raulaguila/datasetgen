@@ -150,9 +150,22 @@ export interface Collection {
   schema?: Record<string, unknown>;
   /** Present in list responses only. */
   record_count?: number;
+  /** The caller's role in this collection; a platform admin is owner everywhere. */
+  role?: MemberRole;
   version: number;
   created_at: string;
   updated_at: string;
+}
+
+export type MemberRole = "owner" | "editor" | "viewer";
+
+export interface CollectionMember {
+  user_id: string;
+  name: string;
+  email: string;
+  status: "pending" | "active" | "locked" | "disabled";
+  role: MemberRole;
+  created_at: string;
 }
 
 /** One entry of a collection; data follows the collection schema. */

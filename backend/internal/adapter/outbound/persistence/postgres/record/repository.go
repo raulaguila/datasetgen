@@ -136,3 +136,9 @@ func (r *Repository) DeleteMany(ctx context.Context, ids []string) error {
 	}
 	return nil
 }
+
+func (r *Repository) CollectionIDs(ctx context.Context, ids []string) ([]string, error) {
+	var out []string
+	err := r.db.WithContext(ctx).Raw(`SELECT DISTINCT collection_id::text FROM app.record WHERE id IN ?`, ids).Find(&out).Error
+	return out, shared.WrapError(err, "record")
+}

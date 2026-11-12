@@ -6,15 +6,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { DangerZone } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { collections } from "@/lib/api/endpoints";
-import { useMe } from "@/lib/context/me";
 import { useI18n } from "@/lib/i18n/provider";
-import { can } from "@/lib/permissions";
+import { roleAllows } from "@/lib/permissions";
 import { useUIStore } from "@/lib/store/ui";
 import { CollectionForm, CollectionPage } from "../_parts";
 
 export default function CollectionSettingsPage() {
   const { t } = useI18n();
-  const { user } = useMe();
   const router = useRouter();
   const client = useQueryClient();
   const { id } = useParams<{ id: string }>();
@@ -22,11 +20,11 @@ export default function CollectionSettingsPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
-    <CollectionPage section="collections.tab.settings">
+    <CollectionPage section="collections.tab.general">
       {(collection) => (
         <div className="space-y-6">
           <CollectionForm key={collection.id} collection={collection} parts={["details"]} />
-          {can(user, "collections", "delete") && (
+          {roleAllows(collection.role, "owner") && (
             <DangerZone description={t("collections.delete_hint")} label={t("collections.delete")} onClick={() => setConfirmDelete(true)} />
           )}
           <ConfirmDialog

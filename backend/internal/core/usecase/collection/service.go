@@ -12,6 +12,7 @@ import (
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/internal/core/port/output"
 	"github.com/raulaguila/dataset/pkg/apperror"
+	"github.com/raulaguila/dataset/pkg/reqctx"
 	"github.com/raulaguila/dataset/pkg/schema"
 	"github.com/raulaguila/dataset/pkg/validate"
 )
@@ -25,16 +26,23 @@ const (
 
 var sortable = []string{"name", "created_at", "updated_at"}
 
+// Inviter creates a pending account for an email that has none.
+type Inviter interface {
+	Invite(ctx context.Context, cmd input.RegisterCommand) (*input.RegisterResult, error)
+}
+
 // Service reads through Repo. Every change runs in Tx with its audit record.
+// Access follows the caller's role in each collection (policy.CollectionRole).
 type Service struct {
-	Repo output.CollectionRepository
-	Tx   output.TxManager
+	Repo    output.CollectionRepository
+	Tx      output.TxManager
+	Inviter Inviter
 }
 
 var _ input.CollectionService = (*Service)(nil)
 
-func New(repo output.CollectionRepository, tx output.TxManager) *Service {
-	return &Service{Repo: repo, Tx: tx}
+func New(repo output.CollectionRepository, tx output.TxManager, inviter Inviter) *Service {
+	return &Service{Repo: repo, Tx: tx, Inviter: inviter}
 }
 
 func (s *Service) List(ctx context.Context, filter domain.CollectionFilter) ([]domain.Collection, int64, error) {
@@ -46,18 +54,31 @@ func (s *Service) List(ctx context.Context, filter domain.CollectionFilter) ([]d
 		return nil, 0, err
 	}
 	filter.Page = domain.NewPage(filter.Page.Number, filter.Page.Limit)
+	if filter.UserID = reqctx.Actor(ctx); filter.UserID == "" {
+		return nil, 0, apperror.New(apperror.CodeUnauthorized, "unauthenticated")
+	}
 	return s.Repo.List(ctx, filter)
 }
 
 func (s *Service) Options(ctx context.Context) ([]domain.Collection, error) {
-	return s.Repo.ListOptions(ctx, optionsCap)
+	actor := reqctx.Actor(ctx)
+	if actor == "" {
+		return nil, apperror.New(apperror.CodeUnauthorized, "unauthenticated")
+	}
+	return s.Repo.ListOptions(ctx, actor, optionsCap)
 }
 
 func (s *Service) Get(ctx context.Context, id string) (*domain.Collection, error) {
-	if err := validate.ID(id); err != nil {
+	role, err := policy.CollectionRole(ctx, s.Repo, id, domain.RoleViewer)
+	if err != nil {
 		return nil, err
 	}
-	return s.Repo.FindByID(ctx, id)
+	c, err := s.Repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	c.Role = role
+	return c, nil
 }
 
 func (s *Service) Create(ctx context.Context, cmd input.CreateCollectionCommand) (*domain.Collection, error) {
@@ -72,11 +93,20 @@ func (s *Service) Create(ctx context.Context, cmd input.CreateCollectionCommand)
 	if _, err := schema.Compile(cmd.Schema); err != nil {
 		return nil, err
 	}
+	actor := reqctx.Actor(ctx)
+	if actor == "" {
+		return nil, apperror.New(apperror.CodeUnauthorized, "unauthenticated")
+	}
 	c := &domain.Collection{Name: name, Description: description, Schema: cmd.Schema}
 	err = s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
 		if err := uow.Collections().Create(ctx, c); err != nil {
 			return err
 		}
+		// The creator owns it, so it shows in their list and they can add helpers.
+		if err := uow.Collections().AddMember(ctx, c.ID, actor, domain.RoleOwner); err != nil {
+			return err
+		}
+		c.Role = domain.RoleOwner
 		return policy.Audit(ctx, uow, "collection.create", c.ID, map[string]any{"name": c.Name})
 	})
 	if err != nil {
@@ -119,9 +149,14 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateCollectionCommand)
 	var updated *domain.Collection
 	err := s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
 		var err error
+		role, err := policy.CollectionRole(ctx, uow.Collections(), cmd.ID, domain.RoleOwner)
+		if err != nil {
+			return err
+		}
 		if updated, err = uow.Collections().Update(ctx, cmd.ID, patch); err != nil {
 			return err
 		}
+		updated.Role = role
 		changes["name"] = updated.Name // the audit log labels the record by name
 		return policy.Audit(ctx, uow, "collection.update", updated.ID, changes)
 	})
@@ -142,6 +177,11 @@ func (s *Service) DeleteMany(ctx context.Context, ids []string) error {
 		}
 	}
 	return s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		for _, id := range ids {
+			if _, err := policy.CollectionRole(ctx, uow.Collections(), id, domain.RoleOwner); err != nil {
+				return err
+			}
+		}
 		names, err := uow.Collections().DeleteMany(ctx, ids)
 		if err != nil {
 			return err

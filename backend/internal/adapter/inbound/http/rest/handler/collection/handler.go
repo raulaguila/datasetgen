@@ -21,15 +21,20 @@ func New(svc input.CollectionService) *Handler {
 	return &Handler{svc: svc}
 }
 
-// Routes expects a router already behind Bearer.
+// Routes expects a router behind Bearer. Creating a collection is an RBAC
+// permission; everything else follows the caller's role in the collection,
+// which the service checks.
 func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
-	read := middleware.Require(authz, domain.ResourceCollections, domain.ActionRead)
-	r.Get("/", read, h.List)
-	r.Get("/list", read, h.Options) // before /:id, which would swallow it
-	r.Get("/:id", read, h.Get)
+	r.Get("/", h.List)
+	r.Get("/list", h.Options) // before /:id, which would swallow it
+	r.Get("/:id", h.Get)
 	r.Post("/", middleware.Require(authz, domain.ResourceCollections, domain.ActionCreate), h.Create)
-	r.Patch("/:id", middleware.Require(authz, domain.ResourceCollections, domain.ActionUpdate), h.Update)
-	r.Post("/delete", middleware.Require(authz, domain.ResourceCollections, domain.ActionDelete), h.Delete)
+	r.Patch("/:id", h.Update)
+	r.Post("/delete", h.Delete)
+	r.Get("/:id/members", h.Members)
+	r.Post("/:id/members", h.AddMember)
+	r.Patch("/:id/members/:userId", h.SetMemberRole)
+	r.Delete("/:id/members/:userId", h.RemoveMember)
 }
 
 type collectionDTO struct {
@@ -38,9 +43,11 @@ type collectionDTO struct {
 	Description string          `json:"description"`
 	Schema      json.RawMessage `json:"schema,omitempty" swaggertype:"object"`
 	RecordCount *int64          `json:"record_count,omitempty"`
-	Version     int             `json:"version"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	// Role is the caller's role here: owner, editor or viewer.
+	Role      string    `json:"role,omitempty" enums:"owner,editor,viewer"`
+	Version   int       `json:"version"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type optionDTO struct {
@@ -64,7 +71,7 @@ type updateDTO struct {
 
 func toDTO(c domain.Collection) collectionDTO {
 	return collectionDTO{
-		ID: c.ID, Name: c.Name, Description: c.Description, Schema: c.Schema,
+		ID: c.ID, Name: c.Name, Description: c.Description, Schema: c.Schema, Role: string(c.Role),
 		Version: c.Version, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
 }
@@ -224,6 +231,135 @@ func (h *Handler) Delete(c fiber.Ctx) error {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
 	if err := h.svc.DeleteMany(c.Context(), body.IDs); err != nil {
+		return mapper.WriteError(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+type memberDTO struct {
+	UserID    string    `json:"user_id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	Status    string    `json:"status" enums:"pending,active,locked,disabled"`
+	Role      string    `json:"role" enums:"owner,editor,viewer"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func toMemberDTO(m domain.CollectionMember) memberDTO {
+	return memberDTO{UserID: m.UserID, Name: m.Name, Email: m.Email, Status: m.Status, Role: string(m.Role), CreatedAt: m.CreatedAt}
+}
+
+type addMemberDTO struct {
+	Email string `json:"email" example:"ana@example.com"`
+	// Name is needed only when the email has no account: it is then invited.
+	Name string `json:"name" example:"Ana"`
+	Role string `json:"role" enums:"owner,editor,viewer" example:"editor"`
+}
+
+type addedMemberDTO struct {
+	Member  memberDTO `json:"member"`
+	Invited bool      `json:"invited"`
+	// ActivationToken is set only for an invite with manual delivery.
+	ActivationToken string `json:"activation_token,omitempty"`
+}
+
+type roleDTO struct {
+	Role string `json:"role" enums:"owner,editor,viewer" example:"viewer"`
+}
+
+// @Summary List a collection's members; owners only
+// @Tags Collections
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Security BearerAuth
+// @Success 200 {object} object{items=[]memberDTO}
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/{id}/members [get]
+func (h *Handler) Members(c fiber.Ctx) error {
+	items, err := h.svc.Members(c.Context(), c.Params("id"))
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	out := make([]memberDTO, 0, len(items))
+	for _, m := range items {
+		out = append(out, toMemberDTO(m))
+	}
+	return c.JSON(fiber.Map{"items": out})
+}
+
+// @Summary Add a member by email; an email without an account is invited and joins at once
+// @Tags Collections
+// @Accept json
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Param body body addMemberDTO true "Request"
+// @Security BearerAuth
+// @Success 201 {object} addedMemberDTO
+// @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 409 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/{id}/members [post]
+func (h *Handler) AddMember(c fiber.Ctx) error {
+	var body addMemberDTO
+	if err := c.Bind().Body(&body); err != nil {
+		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
+	}
+	res, err := h.svc.AddMember(c.Context(), input.AddMemberCommand{
+		CollectionID: c.Params("id"), Email: body.Email, Name: body.Name, Role: domain.MemberRole(body.Role),
+	})
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	return c.Status(fiber.StatusCreated).JSON(addedMemberDTO{Member: toMemberDTO(res.Member), Invited: res.Invited, ActivationToken: res.ActivationToken})
+}
+
+// @Summary Change a member's role; a collection keeps at least one owner
+// @Tags Collections
+// @Accept json
+// @Param id path string true "Collection ID"
+// @Param userId path string true "User ID"
+// @Param body body roleDTO true "Request"
+// @Security BearerAuth
+// @Success 204
+// @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 409 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/{id}/members/{userId} [patch]
+func (h *Handler) SetMemberRole(c fiber.Ctx) error {
+	var body roleDTO
+	if err := c.Bind().Body(&body); err != nil {
+		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
+	}
+	if err := h.svc.SetMemberRole(c.Context(), c.Params("id"), c.Params("userId"), domain.MemberRole(body.Role)); err != nil {
+		return mapper.WriteError(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// @Summary Remove a member; a collection keeps at least one owner
+// @Tags Collections
+// @Param id path string true "Collection ID"
+// @Param userId path string true "User ID"
+// @Security BearerAuth
+// @Success 204
+// @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 409 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/{id}/members/{userId} [delete]
+func (h *Handler) RemoveMember(c fiber.Ctx) error {
+	if err := h.svc.RemoveMember(c.Context(), c.Params("id"), c.Params("userId")); err != nil {
 		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

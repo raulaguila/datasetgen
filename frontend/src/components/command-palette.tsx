@@ -55,7 +55,7 @@ export function CommandPalette() {
     users.list({ page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((u) => ({ href: `/admin/users/${u.id}`, label: u.name, hint: u.email, icon: UserIcon }))));
   const roleHits = useHits("roles", q, search && can(user, "roles", "read"), (signal) =>
     roles.list({ page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((x) => ({ href: `/admin/roles/${x.id}`, label: x.name, hint: t("nav.roles"), icon: KeyRound }))));
-  const collectionHits = useHits("collections", q, search && can(user, "collections", "read"), (signal) =>
+  const collectionHits = useHits("collections", q, search && !!user, (signal) =>
     collections.list({ page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((c) => ({ href: `/collections/${c.id}`, label: c.name, hint: t("nav.collections"), icon: Database }))));
 
   const needle = text.trim().toLowerCase();

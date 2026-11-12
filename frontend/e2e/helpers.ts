@@ -19,7 +19,9 @@ export async function login(page: Page, email: string, password: string) {
   await page.getByLabel("E-mail").fill(email);
   await page.getByLabel("Senha", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page).toHaveURL("/");
+  // "/" forwards into the app (a collection, the user list or the profile).
+  await expect(page).not.toHaveURL(/\/login/);
+  await expect(page.getByRole("button", { name: "Menu da conta" })).toBeVisible();
 }
 
 /** Invites a person through the admin screen and returns the activation link the development backend hands back. */

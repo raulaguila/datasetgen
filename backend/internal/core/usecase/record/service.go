@@ -22,15 +22,17 @@ const (
 // Service checks every record against its collection's schema inside the
 // transaction that writes it; the schema row stays share-locked until commit,
 // so a concurrent schema change waits instead of slipping in between.
+// Reading needs a viewer role in the record's collection, writing an editor role.
 type Service struct {
-	Repo output.RecordRepository
-	Tx   output.TxManager
+	Repo        output.RecordRepository
+	Collections output.CollectionRepository
+	Tx          output.TxManager
 }
 
 var _ input.RecordService = (*Service)(nil)
 
-func New(repo output.RecordRepository, tx output.TxManager) *Service {
-	return &Service{Repo: repo, Tx: tx}
+func New(repo output.RecordRepository, collections output.CollectionRepository, tx output.TxManager) *Service {
+	return &Service{Repo: repo, Collections: collections, Tx: tx}
 }
 
 func (s *Service) List(ctx context.Context, filter domain.RecordFilter) ([]domain.Record, int64, error) {
@@ -46,6 +48,9 @@ func (s *Service) List(ctx context.Context, filter domain.RecordFilter) ([]domai
 		return nil, 0, err
 	}
 	filter.Page = domain.NewPage(filter.Page.Number, filter.Page.Limit)
+	if _, err := policy.CollectionRole(ctx, s.Collections, filter.CollectionID, domain.RoleViewer); err != nil {
+		return nil, 0, err
+	}
 	return s.Repo.List(ctx, filter)
 }
 
@@ -53,7 +58,17 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Record, error) {
 	if err := validate.ID(id); err != nil {
 		return nil, err
 	}
-	return s.Repo.FindByID(ctx, id)
+	r, err := s.Repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := policy.CollectionRole(ctx, s.Collections, r.CollectionID, domain.RoleViewer); err != nil {
+		if apperror.IsCode(err, apperror.CodeNotFound) {
+			return nil, apperror.New(apperror.CodeNotFound, "record not found")
+		}
+		return nil, err
+	}
+	return r, nil
 }
 
 func (s *Service) Create(ctx context.Context, cmd input.CreateRecordCommand) (*domain.Record, error) {
@@ -65,6 +80,9 @@ func (s *Service) Create(ctx context.Context, cmd input.CreateRecordCommand) (*d
 	}
 	r := &domain.Record{CollectionID: cmd.CollectionID, Data: cmd.Data}
 	err := s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		if _, err := policy.CollectionRole(ctx, uow.Collections(), cmd.CollectionID, domain.RoleEditor); err != nil {
+			return err
+		}
 		if err := checkData(ctx, uow, cmd.CollectionID, cmd.Data); err != nil {
 			return err
 		}
@@ -92,6 +110,9 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateRecordCommand) (*d
 		if err != nil {
 			return err
 		}
+		if err := editor(ctx, uow, current.CollectionID); err != nil {
+			return err
+		}
 		if err := checkData(ctx, uow, current.CollectionID, cmd.Data); err != nil {
 			return err
 		}
@@ -117,6 +138,15 @@ func (s *Service) DeleteMany(ctx context.Context, ids []string) error {
 		}
 	}
 	return s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		collections, err := uow.Records().CollectionIDs(ctx, ids)
+		if err != nil {
+			return err
+		}
+		for _, c := range collections {
+			if err := editor(ctx, uow, c); err != nil {
+				return err
+			}
+		}
 		if err := uow.Records().DeleteMany(ctx, ids); err != nil {
 			return err
 		}
@@ -127,6 +157,16 @@ func (s *Service) DeleteMany(ctx context.Context, ids []string) error {
 		}
 		return nil
 	})
+}
+
+// editor checks the caller may write records of the collection; a hidden
+// collection reads as a missing record, so ids do not leak.
+func editor(ctx context.Context, uow output.UnitOfWork, collectionID string) error {
+	_, err := policy.CollectionRole(ctx, uow.Collections(), collectionID, domain.RoleEditor)
+	if apperror.IsCode(err, apperror.CodeNotFound) {
+		return apperror.New(apperror.CodeNotFound, "record not found")
+	}
+	return err
 }
 
 // checkData validates data against the collection schema.

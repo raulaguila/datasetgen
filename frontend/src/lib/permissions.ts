@@ -1,4 +1,4 @@
-import type { Action, Me } from "@/lib/api/types";
+import type { Action, Me, MemberRole } from "@/lib/api/types";
 import type { MessageKey } from "@/lib/i18n/messages";
 
 /** Mirrors the backend rule for UX only: the API still decides every request. */
@@ -6,6 +6,13 @@ export function can(user: Me | null | undefined, resource: string, action: Actio
   if (!user) return false;
   if (user.is_superuser || "*" in user.permissions) return true;
   return user.permissions[resource]?.includes(action) ?? false;
+}
+
+const RANK: Record<MemberRole, number> = { viewer: 1, editor: 2, owner: 3 };
+
+/** Whether a collection role covers need (owner > editor > viewer). Mirrors the backend for UX only. */
+export function roleAllows(role: MemberRole | undefined, need: MemberRole): boolean {
+  return !!role && RANK[role] >= RANK[need];
 }
 
 /** Translated label and description of an RBAC resource; unknown codes fall back to the code and the server's text. */

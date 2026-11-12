@@ -363,13 +363,13 @@ button,a,input,select,textarea {
 [data-ui-workspace-rail][data-collapsed] .rail-brand-mark { display: inline-flex; }
 [data-ui-workspace-rail][data-collapsed] .rail-brand-wordmark { display: none; }
 html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) { width: 64px; padding-inline: 8px; }
-html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item > span,
+html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item > span:not(.rail-avatar),
 html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-brand-wordmark { display: none; }
 html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-brand-mark { display: inline-flex; }
 html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { justify-content: center; padding-inline: 0; gap: 0; }
 @media (min-width:768px) and (max-width:1023px) {
   [data-ui-workspace-rail]:not([data-mobile]) { width:64px; padding-inline:8px; }
-  [data-ui-workspace-rail]:not([data-mobile]) .rail-item > span,
+  [data-ui-workspace-rail]:not([data-mobile]) .rail-item > span:not(.rail-avatar),
   [data-ui-workspace-rail]:not([data-mobile]) .rail-brand-wordmark { display:none; }
   [data-ui-workspace-rail]:not([data-mobile]) .rail-brand-mark { display:inline-flex; }
   [data-ui-workspace-rail]:not([data-mobile]) .rail-item { justify-content:center; padding-inline:0; gap:0; }
@@ -513,3 +513,57 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
 /* The first group sits under the brand, which already draws a divider. */
 .rail-body > .rail-admin:first-child { margin-top:0; padding-top:4px; }
 .rail-body > .rail-admin:first-child::before { display:none; }
+
+/* Collection list: the same pattern as workspaces in the reference rail. */
+.rail-workspaces {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  --rail-admin-row-h:44px;
+  --rail-current-bg:var(--primary);
+  --rail-current-fg:var(--primary-foreground);
+  --rail-item-hover-bg:color-mix(in oklab,var(--primary) 12%,var(--sidebar));
+  --rail-item-hover-fg:var(--primary);
+  --rail-parent-bg:color-mix(in oklab,var(--primary) 16%,var(--sidebar));
+  --rail-parent-hover-bg:color-mix(in oklab,var(--primary) 20%,var(--sidebar));
+}
+.rail-label { font-size:12px; line-height:1.4; font-weight:500; color:var(--muted-foreground); padding:4px 8px 6px; }
+.rail-sublabel { display:block; padding:10px 8px 4px; }
+.rail-group-heading { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+.rail-group-heading > a { padding:4px 8px; font-size:12px; color:var(--primary); }
+.rail-group-heading > a:hover { text-decoration:underline; }
+.rail-workspace { height:44px; min-height:44px; padding-block:4px; }
+.rail-avatar { display:flex; align-items:center; justify-content:center; flex-shrink:0; width:24px; height:24px; border-radius:50%; font-size:12px; font-weight:500; }
+.rail-workspace-copy { display:flex; flex-direction:column; min-width:0; gap:0; }
+.rail-workspace-copy > strong { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:13px; line-height:16px; font-weight:500; color:var(--foreground); }
+.rail-workspace-copy > span { font-size:11px; line-height:14px; color:var(--muted-foreground); }
+.rail-workspace > .rail-avatar { background:transparent !important; }
+.rail-workspace-group { min-width:0; }
+.rail-workspaces .rail-workspace[aria-current=true] { background:var(--rail-parent-bg); }
+.rail-workspace-group[data-selected]:has(> .rail-workspace-navigation) { position:relative; isolation:isolate; border-radius:calc(var(--rail-admin-row-h)/2) calc(var(--rail-admin-row-h)/2) min(12px,calc(var(--radius)*1.6)) min(12px,calc(var(--radius)*1.6)); }
+.rail-workspace-group[data-selected]:has(> .rail-workspace-navigation)::before {
+  content:""; position:absolute; z-index:-1; pointer-events:none;
+  inset:calc(var(--rail-admin-row-h)/2) var(--rail-submenu-inset,8px) 0;
+  border-radius:inherit;
+  background:color-mix(in oklab,var(--primary) 8%,var(--sidebar));
+}
+.rail-workspace-navigation { display:flex; flex-direction:column; gap:3px; padding:4px; margin-top:4px; }
+.rail-workspace-navigation .rail-item { font-size:13px; min-height:var(--rail-admin-row-h); height:auto; white-space:normal; padding-block:4px; gap:8px; }
+.rail-workspace-navigation .rail-item:hover { background:transparent; color:var(--rail-item-hover-fg,var(--foreground)); }
+.rail-workspace-navigation .rail-item > svg { box-sizing:border-box; overflow:visible; width:32px; height:32px; padding:6px; margin-inline:2px; border-radius:50%; flex-shrink:0; }
+.rail-workspace-navigation .rail-item:hover > svg { background:var(--rail-item-hover-bg); }
+.rail-workspace-navigation .rail-item[aria-current=page] { background:transparent; color:var(--primary-strong); font-weight:600; }
+.rail-workspace-navigation .rail-item[aria-current=page] > svg { background:var(--rail-current-bg); color:var(--rail-current-fg); }
+.rail-workspace-navigation .rail-item[aria-current=page]:focus-visible { outline-color:var(--rail-current-focus,var(--ring)); outline-offset:var(--rail-current-focus-offset,-2px); }
+:is([data-ui-workspace-rail][data-collapsed], html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile])) :is(.rail-label, .rail-group-heading) { display:none; }
+:is([data-ui-workspace-rail][data-collapsed], html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile])) .rail-workspace-navigation { padding:4px 0; }
+:is([data-ui-workspace-rail][data-collapsed], html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile])) .rail-workspace-group[data-selected]:has(> .rail-workspace-navigation) { --rail-submenu-inset:4px; border-radius:999px; }
+@media (min-width:768px) and (max-width:1023px) {
+  [data-ui-workspace-rail]:not([data-mobile]) :is(.rail-label, .rail-group-heading) { display:none; }
+  [data-ui-workspace-rail]:not([data-mobile]) .rail-workspace-navigation { padding:4px 0; }
+  [data-ui-workspace-rail]:not([data-mobile]) .rail-workspace-group[data-selected]:has(> .rail-workspace-navigation) { --rail-submenu-inset:4px; border-radius:999px; }
+}
