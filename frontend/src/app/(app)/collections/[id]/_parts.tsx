@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { FieldNote, FormSection, FormSections, PageBody, PageHeader, SaveBar } from "@/components/bits";
+import { CollectionAvatar } from "@/components/collection-avatar";
 import { EmptyState } from "@/components/empty-state";
 import { FieldsEditor } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -27,6 +28,7 @@ import type { MessageKey } from "@/lib/i18n/messages";
 import { can, roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
 import { useUIStore } from "@/lib/store/ui";
+import { COLLECTION_ICONS } from "@/lib/collection-icons";
 import { collectionName, description as descriptionRule, ready } from "@/lib/validation";
 
 const STARTER = {
@@ -96,6 +98,36 @@ export function CollectionPage({ section, children }: { section: MessageKey; chi
   );
 }
 
+/** The collection's sidebar icon: initials or one of the curated icons. */
+function IconPicker({ value, name, seed, disabled, onChange }: { value: string; name: string; seed: string; disabled: boolean; onChange: (icon: string) => void }) {
+  const { t } = useI18n();
+  const option = (icon: string, label: string) => (
+    <button
+      key={icon || "none"}
+      type="button"
+      role="radio"
+      aria-checked={value === icon}
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={() => onChange(icon)}
+      className="rounded-full p-0.5 outline-none ring-offset-2 ring-offset-card focus-visible:ring-2 focus-visible:ring-ring aria-checked:ring-2 aria-checked:ring-primary disabled:opacity-60"
+    >
+      <CollectionAvatar collection={{ id: seed, name: name || "?", icon }} className="size-8 rounded-full text-xs font-semibold" />
+    </button>
+  );
+  return (
+    <div className="space-y-2">
+      <p id="c-icon" className="text-sm font-medium">{t("collections.icon")}</p>
+      <p className="text-xs text-muted-foreground">{t("collections.icon_desc")}</p>
+      <div role="radiogroup" aria-labelledby="c-icon" className="flex flex-wrap gap-1.5">
+        {option("", t("collections.icon_none"))}
+        {Object.keys(COLLECTION_ICONS).map((k) => option(k, k))}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Name, description and schema of a collection. A new collection shows both
  * parts; an existing one shows the part its page is for ("details" on Settings,
@@ -111,6 +143,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
   const original = pretty(collection?.schema ?? STARTER);
   const [name, setName] = useState(collection?.name ?? "");
   const [desc, setDesc] = useState(collection?.description ?? "");
+  const [icon, setIcon] = useState(collection?.icon ?? "");
   const [schemaText, setSchemaText] = useState(original);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(collection?.version);
@@ -122,15 +155,15 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
   const [previewData, setPreviewData] = useState<unknown>({});
   const schemaChanged = schemaText !== original;
   const dirty = collection
-    ? name.trim() !== collection.name || desc.trim() !== collection.description || schemaChanged
+    ? name.trim() !== collection.name || desc.trim() !== collection.description || icon !== collection.icon || schemaChanged
     : name.trim() !== "";
   useUnsavedGuard(editable && dirty, t("roles.leave_unsaved"));
 
   const save = useMutation({
     mutationFn: () => {
-      const input = { name: name.trim(), description: desc.trim(), schema };
+      const input = { name: name.trim(), description: desc.trim(), icon, schema };
       if (!collection) return collections.create(input);
-      return collections.update(collection.id, { name: input.name, description: input.description, schema: schemaChanged ? schema : undefined, version });
+      return collections.update(collection.id, { name: input.name, description: input.description, icon: icon !== collection.icon ? icon : undefined, schema: schemaChanged ? schema : undefined, version });
     },
     onSuccess: (saved) => {
       setError(null);
@@ -151,6 +184,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
     if (!collection) return router.push("/collections");
     setName(collection.name);
     setDesc(collection.description);
+    setIcon(collection.icon);
     setSchemaText(original);
     setVersion(collection.version);
     setError(null);
@@ -176,6 +210,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                 <Label htmlFor="c-desc">{t("collections.description")}</Label>
                 <textarea id="c-desc" data-slot="textarea" rows={2} maxLength={2000} aria-invalid={!!descriptionRule(desc)} disabled={!editable} value={desc} onChange={(e) => setDesc(e.target.value)} className="w-full rounded-lg border border-input bg-card px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
               </div>
+              <IconPicker value={icon} name={name} seed={collection?.id ?? "new"} disabled={!editable} onChange={setIcon} />
             </div>
           </FormSection>
         )}

@@ -12,6 +12,7 @@ import (
 type CreateCollectionCommand struct {
 	Name        string
 	Description string
+	Icon        string
 	Schema      json.RawMessage
 }
 
@@ -19,6 +20,7 @@ type UpdateCollectionCommand struct {
 	ID          string
 	Name        *string
 	Description *string
+	Icon        *string
 	Schema      json.RawMessage // nil keeps the stored schema
 	Version     *int            // the version the caller read; nil skips the check
 }
@@ -72,4 +74,8 @@ type CollectionService interface {
 	// AuditLog is the collection's audit log (owners); Quality checks its records against the schema (editors).
 	AuditLog(ctx context.Context, id string, filter domain.AuditFilter) ([]domain.AuditRecord, int64, error)
 	Quality(ctx context.Context, id string) (*QualityReport, error)
+	// Stats is the overview of the last 30 days, days counted in tz (an IANA name; "" is UTC). Every member.
+	Stats(ctx context.Context, id, tz string) (*domain.CollectionStats, error)
+	// Leave removes the caller from the collection; the last owner cannot leave.
+	Leave(ctx context.Context, id string) error
 }

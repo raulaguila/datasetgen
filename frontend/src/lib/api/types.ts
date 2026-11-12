@@ -150,11 +150,25 @@ export interface Collection {
   schema?: Record<string, unknown>;
   /** Present in list responses only. */
   record_count?: number;
+  /** A slug of COLLECTION_ICONS; "" shows the initials. */
+  icon: string;
+  /** False for a platform admin who sees it without belonging to it; list only. */
+  member?: boolean;
   /** The caller's role in this collection; a platform admin is owner everywhere. */
   role?: MemberRole;
   version: number;
   created_at: string;
   updated_at: string;
+}
+
+/** A collection's overview of the last 30 days. */
+export interface CollectionStats {
+  records: number;
+  members: number;
+  last_update?: string;
+  /** Days with records created, oldest first (YYYY-MM-DD in the requested time zone). */
+  per_day: { day: string; count: number }[];
+  contributors: { user_id: string; name: string; created: number; edited: number }[];
 }
 
 /** Stored records that no longer match the collection's schema. */

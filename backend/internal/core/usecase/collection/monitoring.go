@@ -2,10 +2,12 @@ package collection
 
 import (
 	"context"
+	"time"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/policy"
 	"github.com/raulaguila/dataset/internal/core/port/input"
+	"github.com/raulaguila/dataset/pkg/apperror"
 	"github.com/raulaguila/dataset/pkg/schema"
 )
 
@@ -68,4 +70,20 @@ func (s *Service) Quality(ctx context.Context, id string) (*input.QualityReport,
 	}
 	report.Truncated = true
 	return report, nil
+}
+
+const statsDays = 30
+
+func (s *Service) Stats(ctx context.Context, id, tz string) (*domain.CollectionStats, error) {
+	if tz == "" {
+		tz = "UTC"
+	}
+	// Postgres reads the same IANA names; anything else would be a query error.
+	if _, err := time.LoadLocation(tz); err != nil || tz == "Local" {
+		return nil, apperror.New(apperror.CodeInvalidInput, "tz must be an IANA time zone").WithField("tz")
+	}
+	if _, err := policy.CollectionRole(ctx, s.Repo, id, domain.RoleViewer); err != nil {
+		return nil, err
+	}
+	return s.Repo.Stats(ctx, id, tz, statsDays)
 }

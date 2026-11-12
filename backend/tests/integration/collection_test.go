@@ -267,4 +267,51 @@ func TestCollectionAuditAndQuality(t *testing.T) {
 	}
 }
 
+// Overview stats, a member leaving and the curated icon.
+func TestCollectionStatsLeaveAndIcon(t *testing.T) {
+	e := newEnv(t)
+	collections, records := collectionServices(e)
+	ownerAddr, helperAddr := e.activeUser(t), e.activeUser(t)
+	owner := reqctx.WithActor(context.Background(), e.userID(t, ownerAddr))
+	helper := reqctx.WithActor(context.Background(), e.userID(t, helperAddr))
+
+	wantCode(t, ignore(collections.Create(owner, input.CreateCollectionCommand{Name: "X", Icon: "nope", Schema: json.RawMessage(`{}`)})), apperror.CodeInvalidInput)
+	c, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Painel", Icon: "sparkles", Schema: json.RawMessage(`{}`)})
+	if err != nil || c.Icon != "sparkles" {
+		t.Fatalf("create with icon: %+v, %v", c, err)
+	}
+	if _, err := collections.AddMember(owner, input.AddMemberCommand{CollectionID: c.ID, Email: helperAddr, Role: domain.RoleEditor}); err != nil {
+		t.Fatal(err)
+	}
+	r, err := records.Create(helper, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{"a":1}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := records.Update(helper, input.UpdateRecordCommand{ID: r.ID, Data: json.RawMessage(`{"a":2}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := records.Create(owner, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+
+	wantCode(t, ignore(collections.Stats(helper, c.ID, "Mars/Base")), apperror.CodeInvalidInput)
+	st, err := collections.Stats(helper, c.ID, "America/Manaus")
+	if err != nil || st.Records != 2 || st.Members != 2 || st.LastUpdate == nil || len(st.PerDay) != 1 || st.PerDay[0].Count != 2 {
+		t.Fatalf("stats: %+v, %v", st, err)
+	}
+	if len(st.Contributors) != 2 || st.Contributors[0].Created != 1 || st.Contributors[0].Edited != 1 {
+		t.Fatalf("contributors: %+v", st.Contributors)
+	}
+
+	// The helper leaves and loses access; the last owner cannot leave.
+	if list, _, _ := collections.List(helper, domain.CollectionFilter{}); len(list) != 1 || !list[0].Member {
+		t.Fatalf("member flag: %+v", list)
+	}
+	if err := collections.Leave(helper, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore(collections.Get(helper, c.ID)), apperror.CodeNotFound)
+	wantCode(t, collections.Leave(owner, c.ID), apperror.CodeConflict)
+}
+
 func ignore2[A, B any](_ A, _ B, err error) error { return err }

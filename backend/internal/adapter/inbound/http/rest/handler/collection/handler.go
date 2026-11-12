@@ -37,14 +37,19 @@ func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
 	r.Delete("/:id/members/:userId", h.RemoveMember)
 	r.Get("/:id/audit", h.AuditLog)
 	r.Get("/:id/quality", h.Quality)
+	r.Get("/:id/stats", h.Stats)
+	r.Post("/:id/leave", h.Leave)
 }
 
 type collectionDTO struct {
 	ID          string          `json:"id"`
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
+	Icon        string          `json:"icon"`
 	Schema      json.RawMessage `json:"schema,omitempty" swaggertype:"object"`
 	RecordCount *int64          `json:"record_count,omitempty"`
+	// Member is false for a platform admin who sees the collection without belonging to it; list only.
+	Member *bool `json:"member,omitempty"`
 	// Role is the caller's role here: owner, editor or viewer.
 	Role      string    `json:"role,omitempty" enums:"owner,editor,viewer"`
 	Version   int       `json:"version"`
@@ -60,12 +65,14 @@ type optionDTO struct {
 type createDTO struct {
 	Name        string          `json:"name" example:"Wired"`
 	Description string          `json:"description"`
+	Icon        string          `json:"icon" example:"sparkles"`
 	Schema      json.RawMessage `json:"schema" swaggertype:"object"`
 }
 
 type updateDTO struct {
 	Name        *string         `json:"name"`
 	Description *string         `json:"description"`
+	Icon        *string         `json:"icon"`
 	Schema      json.RawMessage `json:"schema" swaggertype:"object"`
 	// Version is the version the client read; when sent, a newer row is a 409 conflict.
 	Version *int `json:"version" example:"3"`
@@ -73,7 +80,7 @@ type updateDTO struct {
 
 func toDTO(c domain.Collection) collectionDTO {
 	return collectionDTO{
-		ID: c.ID, Name: c.Name, Description: c.Description, Schema: c.Schema, Role: string(c.Role),
+		ID: c.ID, Name: c.Name, Description: c.Description, Icon: c.Icon, Schema: c.Schema, Role: string(c.Role),
 		Version: c.Version, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
 }
@@ -108,6 +115,7 @@ func (h *Handler) List(c fiber.Ctx) error {
 	for _, item := range items {
 		dto := toDTO(item)
 		dto.RecordCount = &item.RecordCount
+		dto.Member = &item.Member
 		out = append(out, dto)
 	}
 	return c.JSON(fiber.Map{"items": out, "pagination": mapper.Pagination(filter.Page, total)})
@@ -172,7 +180,7 @@ func (h *Handler) Create(c fiber.Ctx) error {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
 	item, err := h.svc.Create(c.Context(), input.CreateCollectionCommand{
-		Name: body.Name, Description: body.Description, Schema: body.Schema,
+		Name: body.Name, Description: body.Description, Icon: body.Icon, Schema: body.Schema,
 	})
 	if err != nil {
 		return mapper.WriteError(c, err)
@@ -201,7 +209,7 @@ func (h *Handler) Update(c fiber.Ctx) error {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
 	item, err := h.svc.Update(c.Context(), input.UpdateCollectionCommand{
-		ID: c.Params("id"), Name: body.Name, Description: body.Description, Schema: body.Schema, Version: body.Version,
+		ID: c.Params("id"), Name: body.Name, Description: body.Description, Icon: body.Icon, Schema: body.Schema, Version: body.Version,
 	})
 	if err != nil {
 		return mapper.WriteError(c, err)
@@ -463,4 +471,69 @@ func (h *Handler) Quality(c fiber.Ctx) error {
 		out.Invalid = append(out.Invalid, invalidRecordDTO{ID: r.ID, Data: r.Data, UpdatedAt: r.UpdatedAt, Issues: issues})
 	}
 	return c.JSON(out)
+}
+
+type statsDTO struct {
+	Records    int64      `json:"records"`
+	Members    int64      `json:"members"`
+	LastUpdate *time.Time `json:"last_update,omitempty"`
+	// PerDay holds the days with records created in the last 30, oldest first.
+	PerDay       []dayDTO         `json:"per_day"`
+	Contributors []contributorDTO `json:"contributors"`
+}
+
+type dayDTO struct {
+	Day   string `json:"day" example:"2026-11-12"`
+	Count int64  `json:"count"`
+}
+
+type contributorDTO struct {
+	UserID  string `json:"user_id"`
+	Name    string `json:"name"`
+	Created int64  `json:"created"`
+	Edited  int64  `json:"edited"`
+}
+
+// @Summary A collection's overview: totals, records per day and top contributors of the last 30 days
+// @Tags Collections
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Param tz query string false "IANA time zone the days are counted in" default(UTC)
+// @Security BearerAuth
+// @Success 200 {object} statsDTO
+// @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/{id}/stats [get]
+func (h *Handler) Stats(c fiber.Ctx) error {
+	st, err := h.svc.Stats(c.Context(), c.Params("id"), c.Query("tz"))
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	out := statsDTO{Records: st.Records, Members: st.Members, LastUpdate: st.LastUpdate, PerDay: make([]dayDTO, 0, len(st.PerDay)), Contributors: make([]contributorDTO, 0, len(st.Contributors))}
+	for _, d := range st.PerDay {
+		out.PerDay = append(out.PerDay, dayDTO(d))
+	}
+	for _, p := range st.Contributors {
+		out.Contributors = append(out.Contributors, contributorDTO(p))
+	}
+	return c.JSON(out)
+}
+
+// @Summary Leave a collection; the last owner cannot
+// @Tags Collections
+// @Param id path string true "Collection ID"
+// @Security BearerAuth
+// @Success 204
+// @Failure 401 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 409 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/{id}/leave [post]
+func (h *Handler) Leave(c fiber.Ctx) error {
+	if err := h.svc.Leave(c.Context(), c.Params("id")); err != nil {
+		return mapper.WriteError(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }

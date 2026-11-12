@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Database, Eye, Pencil, Plus, Search } from "lucide-react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Database, Eye, LogOut, Pencil, Pin, PinOff, Plus, Search } from "lucide-react";
+import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { IconAction, PageBody, PageHeader, useFormatDate } from "@/components/bits";
+import { CollectionAvatar } from "@/components/collection-avatar";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
 import { SortHead, SortSelect } from "@/components/sort-head";
@@ -16,13 +19,14 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { collections } from "@/lib/api/endpoints";
-import type { SortOrder } from "@/lib/api/types";
+import type { Collection, SortOrder } from "@/lib/api/types";
 import { useMe } from "@/lib/context/me";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { searchTerm } from "@/lib/utils";
 import { useGoToPage, useListParams } from "@/lib/hooks/use-list-params";
 import { useI18n } from "@/lib/i18n/provider";
-import { can } from "@/lib/permissions";
+import { can, roleAllows } from "@/lib/permissions";
+import { useUIStore } from "@/lib/store/ui";
 
 const SORTS = ["name", "updated_at", "created_at"];
 
@@ -46,8 +50,13 @@ export default function CollectionsPage() {
   const fallback = list.isPlaceholderData ? null : emptyPageFallback(page, limit, list.data);
   useGoToPage(fallback, set);
   const items = list.data?.items ?? [];
-  const canEdit = can(user, "collections", "update");
-  const open = (id: string) => router.push(`/collections/${id}`);
+  const client = useQueryClient();
+  const pinned = useUIStore((s) => s.pinned);
+  const togglePin = useUIStore((s) => s.togglePin);
+  const storedId = useUIStore((s) => s.collectionId);
+  const setCollection = useUIStore((s) => s.setCollection);
+  const [leaving, setLeaving] = useState<Collection | null>(null);
+  const open = (id: string) => router.push(id === "new" ? "/collections/new" : `/collections/${id}/overview`);
   const count = new Intl.NumberFormat(locale);
   const sortProps = { sort, order, onSort: (s: string, o: SortOrder) => set({ sort: s, order: o, page: 1 }) };
 
@@ -93,14 +102,23 @@ export default function CollectionsPage() {
                 {items.map((c) => (
                   <TableRow key={c.id} className="cursor-pointer" onClick={() => open(c.id)}>
                     <TableCell data-label={t("auth.name")} data-cell="name" className="w-full max-w-0">
-                      <Link href={`/collections/${c.id}`} className="block truncate font-medium hover:underline" title={c.name} onClick={(e) => e.stopPropagation()}>{c.name}</Link>
-                      {c.description && <span className="block truncate text-xs text-muted-foreground" title={c.description}>{c.description}</span>}
+                      <div className="flex items-center gap-3">
+                        <CollectionAvatar collection={c} className="size-8 rounded-full text-xs font-semibold" />
+                        <div className="min-w-0">
+                          <Link href={`/collections/${c.id}/overview`} className="block truncate font-medium hover:underline" title={c.name} onClick={(e) => e.stopPropagation()}>{c.name}</Link>
+                          {c.description && <span className="block truncate text-xs text-muted-foreground" title={c.description}>{c.description}</span>}
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell data-label={t("collections.record_count")} data-cell="sub" className="text-right font-mono tabular-nums">{count.format(c.record_count ?? 0)}</TableCell>
                     <TableCell data-label={t("common.updated_at")} data-cell="date" className="text-muted-foreground">{format(c.updated_at)}</TableCell>
-                    <TableCell data-cell="action" className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <IconAction label={t(canEdit ? "common.edit" : "common.view")} target={c.name} onClick={() => open(c.id)}>
-                        {canEdit ? <Pencil className="size-4" /> : <Eye className="size-4" />}
+                    <TableCell data-cell="action" className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <IconAction label={t(pinned.includes(c.id) ? "collections.unpin" : "collections.pin")} target={c.name} onClick={() => togglePin(c.id)}>
+                        {pinned.includes(c.id) ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+                      </IconAction>
+                      {c.member && <IconAction label={t("collections.leave")} target={c.name} onClick={() => setLeaving(c)}><LogOut className="size-4" /></IconAction>}
+                      <IconAction label={t(roleAllows(c.role, "owner") ? "common.edit" : "common.view")} target={c.name} onClick={() => roleAllows(c.role, "owner") ? router.push(`/collections/${c.id}/settings`) : open(c.id)}>
+                        {roleAllows(c.role, "owner") ? <Pencil className="size-4" /> : <Eye className="size-4" />}
                       </IconAction>
                     </TableCell>
                   </TableRow>
@@ -117,6 +135,23 @@ export default function CollectionsPage() {
           </Card>
         )}
       </PageBody>
+      <ConfirmDialog
+        open={!!leaving}
+        onOpenChange={(o) => !o && setLeaving(null)}
+        title={t("collections.leave")}
+        description={t("collections.leave_confirm").replace("{name}", leaving?.name ?? "")}
+        destructive
+        confirmLabel={t("collections.leave")}
+        onConfirm={async () => {
+          if (!leaving) return;
+          await collections.leave(leaving.id); // the dialog shows a refusal, such as the last owner
+          if (storedId === leaving.id) setCollection(null);
+          if (pinned.includes(leaving.id)) togglePin(leaving.id);
+          setLeaving(null);
+          toast.success(t("collections.left"));
+          void client.invalidateQueries({ queryKey: ["collections"] });
+        }}
+      />
     </>
   );
 }

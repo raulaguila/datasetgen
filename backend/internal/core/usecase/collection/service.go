@@ -104,7 +104,10 @@ func (s *Service) Create(ctx context.Context, cmd input.CreateCollectionCommand)
 	if actor == "" {
 		return nil, apperror.New(apperror.CodeUnauthorized, "unauthenticated")
 	}
-	c := &domain.Collection{Name: name, Description: description, Schema: cmd.Schema}
+	if !domain.ValidCollectionIcon(cmd.Icon) {
+		return nil, invalidIcon()
+	}
+	c := &domain.Collection{Name: name, Description: description, Icon: cmd.Icon, Schema: cmd.Schema}
 	err = s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
 		if err := uow.Collections().Create(ctx, c); err != nil {
 			return err
@@ -145,6 +148,13 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateCollectionCommand)
 			return nil, err
 		}
 		patch.Description = &description
+	}
+	if cmd.Icon != nil {
+		if !domain.ValidCollectionIcon(*cmd.Icon) {
+			return nil, invalidIcon()
+		}
+		patch.Icon = cmd.Icon
+		changes["icon"] = *cmd.Icon
 	}
 	if cmd.Schema != nil {
 		if _, err := schema.Compile(cmd.Schema); err != nil {
@@ -200,6 +210,10 @@ func (s *Service) DeleteMany(ctx context.Context, ids []string) error {
 		}
 		return nil
 	})
+}
+
+func invalidIcon() error {
+	return apperror.New(apperror.CodeInvalidInput, "icon is not one of the offered icons").WithField("icon")
 }
 
 func normalizeName(name string) (string, error) {

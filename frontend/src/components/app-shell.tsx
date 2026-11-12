@@ -8,6 +8,7 @@ import { Bell, ChevronRight, Menu } from "lucide-react";
 import { AppRail, useWideRail } from "@/components/app-rail";
 import { initials } from "@/components/bits";
 import { CommandPalette } from "@/components/command-palette";
+import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { QueryErrorState } from "@/components/query-error-state";
 import { SessionKeepalive } from "@/components/session-keepalive";
@@ -116,6 +117,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <div className="ml-2 flex shrink-0 items-center gap-0.5 sm:gap-1">
               <CommandPalette />
+              <KeyboardShortcutsDialog />
               <Link
                 href="/notifications"
                 aria-label={count ? `${t("nav.notifications")}: ${count}` : t("nav.notifications")}

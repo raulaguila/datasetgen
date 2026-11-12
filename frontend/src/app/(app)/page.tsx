@@ -24,7 +24,7 @@ export default function Home() {
     if (list.isPending) return;
     const items = list.data?.items ?? [];
     const target = items.find((c) => c.id === storedId) ?? items[0];
-    router.replace(target ? `/collections/${target.id}` : "/collections");
+    router.replace(target ? `/collections/${target.id}/overview` : "/collections");
   }, [loading, user, list.isPending, list.data, storedId, router]);
 
   return <div className="p-[var(--space-page)]"><ListSkeleton rows={3} /></div>;

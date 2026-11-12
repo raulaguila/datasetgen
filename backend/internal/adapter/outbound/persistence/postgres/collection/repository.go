@@ -28,6 +28,8 @@ type row struct {
 	ID          uuid.UUID `gorm:"column:id"`
 	Name        string    `gorm:"column:name"`
 	Description string    `gorm:"column:description"`
+	Icon        string    `gorm:"column:icon"`
+	Member      bool      `gorm:"column:member"`
 	Schema      []byte    `gorm:"column:schema"`
 	RecordCount int64     `gorm:"column:record_count"`
 	Role        string    `gorm:"column:role"`
@@ -38,7 +40,7 @@ type row struct {
 
 func (m row) toDomain() domain.Collection {
 	return domain.Collection{
-		ID: m.ID.String(), Name: m.Name, Description: m.Description, Schema: json.RawMessage(m.Schema),
+		ID: m.ID.String(), Name: m.Name, Description: m.Description, Icon: m.Icon, Member: m.Member, Schema: json.RawMessage(m.Schema),
 		RecordCount: m.RecordCount, Role: domain.MemberRole(m.Role), Version: m.Version, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt,
 	}
 }
@@ -60,7 +62,7 @@ func visible(q *gorm.DB, userID string) *gorm.DB {
 		Where("(m.user_id IS NOT NULL OR "+platformAdmin+")", userID)
 }
 
-const columns = "id, name, description, schema::text AS schema, version, created_at, updated_at"
+const columns = "id, name, description, icon, schema::text AS schema, version, created_at, updated_at"
 
 // List leaves the schema out (the list screen does not show it) and counts records per row.
 func (r *Repository) List(ctx context.Context, filter domain.CollectionFilter) ([]domain.Collection, int64, error) {
@@ -85,7 +87,7 @@ func (r *Repository) List(ctx context.Context, filter domain.CollectionFilter) (
 	}
 	var rows []row
 	err := matching().
-		Select(`c.id, c.name, c.description, c.version, c.created_at, c.updated_at,
+		Select(`c.id, c.name, c.description, c.icon, c.version, c.created_at, c.updated_at, m.user_id IS NOT NULL AS member,
 			(SELECT count(*) FROM app.record rc WHERE rc.collection_id = c.id) AS record_count,
 			CASE WHEN `+platformAdmin+` THEN 'owner' ELSE m.role END AS role`, filter.UserID).
 		Order("c." + column + " " + direction + ", c.id").
@@ -136,8 +138,8 @@ func (r *Repository) SchemaForWrite(ctx context.Context, id string) (json.RawMes
 func (r *Repository) Create(ctx context.Context, c *domain.Collection) error {
 	var m row
 	err := r.db.WithContext(ctx).Raw(`
-		INSERT INTO app.collection (name, description, schema) VALUES (?, ?, ?::json)
-		RETURNING `+columns, c.Name, c.Description, string(c.Schema)).Take(&m).Error
+		INSERT INTO app.collection (name, description, icon, schema) VALUES (?, ?, ?, ?::json)
+		RETURNING `+columns, c.Name, c.Description, c.Icon, string(c.Schema)).Take(&m).Error
 	if err != nil {
 		return shared.WrapError(err, "collection")
 	}
@@ -156,10 +158,11 @@ func (r *Repository) Update(ctx context.Context, id string, patch domain.Collect
 		UPDATE app.collection
 		SET name = COALESCE(?::text, name),
 		    description = COALESCE(?::text, description),
+		    icon = COALESCE(?::text, icon),
 		    schema = COALESCE(?::json, schema),
 		    version = version + 1
 		WHERE id = ? AND (?::integer IS NULL OR version = ?)
-		RETURNING `+columns, patch.Name, patch.Description, schema, id, patch.Version, patch.Version).Find(&rows).Error
+		RETURNING `+columns, patch.Name, patch.Description, patch.Icon, schema, id, patch.Version, patch.Version).Find(&rows).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "collection")
 	}
@@ -279,4 +282,66 @@ func memberChanged(res *gorm.DB) error {
 		return shared.WrapError(gorm.ErrRecordNotFound, "member")
 	}
 	return shared.WrapError(res.Error, "member")
+}
+
+type dayRow struct {
+	Day   string `gorm:"column:day"`
+	Count int64  `gorm:"column:count"`
+}
+
+type contributorRow struct {
+	UserID  uuid.UUID `gorm:"column:user_id"`
+	Name    string    `gorm:"column:name"`
+	Created int64     `gorm:"column:created"`
+	Edited  int64     `gorm:"column:edited"`
+}
+
+func (r *Repository) Stats(ctx context.Context, id, tz string, days int) (*domain.CollectionStats, error) {
+	db := r.db.WithContext(ctx)
+	var head struct {
+		Records    int64      `gorm:"column:records"`
+		Members    int64      `gorm:"column:members"`
+		LastUpdate *time.Time `gorm:"column:last_update"`
+	}
+	err := db.Raw(`
+		SELECT (SELECT count(*) FROM app.record WHERE collection_id = ?) AS records,
+		       (SELECT count(*) FROM app.collection_member WHERE collection_id = ?) AS members,
+		       (SELECT max(updated_at) FROM app.record WHERE collection_id = ?) AS last_update
+	`, id, id, id).Take(&head).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "collection")
+	}
+	since := time.Now().AddDate(0, 0, -days)
+	var perDay []dayRow
+	// idx_app_record_collection (collection_id, created_at) serves the window.
+	err = db.Raw(`
+		SELECT to_char(created_at AT TIME ZONE ?, 'YYYY-MM-DD') AS day, count(*) AS count
+		FROM app.record WHERE collection_id = ? AND created_at >= ?
+		GROUP BY 1 ORDER BY 1
+	`, tz, id, since).Find(&perDay).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "collection")
+	}
+	// Records carry no author; the audit log does (idx_usr_audit_log_collection).
+	var people []contributorRow
+	err = db.Raw(`
+		SELECT a.actor_id AS user_id, u.name,
+		       count(*) FILTER (WHERE a.action = 'record.create') AS created,
+		       count(*) FILTER (WHERE a.action = 'record.update') AS edited
+		FROM usr.usr_audit_log a JOIN usr.usr_user u ON u.id = a.actor_id
+		WHERE a.details->>'collection_id' = ? AND a.created_at >= ? AND a.action IN ('record.create', 'record.update')
+		GROUP BY a.actor_id, u.name ORDER BY count(*) DESC, u.name LIMIT 10
+	`, id, since).Find(&people).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "collection")
+	}
+	out := &domain.CollectionStats{Records: head.Records, Members: head.Members, LastUpdate: head.LastUpdate,
+		PerDay: make([]domain.DayCount, 0, len(perDay)), Contributors: make([]domain.Contributor, 0, len(people))}
+	for _, d := range perDay {
+		out.PerDay = append(out.PerDay, domain.DayCount{Day: d.Day, Count: d.Count})
+	}
+	for _, p := range people {
+		out.Contributors = append(out.Contributors, domain.Contributor{UserID: p.UserID.String(), Name: p.Name, Created: p.Created, Edited: p.Edited})
+	}
+	return out, nil
 }

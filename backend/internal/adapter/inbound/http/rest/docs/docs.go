@@ -1098,6 +1098,57 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/collections/{id}/leave": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Leave a collection; the last owner cannot",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/collections/{id}/members": {
             "get": {
                 "security": [
@@ -1430,6 +1481,70 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/collections/{id}/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "A collection's overview: totals, records per day and top contributors of the last 30 days",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "UTC",
+                        "description": "IANA time zone the days are counted in",
+                        "name": "tz",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/collection.statsDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/mapper.errorBody"
                         }
@@ -4703,8 +4818,15 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "icon": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
+                },
+                "member": {
+                    "description": "Member is false for a platform admin who sees the collection without belonging to it; list only.",
+                    "type": "boolean"
                 },
                 "name": {
                     "type": "string"
@@ -4732,11 +4854,32 @@ const docTemplate = `{
                 }
             }
         },
+        "collection.contributorDTO": {
+            "type": "object",
+            "properties": {
+                "created": {
+                    "type": "integer"
+                },
+                "edited": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
         "collection.createDTO": {
             "type": "object",
             "properties": {
                 "description": {
                     "type": "string"
+                },
+                "icon": {
+                    "type": "string",
+                    "example": "sparkles"
                 },
                 "name": {
                     "type": "string",
@@ -4744,6 +4887,18 @@ const docTemplate = `{
                 },
                 "schema": {
                     "type": "object"
+                }
+            }
+        },
+        "collection.dayDTO": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "day": {
+                    "type": "string",
+                    "example": "2026-11-12"
                 }
             }
         },
@@ -4876,10 +5031,40 @@ const docTemplate = `{
                 }
             }
         },
+        "collection.statsDTO": {
+            "type": "object",
+            "properties": {
+                "contributors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/collection.contributorDTO"
+                    }
+                },
+                "last_update": {
+                    "type": "string"
+                },
+                "members": {
+                    "type": "integer"
+                },
+                "per_day": {
+                    "description": "PerDay holds the days with records created in the last 30, oldest first.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/collection.dayDTO"
+                    }
+                },
+                "records": {
+                    "type": "integer"
+                }
+            }
+        },
         "collection.updateDTO": {
             "type": "object",
             "properties": {
                 "description": {
+                    "type": "string"
+                },
+                "icon": {
                     "type": "string"
                 },
                 "name": {

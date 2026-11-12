@@ -35,6 +35,9 @@ type CollectionRepository interface {
 	AddMember(ctx context.Context, id, userID string, role domain.MemberRole) error
 	SetMemberRole(ctx context.Context, id, userID string, role domain.MemberRole) error
 	RemoveMember(ctx context.Context, id, userID string) error
+	// Stats is the overview: totals, records created per day in tz over the last
+	// days, and the most active contributors in that window.
+	Stats(ctx context.Context, id, tz string, days int) (*domain.CollectionStats, error)
 	// Owners counts the collection's owner members.
 	Owners(ctx context.Context, id string) (int64, error)
 }

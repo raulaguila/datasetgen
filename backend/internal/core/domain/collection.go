@@ -22,8 +22,10 @@ type Collection struct {
 	Name        string
 	Description string
 	Schema      json.RawMessage // JSON Schema, draft 2020-12
+	Icon        string          // a curated icon slug, "" for initials
 	RecordCount int64           // filled by List only
 	Role        MemberRole      // the caller's role; filled by List and Get
+	Member      bool            // the caller is a member (a platform admin may not be); filled by List
 	Version     int
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -33,8 +35,40 @@ type Collection struct {
 type CollectionPatch struct {
 	Name        *string
 	Description *string
+	Icon        *string
 	Schema      json.RawMessage
 	Version     *int // the version the caller read; a newer row is a conflict
+}
+
+// ValidCollectionIcon accepts "" (initials) or a slug of the frontend's icon set
+// (frontend/src/lib/collection-icons.ts); both lists change together.
+func ValidCollectionIcon(icon string) bool {
+	switch icon {
+	case "", "anchor", "award", "bell", "book-open", "bookmark", "box", "brain", "bug", "building", "calendar", "camera", "chart-column", "cloud", "code", "coffee", "compass", "cpu", "database", "file-text", "flag", "flame", "gamepad-2", "gem", "globe", "graduation-cap", "hammer", "heart", "image", "key", "languages", "leaf", "lightbulb", "map-pin", "message-square", "mic", "music", "package", "palette", "puzzle", "rocket", "scale", "shield", "shopping-bag", "sparkles", "star", "store", "target", "trophy", "users", "wand-sparkles", "wrench", "zap":
+		return true
+	}
+	return false
+}
+
+// CollectionStats is what the collection's overview shows.
+type CollectionStats struct {
+	Records      int64
+	Members      int64
+	LastUpdate   *time.Time    // the newest record change; nil without records
+	PerDay       []DayCount    // records created per local day, oldest first, days without any left out
+	Contributors []Contributor // who created or edited records in the window, most active first
+}
+
+type DayCount struct {
+	Day   string // YYYY-MM-DD in the caller's time zone
+	Count int64
+}
+
+type Contributor struct {
+	UserID  string
+	Name    string
+	Created int64
+	Edited  int64
 }
 
 // MemberRole is what a person may do in one collection (app.collection_member).

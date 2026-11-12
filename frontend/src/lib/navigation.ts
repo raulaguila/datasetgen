@@ -1,4 +1,4 @@
-import { Database, FileJson, Package, KeyRound, ListChecks, ListTree, ScrollText, Settings2, UserCog, Users, type LucideIcon } from "lucide-react";
+import { Database, FileJson, LayoutDashboard, Package, KeyRound, ListChecks, ListTree, ScrollText, Settings2, UserCog, Users, type LucideIcon } from "lucide-react";
 import type { Action, MemberRole } from "@/lib/api/types";
 import type { MessageKey } from "@/lib/i18n/messages";
 
@@ -33,22 +33,28 @@ export interface CollectionSection {
   icon: LucideIcon;
   /** The least role in the collection that sees it; absent means every member. */
   need?: MemberRole;
+  /** "g" then this key opens it (keyboard-shortcuts-dialog lists them). */
+  shortcut?: string;
 }
 
 /** The sections of one collection, under the collection picked in the sidebar. */
 export const COLLECTION_NAV: CollectionSection[] = [
-  { seg: "", key: "collections.tab.records", icon: FileJson },
-  { seg: "/fields", key: "collections.tab.fields", icon: ListTree },
+  { seg: "/overview", key: "collections.tab.overview", icon: LayoutDashboard, shortcut: "o" },
+  { seg: "", key: "collections.tab.records", icon: FileJson, shortcut: "r" },
+  { seg: "/fields", key: "collections.tab.fields", icon: ListTree, shortcut: "f" },
 ];
 
 /** How the collection is doing, its "Monitoring" group in the sidebar. */
 export const COLLECTION_MONITORING_NAV: CollectionSection[] = [
-  { seg: "/quality", key: "collections.tab.quality", icon: ListChecks, need: "editor" },
-  { seg: "/audit", key: "collections.tab.audit", icon: ScrollText, need: "owner" },
+  { seg: "/quality", key: "collections.tab.quality", icon: ListChecks, need: "editor", shortcut: "q" },
+  { seg: "/audit", key: "collections.tab.audit", icon: ScrollText, need: "owner", shortcut: "a" },
 ];
 
 /** The collection's own administration, its "Settings" group in the sidebar. */
 export const COLLECTION_SETTINGS_NAV: CollectionSection[] = [
-  { seg: "/settings", key: "collections.tab.general", icon: Settings2, need: "owner" },
-  { seg: "/members", key: "collections.tab.members", icon: UserCog, need: "owner" },
+  { seg: "/settings", key: "collections.tab.general", icon: Settings2, need: "owner", shortcut: "," },
+  { seg: "/members", key: "collections.tab.members", icon: UserCog, need: "owner", shortcut: "m" },
 ];
+
+/** Every section of a collection, for shortcuts and the palette. */
+export const COLLECTION_SECTIONS: CollectionSection[] = [...COLLECTION_NAV, ...COLLECTION_MONITORING_NAV, ...COLLECTION_SETTINGS_NAV];

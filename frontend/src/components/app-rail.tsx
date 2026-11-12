@@ -1,18 +1,18 @@
 "use client";
 
-import { useId, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, ChevronDown, ChevronRight, Plus, Settings } from "lucide-react";
-import { avatarStyle, initials } from "@/components/bits";
 import { BrandMark } from "@/components/brand-mark";
+import { CollectionAvatar } from "@/components/collection-avatar";
 import { BrandWordmark } from "@/components/brand-wordmark";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { collections } from "@/lib/api/endpoints";
 import { useMe } from "@/lib/context/me";
 import { useI18n } from "@/lib/i18n/provider";
-import { COLLECTION_MONITORING_NAV, COLLECTION_NAV, COLLECTION_SETTINGS_NAV, type CollectionSection } from "@/lib/navigation";
+import { COLLECTION_MONITORING_NAV, COLLECTION_NAV, COLLECTION_SECTIONS, COLLECTION_SETTINGS_NAV, type CollectionSection } from "@/lib/navigation";
 import { can, roleAllows } from "@/lib/permissions";
 import { useUIStore } from "@/lib/store/ui";
 
@@ -52,7 +52,10 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
     enabled: !!user,
     staleTime: 30_000,
   });
-  const items = list.data?.items ?? [];
+  const pinned = useUIStore((s) => s.pinned);
+  // Pinned first, each part in the API's order (by name).
+  const all = list.data?.items ?? [];
+  const items = [...all.filter((c) => pinned.includes(c.id)), ...all.filter((c) => !pinned.includes(c.id))];
   const storedId = useUIStore((s) => s.collectionId);
   // A collection page names its collection; a record page leaves it to the store.
   const activeId = collectionInPath(pathname) ?? storedId;
@@ -81,6 +84,29 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
     onNavigate?.();
   };
   const groupId = useId();
+
+  // "g" then a section's key opens it in the selected collection, as in the reference app.
+  const router = useRouter();
+  useEffect(() => {
+    if (mobile || !active) return;
+    const keys = Object.fromEntries(COLLECTION_SECTIONS.filter((s) => s.shortcut && (!s.need || roleAllows(active.role, s.need))).map((s) => [s.shortcut!, s.seg]));
+    let lastG = 0;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
+      if (e.key === "g") {
+        lastG = e.timeStamp;
+        return;
+      }
+      if (e.timeStamp - lastG < 1000 && e.key in keys) {
+        lastG = 0;
+        router.push(`/collections/${active.id}${keys[e.key]}`);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobile, active, router]);
 
   const tooltip = (label: string, child: React.ReactElement) =>
     compact ? <Tooltip><TooltipTrigger render={child} /><TooltipContent side="right">{label}</TooltipContent></Tooltip> : child;
@@ -125,8 +151,8 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
                 return (
                   <li key={c.id} className="rail-workspace-group" data-selected={selected ? "" : undefined}>
                     {tooltip(c.name, (
-                      <Link href={`/collections/${c.id}`} className="rail-item rail-workspace" aria-label={c.name} title={c.name} aria-current={selected ? "true" : undefined} onClick={() => enterGroup("collection")}>
-                        <span className="rail-avatar" style={avatarStyle(c.id)} aria-hidden>{initials(c.name)}</span>
+                      <Link href={`/collections/${c.id}/overview`} className="rail-item rail-workspace" aria-label={c.name} title={c.name} aria-current={selected ? "true" : undefined} onClick={() => enterGroup("collection")}>
+                        <CollectionAvatar collection={c} className="rail-avatar" />
                         {!compact && <span className="rail-workspace-copy"><strong>{c.name}</strong><span>{count(c.record_count)}</span></span>}
                       </Link>
                     ))}

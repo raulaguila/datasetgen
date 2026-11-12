@@ -8,6 +8,7 @@ import (
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/internal/core/port/output"
 	"github.com/raulaguila/dataset/pkg/apperror"
+	"github.com/raulaguila/dataset/pkg/reqctx"
 	"github.com/raulaguila/dataset/pkg/validate"
 )
 
@@ -124,5 +125,34 @@ func (s *Service) changeMember(ctx context.Context, id, userID, action string, d
 			return apperror.New(apperror.CodeConflict, "a collection keeps at least one owner").WithField("role")
 		}
 		return policy.Audit(ctx, uow, action, id, details)
+	})
+}
+
+// Leave takes the caller out of the collection, under the same last-owner rule.
+func (s *Service) Leave(ctx context.Context, id string) error {
+	actor := reqctx.Actor(ctx)
+	if actor == "" {
+		return apperror.New(apperror.CodeUnauthorized, "unauthenticated")
+	}
+	return s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		if _, err := policy.CollectionRole(ctx, uow.Collections(), id, domain.RoleViewer); err != nil {
+			return err
+		}
+		if err := uow.Lock(ctx, "collection.members:"+id); err != nil {
+			return err
+		}
+		before, err := uow.Collections().Owners(ctx, id)
+		if err != nil {
+			return err
+		}
+		if err := uow.Collections().RemoveMember(ctx, id, actor); err != nil {
+			return err
+		}
+		if after, err := uow.Collections().Owners(ctx, id); err != nil {
+			return err
+		} else if before > 0 && after == 0 {
+			return apperror.New(apperror.CodeConflict, "a collection keeps at least one owner: make someone else owner first")
+		}
+		return policy.Audit(ctx, uow, "collection.member_leave", id, map[string]any{"user_id": actor})
 	})
 }

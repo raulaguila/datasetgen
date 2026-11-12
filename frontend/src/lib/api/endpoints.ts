@@ -12,6 +12,7 @@ import type {
   Product,
   Collection,
   CollectionMember,
+  CollectionStats,
   MemberRole,
   QualityReport,
   DataRecord,
@@ -98,6 +99,7 @@ export interface ProductInput {
 export interface CollectionInput {
   name: string;
   description: string;
+  icon?: string;
   schema: unknown;
 }
 
@@ -128,6 +130,9 @@ export const collections = {
     apiFetch<Paged<AuditRecord>>(`/v1/collections/${id(collectionId)}/audit${query(p)}`, { signal }),
   /** Checks every record against the current schema (editors and owners). */
   quality: (collectionId: string, signal?: AbortSignal) => apiFetch<QualityReport>(`/v1/collections/${id(collectionId)}/quality`, { signal }),
+  stats: (collectionId: string, signal?: AbortSignal) =>
+    apiFetch<CollectionStats>(`/v1/collections/${id(collectionId)}/stats${query({ tz: Intl.DateTimeFormat().resolvedOptions().timeZone })}`, { signal }),
+  leave: (collectionId: string) => apiFetch<void>(`/v1/collections/${id(collectionId)}/leave`, { method: "POST" }),
   removeMember: (collectionId: string, userId: string) => apiFetch<void>(`/v1/collections/${id(collectionId)}/members/${id(userId)}`, { method: "DELETE" }),
 };
 
