@@ -336,7 +336,7 @@ export interface Automation {
   trigger: AutomationTrigger;
   /** Daily only: the hour it runs at (server time). */
   hour?: number;
-  conditions: { any: boolean; rules: { field: string; op: string; value?: unknown }[] };
+  conditions: { any: boolean; rules: { field: string; op: string; value?: unknown }[]; groups?: { any: boolean; rules: { field: string; op: string; value?: unknown }[] }[] };
   action: AutomationAction;
   /** set_field: {field, value}; notify: {message}. */
   config: { field?: string; value?: unknown; message?: string };
@@ -412,4 +412,19 @@ export interface RecordGroup {
   count: number;
   sums: Record<string, number>;
   avgs: Record<string, number>;
+  mins: Record<string, number>;
+  maxs: Record<string, number>;
+}
+
+/** One dashboard widget; the page draws it from the record API. */
+export interface Widget {
+  id: string;
+  kind: "count" | "sum" | "avg" | "min" | "max" | "bars" | "list";
+  title: string;
+  /** The number summed, averaged… or the field bars count by. */
+  field?: string;
+  /** The records it counts, as the list's conditions. */
+  where?: { any: boolean; rules: { field: string; op: string; value?: unknown }[]; groups?: { any: boolean; rules: { field: string; op: string; value?: unknown }[] }[] };
+  /** Two takes a double-width slot. */
+  size?: 1 | 2;
 }

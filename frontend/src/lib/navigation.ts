@@ -1,4 +1,4 @@
-import { Database, FileJson, KeyRound, LayoutDashboard, ListChecks, ListTree, Package, Plug, ScrollText, Settings2, Trash2, UserCog, Users, Zap, type LucideIcon } from "lucide-react";
+import { ChartColumn, Database, FileJson, KeyRound, LayoutDashboard, ListChecks, ListTree, Package, Plug, ScrollText, Settings2, Trash2, UserCog, Users, Zap, type LucideIcon } from "lucide-react";
 import type { Action, MemberRole } from "@/lib/api/types";
 import type { MessageKey } from "@/lib/i18n/messages";
 
@@ -42,6 +42,7 @@ export const COLLECTION_NAV: CollectionSection[] = [
   { seg: "/overview", key: "collections.tab.overview", icon: LayoutDashboard, shortcut: "o" },
   { seg: "", key: "collections.tab.records", icon: FileJson, shortcut: "r" },
   { seg: "/fields", key: "collections.tab.fields", icon: ListTree, shortcut: "f" },
+  { seg: "/analysis", key: "collections.tab.analysis", icon: ChartColumn, shortcut: "n" },
 ];
 
 /** How the collection is doing, its "Monitoring" group in the sidebar. */

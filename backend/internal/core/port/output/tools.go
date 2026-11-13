@@ -12,7 +12,8 @@ import (
 type IntegrationRepository interface {
 	Keys(ctx context.Context, collectionID string) ([]domain.APIKey, error)
 	CreateKey(ctx context.Context, k *domain.APIKey, hash []byte) error
-	DeleteKey(ctx context.Context, collectionID, id string) error
+	// DeleteKey removes a key or share link and says what it was, for the audit log.
+	DeleteKey(ctx context.Context, collectionID, id string) (domain.DeletedKey, error)
 	// Shares lists the collection's share links, tokens sealed.
 	Shares(ctx context.Context, collectionID string) ([]domain.Share, error)
 	CreateShare(ctx context.Context, collectionID, kind, sealed string, hash []byte, by string) (*domain.Share, error)
@@ -25,7 +26,8 @@ type IntegrationRepository interface {
 	WebhooksFor(ctx context.Context, collectionID, event string) ([]domain.Webhook, error)
 	Webhook(ctx context.Context, id string) (*domain.Webhook, error)
 	CreateWebhook(ctx context.Context, w *domain.Webhook, createdBy string) error
-	DeleteWebhook(ctx context.Context, collectionID, id string) error
+	// DeleteWebhook returns the removed hook's URL.
+	DeleteWebhook(ctx context.Context, collectionID, id string) (string, error)
 	WebhookResult(ctx context.Context, id string, status int, errText string) error
 	// LogDelivery keeps a call and its answer, dropping all but the newest 50 of the hook.
 	LogDelivery(ctx context.Context, d *domain.WebhookDelivery) error
@@ -37,7 +39,8 @@ type IntegrationRepository interface {
 	CreateAutomation(ctx context.Context, a *domain.Automation) error
 	// UpdateAutomation saves a's settings (not its run counters); NotFound when it is not the collection's.
 	UpdateAutomation(ctx context.Context, a *domain.Automation) error
-	DeleteAutomation(ctx context.Context, collectionID, id string) error
+	// DeleteAutomation returns the removed automation's name.
+	DeleteAutomation(ctx context.Context, collectionID, id string) (string, error)
 	// AutomationsFor lists the enabled automations of a collection with this trigger.
 	AutomationsFor(ctx context.Context, collectionID, trigger string) ([]string, error)
 	AutomationRan(ctx context.Context, id, errText string) error
@@ -66,6 +69,9 @@ type ToolsRepository interface {
 	SaveSchemaVersion(ctx context.Context, collectionID string, version int, schema json.RawMessage, by string) error
 	SchemaVersions(ctx context.Context, collectionID string, limit int) ([]domain.SchemaVersion, error)
 
+	// Dashboard is the collection's widget list as JSON, "[]" before any save.
+	Dashboard(ctx context.Context, collectionID string) (json.RawMessage, error)
+	SaveDashboard(ctx context.Context, collectionID string, widgets json.RawMessage, by string) error
 	Views(ctx context.Context, collectionID, userID string) ([]domain.SavedView, error)
 	CreateView(ctx context.Context, v *domain.SavedView) error
 	// DeleteView removes a view the user made (NotFound otherwise).

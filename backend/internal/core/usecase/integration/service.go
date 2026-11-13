@@ -101,10 +101,14 @@ func (s *Service) DeleteKey(ctx context.Context, collectionID, id string) error 
 		if err := s.owner(ctx, uow, collectionID); err != nil {
 			return err
 		}
-		if err := uow.Integrations().DeleteKey(ctx, collectionID, id); err != nil {
+		k, err := uow.Integrations().DeleteKey(ctx, collectionID, id)
+		if err != nil {
 			return err
 		}
-		return policy.Audit(ctx, uow, "collection.key_delete", collectionID, map[string]any{"collection_id": collectionID})
+		if k.Share != "" {
+			return policy.Audit(ctx, uow, "collection.share_delete", collectionID, map[string]any{"collection_id": collectionID, "kind": k.Share})
+		}
+		return policy.Audit(ctx, uow, "collection.key_delete", collectionID, map[string]any{"collection_id": collectionID, "key": k.Name, "prefix": k.Prefix})
 	})
 }
 
@@ -184,7 +188,7 @@ func (s *Service) CreateShare(ctx context.Context, collectionID, kind string) (*
 	return out, nil
 }
 
-// DeleteShare removes a link; it is a key row, so DeleteKey's statement does it.
+// DeleteShare removes a link; it is a key row, so DeleteKey does it (and logs share_delete).
 func (s *Service) DeleteShare(ctx context.Context, collectionID, id string) error {
 	return s.DeleteKey(ctx, collectionID, id)
 }
@@ -278,10 +282,11 @@ func (s *Service) DeleteWebhook(ctx context.Context, collectionID, id string) er
 		if err := s.owner(ctx, uow, collectionID); err != nil {
 			return err
 		}
-		if err := uow.Integrations().DeleteWebhook(ctx, collectionID, id); err != nil {
+		u, err := uow.Integrations().DeleteWebhook(ctx, collectionID, id)
+		if err != nil {
 			return err
 		}
-		return policy.Audit(ctx, uow, "collection.webhook_delete", collectionID, map[string]any{"collection_id": collectionID})
+		return policy.Audit(ctx, uow, "collection.webhook_delete", collectionID, map[string]any{"collection_id": collectionID, "url": u})
 	})
 }
 

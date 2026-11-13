@@ -127,3 +127,17 @@ func TestFieldChanges(t *testing.T) {
 		t.Fatal("no change must be nil")
 	}
 }
+
+func TestLeftovers(t *testing.T) {
+	check := Leftovers([]byte(`{"type":"object","properties":{"a":{"type":"string"}}}`))
+	issues := check([]byte(`{"a":"x","old/b":1,"gone":true}`))
+	if len(issues) != 2 || issues[0].Path != "/gone" || issues[1].Path != "/old~1b" || issues[0].Keyword != "additionalProperties" {
+		t.Fatalf("issues = %+v", issues)
+	}
+	if got := check([]byte(`{"a":"x"}`)); len(got) != 0 {
+		t.Fatalf("a matching record has issues: %+v", got)
+	}
+	if Leftovers([]byte(`{"type":"object","additionalProperties":true}`)) != nil {
+		t.Fatal("a schema that sets additionalProperties must get no extra check")
+	}
+}

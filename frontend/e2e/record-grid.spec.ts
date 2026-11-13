@@ -41,6 +41,30 @@ test("conditions, groups, inline edit and the board", async ({ page }) => {
   await page.getByRole("button", { name: /^Remover condição/ }).click();
   await expect(page.locator("tbody tr")).toHaveCount(3);
 
+  // Groups: (status novo and valor > 20) or (status feito).
+  await page.getByRole("button", { name: "Condições" }).click();
+  await rules.getByRole("combobox", { name: "Campo da condição 1" }).click();
+  await page.getByRole("option", { name: "Status" }).click();
+  await rules.getByRole("combobox", { name: "Valor 1" }).click();
+  await page.getByRole("option", { name: "novo" }).click();
+  await rules.getByRole("button", { name: "Adicionar condição" }).click();
+  await rules.getByRole("combobox", { name: "Campo da condição 2" }).click();
+  await page.getByRole("option", { name: "Valor" }).click();
+  await rules.getByRole("combobox", { name: "Operador da condição 2" }).click();
+  await page.getByRole("option", { name: "maior que", exact: true }).click();
+  await rules.getByLabel("Valor 2").fill("20");
+  await rules.getByRole("button", { name: "Adicionar grupo" }).click();
+  await rules.getByRole("combobox", { name: "Campo da condição 3" }).click();
+  await page.getByRole("option", { name: "Status" }).click();
+  await rules.getByRole("combobox", { name: "Valor 3" }).click();
+  await page.getByRole("option", { name: "feito" }).click();
+  await rules.getByRole("button", { name: "Aplicar" }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(2);
+  await expect(page.getByRole("row").filter({ hasText: "Alfa" })).toHaveCount(0);
+  await page.getByRole("button", { name: /^Remover grupo/ }).click();
+  await page.getByRole("button", { name: /^Remover condição/ }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(3);
+
   // Group by status: counts and sums per group.
   await page.getByRole("combobox", { name: "Agrupar" }).click();
   await page.getByRole("option", { name: "Agrupar: Status" }).click();

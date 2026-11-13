@@ -3,6 +3,7 @@ import { apiDownload, apiFetch } from "@/lib/api/client";
 import type {
   Automation,
   AutomationInput,
+  Widget,
   PublicLink,
   WebhookDelivery,
   RecordComment, RecordLinks,
@@ -219,6 +220,8 @@ export const tools = {
   restoreCollection: (collectionId: string) => apiFetch<void>(`/v1/collections/trash/${id(collectionId)}/restore`, { method: "POST" }),
   purgeCollection: (collectionId: string) => apiFetch<void>(`/v1/collections/trash/${id(collectionId)}`, { method: "DELETE" }),
   schemaVersions: (collectionId: string, signal?: AbortSignal) => apiFetch<{ items: SchemaVersion[] }>(`${col(collectionId)}/schema-versions`, { signal }),
+  dashboard: (collectionId: string, signal?: AbortSignal) => apiFetch<{ widgets: Widget[] }>(`${col(collectionId)}/dashboard`, { signal }),
+  saveDashboard: (collectionId: string, widgets: Widget[]) => apiFetch<void>(`${col(collectionId)}/dashboard`, { method: "PUT", json: { widgets } }),
   views: (collectionId: string) => apiFetch<{ items: SavedView[] }>(`${col(collectionId)}/views`),
   createView: (collectionId: string, input: { name: string; query: string; shared: boolean }) => apiFetch<SavedView>(`${col(collectionId)}/views`, { method: "POST", json: input }),
   deleteView: (collectionId: string, viewId: string) => apiFetch<void>(`${col(collectionId)}/views/${id(viewId)}`, { method: "DELETE" }),

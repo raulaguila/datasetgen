@@ -79,6 +79,11 @@ func TestAPIKeysReachOneCollection(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantCode(t, ignore(keys.AuthenticateKey(context.Background(), write.Secret)), apperror.CodeUnauthorized)
+	// The log says which key went.
+	log, _, err = collections.AuditLog(owner, c.ID, domain.AuditFilter{Action: "collection.key_delete", Page: domain.NewPage(1, 5)})
+	if err != nil || len(log) != 1 || log[0].Details["key"] != "Escrita" || log[0].Details["prefix"] != write.Key.Prefix {
+		t.Fatalf("key_delete audit: %+v, %v", log, err)
+	}
 }
 
 // Record changes queue one delivery per hook that asked for the event.
@@ -255,6 +260,20 @@ func TestRecordToolsFollowTheFields(t *testing.T) {
 		t.Fatalf("history: %+v, %v", v, err)
 	}
 
+	// The dashboard starts empty, keeps what owners save and refuses unknown widgets.
+	if w, err := box.Dashboard(owner, tasks.ID); err != nil || string(w) != "[]" {
+		t.Fatalf("empty dashboard: %s %v", w, err)
+	}
+	widgets := json.RawMessage(`[{"kind":"count","title":"Tarefas"},{"kind":"bars","title":"Por dono","field":"dono"}]`)
+	if err := box.SaveDashboard(owner, tasks.ID, widgets); err != nil {
+		t.Fatal(err)
+	}
+	if w, err := box.Dashboard(owner, tasks.ID); err != nil || string(w) != string(widgets) {
+		t.Fatalf("dashboard: %s %v", w, err)
+	}
+	wantCode(t, box.SaveDashboard(owner, tasks.ID, json.RawMessage(`[{"kind":"pizza"}]`)), apperror.CodeInvalidInput)
+	wantCode(t, box.SaveDashboard(owner, tasks.ID, json.RawMessage(`{}`)), apperror.CodeInvalidInput)
+
 	// Views: own and shared.
 	view, err := box.CreateView(owner, tasks.ID, "Por n", "?sort=data.n", true)
 	if err != nil || view.Query != "sort=data.n" {
@@ -310,6 +329,11 @@ func TestWhereRulesAndGroups(t *testing.T) {
 		{"in", domain.Where{Rules: []domain.Condition{rule("v", "in", "[5,7]")}}, 2},
 		{"has", domain.Where{Rules: []domain.Condition{rule("tags", "has", `"x"`)}}, 1},
 		{"neq counts missing", domain.Where{Rules: []domain.Condition{rule("v", "neq", "10")}}, 3},
+		// (cat a AND v > 6) OR (cat b AND v < 8)
+		{"groups", domain.Where{Any: true, Groups: []domain.Where{
+			{Rules: []domain.Condition{rule("cat", "eq", `"a"`), rule("v", "gt", "6")}},
+			{Rules: []domain.Condition{rule("cat", "eq", `"b"`), rule("v", "lt", "8")}},
+		}}, 2},
 	}
 	for _, tc := range cases {
 		if got := count(tc.w); got != tc.want {
@@ -318,6 +342,7 @@ func TestWhereRulesAndGroups(t *testing.T) {
 	}
 	wantCode(t, ignore2(records.List(owner, domain.RecordFilter{CollectionID: c.ID, Where: &domain.Where{Rules: []domain.Condition{rule("v", "drop table", "1")}}})), apperror.CodeInvalidInput)
 	wantCode(t, ignore2(records.List(owner, domain.RecordFilter{CollectionID: c.ID, Where: &domain.Where{Rules: []domain.Condition{rule("v", "in", "5")}}})), apperror.CodeInvalidInput)
+	wantCode(t, ignore2(records.List(owner, domain.RecordFilter{CollectionID: c.ID, Where: &domain.Where{Groups: []domain.Where{{Groups: []domain.Where{{}}}}}})), apperror.CodeInvalidInput)
 
 	groups, err := records.Aggregate(owner, domain.RecordFilter{CollectionID: c.ID}, "cat", []string{"v"})
 	if err != nil || len(groups) != 2 {
@@ -330,7 +355,7 @@ func TestWhereRulesAndGroups(t *testing.T) {
 		}
 	}
 	total, err := records.Aggregate(owner, domain.RecordFilter{CollectionID: c.ID, Where: &domain.Where{Rules: []domain.Condition{rule("cat", "eq", `"a"`)}}}, "", []string{"v"})
-	if err != nil || len(total) != 1 || total[0].Count != 2 || total[0].Avgs["v"] != 7.5 {
+	if err != nil || len(total) != 1 || total[0].Count != 2 || total[0].Avgs["v"] != 7.5 || total[0].Mins["v"] != 5 || total[0].Maxs["v"] != 10 {
 		t.Fatalf("totals: %+v, %v", total, err)
 	}
 }

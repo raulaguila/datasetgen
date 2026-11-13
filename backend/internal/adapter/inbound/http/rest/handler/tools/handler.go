@@ -53,6 +53,8 @@ func (h *Handler) CollectionRoutes(r fiber.Router) {
 	r.Post("/:id/trash/restore", h.RestoreRecords)
 	r.Post("/:id/trash/purge", h.PurgeRecords)
 	r.Get("/:id/schema-versions", h.SchemaVersions)
+	r.Get("/:id/dashboard", h.Dashboard)
+	r.Put("/:id/dashboard", h.SaveDashboard)
 	r.Get("/:id/views", h.Views)
 	r.Post("/:id/views", h.CreateView)
 	r.Delete("/:id/views/:viewId", h.DeleteView)
@@ -499,6 +501,44 @@ type viewDTO struct {
 
 func toViewDTO(v domain.SavedView) viewDTO {
 	return viewDTO{ID: v.ID, Name: v.Name, Query: v.Query, Shared: v.Shared, Mine: v.Mine, CreatedAt: v.CreatedAt}
+}
+
+// @Summary The collection's dashboard widgets; members
+// @Tags Collections
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Security BearerAuth
+// @Success 200 {object} object{widgets=[]object}
+// @Router /v1/collections/{id}/dashboard [get]
+func (h *Handler) Dashboard(c fiber.Ctx) error {
+	widgets, err := h.tools.Dashboard(c.Context(), c.Params("id"))
+	if err != nil {
+		return fail(c, err)
+	}
+	return c.JSON(fiber.Map{"widgets": widgets})
+}
+
+type dashboardDTO struct {
+	Widgets json.RawMessage `json:"widgets" swaggertype:"array,object"`
+}
+
+// @Summary Replace the collection's dashboard widgets (kinds count, sum, avg, min, max, bars, list); owners
+// @Tags Collections
+// @Accept json
+// @Param id path string true "Collection ID"
+// @Param body body dashboardDTO true "Widgets"
+// @Security BearerAuth
+// @Success 204
+// @Router /v1/collections/{id}/dashboard [put]
+func (h *Handler) SaveDashboard(c fiber.Ctx) error {
+	var body dashboardDTO
+	if err := c.Bind().Body(&body); err != nil {
+		return badBody(c)
+	}
+	if err := h.tools.SaveDashboard(c.Context(), c.Params("id"), body.Widgets); err != nil {
+		return fail(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // @Summary The caller's saved views of the record list and the shared ones; viewers

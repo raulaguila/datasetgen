@@ -53,7 +53,7 @@ func (s *Service) AddMember(ctx context.Context, cmd input.AddMemberCommand) (*i
 			}
 			return err
 		}
-		if err := policy.Audit(ctx, uow, "collection.member_add", cmd.CollectionID, map[string]any{"user_id": userID, "role": cmd.Role}); err != nil {
+		if err := policy.Audit(ctx, uow, "collection.member_add", cmd.CollectionID, map[string]any{"user_id": userID, "email": email, "role": cmd.Role}); err != nil {
 			return err
 		}
 		if userID == reqctx.Actor(ctx) {
@@ -139,6 +139,10 @@ func (s *Service) changeMember(ctx context.Context, id, userID, action string, d
 		if before > 0 && after == 0 {
 			return apperror.New(apperror.CodeConflict, "a collection keeps at least one owner").WithField("role")
 		}
+		// The log outlives the account: keep who it was, not only the id.
+		if u, err := uow.Users().FindByID(ctx, userID); err == nil {
+			details["email"] = u.Email
+		}
 		return policy.Audit(ctx, uow, action, id, details)
 	})
 }
@@ -168,6 +172,10 @@ func (s *Service) Leave(ctx context.Context, id string) error {
 		} else if before > 0 && after == 0 {
 			return apperror.New(apperror.CodeConflict, "a collection keeps at least one owner: make someone else owner first")
 		}
-		return policy.Audit(ctx, uow, "collection.member_leave", id, map[string]any{"user_id": actor})
+		details := map[string]any{"user_id": actor}
+		if u, err := uow.Users().FindByID(ctx, actor); err == nil {
+			details["email"] = u.Email
+		}
+		return policy.Audit(ctx, uow, "collection.member_leave", id, details)
 	})
 }

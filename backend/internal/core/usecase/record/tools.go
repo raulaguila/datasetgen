@@ -473,7 +473,8 @@ func (s *Service) BulkUpdate(ctx context.Context, cmd input.BulkUpdateCommand) (
 }
 
 const (
-	maxWhereRules   = 20
+	maxWhereRules   = 20 // across the groups too
+	maxWhereGroups  = 10
 	maxAggregateNum = 5
 )
 
@@ -484,10 +485,20 @@ func checkWhere(w *domain.Where) error {
 		return nil
 	}
 	bad := func(msg string) error { return apperror.New(apperror.CodeInvalidInput, msg).WithField("where") }
-	if len(w.Rules) > maxWhereRules {
+	rules := w.Rules
+	if len(w.Groups) > maxWhereGroups {
+		return bad("where holds up to 10 groups")
+	}
+	for _, g := range w.Groups {
+		if len(g.Groups) > 0 {
+			return bad("groups do not nest")
+		}
+		rules = append(rules[:len(rules):len(rules)], g.Rules...)
+	}
+	if len(rules) > maxWhereRules {
 		return bad("where holds up to 20 rules")
 	}
-	for _, c := range w.Rules {
+	for _, c := range rules {
 		if c.Field == "" || len(c.Field) > 200 || strings.ContainsRune(c.Field, 0) {
 			return bad("each rule needs a field name")
 		}

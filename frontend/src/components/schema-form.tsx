@@ -1,7 +1,7 @@
 "use client";
 
-import Form from "@rjsf/core";
-import { englishStringTranslator, TranslatableString, type ErrorSchema, type FieldProps, type IconButtonProps, type RJSFSchema, type UiSchema, type ValidatorType } from "@rjsf/utils";
+import Form, { getDefaultRegistry } from "@rjsf/core";
+import { englishStringTranslator, TranslatableString, type ArrayFieldItemTemplateProps, type ErrorSchema, type FieldProps, type IconButtonProps, type RJSFSchema, type UiSchema, type ValidatorType } from "@rjsf/utils";
 import Link from "next/link";
 import { useMemo, useRef, useState, type Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -32,9 +32,38 @@ function iconButton(Icon: typeof Plus, name: TranslatableString, variant: "outli
   };
 }
 
+/** Adds a list item: a labelled dashed button under the list, like the field builder's. */
+function AddButton({ onClick, disabled, className, registry }: IconButtonProps) {
+  return (
+    <Button type="button" size="sm" variant="outline" disabled={disabled} className={`${className ?? ""} w-full border-dashed`} onClick={onClick}>
+      <Plus className="size-4" />{registry.translateString(TranslatableString.AddItemButton)}
+    </Button>
+  );
+}
+
+/**
+ * One list item. An object item is a card numbered #1, #2… with its buttons in
+ * the header (its own "Steps-1" title is hidden by the CSS); a plain value sits
+ * in one row with its buttons beside it.
+ */
+// The stock item buttons (move, copy, remove); they draw through ButtonTemplates below.
+const ItemButtons = getDefaultRegistry().templates.ArrayFieldItemButtonsTemplate;
+
+function ArrayItem({ children, className, buttonsProps, hasToolbar, index, schema }: ArrayFieldItemTemplateProps) {
+  const toolbox = hasToolbar && <div className="array-item-toolbox flex shrink-0 gap-0.5"><ItemButtons {...buttonsProps} /></div>;
+  if (schema.type !== "object" || !schema.properties) return <div className={`${className} rjsf-item-row`}><div className="min-w-0 flex-1">{children}</div>{toolbox}</div>;
+  return (
+    <div className={`${className} rjsf-item-card`}>
+      <div className="rjsf-item-head"><span className="font-mono text-xs text-muted-foreground">#{index + 1}</span>{toolbox}</div>
+      {children}
+    </div>
+  );
+}
+
 const templates = {
+  ArrayFieldItemTemplate: ArrayItem,
   ButtonTemplates: {
-    AddButton: iconButton(Plus, TranslatableString.AddItemButton, "outline"),
+    AddButton,
     CopyButton: iconButton(Copy, TranslatableString.CopyButton),
     MoveUpButton: iconButton(ArrowUp, TranslatableString.MoveUpButton),
     MoveDownButton: iconButton(ArrowDown, TranslatableString.MoveDownButton),
@@ -331,8 +360,10 @@ export function uiFor(schema: unknown, nested = false): UiSchema {
  * otherwise drop the errors. The server checks again; its issues come back
  * through `issues`.
  */
-export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec", formRef, issues, liveValidate, collectionId }: {
+export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec", formRef, issues, liveValidate, collectionId, columns = 1 }: {
   schema: Record<string, unknown>;
+  /** Two puts short fields side by side when the form is wide enough; long text, groups and lists keep the whole row. */
+  columns?: 1 | 2;
   /** Where attached files go; without it (the fields preview) file fields only show. */
   collectionId?: string;
   data: unknown;
@@ -355,6 +386,7 @@ export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec",
   const formContext = useMemo(() => ({ collectionId }), [collectionId]);
   const extraErrors = useMemo(() => (issues?.length ? issueErrors(issues, translators[locale]) : undefined), [issues, locale]);
   return (
+    <div className="rjsf-frame" data-columns={columns}>
     <Form
       ref={formRef}
       className="rjsf"
@@ -376,5 +408,6 @@ export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec",
       // The outer page form owns submit; a nested form element would be invalid HTML.
       tagName="div"
     />
+    </div>
   );
 }

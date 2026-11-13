@@ -77,6 +77,9 @@ type ToolsService interface {
 
 	SchemaVersions(ctx context.Context, collectionID string) ([]domain.SchemaVersion, error)
 
+	// Dashboard reads the collection's widgets (members); SaveDashboard replaces them (owners).
+	Dashboard(ctx context.Context, collectionID string) (json.RawMessage, error)
+	SaveDashboard(ctx context.Context, collectionID string, widgets json.RawMessage) error
 	Views(ctx context.Context, collectionID string) ([]domain.SavedView, error)
 	CreateView(ctx context.Context, collectionID, name, query string, shared bool) (*domain.SavedView, error)
 	DeleteView(ctx context.Context, collectionID, id string) error

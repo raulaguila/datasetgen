@@ -19,11 +19,34 @@
 .rjsf .form-control:disabled { opacity: 0.6; cursor: not-allowed; }
 .rjsf .checkbox label { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
 .rjsf .array-item-list { display: grid; gap: 0.5rem; }
-/* rjsf v6 names items .rjsf-array-item; the list also carries .row, kept out of the .row rule below. */
-.rjsf .rjsf-array-item { display: flex; gap: 0.5rem; align-items: flex-start; border: 1px solid var(--border); border-radius: 0.75rem; padding: 0.75rem; }
-.rjsf .rjsf-array-item > :first-child { flex: 1; min-width: 0; }
-.rjsf .array-item-toolbox .btn-group { display: flex; gap: 0.125rem; }
+/* The list also carries .row, kept out of the .row rule below. */
 .rjsf .row:not(.array-item-list) { display: flex; justify-content: flex-end; }
 .rjsf .row > p { margin: 0; }
 .rjsf .error-detail { list-style: none; margin: 0; padding: 0; font-size: 0.8125rem; color: var(--destructive); }
 .rjsf .hidden { display: none; }
+
+/* Layout. The frame is a size container: the preview pane and the record page get the same rules by width, not by screen. */
+.rjsf-frame { container-type: inline-size; }
+/* Long text, groups, lists and the special fields take the whole row wherever fields share one. */
+.rjsf fieldset > :is(legend, .field-description, p, .row, .rjsf-array-item-add),
+.rjsf fieldset > .form-group:has(textarea, fieldset, .array-item-list, [data-wide]) { grid-column: 1 / -1; }
+/* A group's or a list item's short subfields sit side by side, wrapping as the width runs out
+   (flex, not an auto-fit grid: the title spanning the row would keep every empty track alive). */
+.rjsf fieldset fieldset { display: flex; flex-wrap: wrap; column-gap: 0.75rem; }
+.rjsf fieldset fieldset > * { flex: 1 1 13rem; min-width: 0; }
+.rjsf fieldset fieldset > :is(legend, .field-description, p, .row, .rjsf-array-item-add, .array-item-list),
+.rjsf fieldset fieldset > .form-group:has(textarea, fieldset, .array-item-list, [data-wide]) { flex-basis: 100%; }
+@container (min-width: 40rem) {
+  [data-columns="2"] > .rjsf > .form-group > fieldset { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 1.25rem; }
+}
+/* A list is not a card itself: its items are. */
+.rjsf fieldset fieldset:has(> .array-item-list) { border: 0; padding: 0; background: none; gap: 0.5rem; }
+.rjsf .rjsf-item-card { display: grid; gap: 0.5rem; border: 1px solid var(--border); border-radius: 0.75rem; padding: 0.5rem 0.75rem 0.75rem; background: color-mix(in oklab, var(--muted) 35%, transparent); }
+.rjsf .rjsf-item-head { display: flex; align-items: center; justify-content: space-between; min-height: 2rem; }
+/* The object inside an item card: the card is its frame, and "Steps-1" says less than #1. */
+.rjsf .rjsf-item-card fieldset { border: 0; padding: 0; background: none; }
+.rjsf .rjsf-item-card > div > .form-group > fieldset > legend,
+.rjsf .rjsf-item-card > .form-group > fieldset > legend { display: none; }
+.rjsf .rjsf-item-row { display: flex; gap: 0.5rem; align-items: flex-start; }
+/* A yes/no box lines up with the inputs beside it, not with their labels. */
+.rjsf .field-boolean { align-self: end; padding-bottom: 0.5rem; }

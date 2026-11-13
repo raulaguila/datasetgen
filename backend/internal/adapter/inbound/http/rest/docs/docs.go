@@ -1435,6 +1435,84 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/collections/{id}/dashboard": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "The collection's dashboard widgets; members",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "widgets": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Replace the collection's dashboard widgets (kinds count, sum, avg, min, max, bars, list); owners",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Widgets",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tools.dashboardDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/v1/collections/{id}/delete-invalid": {
             "post": {
                 "security": [
@@ -4603,7 +4681,7 @@ const docTemplate = `{
                 "tags": [
                     "Records"
                 ],
-                "summary": "Count the selected records, by a field (group) or all together, with sums and averages of numeric fields (sum, comma separated, up to 5)",
+                "summary": "Count the selected records, by a field (group) or all together, with the sum, average, least and greatest of numeric fields (sum, comma separated, up to 5)",
                 "parameters": [
                     {
                         "type": "string",
@@ -7862,6 +7940,20 @@ const docTemplate = `{
                 "key": {
                     "type": "object"
                 },
+                "maxs": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "mins": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
                 "sums": {
                     "type": "object",
                     "additionalProperties": {
@@ -8334,6 +8426,17 @@ const docTemplate = `{
                 },
                 "shared": {
                     "type": "boolean"
+                }
+            }
+        },
+        "tools.dashboardDTO": {
+            "type": "object",
+            "properties": {
+                "widgets": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
                 }
             }
         },

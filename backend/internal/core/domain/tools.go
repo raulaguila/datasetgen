@@ -9,6 +9,13 @@ import (
 const APIKeyPrefix = "dsk_"
 
 // APIKey lets a program use one collection's records as the member who made it.
+// DeletedKey says which key or share link a delete removed; Share is "" for a key.
+type DeletedKey struct {
+	Name   string `gorm:"column:name"`
+	Prefix string `gorm:"column:prefix"`
+	Share  string `gorm:"column:share"`
+}
+
 type APIKey struct {
 	ID           string
 	CollectionID string

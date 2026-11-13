@@ -12,12 +12,11 @@ import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { fieldsOf, fileRefs, recordTitle, REF, type FieldRow } from "@/components/field-builder";
 import { SavedViews } from "@/components/saved-views";
 import { ColumnPicker, EditableCell, editsInline, pickColumns, useSaveField } from "@/components/record-grid";
-import { RecordGroups, RecordTotals, groupableOf } from "@/components/record-groups";
-import { RecordRules, parseWhere, type Where } from "@/components/record-rules";
+import { RecordGroups, groupableOf } from "@/components/record-groups";
+import { RecordRules, andWhere, parseWhere, whereText as toWhereText, type Rule, type Where } from "@/components/record-rules";
 import { BoardView, CalendarView, GalleryView, layoutFields, type Layout } from "@/components/record-views";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QueryErrorState } from "@/components/query-error-state";
-import { RecordFilters, filterableFields, type FieldFilters } from "@/components/record-filters";
 import { RecordImportDialog } from "@/components/record-import-dialog";
 import { ListSkeleton } from "@/components/skeletons";
 import { SelectAllHead, SelectCell, SelectionBar, useSelection } from "@/components/selection";
@@ -72,13 +71,17 @@ function useRefLabels(columns: FieldRow[], items: DataRecord[], schema: Record<s
 /** The "no grouping" choice; a field key is never this. */
 const NO_GROUP = "\u0000none";
 
-/** The filters kept in the URL as JSON; anything else there reads as none. */
-function parseFilters(raw: string): FieldFilters {
+/**
+ * Field filters of older links and saved views ({"field": value}), read as
+ * "equals" conditions: the Conditions button now does what the Filters panel did.
+ */
+function legacyRules(raw: string): Rule[] {
   try {
     const v: unknown = JSON.parse(raw);
-    return v && typeof v === "object" && !Array.isArray(v) ? (v as FieldFilters) : {};
+    if (!v || typeof v !== "object" || Array.isArray(v)) return [];
+    return Object.entries(v).filter(([, x]) => ["string", "number", "boolean"].includes(typeof x)).map(([field, value]) => ({ field, op: "eq" as const, value }));
   } catch {
-    return {};
+    return [];
   }
 }
 
@@ -92,9 +95,9 @@ function RecordList({ collection }: { collection: Collection }) {
   const { page, limit } = params;
   const rows = fieldsOf(collection.schema ?? null);
   const columns = pickColumns(rows, params.cols);
-  const where = parseWhere(params.where);
-  const whereText = where.rules.length ? JSON.stringify(where) : undefined;
-  const setWhere = (w: Where) => set({ where: w.rules.length ? JSON.stringify(w) : "", page: 1 });
+  const where = andWhere(parseWhere(params.where), params.filter ? legacyRules(params.filter) : []);
+  const whereText = toWhereText(where) || undefined;
+  const setWhere = (w: Where) => set({ where: toWhereText(w), filter: "", page: 1 });
   const groupRow = groupableOf(rows).find((r) => r.key === params.group);
   // A layout needs a field to arrange by; without one the table shows.
   const layoutOptions = (Object.keys(layoutFields) as Exclude<Layout, "table">[]).filter((l) => rows.some(layoutFields[l]));
@@ -106,16 +109,14 @@ function RecordList({ collection }: { collection: Collection }) {
   const sortable = columns.filter((c) => c.field.type !== "file" && c.field.type !== "files");
   const sort = params.sort === "created_at" || sortable.some((c) => params.sort === `data.${c.key}`) ? params.sort : "updated_at";
   const order: SortOrder = params.order === "asc" ? "asc" : "desc";
-  const filters = params.filter ? parseFilters(params.filter) : {};
-  const filter = Object.keys(filters).length ? JSON.stringify(filters) : undefined;
   const [search, setSearch] = useState(params.q);
   const [hidden, setHidden] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
   const [bulk, setBulk] = useState(false);
   const q = searchTerm(useDebounced(params.q));
   const list = useQuery({
-    queryKey: ["records", collection.id, page, limit, q, sort, order, filter, whereText],
-    queryFn: ({ signal }) => records.list({ collection_id: collection.id, page, limit, search: q, sort, order, filter, where: whereText }, signal),
+    queryKey: ["records", collection.id, page, limit, q, sort, order, whereText],
+    queryFn: ({ signal }) => records.list({ collection_id: collection.id, page, limit, search: q, sort, order, where: whereText }, signal),
     enabled: layout === "table",
     placeholderData: keepPreviousData,
   });
@@ -143,13 +144,13 @@ function RecordList({ collection }: { collection: Collection }) {
   // A record edited since the check may be fixed already: it stays unmarked.
   const isInvalid = (id: string, updatedAt: string) => invalid.has(id) && Date.parse(updatedAt) <= Date.parse(invalid.get(id)!);
   const selection = useSelection(canEdit ? items.map((r) => r.id) : []);
-  const filtered = !!(q || filter || whereText);
-  const scope = { collection_id: collection.id, search: q || undefined, filter, where: whereText };
+  const filtered = !!(q || whereText);
+  const scope = { collection_id: collection.id, search: q || undefined, where: whereText };
   // Picking a group filters the list to its value (or to empty).
   const pickGroup = (key: unknown) => {
     if (!groupRow) return;
     const rule = key === null || key === undefined || key === "" ? { field: groupRow.key, op: "empty" as const } : { field: groupRow.key, op: "eq" as const, value: key };
-    setWhere({ any: false, rules: [...(where.any ? [] : where.rules.filter((r) => r.field !== groupRow.key)), rule] });
+    setWhere(andWhere(where.any ? where : { ...where, rules: where.rules.filter((r) => r.field !== groupRow.key) }, [rule]));
     set({ group: "" });
   };
   const sortProps = { sort, order, onSort: (f: string, o: SortOrder) => set({ sort: f, order: o, page: 1 }) };
@@ -186,7 +187,6 @@ function RecordList({ collection }: { collection: Collection }) {
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input type="search" aria-label={t("common.search")} placeholder={t("records.search")} className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); set({ q: e.target.value.trim(), page: 1 }); }} />
         </div>
-        <RecordFilters fields={filterableFields(rows)} value={filters} onChange={(f) => set({ filter: Object.keys(f).length ? JSON.stringify(f) : "", page: 1 })} />
         <RecordRules fields={rows} value={where} onChange={setWhere} />
         {layout === "table" && <ColumnPicker fields={rows} value={columns} onChange={(keys) => set({ cols: keys.join(",") })} />}
         {groupableOf(rows).length > 0 && (
@@ -233,9 +233,9 @@ function RecordList({ collection }: { collection: Collection }) {
       {canEdit && <RecordImportDialog collectionId={collection.id} schema={collection.schema} open={importing} onOpenChange={setImporting} />}
       {groupRow && <RecordGroups selection={scope} group={groupRow} fields={rows} label={(k) => show(k, groupRow)} onPick={pickGroup} />}
       {layout !== "table" && by ? (
-        layout === "board" ? <BoardView collection={collection} by={by} search={scope.search} filter={filter} where={where} show={show} extra={columns.filter((c) => c.key !== by.key).slice(0, 3)} canEdit={canEdit} save={saveField} />
-        : layout === "calendar" ? <CalendarView collection={collection} by={by} search={scope.search} filter={filter} where={where} show={show} extra={[]} />
-        : <GalleryView collection={collection} by={by} search={scope.search} filter={filter} where={where} show={show} extra={columns.filter((c) => c.key !== by.key).slice(0, 2)} />
+        layout === "board" ? <BoardView collection={collection} by={by} search={scope.search} where={where} show={show} extra={columns.filter((c) => c.key !== by.key).slice(0, 3)} canEdit={canEdit} save={saveField} />
+        : layout === "calendar" ? <CalendarView collection={collection} by={by} search={scope.search} where={where} show={show} extra={[]} />
+        : <GalleryView collection={collection} by={by} search={scope.search} where={where} show={show} extra={columns.filter((c) => c.key !== by.key).slice(0, 2)} />
       ) : list.isPending ? (
         <ListSkeleton rows={3} />
       ) : list.isError ? (
@@ -292,7 +292,6 @@ function RecordList({ collection }: { collection: Collection }) {
               })}
             </TableBody>
           </Table>
-          <RecordTotals selection={scope} fields={columns} />
           {/* One page of the smallest size needs no paging controls, only the total. */}
           {page === 1 && list.data.pagination.total_items <= Math.min(limit, 10) ? (
             <p className="border-t px-4 py-2.5 text-xs text-muted-foreground">{t(list.data.pagination.total_items === 1 ? "nav.record_one" : "nav.record_many").replace("{n}", String(list.data.pagination.total_items))}</p>

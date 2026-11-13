@@ -70,15 +70,17 @@ func (r *Repository) CreateKey(ctx context.Context, k *domain.APIKey, hash []byt
 	return nil
 }
 
-func (r *Repository) DeleteKey(ctx context.Context, collectionID, id string) error {
-	res := r.db.WithContext(ctx).Exec(`DELETE FROM app.api_key WHERE id = ? AND collection_id = ?`, id, collectionID)
-	if res.Error != nil {
-		return shared.WrapError(res.Error, "api key")
+func (r *Repository) DeleteKey(ctx context.Context, collectionID, id string) (domain.DeletedKey, error) {
+	var rows []domain.DeletedKey
+	err := r.db.WithContext(ctx).Raw(`DELETE FROM app.api_key WHERE id = ? AND collection_id = ?
+		RETURNING name, prefix, COALESCE(share, '') AS share`, id, collectionID).Find(&rows).Error
+	if err != nil {
+		return domain.DeletedKey{}, shared.WrapError(err, "api key")
 	}
-	if res.RowsAffected == 0 {
-		return shared.WrapError(gorm.ErrRecordNotFound, "api key")
+	if len(rows) == 0 {
+		return domain.DeletedKey{}, shared.WrapError(gorm.ErrRecordNotFound, "api key")
 	}
-	return nil
+	return rows[0], nil
 }
 
 func (r *Repository) Grant(ctx context.Context, hash []byte) (*domain.KeyGrant, error) {
@@ -223,15 +225,16 @@ func (r *Repository) CreateWebhook(ctx context.Context, w *domain.Webhook, creat
 	return nil
 }
 
-func (r *Repository) DeleteWebhook(ctx context.Context, collectionID, id string) error {
-	res := r.db.WithContext(ctx).Exec(`DELETE FROM app.webhook WHERE id = ? AND collection_id = ?`, id, collectionID)
-	if res.Error != nil {
-		return shared.WrapError(res.Error, "webhook")
+func (r *Repository) DeleteWebhook(ctx context.Context, collectionID, id string) (string, error) {
+	var urls []string
+	err := r.db.WithContext(ctx).Raw(`DELETE FROM app.webhook WHERE id = ? AND collection_id = ? RETURNING url`, id, collectionID).Find(&urls).Error
+	if err != nil {
+		return "", shared.WrapError(err, "webhook")
 	}
-	if res.RowsAffected == 0 {
-		return shared.WrapError(gorm.ErrRecordNotFound, "webhook")
+	if len(urls) == 0 {
+		return "", shared.WrapError(gorm.ErrRecordNotFound, "webhook")
 	}
-	return nil
+	return urls[0], nil
 }
 
 func (r *Repository) WebhookResult(ctx context.Context, id string, status int, errText string) error {

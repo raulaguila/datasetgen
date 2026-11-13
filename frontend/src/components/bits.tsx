@@ -130,15 +130,17 @@ export function IconAction({ label, target, className, disabled, expanded, onCli
  * screens, above it on narrow ones. Plain fields stay at a readable width;
  * `wide` lets tables and matrices take the room they need.
  */
-export function FormSection({ title, description, wide = false, danger = false, children }: {
+export function FormSection({ title, description, wide = false, danger = false, headAbove = false, children }: {
   title: string;
   description?: string;
   wide?: boolean;
+  /** The title sits above the content up to 2xl screens, leaving the width to a wide form. */
+  headAbove?: boolean;
   danger?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className="grid gap-3 border-t pt-8 first:border-t-0 first:pt-0 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10">
+    <section className={cn("grid gap-3 border-t pt-8 first:border-t-0 first:pt-0", headAbove ? "2xl:grid-cols-[18rem_minmax(0,1fr)] 2xl:gap-10" : "lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10")}>
       <div className="space-y-1">
         <h2 className={cn("font-heading text-base font-semibold", danger && "text-destructive")}>{title}</h2>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}

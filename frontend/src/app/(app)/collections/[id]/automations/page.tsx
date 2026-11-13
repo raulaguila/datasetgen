@@ -9,7 +9,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { fieldsOf, type FieldRow } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
-import { RecordRules, type Where } from "@/components/record-rules";
+import { RecordRules, whereEmpty, type Where } from "@/components/record-rules";
 import { ListSkeleton } from "@/components/skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -99,7 +99,7 @@ function AutomationForm({ collection, initial, onDone }: { collection: Collectio
         <p className="text-sm font-medium">{t("automations.if")}</p>
         <div className="flex flex-wrap items-center gap-2">
           <RecordRules fields={rows} value={draft.conditions as Where} onChange={(w) => set({ conditions: w })} />
-          {draft.conditions.rules.length === 0 && <span className="text-xs text-muted-foreground">{t("automations.every_record")}</span>}
+          {whereEmpty(draft.conditions as Where) && <span className="text-xs text-muted-foreground">{t("automations.every_record")}</span>}
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -163,7 +163,8 @@ function Automations({ collection }: { collection: Collection }) {
   const summary = (a: Automation) => {
     const when = a.trigger === "daily" ? t("automations.daily_at").replace("{hour}", `${String(a.hour ?? 0).padStart(2, "0")}:00`) : t(`automations.trigger.${a.trigger}` as MessageKey);
     const then = a.action === "notify" ? t("automations.action.notify") : t("automations.sets").replace("{field}", names.get(a.config.field ?? "") ?? a.config.field ?? "").replace("{value}", a.config.value === null || a.config.value === undefined ? "—" : String(a.config.value));
-    const rules = a.conditions.rules.length ? ` · ${t("automations.n_conditions").replace("{n}", String(a.conditions.rules.length))}` : "";
+    const n = a.conditions.rules.length + ((a.conditions as Where).groups ?? []).reduce((k, g) => k + g.rules.length, 0);
+    const rules = n ? ` · ${t("automations.n_conditions").replace("{n}", String(n))}` : "";
     return `${when}${rules} → ${then}`;
   };
   const items = list.data?.items ?? [];

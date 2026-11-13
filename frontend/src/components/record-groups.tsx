@@ -59,24 +59,3 @@ export function RecordGroups({ selection, group, fields, label, onPick }: {
     </section>
   );
 }
-
-/** Sums and averages of the numeric columns over every selected record, not only this page. */
-export function RecordTotals({ selection, fields }: { selection: Selection; fields: FieldRow[] }) {
-  const { t } = useI18n();
-  const num = useNumberFormat();
-  const numeric = numericOf(fields);
-  const q = useQuery({
-    queryKey: ["records", selection.collection_id, "totals", selection, numeric.map((f) => f.key)],
-    queryFn: ({ signal }) => records.aggregate({ ...selection, sum: numeric.map((f) => f.key).join(",") }, signal),
-    enabled: numeric.length > 0,
-  });
-  const all = q.data?.items[0];
-  if (!numeric.length || !all) return null;
-  return (
-    <p className="flex flex-wrap gap-x-4 gap-y-1 border-t px-4 py-2 text-xs text-muted-foreground" aria-label={t("groups.totals")}>
-      {numeric.filter((f) => all.sums[f.key] !== undefined).map((f) => (
-        <span key={f.key}><span className="font-medium text-foreground">{f.field.name}</span>: {t("groups.sum")} {num(all.sums[f.key])} · {t("groups.avg")} {num(all.avgs[f.key])}</span>
-      ))}
-    </p>
-  );
-}

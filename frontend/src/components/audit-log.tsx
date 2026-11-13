@@ -51,8 +51,8 @@ function daysAgo(n: number): string {
 const PRESETS = [["audit.today", 0], ["audit.last_7", 6], ["audit.last_30", 29]] as const;
 
 /** Adding reads green, removing red, any other change blue. */
-const GOOD = /\.(create|import|invite|reinvite|restore|enable|member_add|bootstrap|promote)$/;
-const BAD = /\.(delete|delete_invalid|disable|member_remove|member_leave|sessions_revoke)$/;
+const GOOD = /[._](create|import|invite|reinvite|restore|untrash|enable|member_add|bootstrap|promote)$/;
+const BAD = /[._](delete|delete_invalid|purge|disable|member_remove|member_leave|sessions_revoke)$/;
 function tone(action: string): string {
   return GOOD.test(action) ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
     : BAD.test(action) ? "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
@@ -68,6 +68,8 @@ function useDetails() {
   return (d: Record<string, unknown>, target?: string): [string, string][] =>
     Object.entries(d).flatMap(([k, v]): [string, string][] => {
       if (k === "collection_id" || (k === "name" && v === target)) return [];
+      // The email names the member; its id adds nothing to read.
+      if (k === "user_id" && typeof d.email === "string") return [];
       // A change of fields names them: added, removed, changed.
       if (k === "fields" && v && typeof v === "object") {
         return (["added", "removed", "changed"] as const).flatMap((kind): [string, string][] => {
@@ -77,8 +79,12 @@ function useDetails() {
       }
       if (k === "schema") return [[t("audit.fields_changed"), t("common.yes")]];
       const name = t(`audit.detail.${k}` as MessageKey);
+      // Codes with a label of their own: a member role, a share link kind, a bulk fix.
+      const coded = typeof v === "string" && ({ role: `members.role.${v}`, kind: `share.${v}`, op: `fix.op.${v}` } as Record<string, string>)[k];
+      const label = coded ? t(coded as MessageKey) : "";
       const value =
-        typeof v === "boolean" ? t(v ? "common.yes" : "common.no")
+        coded && label !== coded ? label
+        : typeof v === "boolean" ? t(v ? "common.yes" : "common.no")
         : typeof v === "string" ? v
         : k === "permissions" && v && typeof v === "object" ? permissionsText(t, v as Record<string, number>)
         : JSON.stringify(v);

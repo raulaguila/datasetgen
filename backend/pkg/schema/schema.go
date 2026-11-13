@@ -318,3 +318,37 @@ func UniqueKeys(raw []byte) []string {
 func UniqueIssue(key string) Issue {
 	return Issue{Path: "/" + pointerEscape.Replace(key), Keyword: "unique", Message: "value already used by another record"}
 }
+
+// Leftovers returns a check for top-level keys a document holds that the
+// schema no longer has, such as the value of a removed field. JSON Schema
+// lets them pass unless the schema says otherwise, so a schema that sets
+// "additionalProperties" itself gets no extra check (nil).
+// shortcut: top level only; a group's removed subfield is not reported, walk nested "properties" if that matters.
+func Leftovers(raw []byte) func(data []byte) []Issue {
+	var doc map[string]json.RawMessage
+	if json.Unmarshal(raw, &doc) != nil {
+		return nil
+	}
+	if _, set := doc["additionalProperties"]; set {
+		return nil
+	}
+	known := topProps(raw)
+	return func(data []byte) []Issue {
+		var obj map[string]json.RawMessage
+		if json.Unmarshal(data, &obj) != nil {
+			return nil
+		}
+		var keys []string
+		for k := range obj {
+			if _, ok := known[k]; !ok {
+				keys = append(keys, k)
+			}
+		}
+		slices.Sort(keys)
+		issues := make([]Issue, 0, len(keys))
+		for _, k := range keys {
+			issues = append(issues, Issue{Path: "/" + pointerEscape.Replace(k), Keyword: "additionalProperties", Message: "field no longer in the schema"})
+		}
+		return issues
+	}
+}

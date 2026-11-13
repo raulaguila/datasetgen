@@ -246,6 +246,26 @@ type viewRow struct {
 	CreatedAt time.Time `gorm:"column:created_at"`
 }
 
+func (r *Repository) Dashboard(ctx context.Context, collectionID string) (json.RawMessage, error) {
+	var rows []string
+	err := r.db.WithContext(ctx).Raw(`SELECT widgets::text FROM app.collection_dashboard WHERE collection_id = ?`, collectionID).Find(&rows).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "dashboard")
+	}
+	if len(rows) == 0 {
+		return json.RawMessage("[]"), nil
+	}
+	return json.RawMessage(rows[0]), nil
+}
+
+func (r *Repository) SaveDashboard(ctx context.Context, collectionID string, widgets json.RawMessage, by string) error {
+	err := r.db.WithContext(ctx).Exec(`
+		INSERT INTO app.collection_dashboard (collection_id, widgets, updated_by) VALUES (?, ?::json, NULLIF(?, '')::uuid)
+		ON CONFLICT (collection_id) DO UPDATE SET widgets = EXCLUDED.widgets, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+		collectionID, string(widgets), by).Error
+	return shared.WrapError(err, "dashboard")
+}
+
 // shortcut: no limit per collection; add one when views reach the hundreds.
 func (r *Repository) Views(ctx context.Context, collectionID, userID string) ([]domain.SavedView, error) {
 	var rows []viewRow

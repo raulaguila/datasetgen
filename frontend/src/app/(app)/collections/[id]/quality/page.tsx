@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, CircleCheck, ListChecks, RefreshCw, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
@@ -55,10 +55,9 @@ function valueOf(field: Field | undefined, text: string): unknown {
 }
 
 /** The fix form: one bulk change, counted, confirmed, then the check runs again. */
-function BulkFix({ collection, report, onDone }: { collection: Collection; report: QualityReport; onDone: () => void }) {
+function BulkFix({ collection, report, onDone, fieldLabel, issueText }: { collection: Collection; report: QualityReport; onDone: () => void; fieldLabel: (key: string) => string; issueText: (keyword: string, message: string) => string }) {
   const { t } = useI18n();
   const client = useQueryClient();
-  const [open, setOpen] = useState(report.invalid_count > 0);
   const [op, setOp] = useState<RecordFix["op"]>("set_default");
   const [field, setField] = useState("");
   const [to, setTo] = useState("");
@@ -77,25 +76,36 @@ function BulkFix({ collection, report, onDone }: { collection: Collection; repor
   const target = rows.find((r) => r.key === field)?.field;
   const ready = field !== "" && (op !== "rename" || (to.trim() !== "" && to.trim() !== field)) && (op !== "set_default" || value !== "");
 
-  // One-click fixes for what the check found: fill a required field, drop a field gone from the schema.
-  const missing = [...new Set(report.invalid.flatMap((r) => r.issues.filter((i) => i.keyword === "required").map((i) => i.path.split("/")[1] ?? "")))].filter((k) => known.has(k));
-  const suggestions: { label: string; run: () => void }[] = [
-    ...missing.map((k) => {
+  // What the check found, one line per field and rule, with the fix that fits when there is one.
+  const problems = new Map<string, { keyword: string; key: string; message: string; count: number }>();
+  for (const rec of report.invalid) {
+    for (const i of rec.issues) {
+      const key = (i.path.split("/")[1] ?? "").replace(/~1/g, "/").replace(/~0/g, "~");
+      const id = `${i.keyword}|${key}`;
+      const p = problems.get(id) ?? { keyword: i.keyword, key, message: i.message, count: 0 };
+      p.count++;
+      problems.set(id, p);
+    }
+  }
+  const actionFor = (keyword: string, k: string): { label: string; run: () => void } | null => {
+    if (keyword === "required" && known.has(k)) {
       const f = rows.find((r) => r.key === k)!.field;
       return {
         label: t("fix.suggest_fill").replace("{field}", f.name),
         run: () => {
-          setOp("set_default"); setField(k); setValue(f.default);
+          setOp("set_default"); setField(k); setValue(f.default); setManual(true);
           if (f.default !== "") void review({ op: "set_default", field: k, value: valueOf(f, f.default) });
           else setTimeout(() => document.getElementById("fix-value")?.focus());
         },
       };
-    }),
-    ...old.map((k) => ({
+    }
+    if (keyword === "additionalProperties" && k && !known.has(k)) return {
       label: t("fix.suggest_remove").replace("{field}", k),
       run: () => { setOp("remove"); setField(k); void review({ op: "remove", field: k }); },
-    })),
-  ];
+    };
+    return null;
+  };
+  const [manual, setManual] = useState(false);
 
   const after = (n: number, key: MessageKey) => {
     toast.success(t(key).replace("{n}", String(n)));
@@ -120,26 +130,40 @@ function BulkFix({ collection, report, onDone }: { collection: Collection; repor
   const ops: Record<RecordFix["op"], string> = { set_default: t("fix.op.set_default"), rename: t("fix.op.rename"), remove: t("fix.op.remove") };
   const pending = confirm && "fix" in confirm ? confirm : null;
 
-  if (!open) return (
-    <Button variant="ghost" className="-ml-2" aria-expanded={false} onClick={() => setOpen(true)}>
-      <Wrench className="size-4" />{t("fix.title")}<ChevronDown className="size-4" />
-    </Button>
-  );
   return (
     <FormSections>
-      <FormSection title={t("fix.title")} description={t("fix.desc")}>
-        {suggestions.length > 0 && (
-          <div className="mb-5 space-y-2">
-            <p className="text-sm font-medium">{t("fix.suggestions")}</p>
-            <div className="flex flex-wrap gap-2">
-              {suggestions.map((s) => <Button key={s.label} type="button" size="sm" variant="outline" disabled={counting} onClick={s.run}>{s.label}</Button>)}
-            </div>
-          </div>
-        )}
-        <form className="space-y-4" onSubmit={(e) => {
+      <FormSection title={t("fix.problems")} description={t(report.invalid_count > report.invalid.length ? "fix.problems_first" : "fix.problems_desc").replace("{n}", String(report.invalid.length))}>
+        <ul className="divide-y rounded-lg border" aria-label={t("fix.problems")}>
+          {[...problems.values()].sort((a, b) => b.count - a.count).map((p) => {
+            const action = actionFor(p.keyword, p.key);
+            return (
+              <li key={`${p.keyword}|${p.key}`} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm"><span className="font-medium">{fieldLabel(p.key)}</span> · <span className="text-destructive">{issueText(p.keyword, p.message)}</span></p>
+                  <p className="text-xs text-muted-foreground">{t(p.count === 1 ? "fix.records_one" : "fix.records").replace("{n}", String(p.count))}</p>
+                </div>
+                {action
+                  ? <Button type="button" size="sm" variant="outline" disabled={counting} onClick={action.run}><Wrench className="size-4" />{action.label}</Button>
+                  : <span className="text-xs text-muted-foreground">{t("fix.by_hand")}</span>}
+              </li>
+            );
+          })}
+        </ul>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button type="button" variant="ghost" className="-ml-2" aria-expanded={manual} onClick={() => setManual((m) => !m)}>
+            {t("fix.other")}<ChevronDown className={manual ? "size-4 rotate-180" : "size-4"} />
+          </Button>
+          {canDelete && (
+            <Button type="button" variant="ghost" className="ml-auto text-destructive" onClick={() => setConfirm({ delete: true })}>
+              <Trash2 className="size-4" />{t("fix.delete_invalid").replace("{n}", String(report.invalid_count))}
+            </Button>
+          )}
+        </div>
+        {manual && <form className="mt-4 space-y-4 rounded-lg border p-4" aria-label={t("fix.other")} onSubmit={(e) => {
           e.preventDefault();
           if (ready) void review({ op, field, ...(op === "rename" ? { to: to.trim() } : {}), ...(op === "set_default" ? { value: valueOf(target, value) } : {}) });
         }}>
+          <p className="text-sm text-muted-foreground">{t("fix.desc")}</p>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="fix-op">{t("fix.op")}</Label>
             <Select value={op} items={ops} onValueChange={(v) => setOp(v as RecordFix["op"])}>
@@ -171,15 +195,8 @@ function BulkFix({ collection, report, onDone }: { collection: Collection; repor
             </div>
           )}
           <p className="text-xs text-muted-foreground">{t("fix.versions_hint")}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={!ready || counting}><Wrench className="size-4" />{t("fix.apply")}</Button>
-            {canDelete && (
-              <Button type="button" variant="outline" className="text-destructive" onClick={() => setConfirm({ delete: true })}>
-                <Trash2 className="size-4" />{t("fix.delete_invalid").replace("{n}", String(report.invalid_count))}
-              </Button>
-            )}
-          </div>
-        </form>
+          <Button type="submit" disabled={!ready || counting}><Wrench className="size-4" />{t("fix.apply")}</Button>
+        </form>}
       </FormSection>
       <ConfirmDialog
         open={!!confirm}
@@ -207,6 +224,14 @@ function Quality({ collection }: { collection: Collection }) {
   const { t } = useI18n();
   const format = useFormatDate();
   const { q, start, stale } = useQuality(collection);
+  // Records change without the fields changing: opening this page checks them again, once.
+  // shortcut: re-scans the whole collection per visit; compare against the latest record change if checks get slow.
+  const refreshed = useRef(false);
+  useEffect(() => {
+    if (refreshed.current || q.data?.status !== "done" || stale) return;
+    refreshed.current = true;
+    start.mutate();
+  }, [q.data?.status, stale, start]);
   // Issues name the field by its key; show its label, as the form does.
   const schema = collection.schema ?? null;
   const labels = new Map(fieldsOf(schema).map((r) => [r.key, r.field.name]));
@@ -258,6 +283,9 @@ function Quality({ collection }: { collection: Collection }) {
         <div className="ml-auto">{recheck}</div>
       </div>
       {r.status === "done" && !stale && r.invalid_count > 0 && (
+        <BulkFix key={String(r.finished_at)} collection={collection} report={r} onDone={() => start.mutate()} fieldLabel={(k) => (k ? labels.get(k) ?? k : t("quality.root"))} issueText={issue} />
+      )}
+      {r.status === "done" && !stale && r.invalid_count > 0 && (
         <Card className="gap-0 overflow-hidden p-0">
           <div className="border-b px-4 py-3">
             <h2 className="font-heading text-base font-semibold">{t("quality.invalid").replace("{n}", String(r.invalid_count))}</h2>
@@ -283,7 +311,6 @@ function Quality({ collection }: { collection: Collection }) {
           </ul>
         </Card>
       )}
-      <BulkFix key={r.invalid_count > 0 ? "open" : "closed"} collection={collection} report={r} onDone={() => start.mutate()} />
     </div>
   );
 }

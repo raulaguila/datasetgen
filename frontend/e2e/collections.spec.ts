@@ -65,15 +65,23 @@ test("a collection's records follow its fields", async ({ page }) => {
   await expect(page.getByRole("columnheader")).toHaveText(["", "Nome", "Categoria", "Nota", "Atualizado em"]);
   const row = page.getByRole("row").filter({ hasText: "Ao clicar" });
   await expect(row.getByRole("cell")).toHaveText(["", "Ao clicar", "gatilho", "—", /\d/]);
-  // A choice field filters through a select inside the filter popover.
-  await page.getByRole("button", { name: "Filtros" }).click();
-  await page.getByRole("combobox", { name: "Categoria" }).click();
+  // A choice field: its condition offers the options.
+  await page.getByRole("button", { name: "Condições" }).click();
+  const rules = page.getByRole("dialog", { name: "Condições" });
+  await rules.getByRole("combobox", { name: "Campo da condição 1" }).click();
+  await page.getByRole("option", { name: "Categoria" }).click();
+  await rules.getByRole("combobox", { name: "Valor 1" }).click();
   await page.getByRole("option", { name: "gatilho" }).click();
-  await page.getByRole("button", { name: "Aplicar" }).click();
-  await expect(page.getByRole("button", { name: "Remover filtro: Categoria" })).toBeVisible();
+  await rules.getByRole("button", { name: "Aplicar" }).click();
   await expect(row).toBeVisible();
-  await expect(page).toHaveURL(/filter=/);
-  await page.getByRole("button", { name: "Remover filtro: Categoria" }).click();
+  await expect(page).toHaveURL(/where=/);
+  await page.getByRole("button", { name: /^Remover condição: Categoria/ }).click();
+  // A field filter from an older link or saved view reads as a condition.
+  await page.goto(`${page.url().split("?")[0]}?filter=${encodeURIComponent('{"categoria":"gatilho"}')}`);
+  await expect(page.getByRole("button", { name: /^Remover condição: Categoria/ })).toBeVisible();
+  await expect(row).toBeVisible();
+  await page.getByRole("button", { name: /^Remover condição: Categoria/ }).click();
+  await expect(page).not.toHaveURL(/filter=/);
 
   // Fields live in their own section; changing them with records stored warns.
   await page.getByRole("link", { name: "Campos" }).click();

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type Form from "@rjsf/core";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Columns2, Rows3 } from "lucide-react";
 import { toast } from "sonner";
 import { DangerZone, FormSection, FormSections, PageBody, PageHeader, SaveBar, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -33,6 +33,8 @@ import { useUIStore } from "@/lib/store/ui";
 /** Create when `record` is null, edit otherwise. The server checks the data against the schema. */
 function RecordForm({ collection, record, editable }: { collection: Collection; record: DataRecord | null; editable: boolean }) {
   const { t } = useI18n();
+  const columns = useUIStore((s) => s.formColumns);
+  const setColumns = useUIStore((s) => s.setFormColumns);
   const router = useRouter();
   const client = useQueryClient();
   const [data, setData] = useState<unknown>(record?.data ?? {});
@@ -111,8 +113,16 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
         submit(e.shiftKey && !record ? "copy" : undefined);
       }}>
       <FormSections>
-        <FormSection title={collection.name} description={[collection.description.trim(), t("records.required_legend")].filter(Boolean).join(" ")}>
-          <SchemaForm schema={collection.schema ?? {}} collectionId={collection.id} data={data} disabled={!editable} onChange={setData} formRef={formRef} liveValidate={checked} issues={issues} />
+        <FormSection wide={columns === 2} headAbove={columns === 2} title={collection.name} description={[collection.description.trim(), t("records.required_legend")].filter(Boolean).join(" ")}>
+          {/* Below lg the form has room for one column only, so the choice shows from there up. */}
+          <div className="mb-4 hidden justify-end gap-1 lg:flex" role="group" aria-label={t("records.layout")}>
+            {([1, 2] as const).map((n) => (
+              <Button key={n} type="button" size="sm" variant={columns === n ? "secondary" : "ghost"} aria-pressed={columns === n} onClick={() => setColumns(n)}>
+                {n === 1 ? <Rows3 className="size-4" /> : <Columns2 className="size-4" />}{t(n === 1 ? "records.layout_one" : "records.layout_two")}
+              </Button>
+            ))}
+          </div>
+          <SchemaForm schema={collection.schema ?? {}} collectionId={collection.id} data={data} disabled={!editable} onChange={setData} formRef={formRef} liveValidate={checked} issues={issues} columns={columns} />
         </FormSection>
         {canSubmit && (
           <SaveBar

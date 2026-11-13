@@ -12,7 +12,7 @@ import { records, tools } from "@/lib/api/endpoints";
 import type { Collection, DataRecord } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
-import type { Where } from "@/components/record-rules";
+import { andWhere, whereText, type Where } from "@/components/record-rules";
 
 export type Layout = "table" | "board" | "calendar" | "gallery";
 
@@ -27,7 +27,6 @@ interface Common {
   collection: Collection;
   by: FieldRow;
   search?: string;
-  filter?: string;
   where: Where;
   show: (v: unknown, r: FieldRow) => string;
   /** Up to three more fields shown on each card. */
@@ -37,11 +36,11 @@ interface Common {
 // shortcut: the board, calendar month and gallery load at most 100 records; page them when a collection holds more per view.
 const CARD_LIMIT = 100;
 
-function useCards(p: { collection: Collection; search?: string; filter?: string; where: Where }, key: string) {
-  const where = p.where.rules.length ? JSON.stringify(p.where) : undefined;
+function useCards(p: { collection: Collection; search?: string; where: Where }, key: string) {
+  const where = whereText(p.where) || undefined;
   return useQuery({
-    queryKey: ["records", p.collection.id, "cards", key, p.search, p.filter, where],
-    queryFn: ({ signal }) => records.list({ collection_id: p.collection.id, page: 1, limit: CARD_LIMIT, search: p.search, filter: p.filter, where, sort: "updated_at", order: "desc" }, signal),
+    queryKey: ["records", p.collection.id, "cards", key, p.search, where],
+    queryFn: ({ signal }) => records.list({ collection_id: p.collection.id, page: 1, limit: CARD_LIMIT, search: p.search, where, sort: "updated_at", order: "desc" }, signal),
   });
 }
 
@@ -111,10 +110,9 @@ export function CalendarView(p: Common) {
   const next = new Date(month.getFullYear(), month.getMonth() + 1, 1);
   const datetime = p.by.field.type === "datetime";
   const bound = (d: Date) => (datetime ? d.toISOString() : dayKey(d));
-  // The month's range joins the list's rules; with OR rules it stands alone.
-  // shortcut: OR rules are not applied on the calendar; nest rule groups when that matters.
+  // The month's range joins the list's rules with AND, OR rules and groups included.
   const monthRules = [{ field: p.by.key, op: "gte" as const, value: bound(month) }, { field: p.by.key, op: "lt" as const, value: bound(next) }];
-  const where: Where = { any: false, rules: [...(p.where.any ? [] : p.where.rules), ...monthRules] };
+  const where = andWhere(p.where, monthRules);
   const q = useCards({ ...p, where }, `cal:${p.by.key}:${dayKey(month)}`);
   const byDay = new Map<string, DataRecord[]>();
   for (const r of q.data?.items ?? []) {

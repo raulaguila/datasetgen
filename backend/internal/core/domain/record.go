@@ -51,6 +51,22 @@ type Condition struct {
 type Where struct {
 	Any   bool        `json:"any"`
 	Rules []Condition `json:"rules"`
+	// Groups are bracketed sets of rules, each joined by its own Any, then
+	// joined with Rules by this Any: (a AND b) OR (c AND d). One level only.
+	Groups []Where `json:"groups,omitempty"`
+}
+
+// Empty says the filter has no rule at all.
+func (w *Where) Empty() bool {
+	if w == nil {
+		return true
+	}
+	for i := range w.Groups {
+		if !w.Groups[i].Empty() {
+			return false
+		}
+	}
+	return len(w.Rules) == 0
 }
 
 // RecordGroup is the count of records sharing one value of a field, with
@@ -61,6 +77,8 @@ type RecordGroup struct {
 	Count int64
 	Sums  map[string]float64
 	Avgs  map[string]float64
+	Mins  map[string]float64
+	Maxs  map[string]float64
 }
 
 // SortField is the data field a Sort of "data.<field>" orders by, "" otherwise.

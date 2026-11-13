@@ -159,15 +159,16 @@ func (r *Repository) UpdateAutomation(ctx context.Context, a *domain.Automation)
 	return nil
 }
 
-func (r *Repository) DeleteAutomation(ctx context.Context, collectionID, id string) error {
-	res := r.db.WithContext(ctx).Exec(`DELETE FROM app.automation WHERE id = ? AND collection_id = ?`, id, collectionID)
-	if res.Error != nil {
-		return shared.WrapError(res.Error, "automation")
+func (r *Repository) DeleteAutomation(ctx context.Context, collectionID, id string) (string, error) {
+	var names []string
+	err := r.db.WithContext(ctx).Raw(`DELETE FROM app.automation WHERE id = ? AND collection_id = ? RETURNING name`, id, collectionID).Find(&names).Error
+	if err != nil {
+		return "", shared.WrapError(err, "automation")
 	}
-	if res.RowsAffected == 0 {
-		return shared.WrapError(gorm.ErrRecordNotFound, "automation")
+	if len(names) == 0 {
+		return "", shared.WrapError(gorm.ErrRecordNotFound, "automation")
 	}
-	return nil
+	return names[0], nil
 }
 
 // AutomationsFor reads at most 20 ids, the cap per collection.

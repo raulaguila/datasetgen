@@ -116,6 +116,8 @@ func checkRecords(ctx context.Context, repo output.CollectionRepository, records
 	if err != nil {
 		return fail(err)
 	}
+	// A removed field's values stay in the records: they count as out of format.
+	leftovers := schema.Leftovers(c.Schema)
 	invalid := []input.InvalidRecord{}
 	after := ""
 	for {
@@ -131,6 +133,9 @@ func checkRecords(ctx context.Context, repo output.CollectionRepository, records
 			issues, err := schema.Check(compiled, r.Data)
 			if err != nil {
 				return fail(err)
+			}
+			if leftovers != nil {
+				issues = append(issues, leftovers(r.Data)...)
 			}
 			if len(issues) > 0 {
 				run.InvalidCount++

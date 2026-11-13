@@ -85,11 +85,16 @@ func (r *Repository) matching(ctx context.Context, filter domain.RecordFilter) *
 // whereSQL turns the rules into one condition; field names and values are bind
 // parameters, never SQL text (the service checked the operators).
 func whereSQL(w *domain.Where) (string, []any) {
-	if w == nil || len(w.Rules) == 0 {
+	if w.Empty() {
 		return "", nil
 	}
-	parts := make([]string, 0, len(w.Rules))
+	parts := make([]string, 0, len(w.Rules)+len(w.Groups))
 	var vars []any
+	for i := range w.Groups {
+		if sql, v := whereSQL(&w.Groups[i]); sql != "" {
+			parts, vars = append(parts, sql), append(vars, v...)
+		}
+	}
 	for _, c := range w.Rules {
 		v := string(c.Value)
 		switch c.Op {
@@ -133,8 +138,9 @@ func (r *Repository) Aggregate(ctx context.Context, filter domain.RecordFilter, 
 		vars = append(vars, group)
 	}
 	for i, f := range numeric {
-		cols = append(cols, fmt.Sprintf("sum((data ->> ?)::numeric) FILTER (WHERE jsonb_typeof(data -> ?) = 'number') AS s%d, avg((data ->> ?)::numeric) FILTER (WHERE jsonb_typeof(data -> ?) = 'number') AS a%d", i, i))
-		vars = append(vars, f, f, f, f)
+		num := "(data ->> ?)::numeric) FILTER (WHERE jsonb_typeof(data -> ?) = 'number')"
+		cols = append(cols, fmt.Sprintf("sum("+num+" AS s%d, avg("+num+" AS a%d, min("+num+" AS m%d, max("+num+" AS x%d", i, i, i, i))
+		vars = append(vars, f, f, f, f, f, f, f, f)
 	}
 	q := r.matching(ctx, filter).Select(key+" AS k, "+strings.Join(cols, ", "), vars...)
 	if group != "" {
@@ -149,7 +155,7 @@ func (r *Repository) Aggregate(ctx context.Context, filter domain.RecordFilter, 
 	for rows.Next() {
 		var k *string
 		var n int64
-		nums := make([]*float64, 2*len(numeric))
+		nums := make([]*float64, 4*len(numeric))
 		dest := []any{&k, &n}
 		for i := range nums {
 			dest = append(dest, &nums[i])
@@ -157,13 +163,13 @@ func (r *Repository) Aggregate(ctx context.Context, filter domain.RecordFilter, 
 		if err := rows.Scan(dest...); err != nil {
 			return nil, shared.WrapError(err, "record")
 		}
-		g := domain.RecordGroup{Count: n, Sums: map[string]float64{}, Avgs: map[string]float64{}}
+		g := domain.RecordGroup{Count: n, Sums: map[string]float64{}, Avgs: map[string]float64{}, Mins: map[string]float64{}, Maxs: map[string]float64{}}
 		if k != nil {
 			g.Key = json.RawMessage(*k)
 		}
 		for i, f := range numeric {
-			if nums[2*i] != nil {
-				g.Sums[f], g.Avgs[f] = *nums[2*i], *nums[2*i+1]
+			if nums[4*i] != nil {
+				g.Sums[f], g.Avgs[f], g.Mins[f], g.Maxs[f] = *nums[4*i], *nums[4*i+1], *nums[4*i+2], *nums[4*i+3]
 			}
 		}
 		out = append(out, g)

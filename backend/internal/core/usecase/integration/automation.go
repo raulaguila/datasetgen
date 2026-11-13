@@ -187,10 +187,11 @@ func (s *Service) DeleteAutomation(ctx context.Context, collectionID, id string)
 		if err := s.owner(ctx, uow, collectionID); err != nil {
 			return err
 		}
-		if err := uow.Integrations().DeleteAutomation(ctx, collectionID, id); err != nil {
+		name, err := uow.Integrations().DeleteAutomation(ctx, collectionID, id)
+		if err != nil {
 			return err
 		}
-		return policy.Audit(ctx, uow, "collection.automation_delete", collectionID, map[string]any{"collection_id": collectionID})
+		return policy.Audit(ctx, uow, "collection.automation_delete", collectionID, map[string]any{"collection_id": collectionID, "automation": name})
 	})
 }
 

@@ -29,13 +29,16 @@ test("records come in, go out and keep their history", async ({ page }) => {
   await expect(page.getByRole("row").filter({ hasText: "Primeiro" })).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: "Segundo" })).toBeVisible();
 
-  // An exact-value filter, shown as a removable chip.
-  await page.getByRole("button", { name: "Filtros" }).click();
-  await page.getByRole("textbox", { name: "Notas" }).fill("b");
-  await page.getByRole("button", { name: "Aplicar" }).click();
+  // A condition, shown as a removable chip.
+  await page.getByRole("button", { name: "Condições" }).click();
+  const rules = page.getByRole("dialog", { name: "Condições" });
+  await rules.getByRole("combobox", { name: "Campo da condição 1" }).click();
+  await page.getByRole("option", { name: "Notas" }).click();
+  await rules.getByLabel("Valor 1").fill("b");
+  await rules.getByRole("button", { name: "Aplicar" }).click();
   await expect(page.getByRole("row").filter({ hasText: "Segundo" })).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: "Primeiro" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Remover filtro: Notas" }).click();
+  await page.getByRole("button", { name: /^Remover condição: Notas/ }).click();
   await expect(page.getByRole("row").filter({ hasText: "Primeiro" })).toBeVisible();
 
   // Export as JSON Lines.
@@ -61,24 +64,28 @@ test("records come in, go out and keep their history", async ({ page }) => {
   await expect(page.locator("#rec_title")).toHaveValue("Primeiro");
   await expect(history.getByText(/^Versão \d+$/)).toHaveText(["Versão 2", "Versão 1"]);
 
-  // Quality runs in the background; a bulk fix then a new check.
+  // Quality runs in the background; with nothing to fix there is nothing to do.
   await page.goto(records.replace(/$/, "/quality"));
   await expect(page.getByText("Todos os 2 registros seguem os campos atuais")).toBeVisible({ timeout: 15_000 });
-  // With nothing to fix, the bulk form starts folded.
-  await page.getByRole("button", { name: "Correções em lote" }).click();
-  await page.getByLabel("O que fazer").click();
-  await page.getByRole("option", { name: "Renomear o campo" }).click();
-  await page.getByLabel("Nome atual").click();
-  await page.getByRole("option", { name: "Título" }).click();
-  await page.getByLabel("Novo nome").fill("titulo");
-  await page.getByRole("button", { name: "Aplicar" }).click();
+  await expect(page.getByRole("button", { name: "Outra correção em lote" })).toHaveCount(0);
+  // Removing a field leaves its values in the records: the check lists them by field.
+  await page.goto(`${records}/fields`);
+  await page.getByRole("button", { name: "Remover campo: Notas" }).click();
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("Alterações salvas.")).toBeVisible();
+  await page.goto(records.replace(/$/, "/quality"));
+  await expect(page.getByRole("heading", { name: "2 registro(s) fora do formato" })).toBeVisible({ timeout: 15_000 });
+  const problems = page.getByRole("list", { name: "O que corrigir" });
+  await expect(problems.getByRole("listitem")).toHaveCount(1);
+  await expect(problems).toContainText("notes · Campo removido, valor ainda guardado");
+  await expect(problems).toContainText("2 registros");
+  await problems.getByRole("button", { name: "Remover notes" }).click();
   const apply = page.getByRole("dialog", { name: "Aplicar a todos os registros?" });
   await expect(apply).toContainText("Vai alterar 2 registros.");
   await apply.getByRole("button", { name: "Aplicar" }).click();
   await expect(page.getByText("2 registro(s) alterado(s)")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "2 registro(s) fora do formato" })).toBeVisible({ timeout: 15_000 });
-  // The check names what to do: fill the now missing title, drop the old key.
-  await expect(page.getByRole("button", { name: "Remover titulo" })).toBeVisible();
+  await expect(page.getByText("Todos os 2 registros seguem os campos atuais")).toBeVisible({ timeout: 15_000 });
 
   // Duplicating copies fields and, when asked, records.
   await page.goto("/collections");

@@ -3,6 +3,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"time"
@@ -174,6 +175,57 @@ func (s *Service) SchemaVersions(ctx context.Context, collectionID string) ([]do
 		return nil, err
 	}
 	return s.Store.Tools().SchemaVersions(ctx, collectionID, historyPage)
+}
+
+const (
+	maxWidgets      = 24
+	maxWidgetsBytes = 32 << 10
+)
+
+// widgetKinds are the dashboard's widgets; the client draws them from the record API.
+var widgetKinds = []string{"count", "sum", "avg", "min", "max", "bars", "list"}
+
+func (s *Service) Dashboard(ctx context.Context, collectionID string) (json.RawMessage, error) {
+	if err := role(ctx, s.Store, collectionID, domain.RoleViewer); err != nil {
+		return nil, err
+	}
+	return s.Store.Tools().Dashboard(ctx, collectionID)
+}
+
+// SaveDashboard checks each widget's shape; the fields and rules a widget names
+// are checked when it is drawn, by the record queries it runs.
+func (s *Service) SaveDashboard(ctx context.Context, collectionID string, widgets json.RawMessage) error {
+	bad := func(msg string) error { return apperror.New(apperror.CodeInvalidInput, msg).WithField("widgets") }
+	if len(widgets) > maxWidgetsBytes {
+		return bad("the dashboard is too large")
+	}
+	var list []struct {
+		Kind  string `json:"kind"`
+		Title string `json:"title"`
+	}
+	if err := json.Unmarshal(widgets, &list); err != nil || list == nil {
+		return bad("widgets must be a list")
+	}
+	if len(list) > maxWidgets {
+		return bad("a dashboard holds up to 24 widgets")
+	}
+	for _, w := range list {
+		if !slices.Contains(widgetKinds, w.Kind) {
+			return bad("unknown widget kind " + w.Kind)
+		}
+		if utf8.RuneCountInString(w.Title) > maxViewName {
+			return bad("a widget title holds up to 80 characters")
+		}
+	}
+	return s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		if err := role(ctx, uow, collectionID, domain.RoleOwner); err != nil {
+			return err
+		}
+		if err := uow.Tools().SaveDashboard(ctx, collectionID, widgets, reqctx.Actor(ctx)); err != nil {
+			return err
+		}
+		return policy.Audit(ctx, uow, "collection.dashboard_update", collectionID, map[string]any{"collection_id": collectionID, "widgets": len(list)})
+	})
 }
 
 func (s *Service) Views(ctx context.Context, collectionID string) ([]domain.SavedView, error) {

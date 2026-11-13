@@ -210,7 +210,7 @@ func listFilter(c fiber.Ctx) (domain.RecordFilter, error) {
 // @Param search query string false "Text anywhere in the record JSON"
 // @Param sort query string false "Sort field" default(created_at)
 // @Param order query string false "Sort order" Enums(asc, desc) default(desc)
-// @Param where query string false "Rules as JSON: {\"any\": false, \"rules\": [{\"field\": \"price\", \"op\": \"gt\", \"value\": 10}]}; ops eq, neq, contains, gt, gte, lt, lte, empty, not_empty, in, has; any joins them by OR"
+// @Param where query string false "Rules as JSON: {\"any\": false, \"rules\": [{\"field\": \"price\", \"op\": \"gt\", \"value\": 10}]}; ops eq, neq, contains, gt, gte, lt, lte, empty, not_empty, in, has; any joins them by OR; groups (one level) bracket rules: {\"any\": true, \"groups\": [{\"rules\": [...]}, {\"rules\": [...]}]}"
 // @Param filter query string false "JSON object of top-level fields and exact values, up to 10, such as {\"category\":\"trigger\"}"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]recordDTO,pagination=mapper.PaginationDTO}
@@ -339,9 +339,11 @@ type groupDTO struct {
 	Count int64              `json:"count"`
 	Sums  map[string]float64 `json:"sums"`
 	Avgs  map[string]float64 `json:"avgs"`
+	Mins  map[string]float64 `json:"mins"`
+	Maxs  map[string]float64 `json:"maxs"`
 }
 
-// @Summary Count the selected records, by a field (group) or all together, with sums and averages of numeric fields (sum, comma separated, up to 5)
+// @Summary Count the selected records, by a field (group) or all together, with the sum, average, least and greatest of numeric fields (sum, comma separated, up to 5)
 // @Tags Records
 // @Produce json
 // @Param collection_id query string true "Collection ID"
@@ -369,7 +371,7 @@ func (h *Handler) Aggregate(c fiber.Ctx) error {
 	}
 	out := make([]groupDTO, 0, len(groups))
 	for _, g := range groups {
-		out = append(out, groupDTO{Key: g.Key, Count: g.Count, Sums: g.Sums, Avgs: g.Avgs})
+		out = append(out, groupDTO{Key: g.Key, Count: g.Count, Sums: g.Sums, Avgs: g.Avgs, Mins: g.Mins, Maxs: g.Maxs})
 	}
 	return c.JSON(fiber.Map{"items": out})
 }
