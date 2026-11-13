@@ -170,3 +170,23 @@ it("marks top-level plain fields unique and reports turning it on", () => {
   expect(fieldsOf(after)[0].field.unique).toBe(true);
   expect(schemaChanges(before, after)).toEqual([{ kind: "unique", name: "Nome", risky: false }]);
 });
+
+describe("list of objects", () => {
+  it("is built empty, takes subfields with a reference, and reads back", () => {
+    let s = addField({ type: "object" }, field({ name: "Passos", type: "objects" }));
+    expect(s.properties).toEqual({ passos: { title: "Passos", type: "array", items: { type: "object", properties: {} } } });
+    const passos = (s.properties as Record<string, Record<string, unknown>>).passos;
+    const item = addField(addField(passos.items as Record<string, unknown>, field({ name: "Wired", type: "reference", ref: "c1" })), field({ name: "Configuração", type: "text" }));
+    s = setProp(s, "passos", { ...passos, items: item });
+    expect(typeOf((s.properties as Record<string, unknown>).passos)).toBe("objects");
+    // Editing the list's own name keeps its subfields.
+    s = updateField(s, "passos", field({ name: "Etapas", key: "passos", type: "objects" }));
+    const items = (s.properties as Record<string, { items: { properties: Record<string, unknown> } }>).passos.items;
+    expect(Object.keys(items.properties)).toEqual(["wired", "configuracao"]);
+    expect(schemaChanges({ type: "object", properties: { passos } }, s).map((c) => c.name)).toContain("Etapas › Wired");
+  });
+
+  it("is not offered for items holding a group", () => {
+    expect(typeOf({ type: "array", items: { type: "object", properties: { g: { type: "object", properties: {} } } } })).toBeUndefined();
+  });
+});

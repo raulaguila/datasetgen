@@ -7977,6 +7977,10 @@ const docTemplate = `{
                 "schema": {
                     "type": "object"
                 },
+                "sub": {
+                    "description": "the reference subfield of each item when Field is a list of objects",
+                    "type": "string"
+                },
                 "total": {
                     "type": "integer"
                 }

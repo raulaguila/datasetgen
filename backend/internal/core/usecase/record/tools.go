@@ -325,6 +325,20 @@ func checkMatch(match json.RawMessage) error {
 				return bad
 			}
 		case float64, bool:
+		case []any:
+			// One item of a list of objects: [{"subfield": plain value}] (the backlinks of a list's references).
+			item, ok := map[string]any(nil), len(v) == 1
+			if ok {
+				item, ok = v[0].(map[string]any)
+			}
+			if !ok || len(item) != 1 {
+				return bad
+			}
+			for sk, sv := range item {
+				if s, isText := sv.(string); sk == "" || len(sk) > 200 || !isText || len(s) > maxMatchValue {
+					return bad
+				}
+			}
 		default:
 			return bad
 		}

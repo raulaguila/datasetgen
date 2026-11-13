@@ -118,9 +118,15 @@ func (s *Service) Links(ctx context.Context, id string) ([]domain.RecordLinks, e
 	value, _ := json.Marshal(id)
 	out := []domain.RecordLinks{}
 	for _, ref := range referrers {
-		// One id or a list holding it.
-		where := &domain.Where{Any: true, Rules: []domain.Condition{{Field: ref.Field, Op: domain.OpEq, Value: value}, {Field: ref.Field, Op: domain.OpHas, Value: value}}}
-		items, total, err := s.List(ctx, domain.RecordFilter{CollectionID: ref.CollectionID, Page: domain.NewPage(1, linksShown), Where: where, Sort: "updated_at", Order: "desc"})
+		filter := domain.RecordFilter{CollectionID: ref.CollectionID, Page: domain.NewPage(1, linksShown), Sort: "updated_at", Order: "desc"}
+		if ref.Sub != "" {
+			// An item of the list holding it.
+			filter.Match, _ = json.Marshal(map[string]any{ref.Field: []map[string]string{{ref.Sub: id}}})
+		} else {
+			// One id or a list holding it.
+			filter.Where = &domain.Where{Any: true, Rules: []domain.Condition{{Field: ref.Field, Op: domain.OpEq, Value: value}, {Field: ref.Field, Op: domain.OpHas, Value: value}}}
+		}
+		items, total, err := s.List(ctx, filter)
 		if apperror.IsCode(err, apperror.CodeNotFound) {
 			continue // an API key sees only its own collection
 		}
@@ -325,8 +331,8 @@ func hookData(r *domain.Record) map[string]any {
 // does not exist.
 func linksIn(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionID string, docs [][]byte) ([][]schema.Issue, error) {
 	out := make([][]schema.Issue, len(docs))
-	refs, files := schema.RefKeys(raw), schema.FileKeys(raw)
-	if len(refs) == 0 && len(files) == 0 {
+	refs, files, itemRefs := schema.RefKeys(raw), schema.FileKeys(raw), schema.ItemRefKeys(raw)
+	if len(refs) == 0 && len(files) == 0 && len(itemRefs) == 0 {
 		return out, nil
 	}
 	parsed := make([]map[string]json.RawMessage, len(docs))
@@ -400,6 +406,25 @@ func linksIn(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionI
 	for _, key := range files {
 		if err := check(key, collectionID, fileID, uow.Tools().FilesExist); err != nil {
 			return nil, err
+		}
+	}
+	// A reference subfield of a list of objects: the ids its items hold.
+	for _, key := range slices.Sorted(maps.Keys(itemRefs)) {
+		for _, sub := range slices.Sorted(maps.Keys(itemRefs[key])) {
+			itemIDs := func(v json.RawMessage) []string {
+				var items []map[string]json.RawMessage
+				if json.Unmarshal(v, &items) != nil {
+					return nil
+				}
+				var ids []string
+				for _, it := range items {
+					ids = append(ids, refIDs(it[sub])...)
+				}
+				return ids
+			}
+			if err := check(key, itemRefs[key][sub], itemIDs, uow.Tools().RecordsExist); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return out, nil

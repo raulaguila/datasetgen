@@ -16,12 +16,14 @@ import type { FileRef } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
-export const FIELD_TYPES = ["string", "text", "number", "integer", "boolean", "enum", "strings", "date", "datetime", "email", "url", "reference", "references", "file", "files", "autonumber", "formula", "created_by", "updated_by", "group", "json"] as const;
+export const FIELD_TYPES = ["string", "text", "number", "integer", "boolean", "enum", "strings", "date", "datetime", "email", "url", "reference", "references", "file", "files", "autonumber", "formula", "created_by", "updated_by", "group", "objects", "json"] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 /** Types the server fills on every write; the form shows them read-only. */
 export const AUTO_TYPES: readonly FieldType[] = ["autonumber", "formula", "created_by", "updated_by"];
 /** Groups hold one level of subfields: no group inside a group; the server checks references and files on top-level fields only. */
-const SUBFIELD_TYPES = FIELD_TYPES.filter((t) => t !== "group" && t !== "reference" && t !== "references" && t !== "file" && t !== "files" && !AUTO_TYPES.includes(t));
+const SUBFIELD_TYPES = FIELD_TYPES.filter((t) => t !== "group" && t !== "objects" && t !== "reference" && t !== "references" && t !== "file" && t !== "files" && !AUTO_TYPES.includes(t));
+/** A list of objects' items may also point at a record: the server checks a reference subfield of each item. */
+const ITEM_TYPES: readonly FieldType[] = [...SUBFIELD_TYPES, "reference"];
 /** Plain values the server can compare across records: these can be marked unique. */
 const UNIQUE_TYPES: readonly FieldType[] = ["string", "number", "integer", "enum", "date", "datetime", "email", "url"];
 /** The keyword the server reads (schema.UniqueKeyword): no two records share the value. */
@@ -35,7 +37,7 @@ export const AUTO = "x-auto";
 export const FORMULA = "x-formula";
 export const FILE = "x-file";
 /** Types with no default the builder edits; any default is kept as it was. */
-const isObjectType = (t: FieldType) => t === "group" || t === "json" || t === "file" || t === "files" || t === "reference" || t === "references" || AUTO_TYPES.includes(t);
+const isObjectType = (t: FieldType) => t === "group" || t === "objects" || t === "json" || t === "file" || t === "files" || t === "reference" || t === "references" || AUTO_TYPES.includes(t);
 /** How a record stores an attached file (tools.upload answers it). */
 const FILE_ITEM = { type: "object", required: ["id"], properties: { id: { type: "string" }, name: { type: "string" }, size: { type: "integer" }, type: { type: "string" } } };
 const FILE_PROP = { ...FILE_ITEM, [FILE]: true };
@@ -93,7 +95,7 @@ function limitKeys(type: FieldType): [string, string] | null {
   switch (type) {
     case "string": case "text": case "email": case "url": return ["minLength", "maxLength"];
     case "number": case "integer": return ["minimum", "maximum"];
-    case "strings": case "references": return ["minItems", "maxItems"];
+    case "strings": case "references": case "objects": return ["minItems", "maxItems"];
     default: return null;
   }
 }
@@ -146,6 +148,7 @@ function typeBase(f: Field): Record<string, unknown> {
     case "enum": return { type: "string", enum: optionsOf(f) };
     case "strings": return { type: "array", items: { type: "string" } };
     case "group": return { type: "object", properties: {} };
+    case "objects": return { type: "array", items: { type: "object", properties: {} } };
     case "json": return { type: "object" };
     case "reference": return { type: "string", format: "uuid" };
     case "references": return { type: "array", items: { type: "string", format: "uuid" }, uniqueItems: true };
@@ -206,6 +209,8 @@ export function typeOf(p: unknown): FieldType | undefined {
     case "boolean": return s.type;
     case "array": {
       const items = s.items as Record<string, unknown> | undefined;
+      if (items?.type === "object" && items.properties && typeof items.properties === "object" && !Array.isArray(items.properties))
+        return Object.values(items.properties).every((sub) => { const t = typeOf(sub); return t && ITEM_TYPES.includes(t); }) ? "objects" : undefined;
       return items?.type === "string" && !items.enum && !items.format ? "strings" : undefined;
     }
     case "object": {
@@ -387,11 +392,12 @@ export function schemaChanges(original: Schema | null, next: Schema | null): Sch
     const strip = (p: Record<string, unknown>) => ({ ...p, [UNIQUE]: undefined });
     const [was, now] = [strip(propsOf(original)[r.key]), strip(propsOf(next)[r.key])];
     if (r.advanced !== old.advanced || r.field.type !== old.field.type) out.push({ kind: "type", name: r.field.name, risky: true });
-    else if (r.field.type === "group" && !r.advanced) {
-      // A group reports its subfields by name; its own rules apart from them.
-      const bare = (p: Record<string, unknown>) => canonical({ ...p, properties: undefined, required: undefined });
+    else if ((r.field.type === "group" || r.field.type === "objects") && !r.advanced) {
+      // A group (or a list's item) reports its subfields by name; its own rules apart from them.
+      const inner = (p: Record<string, unknown>) => (r.field.type === "objects" ? (p.items ?? {}) as Record<string, unknown> : p);
+      const bare = (p: Record<string, unknown>) => canonical(r.field.type === "objects" ? { ...p, items: { ...inner(p), properties: undefined, required: undefined } } : { ...p, properties: undefined, required: undefined });
       if (bare(was) !== bare(now)) out.push({ kind: "rules", name: r.field.name, risky: true });
-      for (const c of schemaChanges(was, now)) out.push({ ...c, name: `${r.field.name} › ${c.name}` });
+      for (const c of schemaChanges(inner(was), inner(now))) out.push({ ...c, name: `${r.field.name} › ${c.name}` });
     } else if (canonical(was) !== canonical(now)) out.push({ kind: "rules", name: r.field.name, risky: true });
   }
   const kept = new Set(after.map((r) => r.key));
@@ -496,9 +502,9 @@ function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, 
       )}
       {AUTO_TYPES.includes(field.type) && field.type !== "formula" && <p className="text-xs text-muted-foreground">{t("collections.field_auto_hint")}</p>}
       {(field.type === "reference" || field.type === "references") && <RefSelect id={`${id}-ref`} value={field.ref} invalid={shown === "collections.field_ref_needed"} onChange={(ref) => set({ ref })} />}
-      {(field.type === "group" || field.type === "json") && (
+      {(field.type === "group" || field.type === "objects" || field.type === "json") && (
         <p className={cn("text-xs", field.type === "json" ? "text-warn" : "text-muted-foreground")}>
-          {t(field.type === "json" ? "collections.json_hint" : "collections.group_hint")}
+          {t(field.type === "json" ? "collections.json_hint" : field.type === "objects" ? "collections.objects_hint" : "collections.group_hint")}
         </p>
       )}
       <details className="group" open={hasRules || undefined}>
@@ -530,7 +536,7 @@ function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, 
             <Input id={`${id}-desc`} value={field.description} maxLength={500} aria-describedby={`${id}-desc-hint`} onChange={(e) => set({ description: e.target.value })} />
             <p id={`${id}-desc-hint`} className="text-xs text-muted-foreground">{t("collections.field_description_hint")}</p>
           </div>
-          {field.type !== "group" && field.type !== "file" && field.type !== "files" && (
+          {field.type !== "group" && field.type !== "objects" && field.type !== "file" && field.type !== "files" && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${id}-ph`}>{t("collections.field_placeholder")}</Label>
               <Input id={`${id}-ph`} value={field.placeholder} maxLength={200} onChange={(e) => set({ placeholder: e.target.value })} />
@@ -603,7 +609,7 @@ function DefaultSelect({ id, field, onChange }: { id: string; field: Field; onCh
  * arrows) without touching JSON. Against `original`, the saved schema, rows show
  * what is new or changed and removed fields can come back.
  */
-export function FieldsEditor({ schema, original, editable, keysLocked = false, group, onChange }: {
+export function FieldsEditor({ schema, original, editable, keysLocked = false, group, items = false, onChange }: {
   schema: Schema | null;
   original?: Schema | null;
   editable: boolean;
@@ -611,6 +617,8 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
   keysLocked?: boolean;
   /** Set when this edits a group's subfields: the group's name. */
   group?: string;
+  /** The subfields are a list's item: they may also be references. */
+  items?: boolean;
   onChange: (next: Schema) => void;
 }) {
   const { t } = useI18n();
@@ -651,7 +659,7 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
                 <li key={key} className="bg-muted/30 p-2">
                   <FieldForm
                     label={`${t("collections.field_editing")} ${field.name}`}
-                    types={group ? SUBFIELD_TYPES : FIELD_TYPES}
+                    types={items ? ITEM_TYPES : group ? SUBFIELD_TYPES : FIELD_TYPES}
                     uniqueAllowed={!group}
                     initial={field}
                     initialKey={key}
@@ -665,9 +673,12 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
               );
             }
             const prop = propsOf(schema)[key];
-            const isGroup = field.type === "group" && !advanced;
+            const isList = field.type === "objects" && !advanced;
+            const isGroup = (field.type === "group" || isList) && !advanced;
             const open = isGroup && !collapsed.has(key);
-            const subCount = isGroup ? Object.keys(propsOf(prop)).length : 0;
+            // A list of objects keeps its subfields on the item schema.
+            const inner = (p: Schema | undefined) => (isList ? ((p?.items ?? {}) as Schema) : p);
+            const subCount = isGroup ? Object.keys(propsOf(inner(prop) ?? {})).length : 0;
             return (
               <li key={key}>
               {/* The drag handlers sit on the row, so a group's subfields drag on their own. */}
@@ -718,13 +729,14 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
               {open && (
                 <div className="mb-3 ml-3 mr-2 border-l-2 pl-2 sm:ml-8 sm:pl-3">
                   <FieldsEditor
-                    schema={prop}
+                    schema={inner(prop) ?? null}
                     // A new group is marked once, not again on each of its subfields.
-                    original={original && key in saved ? saved[key] : undefined}
+                    original={original && key in saved ? inner(saved[key]) : undefined}
                     editable={editable}
                     keysLocked={keysLocked && key in saved}
                     group={field.name}
-                    onChange={(sub) => onChange(setProp(schema, key, sub))}
+                    items={isList}
+                    onChange={(sub) => onChange(setProp(schema, key, isList ? { ...prop, items: sub } : sub))}
                   />
                 </div>
               )}
@@ -755,7 +767,7 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
         <FieldForm
           key="new"
           label={group ? `${t("collections.add_subfield")}: ${group}` : t("collections.add_field")}
-          types={group ? SUBFIELD_TYPES : FIELD_TYPES}
+          types={items ? ITEM_TYPES : group ? SUBFIELD_TYPES : FIELD_TYPES}
           uniqueAllowed={!group}
           initial={blankField}
           taken={(k) => keys.has(k)}

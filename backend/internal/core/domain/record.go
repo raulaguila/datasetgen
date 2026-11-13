@@ -109,7 +109,9 @@ type Referrer struct {
 	CollectionID string
 	Name         string
 	Field        string
-	Schema       json.RawMessage
+	// Sub, when set, is the subfield of each item of the list Field that holds the reference.
+	Sub    string
+	Schema json.RawMessage
 }
 
 // RecordLinks are the records of one collection whose reference field names a record.

@@ -285,6 +285,8 @@ export interface RecordLinks {
   collection_id: string;
   collection_name: string;
   field: string;
+  /** The reference subfield of each item when field is a list of objects. */
+  sub?: string;
   schema: Record<string, unknown>;
   total: number;
   records: DataRecord[];

@@ -240,6 +240,35 @@ func RefKeys(raw []byte) map[string]string {
 	return out
 }
 
+// ItemRefKeys finds references inside a list of objects: for each top-level
+// array property, its item subfields marked with RefKeyword and the
+// collection each names.
+func ItemRefKeys(raw []byte) map[string]map[string]string {
+	var doc struct {
+		Properties map[string]struct {
+			Type  any `json:"type"`
+			Items struct {
+				Properties map[string]map[string]any `json:"properties"`
+			} `json:"items"`
+		} `json:"properties"`
+	}
+	if json.Unmarshal(raw, &doc) != nil {
+		return nil
+	}
+	out := map[string]map[string]string{}
+	for k, p := range doc.Properties {
+		for sub, sp := range p.Items.Properties {
+			if id, _ := sp[RefKeyword].(string); id != "" {
+				if out[k] == nil {
+					out[k] = map[string]string{}
+				}
+				out[k][sub] = id
+			}
+		}
+	}
+	return out
+}
+
 // FileKeys lists the properties holding attached files, sorted.
 func FileKeys(raw []byte) []string {
 	var doc struct {

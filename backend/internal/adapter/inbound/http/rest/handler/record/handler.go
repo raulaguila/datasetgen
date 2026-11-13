@@ -54,6 +54,7 @@ type linksDTO struct {
 	CollectionID   string          `json:"collection_id"`
 	CollectionName string          `json:"collection_name"`
 	Field          string          `json:"field"`
+	Sub            string          `json:"sub,omitempty"` // the reference subfield of each item when Field is a list of objects
 	Schema         json.RawMessage `json:"schema" swaggertype:"object"`
 	Total          int64           `json:"total"`
 	Records        []recordDTO     `json:"records"`
@@ -79,7 +80,7 @@ func (h *Handler) Links(c fiber.Ctx) error {
 		for _, r := range l.Records {
 			recs = append(recs, toDTO(r))
 		}
-		out = append(out, linksDTO{CollectionID: l.CollectionID, CollectionName: l.Name, Field: l.Field, Schema: l.Schema, Total: l.Total, Records: recs})
+		out = append(out, linksDTO{CollectionID: l.CollectionID, CollectionName: l.Name, Field: l.Field, Sub: l.Sub, Schema: l.Schema, Total: l.Total, Records: recs})
 	}
 	return c.JSON(fiber.Map{"items": out})
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Form from "@rjsf/core";
-import type { ErrorSchema, FieldProps, IconButtonProps, RJSFSchema, UiSchema, ValidatorType } from "@rjsf/utils";
+import { englishStringTranslator, TranslatableString, type ErrorSchema, type FieldProps, type IconButtonProps, type RJSFSchema, type UiSchema, type ValidatorType } from "@rjsf/utils";
 import Link from "next/link";
 import { useMemo, useRef, useState, type Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -16,14 +16,16 @@ import { errorMessage } from "@/lib/errors";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { searchTerm } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/provider";
-import { LOCALES, messages, type Locale } from "@/lib/i18n/messages";
+import { LOCALES, messages, type Locale, type MessageKey } from "@/lib/i18n/messages";
 import { schemaValidator, type Translate } from "@/lib/schema-validator";
 
 // The default theme draws glyphicon fonts this app does not load; these use lucide.
-function iconButton(Icon: typeof Plus, variant: "outline" | "ghost" | "destructive" = "ghost") {
-  return function SchemaIconButton({ onClick, disabled, title, className }: IconButtonProps) {
+// Some buttons (add) come without a title: the name falls back to the registry's translated string.
+function iconButton(Icon: typeof Plus, name: TranslatableString, variant: "outline" | "ghost" | "destructive" = "ghost") {
+  return function SchemaIconButton({ onClick, disabled, title, className, registry }: IconButtonProps) {
+    const label = title || registry.translateString(name);
     return (
-      <Button type="button" size="icon-sm" variant={variant} title={title} aria-label={title} disabled={disabled} className={className} onClick={onClick}>
+      <Button type="button" size="icon-sm" variant={variant} title={label} aria-label={label} disabled={disabled} className={className} onClick={onClick}>
         <Icon className="size-4" />
       </Button>
     );
@@ -32,13 +34,23 @@ function iconButton(Icon: typeof Plus, variant: "outline" | "ghost" | "destructi
 
 const templates = {
   ButtonTemplates: {
-    AddButton: iconButton(Plus, "outline"),
-    CopyButton: iconButton(Copy),
-    MoveUpButton: iconButton(ArrowUp),
-    MoveDownButton: iconButton(ArrowDown),
-    RemoveButton: iconButton(X),
-    ClearButton: iconButton(X),
+    AddButton: iconButton(Plus, TranslatableString.AddItemButton, "outline"),
+    CopyButton: iconButton(Copy, TranslatableString.CopyButton),
+    MoveUpButton: iconButton(ArrowUp, TranslatableString.MoveUpButton),
+    MoveDownButton: iconButton(ArrowDown, TranslatableString.MoveDownButton),
+    RemoveButton: iconButton(X, TranslatableString.RemoveButton),
+    ClearButton: iconButton(X, TranslatableString.RemoveButton),
   },
+};
+
+// The list buttons' names (their tooltip and accessible name) in the user's language.
+const BUTTON_KEYS: Partial<Record<TranslatableString, MessageKey>> = {
+  [TranslatableString.AddItemButton]: "schema.item_add",
+  [TranslatableString.AddButton]: "schema.item_add",
+  [TranslatableString.RemoveButton]: "schema.item_remove",
+  [TranslatableString.CopyButton]: "schema.item_copy",
+  [TranslatableString.MoveUpButton]: "schema.item_up",
+  [TranslatableString.MoveDownButton]: "schema.item_down",
 };
 
 // One validator per language; the failed keyword picks the message (schema.error.*).
@@ -333,7 +345,11 @@ export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec",
   /** Keep errors on screen across re-renders, updating as the user types. */
   liveValidate?: boolean;
 }) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
+  const translateString = useMemo(() => (str: TranslatableString, params?: string[]) => {
+    const key = BUTTON_KEYS[str];
+    return key ? t(key) : englishStringTranslator(str, params);
+  }, [t]);
   // The page has its own save bar; the form never submits by itself.
   const uiSchema = useMemo(() => ({ ...uiFor(schema), "ui:submitButtonOptions": { norender: true } }), [schema]);
   const formContext = useMemo(() => ({ collectionId }), [collectionId]);
@@ -347,6 +363,7 @@ export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec",
       formData={data}
       validator={validators[locale]}
       templates={templates}
+      translateString={translateString}
       fields={fields}
       formContext={formContext}
       disabled={disabled}

@@ -281,3 +281,38 @@ test("several files in one field", async ({ page }) => {
   await expect(page).toHaveURL(new RegExp(`/collections/${id}$`));
   await expect(page.getByRole("row").filter({ hasText: "Viagem" })).toContainText("praia.png +1");
 });
+
+// A list of objects whose items point at records: the form picks one per item, and the record pointed at lists them.
+test("a list of objects with a reference in each item", async ({ page }) => {
+  await page.goto("/");
+  const wireds = (await (await api(page, "/v1/collections", { name: `wireds-${Date.now()}`, schema: { type: "object", properties: { nome: { type: "string", title: "Nome" } } } })).json()).id as string;
+  const andar = (await (await api(page, "/v1/records", { collection_id: wireds, data: { nome: "Ao andar" } })).json()).id as string;
+  await api(page, "/v1/records", { collection_id: wireds, data: { nome: "Abrir porta" } });
+  const exemplos = (await (await api(page, "/v1/collections", {
+    name: `exemplos-${Date.now()}`,
+    schema: { type: "object", properties: {
+      titulo: { type: "string", title: "Título" },
+      passos: { type: "array", title: "Passos", items: { type: "object", properties: {
+        wired: { type: "string", title: "Wired", format: "uuid", "x-ref": wireds },
+        config: { type: "string", title: "Configuração" },
+      } } },
+    } },
+  })).json()).id as string;
+
+  // The Fields page reads it as a list of objects with its subfields.
+  await page.goto(`/collections/${exemplos}/fields`);
+  await expect(page.getByRole("main")).toContainText("Lista de objetos · 2 subcampos");
+
+  await page.goto(`/records/new?collection=${exemplos}`);
+  await page.locator("#rec_titulo").fill("Porta com senha");
+  await page.getByRole("button", { name: "Adicionar item" }).click();
+  await page.getByRole("button", { name: /Escolher registro/ }).first().click();
+  await page.getByPlaceholder("Buscar registro").fill("Ao andar");
+  await page.getByRole("button", { name: "Ao andar", exact: true }).click();
+  await page.locator("#rec_passos_0_config").fill("Pisar no quadrado da porta");
+  await page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/collections/${exemplos}$`));
+
+  await page.goto(`/records/${andar}`);
+  await expect(page.getByRole("region", { name: /: Passos › Wired$/ }).getByRole("link", { name: "Porta com senha" })).toBeVisible();
+});

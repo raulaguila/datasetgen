@@ -40,3 +40,10 @@ describe("issueErrors", () => {
     });
   });
 });
+
+describe("uiFor in a list of objects", () => {
+  it("picks records for a reference subfield", () => {
+    expect(uiFor({ type: "object", properties: { passos: { type: "array", items: { type: "object", properties: { wired: { type: "string", "x-ref": "c1" } } } } } }))
+      .toEqual({ passos: { items: { wired: { "ui:field": "reference" } } } });
+  });
+});

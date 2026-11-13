@@ -18,7 +18,7 @@ const INLINE: FieldType[] = ["string", "email", "url", "number", "integer", "boo
 export const editsInline = (r: FieldRow) => !r.advanced && INLINE.includes(r.field.type);
 
 /** Fields a list can show as a column (their value fits a cell). */
-export const showable = (rows: FieldRow[]) => rows.filter((r) => !r.advanced && !["group", "json"].includes(r.field.type));
+export const showable = (rows: FieldRow[]) => rows.filter((r) => !r.advanced && !["group", "objects", "json"].includes(r.field.type));
 
 /** The columns shown: those in cols (in field order), or the first four. */
 export function pickColumns(rows: FieldRow[], cols: string): FieldRow[] {

@@ -667,3 +667,35 @@ func TestManyFilesAndSweep(t *testing.T) {
 		t.Fatalf("bytes kept after purge: %v", err)
 	}
 }
+
+// A list of objects may hold a reference in each item: saves check every id,
+// and the referenced record lists the records whose items point at it.
+func TestReferencesInListItems(t *testing.T) {
+	e := newEnv(t)
+	collections, records := collectionServices(e)
+	owner := reqctx.WithActor(context.Background(), e.userID(t, e.activeUser(t)))
+	wireds, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Wireds", Schema: json.RawMessage(`{"type":"object","properties":{"nome":{"type":"string"}}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := records.Create(owner, input.CreateRecordCommand{CollectionID: wireds.ID, Data: json.RawMessage(`{"nome":"Ao andar"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	examples, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Exemplos", Schema: json.RawMessage(`{"type":"object","properties":{
+		"titulo":{"type":"string"},
+		"passos":{"type":"array","items":{"type":"object","properties":{
+			"wired":{"type":"string","format":"uuid","x-ref":"` + wireds.ID + `"},"config":{"type":"string"}}}}}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore(records.Create(owner, input.CreateRecordCommand{CollectionID: examples.ID, Data: json.RawMessage(`{"passos":[{"wired":"` + w.ID + `"},{"wired":"` + examples.ID + `"}]}`)})), apperror.CodeValidationFailed)
+	ex, err := records.Create(owner, input.CreateRecordCommand{CollectionID: examples.ID, Data: json.RawMessage(`{"titulo":"Porta","passos":[{"wired":"` + w.ID + `","config":"1 passo"},{"config":"sem wired"}]}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	links, err := records.Links(owner, w.ID)
+	if err != nil || len(links) != 1 || links[0].Field != "passos" || links[0].Sub != "wired" || links[0].Total != 1 || links[0].Records[0].ID != ex.ID {
+		t.Fatalf("links: %+v, %v", links, err)
+	}
+}

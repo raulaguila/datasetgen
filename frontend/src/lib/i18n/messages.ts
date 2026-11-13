@@ -1050,6 +1050,16 @@ const ptBR = {
   "collections.field_private": "Privado",
   "collections.field_private_hint": "Fica fora dos links públicos: a lista não mostra e o formulário não pede.",
   "share.private_note": "Campos privados ficam fora deste link; a busca fica desligada.",
+  "collections.type.objects": "Lista de objetos",
+  "collections.type_hint.objects": "Vários itens com os mesmos subcampos, ex.: passos ou itens de um pedido",
+  "collections.objects_hint": "Salve o campo e adicione os subcampos de cada item abaixo dele. Um subcampo pode ser referência a outra coleção.",
+  "records.items_count": "{n} itens",
+  "records.items_one": "1 item",
+  "schema.item_add": "Adicionar item",
+  "schema.item_remove": "Remover item",
+  "schema.item_copy": "Duplicar item",
+  "schema.item_up": "Subir item",
+  "schema.item_down": "Descer item",
 } as const;
 
 export type MessageKey = keyof typeof ptBR;
@@ -2096,6 +2106,16 @@ const enUS: Record<MessageKey, string> = {
   "collections.field_private": "Private",
   "collections.field_private_hint": "Kept off share links: the list does not show it and the form does not ask for it.",
   "share.private_note": "Private fields stay off this link; search is off.",
+  "collections.type.objects": "List of objects",
+  "collections.type_hint.objects": "Several items with the same subfields, e.g. steps or order lines",
+  "collections.objects_hint": "Save the field, then add each item's subfields below it. A subfield may point at another collection.",
+  "records.items_count": "{n} items",
+  "records.items_one": "1 item",
+  "schema.item_add": "Add item",
+  "schema.item_remove": "Remove item",
+  "schema.item_copy": "Copy item",
+  "schema.item_up": "Move item up",
+  "schema.item_down": "Move item down",
 };
 
 export const messages: Record<Locale, Record<MessageKey, string>> = { "pt-BR": ptBR, "en-US": enUS };

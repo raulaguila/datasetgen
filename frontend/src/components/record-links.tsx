@@ -22,9 +22,14 @@ export function RecordLinks({ recordId }: { recordId: string }) {
       <FormSection title={t("links.title")} description={t("links.desc")}>
         <div className="space-y-4">
           {items.map((l) => {
-            const field = fieldsOf(l.schema).find((f) => f.key === l.field)?.field.name ?? l.field;
+            let field = fieldsOf(l.schema).find((f) => f.key === l.field)?.field.name ?? l.field;
+            // A reference inside each item of a list of objects: "Passos › Wired".
+            if (l.sub) {
+              const items = (((l.schema.properties ?? {}) as Record<string, { items?: Record<string, unknown> }>)[l.field]?.items ?? null);
+              field = `${field} › ${fieldsOf(items).find((f) => f.key === l.sub)?.field.name ?? l.sub}`;
+            }
             return (
-              <section key={`${l.collection_id}:${l.field}`} aria-label={`${l.collection_name}: ${field}`} className="space-y-1.5">
+              <section key={`${l.collection_id}:${l.field}:${l.sub ?? ""}`} aria-label={`${l.collection_name}: ${field}`} className="space-y-1.5">
                 <h3 className="text-sm font-medium">
                   <Link href={`/collections/${l.collection_id}`} className="hover:underline">{t("links.via").replace("{collection}", l.collection_name).replace("{field}", field)}</Link>
                   <span className="ml-2 text-xs text-muted-foreground">{l.total}</span>

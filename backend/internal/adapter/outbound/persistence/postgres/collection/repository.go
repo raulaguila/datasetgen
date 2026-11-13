@@ -225,21 +225,29 @@ func (r *Repository) Referrers(ctx context.Context, targetID, userID string) ([]
 		ID     uuid.UUID `gorm:"column:id"`
 		Name   string    `gorm:"column:name"`
 		Field  string    `gorm:"column:field"`
+		Sub    string    `gorm:"column:sub"`
 		Schema []byte    `gorm:"column:schema"`
 	}
+	// A top-level reference field, or a reference subfield of a list of objects.
 	err := r.db.WithContext(ctx).Raw(`
-		SELECT c.id, c.name, p.key AS field, c.schema
+		SELECT c.id, c.name, f.field, f.sub, c.schema
 		FROM app.collection c
 		JOIN app.collection_member m ON m.collection_id = c.id AND m.user_id = ?
-		CROSS JOIN LATERAL json_each(c.schema -> 'properties') p
-		WHERE c.deleted_at IS NULL AND p.value ->> 'x-ref' = ?
-		ORDER BY c.name, p.key LIMIT 20`, userID, targetID).Find(&rows).Error
+		CROSS JOIN LATERAL (
+			SELECT p.key AS field, '' AS sub FROM json_each(c.schema -> 'properties') p WHERE p.value ->> 'x-ref' = ?
+			UNION ALL
+			SELECT p.key, s.key FROM json_each(c.schema -> 'properties') p
+			CROSS JOIN LATERAL json_each(CASE WHEN json_typeof(p.value -> 'items' -> 'properties') = 'object' THEN p.value -> 'items' -> 'properties' ELSE '{}'::json END) s
+			WHERE s.value ->> 'x-ref' = ?
+		) f
+		WHERE c.deleted_at IS NULL
+		ORDER BY c.name, f.field, f.sub LIMIT 20`, userID, targetID, targetID).Find(&rows).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "collection")
 	}
 	out := make([]domain.Referrer, 0, len(rows))
 	for _, m := range rows {
-		out = append(out, domain.Referrer{CollectionID: m.ID.String(), Name: m.Name, Field: m.Field, Schema: m.Schema})
+		out = append(out, domain.Referrer{CollectionID: m.ID.String(), Name: m.Name, Field: m.Field, Sub: m.Sub, Schema: m.Schema})
 	}
 	return out, nil
 }
