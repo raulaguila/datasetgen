@@ -22,7 +22,14 @@ type UpdateRecordCommand struct {
 // RecordService is the inbound port for records; data must match the collection schema.
 type RecordService interface {
 	List(ctx context.Context, filter domain.RecordFilter) ([]domain.Record, int64, error)
+	Aggregate(ctx context.Context, filter domain.RecordFilter, group string, numeric []string) ([]domain.RecordGroup, error)
 	Get(ctx context.Context, id string) (*domain.Record, error)
+	// Comments lists a record's comments (viewers); members comment, the author or an owner deletes.
+	Comments(ctx context.Context, recordID string) ([]domain.RecordComment, error)
+	AddComment(ctx context.Context, recordID, body string) (*domain.RecordComment, error)
+	DeleteComment(ctx context.Context, recordID, commentID string) error
+	// Links lists, per collection and field the caller can read, the records pointing at this one.
+	Links(ctx context.Context, id string) ([]domain.RecordLinks, error)
 	Create(ctx context.Context, cmd CreateRecordCommand) (*domain.Record, error)
 	Update(ctx context.Context, cmd UpdateRecordCommand) (*domain.Record, error)
 	// DeleteMany deletes every listed record or none.
@@ -49,10 +56,14 @@ type ImportRecordsCommand struct {
 	Records      []json.RawMessage
 	DryRun       bool // check only
 	SkipInvalid  bool // insert the valid records even when some are invalid
+	// UpsertKey, a unique field, updates the record already holding a row's
+	// value (its other fields stay) instead of adding one.
+	UpsertKey string
 }
 
 type ImportResult struct {
 	Created int64
+	Updated int64
 	Invalid int
 	Errors  []ImportError // the first 100
 }

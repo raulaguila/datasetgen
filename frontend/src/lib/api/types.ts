@@ -212,6 +212,8 @@ export interface RecordVersion {
 
 export interface ImportResult {
   created: number;
+  /** Records an upsert merged into instead of creating. */
+  updated?: number;
   invalid: number;
   /** index is the record's position in that batch. */
   errors: { index: number; issues: SchemaIssue[] }[];
@@ -270,6 +272,44 @@ export interface InviteResult {
 }
 
 /** A program's access to one collection's records; the secret shows once, at creation. */
+/** Records of one collection whose reference field names a record. */
+export interface RecordComment {
+  id: string;
+  author_id?: string;
+  author_name?: string;
+  body: string;
+  created_at: string;
+}
+
+export interface RecordLinks {
+  collection_id: string;
+  collection_name: string;
+  field: string;
+  schema: Record<string, unknown>;
+  total: number;
+  records: DataRecord[];
+}
+
+/** A public link: a form that adds records or a read-only list. */
+export interface ShareLink {
+  id: string;
+  kind: "form" | "view";
+  token: string;
+  created_at: string;
+  last_used_at?: string;
+}
+
+/** What a share link opens, as anyone holding it sees it. */
+export interface PublicLink {
+  kind: "form" | "view";
+  name: string;
+  description?: string;
+  icon?: string;
+  schema: Record<string, unknown>;
+  /** False when the collection has private fields. */
+  searchable: boolean;
+}
+
 export interface ApiKey {
   id: string;
   name: string;
@@ -283,6 +323,36 @@ export interface ApiKey {
 
 export type WebhookEvent = "record.created" | "record.updated" | "record.deleted" | "records.imported";
 export const WEBHOOK_EVENTS: WebhookEvent[] = ["record.created", "record.updated", "record.deleted", "records.imported"];
+
+export type AutomationTrigger = "record.created" | "record.updated" | "daily";
+export type AutomationAction = "set_field" | "notify";
+
+export interface Automation {
+  id: string;
+  name: string;
+  enabled: boolean;
+  trigger: AutomationTrigger;
+  /** Daily only: the hour it runs at (server time). */
+  hour?: number;
+  conditions: { any: boolean; rules: { field: string; op: string; value?: unknown }[] };
+  action: AutomationAction;
+  /** set_field: {field, value}; notify: {message}. */
+  config: { field?: string; value?: unknown; message?: string };
+  created_at: string;
+  last_run_at?: string;
+  last_error?: string;
+  runs: number;
+}
+
+export type AutomationInput = Pick<Automation, "name" | "enabled" | "trigger" | "hour" | "conditions" | "action" | "config">;
+
+export interface WebhookDelivery {
+  id: string;
+  event: string;
+  status?: number;
+  error?: string;
+  created_at: string;
+}
 
 export interface Webhook {
   id: string;
@@ -332,4 +402,12 @@ export interface FileRef {
   name: string;
   size: number;
   type: string;
+}
+
+/** Records sharing one value of a field (key; null for all of them), with sums and averages. */
+export interface RecordGroup {
+  key: unknown;
+  count: number;
+  sums: Record<string, number>;
+  avgs: Record<string, number>;
 }

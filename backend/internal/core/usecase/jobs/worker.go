@@ -36,6 +36,10 @@ type Worker struct {
 	Batch    int
 	Poll     time.Duration
 	Lease    time.Duration
+	// Periodic, when set, runs at most once per Every, between ticks.
+	Periodic func(ctx context.Context) error
+	Every    time.Duration
+	lastRun  time.Time
 }
 
 func (w *Worker) Run(ctx context.Context) error {
@@ -49,6 +53,12 @@ func (w *Worker) Run(ctx context.Context) error {
 	for {
 		if err := w.Tick(ctx, kinds); err != nil && ctx.Err() == nil {
 			output.Log(w.Log).Warn("Job tick error", slog.String("error", err.Error()))
+		}
+		if now := w.Clock.Now(); w.Periodic != nil && now.Sub(w.lastRun) >= w.Every {
+			w.lastRun = now
+			if err := w.Periodic(ctx); err != nil && ctx.Err() == nil {
+				output.Log(w.Log).Warn("Periodic job error", slog.String("error", err.Error()))
+			}
 		}
 		select {
 		case <-ctx.Done():

@@ -13,6 +13,8 @@ import { EmptyState } from "@/components/empty-state";
 import { recordTitle } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
 import { RecordHistory } from "@/components/record-history";
+import { RecordComments } from "@/components/record-comments";
+import { RecordLinks, useRecordLinks } from "@/components/record-links";
 import { SchemaForm } from "@/components/schema-form";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
@@ -173,6 +175,8 @@ export default function RecordPage() {
   const setCollection = useUIStore((st) => st.setCollection);
   useEffect(() => { if (collection) setCollection(collection.id); }, [collection, setCollection]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const links = useRecordLinks(record?.id);
+  const linked = (links.data?.items ?? []).reduce((n, l) => n + l.total, 0);
   const editable = roleAllows(collection?.role, "editor");
   // Named by its first text value, as lists show it; the id when it has none.
   const title = creating ? t("records.new") : record ? recordTitle(collection?.schema ?? null, record.data) ?? `${t("records.record")} ${record.id.slice(0, 8)}` : t("records.record");
@@ -196,6 +200,8 @@ export default function RecordPage() {
           <>
             {/* Keyed by version: a restore elsewhere on the page reloads the form. */}
             <RecordForm key={record ? `${record.id}:${record.version}` : "new"} collection={collection} record={record ?? null} editable={editable} />
+            {record && <RecordLinks recordId={record.id} />}
+            {record && <RecordComments recordId={record.id} owner={roleAllows(collection.role, "owner")} />}
             {record && <RecordHistory collection={collection} record={record} editable={editable} />}
           </>
         )}
@@ -207,7 +213,7 @@ export default function RecordPage() {
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title={t("records.delete")}
-        description={t("records.delete_hint")}
+        description={linked ? `${t("records.delete_hint")} ${t("links.delete_warn").replace("{n}", String(linked))}` : t("records.delete_hint")}
         destructive
         confirmLabel={t("common.delete")}
         onConfirm={async () => {

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, KeyRound, Plug, Send, Trash2, Webhook as WebhookIcon } from "lucide-react";
+import { Check, Copy, ExternalLink, KeyRound, Link2, Plug, Send, Trash2, Webhook as WebhookIcon } from "lucide-react";
 import { toast } from "sonner";
 import { FormError, FormSection, FormSections, IconAction, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { tools } from "@/lib/api/endpoints";
-import { WEBHOOK_EVENTS, type Collection, type WebhookEvent } from "@/lib/api/types";
+import { WEBHOOK_EVENTS, type Collection, type ShareLink, type WebhookEvent } from "@/lib/api/types";
 import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
@@ -115,6 +115,102 @@ function Keys({ collection }: { collection: Collection }) {
   );
 }
 
+/** Public links: a form anyone can fill, or a read-only list. The link is the access. */
+function Shares({ collection }: { collection: Collection }) {
+  const { t } = useI18n();
+  const client = useQueryClient();
+  const format = useFormatDate();
+  const key = ["shares", collection.id];
+  const list = useQuery({ queryKey: key, queryFn: () => tools.shares(collection.id) });
+  const [removing, setRemoving] = useState<{ id: string; kind: ShareLink["kind"] } | null>(null);
+  const create = useMutation({
+    mutationFn: (kind: ShareLink["kind"]) => tools.createShare(collection.id, kind),
+    onSuccess: () => void client.invalidateQueries({ queryKey: key }),
+  });
+  const items = list.data?.items ?? [];
+  const urlOf = (s: ShareLink) => `${window.location.origin}/${s.kind === "form" ? "f" : "s"}/${s.token}`;
+  const kindName = (k: ShareLink["kind"]) => t(k === "form" ? "share.form" : "share.view");
+  return (
+    <FormSection title={t("share.title")} description={`${t("share.desc")} ${t("share.private_note")}`}>
+      <div className="space-y-3">
+        {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
+          <p className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">{t("share.empty")}</p>
+        ) : (
+          <ul className="divide-y rounded-md border" aria-label={t("share.title")}>
+            {items.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+                <div className="min-w-48 flex-1">
+                  <p className="text-sm font-medium">{kindName(s.kind)}</p>
+                  <p className="truncate font-mono text-xs text-muted-foreground">{urlOf(s)}</p>
+                  <p className="text-xs text-muted-foreground">{s.last_used_at ? t("integrations.used_at").replace("{at}", format(s.last_used_at)) : t("integrations.never_used")}</p>
+                </div>
+                <CopyButton text={urlOf(s)} />
+                <Button size="sm" variant="ghost" nativeButton={false} render={<a href={urlOf(s)} target="_blank" rel="noreferrer" />}><ExternalLink className="size-4" />{t("share.open")}</Button>
+                <IconAction label={t("integrations.revoke")} target={kindName(s.kind)} className="text-destructive" onClick={() => setRemoving(s)}><Trash2 className="size-4" /></IconAction>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled={create.isPending} onClick={() => create.mutate("form")}><Link2 className="size-4" />{t("share.create_form")}</Button>
+          <Button variant="outline" disabled={create.isPending} onClick={() => create.mutate("view")}><Link2 className="size-4" />{t("share.create_view")}</Button>
+        </div>
+        <FormError message={create.isError ? errorMessage(create.error, "common.save_failed", t) : null} />
+      </div>
+      <ConfirmDialog
+        open={!!removing}
+        onOpenChange={(o) => !o && setRemoving(null)}
+        title={t("share.revoke_title").replace("{name}", removing ? kindName(removing.kind) : "")}
+        description={t("share.revoke_desc")}
+        confirmLabel={t("integrations.revoke")}
+        destructive
+        onConfirm={async () => {
+          if (!removing) return;
+          await tools.deleteShare(collection.id, removing.id).then(() => client.invalidateQueries({ queryKey: key }), (err) => toast.error(errorMessage(err, "common.save_failed", t)));
+          setRemoving(null);
+        }}
+      />
+    </FormSection>
+  );
+}
+
+/** A hook's newest calls; a failed one can be sent again with the same body. */
+function Deliveries({ collection, hookId }: { collection: Collection; hookId: string }) {
+  const { t } = useI18n();
+  const client = useQueryClient();
+  const format = useFormatDate();
+  const key = ["webhooks", collection.id, hookId, "deliveries"];
+  const list = useQuery({ queryKey: key, queryFn: () => tools.deliveries(collection.id, hookId) });
+  const again = useMutation({
+    mutationFn: (deliveryId: string) => tools.redeliver(collection.id, hookId, deliveryId),
+    onSuccess: (d) => {
+      if (d.error) toast.error(t("integrations.test_failed").replace("{error}", d.error));
+      else toast.success(t("integrations.test_ok").replace("{status}", String(d.status ?? "")));
+      void client.invalidateQueries({ queryKey: ["webhooks", collection.id] });
+    },
+    onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
+  });
+  if (list.isPending) return <ListSkeleton rows={1} />;
+  const items = list.data?.items ?? [];
+  if (!items.length) return <p className="text-xs text-muted-foreground">{t("deliveries.empty")}</p>;
+  return (
+    <ul className="max-h-64 divide-y overflow-auto rounded border text-xs" aria-label={t("deliveries.title")}>
+      {items.map((d) => {
+        const ok = !d.error && d.status !== undefined && d.status < 300;
+        return (
+          <li key={d.id} className="flex items-center gap-2 px-2 py-1.5">
+            <span className={ok ? "text-success" : "text-destructive"}>{d.status ? `HTTP ${d.status}` : t("deliveries.no_answer")}</span>
+            <span className="font-mono">{d.event}</span>
+            <span className="text-muted-foreground">{format(d.created_at)}</span>
+            {d.error && <span className="min-w-0 flex-1 truncate text-destructive" title={d.error}>{d.error}</span>}
+            <Button size="sm" variant="ghost" className="ml-auto" disabled={again.isPending} onClick={() => again.mutate(d.id)}>{t("deliveries.redeliver")}</Button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function Webhooks({ collection }: { collection: Collection }) {
   const { t } = useI18n();
   const client = useQueryClient();
@@ -125,6 +221,7 @@ function Webhooks({ collection }: { collection: Collection }) {
   const [events, setEvents] = useState<WebhookEvent[]>([...WEBHOOK_EVENTS]);
   const [secret, setSecret] = useState<string | null>(null);
   const [removing, setRemoving] = useState<{ id: string; url: string } | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   const create = useMutation({
     mutationFn: () => tools.createWebhook(collection.id, url.trim(), events),
     onSuccess: (w) => { setSecret(w.secret); setUrl(""); setEvents([...WEBHOOK_EVENTS]); void client.invalidateQueries({ queryKey: key }); },
@@ -164,7 +261,9 @@ function Webhooks({ collection }: { collection: Collection }) {
                     </p>
                   </div>
                   <Button type="button" size="sm" variant="outline" disabled={test.isPending} onClick={() => test.mutate(w.id)}><Send className="size-4" />{t("integrations.test")}</Button>
+                  <Button type="button" size="sm" variant="ghost" aria-expanded={open === w.id} onClick={() => setOpen(open === w.id ? null : w.id)}>{t("deliveries.title")}</Button>
                   <IconAction label={t("common.delete")} target={w.url} className="text-destructive" onClick={() => setRemoving(w)}><Trash2 className="size-4" /></IconAction>
+                  {open === w.id && <div className="basis-full"><Deliveries collection={collection} hookId={w.id} /></div>}
                 </li>
               );
             })}
@@ -265,6 +364,7 @@ export default function CollectionIntegrationsPage() {
     <CollectionPage section="collections.tab.integrations" description="integrations.subtitle">
       {(collection) => roleAllows(collection.role, "owner") ? (
         <FormSections>
+          <Shares collection={collection} />
           <Keys collection={collection} />
           <Webhooks collection={collection} />
           <Docs collection={collection} />

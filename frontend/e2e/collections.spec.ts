@@ -67,7 +67,7 @@ test("a collection's records follow its fields", async ({ page }) => {
   await expect(row.getByRole("cell")).toHaveText(["", "Ao clicar", "gatilho", "—", /\d/]);
   // A choice field filters through a select inside the filter popover.
   await page.getByRole("button", { name: "Filtros" }).click();
-  await page.getByLabel("Categoria").click();
+  await page.getByRole("combobox", { name: "Categoria" }).click();
   await page.getByRole("option", { name: "gatilho" }).click();
   await page.getByRole("button", { name: "Aplicar" }).click();
   await expect(page.getByRole("button", { name: "Remover filtro: Categoria" })).toBeVisible();

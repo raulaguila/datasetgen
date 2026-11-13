@@ -28,11 +28,40 @@ type IntegrationService interface {
 	// AuthenticateKey answers what a dsk_ key allows; any failure is Unauthorized.
 	AuthenticateKey(ctx context.Context, secret string) (*domain.KeyGrant, error)
 
+	Shares(ctx context.Context, collectionID string) ([]domain.Share, error)
+	CreateShare(ctx context.Context, collectionID, kind string) (*domain.Share, error)
+	DeleteShare(ctx context.Context, collectionID, id string) error
+	// AuthenticateShare answers what a dss_ link allows; any failure is NotFound.
+	AuthenticateShare(ctx context.Context, token string) (*domain.KeyGrant, error)
+
 	Webhooks(ctx context.Context, collectionID string) ([]domain.Webhook, error)
 	CreateWebhook(ctx context.Context, collectionID, url string, events []string) (*NewWebhook, error)
 	DeleteWebhook(ctx context.Context, collectionID, id string) error
 	// TestWebhook sends a ping now and records the answer.
 	TestWebhook(ctx context.Context, collectionID, id string) (*domain.Webhook, error)
+	// Deliveries lists a hook's newest calls; Redeliver sends one again now.
+	Deliveries(ctx context.Context, collectionID, hookID string) ([]domain.WebhookDelivery, error)
+	Redeliver(ctx context.Context, collectionID, hookID, deliveryID string) (*domain.WebhookDelivery, error)
+
+	Automations(ctx context.Context, collectionID string) ([]domain.Automation, error)
+	CreateAutomation(ctx context.Context, collectionID string, in AutomationInput) (*domain.Automation, error)
+	UpdateAutomation(ctx context.Context, collectionID, id string, in AutomationInput) (*domain.Automation, error)
+	DeleteAutomation(ctx context.Context, collectionID, id string) error
+	// RunAutomation runs it now on every matching record (up to 100), as a daily run does.
+	RunAutomation(ctx context.Context, collectionID, id string) (*domain.Automation, error)
+	// Schedule queues the daily automations that are due; the job worker calls it.
+	Schedule(ctx context.Context) error
+}
+
+// AutomationInput is an automation's settings as its owner edits them.
+type AutomationInput struct {
+	Name       string
+	Enabled    bool
+	Trigger    string
+	Hour       *int
+	Conditions domain.Where
+	Action     string
+	Config     json.RawMessage
 }
 
 // ToolsService runs the trash, field history, saved views and attached files.

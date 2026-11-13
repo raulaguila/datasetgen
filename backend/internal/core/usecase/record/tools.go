@@ -3,7 +3,9 @@ package record
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"slices"
+	"strings"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/policy"
@@ -51,7 +53,7 @@ func (s *Service) Restore(ctx context.Context, cmd input.RestoreRecordCommand) (
 		if err != nil {
 			return err
 		}
-		raw, err := checkData(ctx, uow, current.CollectionID, cmd.ID, data)
+		raw, data, err := checkData(ctx, uow, current.CollectionID, cmd.ID, data)
 		if err != nil {
 			return err
 		}
@@ -90,6 +92,39 @@ func (s *Service) Import(ctx context.Context, cmd input.ImportRecordsCommand) (*
 		if err != nil {
 			return err
 		}
+		uniques := schema.UniqueKeys(raw)
+		// Upsert: a row whose key value a record holds updates that record.
+		existing := map[int]domain.Record{}
+		if cmd.UpsertKey != "" {
+			if !slices.Contains(uniques, cmd.UpsertKey) {
+				return apperror.New(apperror.CodeInvalidInput, "upsert_key must be a unique field").WithField("upsert_key")
+			}
+			if existing, err = upsertTargets(ctx, uow, cmd.CollectionID, cmd.UpsertKey, cmd.Records); err != nil {
+				return err
+			}
+		}
+		// The server's own fields: new rows get the next number and their maker.
+		var fresh, again [][]byte
+		var freshAt, againAt []int
+		for i, d := range cmd.Records {
+			if _, ok := existing[i]; ok {
+				again, againAt = append(again, d), append(againAt, i)
+			} else {
+				fresh, freshAt = append(fresh, d), append(freshAt, i)
+			}
+		}
+		if err := fill(ctx, uow, raw, cmd.CollectionID, fresh, true); err != nil {
+			return err
+		}
+		if err := fill(ctx, uow, raw, cmd.CollectionID, again, false); err != nil {
+			return err
+		}
+		for n, i := range freshAt {
+			cmd.Records[i] = fresh[n]
+		}
+		for n, i := range againAt {
+			cmd.Records[i] = again[n]
+		}
 		// Schema first; the records that pass are then checked for unique values,
 		// against the collection and each other.
 		passed := make([]int, 0, len(cmd.Records))
@@ -107,20 +142,43 @@ func (s *Service) Import(ctx context.Context, cmd input.ImportRecordsCommand) (*
 			passed = append(passed, i)
 			docs = append(docs, data)
 		}
-		taken, err := takenIn(ctx, uow, cmd.CollectionID, "", schema.UniqueKeys(raw), docs)
+		// New rows are checked together; an updated record against the others only.
+		// shortcut: one query per updated record and unique field; batch them if upserts of thousands get slow.
+		var newDocs [][]byte
+		var newAt []int
+		for n, i := range passed {
+			if rec, ok := existing[i]; ok {
+				taken, err := takenIn(ctx, uow, cmd.CollectionID, rec.ID, uniques, [][]byte{docs[n]})
+				if err != nil {
+					return err
+				}
+				if len(taken[0]) > 0 {
+					bad[i] = taken[0]
+				}
+				continue
+			}
+			newDocs, newAt = append(newDocs, docs[n]), append(newAt, i)
+		}
+		taken, err := takenIn(ctx, uow, cmd.CollectionID, "", uniques, newDocs)
 		if err != nil {
 			return err
+		}
+		for n, issues := range taken {
+			if len(issues) > 0 {
+				bad[newAt[n]] = issues
+			}
 		}
 		missing, err := linksIn(ctx, uow, raw, cmd.CollectionID, docs)
 		if err != nil {
 			return err
 		}
-		for n, issues := range taken {
-			if issues = append(issues, missing[n]...); len(issues) > 0 {
-				bad[passed[n]] = issues
+		for n, issues := range missing {
+			if len(issues) > 0 {
+				bad[passed[n]] = append(bad[passed[n]], issues...)
 			}
 		}
 		valid := make([]string, 0, len(cmd.Records))
+		var updates []int
 		for i, data := range cmd.Records {
 			if issues, ok := bad[i]; ok {
 				res.Invalid++
@@ -129,16 +187,35 @@ func (s *Service) Import(ctx context.Context, cmd input.ImportRecordsCommand) (*
 				}
 				continue
 			}
+			if _, ok := existing[i]; ok {
+				updates = append(updates, i)
+				continue
+			}
 			valid = append(valid, string(data))
 		}
-		if cmd.DryRun || len(valid) == 0 || (res.Invalid > 0 && !cmd.SkipInvalid) {
+		if cmd.DryRun || len(valid)+len(updates) == 0 || (res.Invalid > 0 && !cmd.SkipInvalid) {
 			return nil
 		}
-		if res.Created, err = uow.Records().CreateMany(ctx, cmd.CollectionID, valid); err != nil {
+		if len(valid) > 0 {
+			if res.Created, err = uow.Records().CreateMany(ctx, cmd.CollectionID, valid); err != nil {
+				return err
+			}
+		}
+		for _, i := range updates {
+			updated, err := uow.Records().Update(ctx, existing[i].ID, cmd.Records[i], nil)
+			if err != nil {
+				return err
+			}
+			res.Updated++
+			if err := policy.Notify(ctx, uow, cmd.CollectionID, domain.EventRecordUpdated, hookData(updated)); err != nil {
+				return err
+			}
+		}
+		if err := policy.Audit(ctx, uow, "record.import", cmd.CollectionID, map[string]any{"collection_id": cmd.CollectionID, "count": res.Created, "updated": res.Updated}); err != nil {
 			return err
 		}
-		if err := policy.Audit(ctx, uow, "record.import", cmd.CollectionID, map[string]any{"collection_id": cmd.CollectionID, "count": res.Created}); err != nil {
-			return err
+		if res.Created == 0 {
+			return nil
 		}
 		return policy.Notify(ctx, uow, cmd.CollectionID, domain.EventRecordsImported, map[string]any{"count": res.Created})
 	})
@@ -146,6 +223,42 @@ func (s *Service) Import(ctx context.Context, cmd input.ImportRecordsCommand) (*
 		return nil, err
 	}
 	return res, nil
+}
+
+// upsertTargets finds the records holding each row's key value and merges the
+// row into a copy of that record's data (in place in rows): the fields the row
+// leaves out stay as they were.
+func upsertTargets(ctx context.Context, uow output.UnitOfWork, collectionID, key string, rows []json.RawMessage) (map[int]domain.Record, error) {
+	var values []json.RawMessage
+	var at []int
+	for i, row := range rows {
+		var doc map[string]json.RawMessage
+		if json.Unmarshal(row, &doc) != nil || doc[key] == nil || string(doc[key]) == "null" {
+			continue
+		}
+		values, at = append(values, doc[key]), append(at, i)
+	}
+	found, err := uow.Records().Matching(ctx, collectionID, key, values)
+	if err != nil {
+		return nil, err
+	}
+	out := map[int]domain.Record{}
+	for n, rec := range found {
+		i := at[n]
+		var base, row map[string]json.RawMessage
+		if json.Unmarshal(rec.Data, &base) != nil || base == nil {
+			base = map[string]json.RawMessage{}
+		}
+		_ = json.Unmarshal(rows[i], &row) // an object: values found its key
+		maps.Copy(base, row)
+		merged, err := json.Marshal(base)
+		if err != nil {
+			return nil, err
+		}
+		rows[i] = merged
+		out[i] = rec
+	}
+	return out, nil
 }
 
 // Export returns the collection's records in id order, with the schema for the
@@ -292,6 +405,12 @@ func (s *Service) BulkUpdate(ctx context.Context, cmd input.BulkUpdateCommand) (
 			if docs[i], err = json.Marshal(data); err != nil {
 				return err
 			}
+		}
+		// Formulas and "changed by" follow the new values.
+		if err := fill(ctx, uow, raw, collectionID, docs, false); err != nil {
+			return err
+		}
+		for i, id := range ids {
 			if issues, err := schema.Check(compiled, docs[i]); err != nil || len(issues) > 0 {
 				if err == nil {
 					err = apperror.New(apperror.CodeValidationFailed, "a record would break the collection's fields").
@@ -337,4 +456,67 @@ func (s *Service) BulkUpdate(ctx context.Context, cmd input.BulkUpdateCommand) (
 		return 0, err
 	}
 	return len(ids), nil
+}
+
+const (
+	maxWhereRules   = 20
+	maxAggregateNum = 5
+)
+
+// checkWhere refuses unknown operators, odd field names and values too large
+// to compare; a value must fit its operator (an array for in, none for empty).
+func checkWhere(w *domain.Where) error {
+	if w == nil {
+		return nil
+	}
+	bad := func(msg string) error { return apperror.New(apperror.CodeInvalidInput, msg).WithField("where") }
+	if len(w.Rules) > maxWhereRules {
+		return bad("where holds up to 20 rules")
+	}
+	for _, c := range w.Rules {
+		if c.Field == "" || len(c.Field) > 200 || strings.ContainsRune(c.Field, 0) {
+			return bad("each rule needs a field name")
+		}
+		if !slices.Contains(domain.WhereOps, c.Op) {
+			return bad("unknown operator " + c.Op)
+		}
+		if len(c.Value) > maxMatchValue*4 {
+			return bad("value too long")
+		}
+		if c.Op == domain.OpEmpty || c.Op == domain.OpNotEmpty {
+			continue
+		}
+		var v any
+		if len(c.Value) == 0 || json.Unmarshal(c.Value, &v) != nil {
+			return bad("rule " + c.Field + " needs a JSON value")
+		}
+		if _, isList := v.([]any); (c.Op == domain.OpIn) != isList {
+			return bad("in takes an array; other operators a single value")
+		}
+		if _, isText := v.(string); c.Op == domain.OpContains && !isText {
+			return bad("contains takes text")
+		}
+	}
+	return nil
+}
+
+// Aggregate counts the selected records, by a group field or all together,
+// with sums and averages of up to five numeric fields.
+func (s *Service) Aggregate(ctx context.Context, filter domain.RecordFilter, group string, numeric []string) ([]domain.RecordGroup, error) {
+	filter.Page = domain.NewPage(1, 1)
+	if err := checkFilter(&filter); err != nil {
+		return nil, err
+	}
+	if len(group) > 200 || len(numeric) > maxAggregateNum {
+		return nil, apperror.New(apperror.CodeInvalidInput, "group one field; sum up to 5").WithField("fields")
+	}
+	for _, f := range numeric {
+		if f == "" || len(f) > 200 {
+			return nil, apperror.New(apperror.CodeInvalidInput, "field names are 1-200 characters").WithField("fields")
+		}
+	}
+	if _, err := policy.CollectionRole(ctx, s.Collections, filter.CollectionID, domain.RoleViewer); err != nil {
+		return nil, err
+	}
+	return s.Repo.Aggregate(ctx, filter, group, numeric)
 }

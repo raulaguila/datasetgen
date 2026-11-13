@@ -87,10 +87,13 @@ type importDTO struct {
 	Records      []json.RawMessage `json:"records" swaggertype:"array,object"`
 	DryRun       bool              `json:"dry_run"`
 	SkipInvalid  bool              `json:"skip_invalid"`
+	// UpsertKey, a unique field: a record already holding a row's value is updated (its other fields stay).
+	UpsertKey string `json:"upsert_key,omitempty"`
 }
 
 type importResultDTO struct {
 	Created int64            `json:"created"`
+	Updated int64            `json:"updated"`
 	Invalid int              `json:"invalid"`
 	Errors  []importErrorDTO `json:"errors"`
 }
@@ -109,7 +112,7 @@ type issueDTO struct {
 }
 
 // @Summary Check a batch of records against the schema and add them; editors and owners
-// @Description Up to 1000 records within the body limit; clients send a large file in batches. With dry_run nothing is written. With invalid records and no skip_invalid, none are written.
+// @Description Up to 1000 records within the body limit; clients send a large file in batches. With dry_run nothing is written. With invalid records and no skip_invalid, none are written. With upsert_key (a unique field) a row whose value a record already holds updates that record.
 // @Tags Records
 // @Accept json
 // @Produce json
@@ -129,12 +132,12 @@ func (h *Handler) Import(c fiber.Ctx) error {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
 	res, err := h.svc.Import(c.Context(), input.ImportRecordsCommand{
-		CollectionID: body.CollectionID, Records: body.Records, DryRun: body.DryRun, SkipInvalid: body.SkipInvalid,
+		CollectionID: body.CollectionID, Records: body.Records, DryRun: body.DryRun, SkipInvalid: body.SkipInvalid, UpsertKey: body.UpsertKey,
 	})
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
-	out := importResultDTO{Created: res.Created, Invalid: res.Invalid, Errors: make([]importErrorDTO, 0, len(res.Errors))}
+	out := importResultDTO{Created: res.Created, Updated: res.Updated, Invalid: res.Invalid, Errors: make([]importErrorDTO, 0, len(res.Errors))}
 	for _, e := range res.Errors {
 		issues := make([]issueDTO, 0, len(e.Issues))
 		for _, i := range e.Issues {

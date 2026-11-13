@@ -39,6 +39,8 @@ type Service struct {
 	Tx      output.TxManager
 	Send    output.WebhookSender
 	SealKey []byte
+	// Records runs automations' conditions and changes, as the automation's maker.
+	Records input.RecordService
 }
 
 var _ input.IntegrationService = (*Service)(nil)
@@ -117,6 +119,90 @@ func (s *Service) AuthenticateKey(ctx context.Context, secret string) (*domain.K
 			return nil, bad
 		}
 		return nil, err
+	}
+	if g.Share != "" {
+		return nil, bad
+	}
+	return g, nil
+}
+
+const maxShares = 10
+
+func (s *Service) Shares(ctx context.Context, collectionID string) ([]domain.Share, error) {
+	if err := s.owner(ctx, s.Store, collectionID); err != nil {
+		return nil, err
+	}
+	shares, err := s.Store.Integrations().Shares(ctx, collectionID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range shares {
+		if shares[i].Token, err = aescrypt.Decrypt(s.SealKey, shares[i].Token); err != nil {
+			return nil, err
+		}
+	}
+	return shares, nil
+}
+
+func (s *Service) CreateShare(ctx context.Context, collectionID, kind string) (*domain.Share, error) {
+	if kind != domain.ShareForm && kind != domain.ShareView {
+		return nil, apperror.New(apperror.CodeInvalidInput, "kind must be form or view").WithField("kind")
+	}
+	random, err := tokenhash.RandomURLSafe()
+	if err != nil {
+		return nil, err
+	}
+	token := domain.SharePrefix + random
+	sealed, err := aescrypt.Encrypt(s.SealKey, token)
+	if err != nil {
+		return nil, err
+	}
+	var out *domain.Share
+	err = s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		if err := s.owner(ctx, uow, collectionID); err != nil {
+			return err
+		}
+		if _, byKey := reqctx.Key(ctx); byKey {
+			return apperror.New(apperror.CodeForbidden, "an API key cannot make links")
+		}
+		existing, err := uow.Integrations().Shares(ctx, collectionID)
+		if err != nil {
+			return err
+		}
+		if len(existing) >= maxShares {
+			return apperror.New(apperror.CodeInvalidInput, "a collection holds up to 10 links; delete one first")
+		}
+		if out, err = uow.Integrations().CreateShare(ctx, collectionID, kind, sealed, tokenhash.SHA256Bytes(token), reqctx.Actor(ctx)); err != nil {
+			return err
+		}
+		return policy.Audit(ctx, uow, "collection.share_create", collectionID, map[string]any{"collection_id": collectionID, "kind": kind})
+	})
+	if err != nil {
+		return nil, err
+	}
+	out.Token = token
+	return out, nil
+}
+
+// DeleteShare removes a link; it is a key row, so DeleteKey's statement does it.
+func (s *Service) DeleteShare(ctx context.Context, collectionID, id string) error {
+	return s.DeleteKey(ctx, collectionID, id)
+}
+
+func (s *Service) AuthenticateShare(ctx context.Context, token string) (*domain.KeyGrant, error) {
+	bad := apperror.New(apperror.CodeNotFound, "link not found")
+	if !strings.HasPrefix(token, domain.SharePrefix) || len(token) > 100 {
+		return nil, bad
+	}
+	g, err := s.Store.Integrations().Grant(ctx, tokenhash.SHA256Bytes(token))
+	if err != nil {
+		if apperror.IsCode(err, apperror.CodeNotFound) {
+			return nil, bad
+		}
+		return nil, err
+	}
+	if g.Share == "" {
+		return nil, bad
 	}
 	return g, nil
 }
@@ -254,6 +340,13 @@ func (s *Service) deliver(ctx context.Context, h *domain.Webhook, payload map[st
 	if err := s.Store.Integrations().WebhookResult(ctx, h.ID, status, errText); err != nil {
 		return err
 	}
+	d := &domain.WebhookDelivery{WebhookID: h.ID, Event: asString(payload["event"]), Body: body, Error: errText}
+	if status > 0 {
+		d.Status = &status
+	}
+	if err := s.Store.Integrations().LogDelivery(ctx, d); err != nil {
+		return err
+	}
 	return sendErr
 }
 
@@ -279,5 +372,6 @@ func (s *Service) Jobs() map[string]policy.JobHandler {
 			}
 			return s.deliver(ctx, h, job.Body)
 		},
+		policy.JobAutomation: s.runJob,
 	}
 }

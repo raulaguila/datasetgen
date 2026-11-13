@@ -12,6 +12,9 @@ import (
 type RecordRepository interface {
 	// List returns one page; each Data holds only top-level plain values, strings cut to 120 characters.
 	List(ctx context.Context, filter domain.RecordFilter) ([]domain.Record, int64, error)
+	// Aggregate counts the records the filter selects, by group field (or all
+	// together when group is ""), with sums and averages of numeric fields.
+	Aggregate(ctx context.Context, filter domain.RecordFilter, group string, numeric []string) ([]domain.RecordGroup, error)
 	FindByID(ctx context.Context, id string) (*domain.Record, error)
 	Create(ctx context.Context, r *domain.Record) error
 	// Update replaces data; with version set, a row changed since that version is a conflict.
@@ -43,6 +46,16 @@ type RecordRepository interface {
 	// TakenValues returns the positions in values of those another record of the
 	// collection (not excludeID) already holds under key.
 	TakenValues(ctx context.Context, collectionID, excludeID, key string, values []json.RawMessage) ([]int, error)
+	// Comments lists a record's comments, oldest first, up to limit.
+	Comments(ctx context.Context, recordID string, limit int) ([]domain.RecordComment, error)
+	AddComment(ctx context.Context, c *domain.RecordComment) error
+	// Comment reads one comment's record and author (NotFound when gone).
+	Comment(ctx context.Context, id string) (*domain.RecordComment, error)
+	DeleteComment(ctx context.Context, id string) error
+	// MaxNumber is the largest number the collection's records hold under key, 0 when none.
+	MaxNumber(ctx context.Context, collectionID, key string) (int64, error)
+	// Matching finds, per value (by index), the record of the collection whose key holds it.
+	Matching(ctx context.Context, collectionID, key string, values []json.RawMessage) (map[int]domain.Record, error)
 	// DuplicatedKeys returns the listed keys that two or more records share a value of.
 	DuplicatedKeys(ctx context.Context, collectionID string, keys []string) ([]string, error)
 }

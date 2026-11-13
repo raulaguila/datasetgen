@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Bell, CheckCheck, Info, OctagonAlert } from "lucide-react";
 import { UNREAD_KEY } from "@/components/app-shell";
@@ -95,6 +96,11 @@ export default function NotificationsPage() {
                         <span className="text-xs text-muted-foreground">{format(n.created_at)}</span>
                       </div>
                       <p className="mt-0.5 text-sm text-muted-foreground">{message}</p>
+                      {(n.params?.record_id || (!n.kind && n.params?.collection_id)) && (
+                        <Link className="mt-0.5 inline-block text-sm text-primary hover:underline" href={n.params.record_id ? `/records/${n.params.record_id}` : `/collections/${n.params.collection_id}`}>
+                          {t(n.params.record_id ? "notifications.open_record" : "notifications.open_collection")}
+                        </Link>
+                      )}
                     </div>
                     {!n.read_at && (
                       <Button variant="ghost" size="sm" className="max-sm:ml-9" disabled={markRead.isPending} onClick={() => markRead.mutate([n.id])}>

@@ -3,6 +3,7 @@ package output
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
 )
@@ -12,6 +13,9 @@ type IntegrationRepository interface {
 	Keys(ctx context.Context, collectionID string) ([]domain.APIKey, error)
 	CreateKey(ctx context.Context, k *domain.APIKey, hash []byte) error
 	DeleteKey(ctx context.Context, collectionID, id string) error
+	// Shares lists the collection's share links, tokens sealed.
+	Shares(ctx context.Context, collectionID string) ([]domain.Share, error)
+	CreateShare(ctx context.Context, collectionID, kind, sealed string, hash []byte, by string) (*domain.Share, error)
 	// Grant finds a key by its hash; its member must still be active. It marks
 	// the key used (at most once a minute). NotFound when nothing matches.
 	Grant(ctx context.Context, hash []byte) (*domain.KeyGrant, error)
@@ -23,6 +27,23 @@ type IntegrationRepository interface {
 	CreateWebhook(ctx context.Context, w *domain.Webhook, createdBy string) error
 	DeleteWebhook(ctx context.Context, collectionID, id string) error
 	WebhookResult(ctx context.Context, id string, status int, errText string) error
+	// LogDelivery keeps a call and its answer, dropping all but the newest 50 of the hook.
+	LogDelivery(ctx context.Context, d *domain.WebhookDelivery) error
+	Deliveries(ctx context.Context, webhookID string, limit int) ([]domain.WebhookDelivery, error)
+	Delivery(ctx context.Context, id string) (*domain.WebhookDelivery, error)
+
+	Automations(ctx context.Context, collectionID string) ([]domain.Automation, error)
+	Automation(ctx context.Context, id string) (*domain.Automation, error)
+	CreateAutomation(ctx context.Context, a *domain.Automation) error
+	// UpdateAutomation saves a's settings (not its run counters); NotFound when it is not the collection's.
+	UpdateAutomation(ctx context.Context, a *domain.Automation) error
+	DeleteAutomation(ctx context.Context, collectionID, id string) error
+	// AutomationsFor lists the enabled automations of a collection with this trigger.
+	AutomationsFor(ctx context.Context, collectionID, trigger string) ([]string, error)
+	AutomationRan(ctx context.Context, id, errText string) error
+	// DueDaily claims the enabled daily automations whose hour has come and that
+	// have not run today, stamping them run, and returns their ids.
+	DueDaily(ctx context.Context) ([]string, error)
 }
 
 // ToolsRepository keeps the trash, schema history, saved views and files.
@@ -56,6 +77,13 @@ type ToolsRepository interface {
 	RecordsExist(ctx context.Context, collectionID string, ids []string) (map[string]bool, error)
 	// FilesExist counts which of ids are files of the collection.
 	FilesExist(ctx context.Context, collectionID string, ids []string) (map[string]bool, error)
+	// DropOrphanFiles deletes up to limit file rows made before the time that
+	// no record, trashed record or record version names; their ids go to the
+	// gone list.
+	DropOrphanFiles(ctx context.Context, before time.Time, limit int) (int64, error)
+	// GoneFiles lists up to limit deleted files whose bytes are still stored.
+	GoneFiles(ctx context.Context, limit int) ([]string, error)
+	ForgetGoneFiles(ctx context.Context, ids []string) error
 }
 
 // WebhookSender POSTs one delivery; an error covers a refused address, a

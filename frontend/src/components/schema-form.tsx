@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useMemo, useRef, useState, type Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Copy, FileUp, Loader2, Paperclip, Plus, Search, X } from "lucide-react";
-import { FILE, REF, recordTitle } from "@/components/field-builder";
+import { AUTO, FILE, FORMULA, REF, fileRefs, isImage, recordTitle } from "@/components/field-builder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -111,20 +111,48 @@ export function useRecordLabel(collectionId: string | undefined, recordId: strin
   return (rec.data && recordTitle(target.data?.schema ?? null, rec.data.data)) ?? recordId.slice(0, 8);
 }
 
+/** Searches the target collection and hands back the picked record's id. */
+function RecordPicker({ id, target, onPick, onClose }: { id: string; target: string; onPick: (id: string) => void; onClose: () => void }) {
+  const { t } = useI18n();
+  const [text, setText] = useState("");
+  const q = searchTerm(useDebounced(text));
+  const meta = useQuery({ queryKey: ["collections", "detail", target], queryFn: () => collections.get(target), enabled: !!target });
+  const found = useQuery({ queryKey: ["records", target, "pick", q], queryFn: ({ signal }) => records.list({ collection_id: target, page: 1, limit: 8, search: q }, signal), enabled: !!target });
+  return (
+    <div className="space-y-1.5 rounded-md border p-2">
+      <Input id={id} autoFocus type="search" placeholder={t("schema.ref_search")} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") onClose(); if (e.key === "Enter") e.preventDefault(); }} />
+      {found.isPending ? <Loader2 className="mx-auto size-4 animate-spin text-muted-foreground" /> : (
+        <ul className="max-h-56 overflow-auto">
+          {(found.data?.items ?? []).map((r) => (
+            <li key={r.id}>
+              <button type="button" className="w-full truncate rounded px-2 py-1.5 text-left text-sm hover:bg-muted" onClick={() => { onPick(r.id); setText(""); }}>
+                {recordTitle(meta.data?.schema ?? null, r.data) ?? r.id.slice(0, 8)}
+              </button>
+            </li>
+          ))}
+          {found.data?.items.length === 0 && <li className="px-2 py-1.5 text-sm text-muted-foreground">{t("common.no_results")}</li>}
+        </ul>
+      )}
+      <Button type="button" size="sm" variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
+    </div>
+  );
+}
+
+const refTarget = (schema: unknown) => {
+  const v = (schema as Record<string, unknown>)[REF];
+  return typeof v === "string" ? v : "";
+};
+
 /** A record of the collection named by x-ref, picked by searching it. */
 function ReferenceField({ formData, onChange, fieldPathId, schema, name, required, disabled, readonly }: FieldProps) {
   const { t } = useI18n();
-  const target = typeof (schema as Record<string, unknown>)[REF] === "string" ? ((schema as Record<string, unknown>)[REF] as string) : "";
+  const target = refTarget(schema);
   const value = typeof formData === "string" && formData ? formData : undefined;
   const label = useRecordLabel(target, value);
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
-  const q = searchTerm(useDebounced(text));
-  const meta = useQuery({ queryKey: ["collections", "detail", target], queryFn: () => collections.get(target), enabled: open && !!target });
-  const found = useQuery({ queryKey: ["records", target, "pick", q], queryFn: ({ signal }) => records.list({ collection_id: target, page: 1, limit: 8, search: q }, signal), enabled: open && !!target });
   const id = fieldPathId.$id;
   const off = disabled || readonly;
-  const pick = (v: string | undefined) => { onChange(v, fieldPathId.path); setOpen(false); setText(""); };
+  const pick = (v: string | undefined) => { onChange(v, fieldPathId.path); setOpen(false); };
   return (
     <>
       <Head id={id} schema={schema} name={name} required={required} />
@@ -139,46 +167,95 @@ function ReferenceField({ formData, onChange, fieldPathId, schema, name, require
       ) : !open ? (
         <Button {...named(id)} type="button" variant="outline" onClick={() => setOpen(true)}><Search className="size-4" />{t("schema.ref_pick")}</Button>
       ) : (
-        <div className="space-y-1.5 rounded-md border p-2">
-          <Input id={id} autoFocus type="search" placeholder={t("schema.ref_search")} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); if (e.key === "Enter") e.preventDefault(); }} />
-          {found.isPending ? <Loader2 className="mx-auto size-4 animate-spin text-muted-foreground" /> : (
-            <ul className="max-h-56 overflow-auto">
-              {(found.data?.items ?? []).map((r) => (
-                <li key={r.id}>
-                  <button type="button" className="w-full truncate rounded px-2 py-1.5 text-left text-sm hover:bg-muted" onClick={() => pick(r.id)}>
-                    {recordTitle(meta.data?.schema ?? null, r.data) ?? r.id.slice(0, 8)}
-                  </button>
-                </li>
-              ))}
-              {found.data?.items.length === 0 && <li className="px-2 py-1.5 text-sm text-muted-foreground">{t("common.no_results")}</li>}
-            </ul>
-          )}
-          <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>{t("common.cancel")}</Button>
-        </div>
+        <RecordPicker id={id} target={target} onPick={pick} onClose={() => setOpen(false)} />
+      )}
+    </>
+  );
+}
+
+function RefChip({ target, value, onRemove }: { target: string; value: string; onRemove?: () => void }) {
+  const { t } = useI18n();
+  const label = useRecordLabel(target, value);
+  return (
+    <li className="flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2.5 pr-0.5 text-sm">
+      <Link href={`/records/${value}`} className="max-w-60 truncate hover:underline">{label}</Link>
+      {onRemove && <button type="button" className="grid size-6 place-items-center rounded-full hover:bg-accent" aria-label={`${t("schema.ref_clear")}: ${label}`} onClick={onRemove}><X className="size-3" /></button>}
+    </li>
+  );
+}
+
+/** Several records of the collection named by x-ref, kept as a list of ids. */
+function ReferencesField({ formData, onChange, fieldPathId, schema, name, required, disabled, readonly }: FieldProps) {
+  const { t } = useI18n();
+  const target = refTarget(schema);
+  const value = Array.isArray(formData) ? (formData as unknown[]).filter((v): v is string => typeof v === "string") : [];
+  const [open, setOpen] = useState(false);
+  const id = fieldPathId.$id;
+  const off = disabled || readonly;
+  const set = (next: string[]) => onChange(next.length ? next : undefined, fieldPathId.path);
+  return (
+    <>
+      <Head id={id} schema={schema} name={name} required={required} />
+      {value.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5" aria-label={String(schema.title ?? name)}>
+          {value.map((v) => <RefChip key={v} target={target} value={v} onRemove={off ? undefined : () => set(value.filter((x) => x !== v))} />)}
+        </ul>
+      )}
+      {off ? (value.length === 0 && <p className="text-sm text-muted-foreground">—</p>) : !open ? (
+        <Button {...named(id)} type="button" variant="outline" size="sm" onClick={() => setOpen(true)}><Search className="size-4" />{t("schema.ref_add")}</Button>
+      ) : (
+        <RecordPicker id={id} target={target} onPick={(r) => { if (!value.includes(r)) set([...value, r]); }} onClose={() => setOpen(false)} />
       )}
     </>
   );
 }
 
 export const fileSize = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
-const FILE_MAX = 1024 * 1024;
+const FILE_MAX = 8 * 1024 * 1024;
+const FILES_MAX = 20;
 
-/** An attached file: uploaded to the collection at once, the record keeps {id, name, size, type}. */
+/** One attached file: a thumbnail for images, else a clip; opens in a new tab. */
+function FileChip({ file, onRemove }: { file: FileRef; onRemove?: () => void }) {
+  const { t } = useI18n();
+  return (
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1">
+      <a href={tools.fileUrl(file.id)} target="_blank" rel="noopener" className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-md border px-2 py-1 text-sm hover:underline">
+        {isImage(file)
+          // eslint-disable-next-line @next/next/no-img-element -- a private file behind the session proxy, not an optimizable asset
+          ? <img src={tools.fileUrl(file.id)} alt="" loading="lazy" className="size-8 shrink-0 rounded object-cover" />
+          : <Paperclip className="size-4 shrink-0" />}
+        <span className="truncate">{file.name}</span><span className="shrink-0 text-xs text-muted-foreground">{fileSize(file.size)}</span>
+      </a>
+      {onRemove && <Button type="button" size="icon-sm" variant="ghost" aria-label={`${t("schema.file_remove")}: ${file.name}`} title={t("schema.file_remove")} onClick={onRemove}><X className="size-4" /></Button>}
+    </span>
+  );
+}
+
+/**
+ * An attached file, or several (an array field): each is uploaded to the
+ * collection at once, the record keeps {id, name, size, type}.
+ */
 function FileField({ formData, onChange, fieldPathId, schema, name, required, disabled, readonly, registry }: FieldProps) {
   const { t } = useI18n();
   const collectionId = (registry.formContext as { collectionId?: string } | undefined)?.collectionId;
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const file = formData && typeof formData === "object" && typeof (formData as FileRef).id === "string" ? (formData as FileRef) : undefined;
+  const many = schema.type === "array";
+  const files = fileRefs(formData);
   const id = fieldPathId.$id;
   const off = disabled || readonly || !collectionId;
-  const upload = async (f: File) => {
+  const full = many && files.length >= FILES_MAX;
+  const set = (next: FileRef[]) => onChange(many ? (next.length ? next : undefined) : next[0], fieldPathId.path);
+  const upload = async (picked: File[]) => {
     setError(null);
-    if (f.size > FILE_MAX) return setError(t("schema.file_too_large"));
+    const list = many ? picked.slice(0, FILES_MAX - files.length) : picked.slice(0, 1);
+    if (list.some((f) => f.size > FILE_MAX)) return setError(t("schema.file_too_large"));
     setBusy(true);
     try {
-      onChange(await tools.upload(collectionId!, f), fieldPathId.path);
+      const added: FileRef[] = [];
+      for (const f of list) added.push(await tools.upload(collectionId!, f));
+      set(many ? [...files, ...added] : added);
     } catch (err) {
       setError(errorMessage(err, "common.save_failed", t));
     } finally {
@@ -189,27 +266,26 @@ function FileField({ formData, onChange, fieldPathId, schema, name, required, di
     <>
       <Head id={id} schema={schema} name={name} required={required} />
       <div className="flex flex-wrap items-center gap-2">
-        {file && (
-          <a href={tools.fileUrl(file.id)} target="_blank" rel="noopener" className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:underline">
-            <Paperclip className="size-4 shrink-0" /><span className="truncate">{file.name}</span><span className="shrink-0 text-xs text-muted-foreground">{fileSize(file.size)}</span>
-          </a>
+        {files.length > 0 && (
+          <ul className="flex min-w-0 max-w-full flex-wrap gap-2" aria-label={String(schema.title ?? name)}>
+            {files.map((f, i) => <li key={f.id} className="min-w-0 max-w-full"><FileChip file={f} onRemove={off ? undefined : () => set(files.filter((_, j) => j !== i))} /></li>)}
+          </ul>
         )}
-        {!off && (
+        {!off && !full && (
           <Button {...named(id)} type="button" variant="outline" size="sm" disabled={busy} onClick={() => input.current?.click()}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <FileUp className="size-4" />}{t(file ? "schema.file_replace" : "schema.file_pick")}
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <FileUp className="size-4" />}{t(many ? "schema.files_add" : files.length ? "schema.file_replace" : "schema.file_pick")}
           </Button>
         )}
-        {!off && file && <Button type="button" size="icon-sm" variant="ghost" aria-label={t("schema.file_remove")} title={t("schema.file_remove")} onClick={() => onChange(undefined, fieldPathId.path)}><X className="size-4" /></Button>}
-        {!file && off && <span className="text-sm text-muted-foreground">{collectionId ? "—" : t("schema.file_preview")}</span>}
-        <input ref={input} type="file" className="hidden" aria-hidden tabIndex={-1} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
+        {!files.length && off && <span className="text-sm text-muted-foreground">{collectionId ? "—" : t("schema.file_preview")}</span>}
+        <input ref={input} type="file" multiple={many} className="hidden" aria-hidden tabIndex={-1} onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ""; if (f.length) void upload(f); }} />
       </div>
-      <p className="text-xs text-muted-foreground">{t("schema.file_hint")}</p>
+      <p className="text-xs text-muted-foreground">{t(full ? "schema.files_full" : "schema.file_hint")}</p>
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     </>
   );
 }
 
-const fields = { json: JsonField, reference: ReferenceField, file: FileField };
+const fields = { json: JsonField, reference: ReferenceField, references: ReferencesField, file: FileField };
 
 /**
  * Text areas for strings allowed to run long (the field builder's "long text"),
@@ -218,9 +294,11 @@ const fields = { json: JsonField, reference: ReferenceField, file: FileField };
  */
 export function uiFor(schema: unknown, nested = false): UiSchema {
   if (!schema || typeof schema !== "object") return {};
-  const s = schema as { type?: unknown; maxLength?: unknown; examples?: unknown; properties?: Record<string, unknown>; items?: unknown; [REF]?: unknown; [FILE]?: unknown };
+  const s = schema as { type?: unknown; maxLength?: unknown; examples?: unknown; properties?: Record<string, unknown>; items?: unknown; [REF]?: unknown; [FILE]?: unknown; [AUTO]?: unknown; [FORMULA]?: unknown };
   if (nested && s.type === "string" && typeof s[REF] === "string") return { "ui:field": "reference" };
-  if (nested && s.type === "object" && s[FILE] === true) return { "ui:field": "file" };
+  if (nested && s.type === "array" && typeof s[REF] === "string") return { "ui:field": "references" };
+  if (nested && (s.type === "object" || s.type === "array") && s[FILE] === true) return { "ui:field": "file" };
+  if (nested && (typeof s[AUTO] === "string" || typeof s[FORMULA] === "string")) return { "ui:readonly": true }; // the server fills it on save
   const out: UiSchema = {};
   if (Array.isArray(s.examples) && typeof s.examples[0] === "string") out["ui:placeholder"] = s.examples[0];
   if (s.type === "string" && typeof s.maxLength === "number" && s.maxLength >= 500) out["ui:widget"] = "textarea";

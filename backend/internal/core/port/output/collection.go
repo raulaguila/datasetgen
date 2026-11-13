@@ -18,6 +18,8 @@ type CollectionRepository interface {
 	// (superuser or '*'), else the member role. NotFound when the collection is
 	// missing or userID is not a member.
 	Access(ctx context.Context, id, userID string) (domain.MemberRole, error)
+	// Referrers lists the collections userID belongs to whose reference fields point at targetID.
+	Referrers(ctx context.Context, targetID, userID string) ([]domain.Referrer, error)
 	FindByID(ctx context.Context, id string) (*domain.Collection, error)
 	// SchemaForWrite reads only the schema and holds a FOR SHARE lock until the
 	// transaction ends, so a schema update waits for records being checked against it.

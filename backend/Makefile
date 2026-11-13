@@ -172,7 +172,7 @@ install-tools: ## Install pinned Go tooling into GOPATH/bin
 # =========================
 # 1. Environment & Setup
 # =========================
-.PHONY: db-backup db-restore clean clean-go-cache clean-go-mod-cache init swagger tidy dev-backend dev-mailer list-updates
+.PHONY: db-backup db-restore backup-now backup-verify clean clean-go-cache clean-go-mod-cache init swagger tidy dev-backend dev-mailer list-updates
 
 clean: ## Clean local build artifacts
 	@echo "$(BLUE)🏗️  Cleaning local build artifacts...$(RESET)"
@@ -353,6 +353,12 @@ db-backup: ## Dump the database now into backups/ (custom-format pg_dump)
 	@set -a && . ./config/.env && set +a; \
 	file="backups/db-$$(date +%Y%m%d-%H%M%S)"; \
 	$(DOCKER) exec dataset_postgres pg_dump -Fc -U "$${POSTGRES_USER}" -d "$${POSTGRES_BASE}" -p "$${POSTGRES_PORT}" > "$$file.part" && mv "$$file.part" "$$file.dump" && echo "$(GREEN)✅ $$file.dump$(RESET)"
+
+backup-now: ## Run the backup container's dump now, verified by a test restore
+	$(DOCKER) exec dataset_backup sh /backup.sh once
+
+backup-verify: ## Restore the newest backup into a scratch database and report what it holds
+	$(DOCKER) exec dataset_backup sh /backup.sh verify
 
 db-restore: ## Restore a dump over the database, replacing current data (Usage: make db-restore FILE=backups/db-....dump)
 	$(call require_env_file)

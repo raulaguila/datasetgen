@@ -5,6 +5,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
@@ -220,7 +221,7 @@ func (s *Service) UploadFile(ctx context.Context, collectionID, name, contentTyp
 		return nil, apperror.New(apperror.CodeInvalidInput, "file name must be 1-200 characters").WithField("file")
 	}
 	if len(data) == 0 || len(data) > domain.FileMaxBytes {
-		return nil, apperror.New(apperror.CodeInvalidInput, "a file holds 1 byte to 1 MB").WithField("file")
+		return nil, apperror.New(apperror.CodeInvalidInput, "a file holds 1 byte to 8 MB").WithField("file")
 	}
 	if contentType == "" || len(contentType) > 100 {
 		contentType = "application/octet-stream"
@@ -233,8 +234,7 @@ func (s *Service) UploadFile(ctx context.Context, collectionID, name, contentTyp
 		if err := uow.Tools().CreateFile(ctx, f, reqctx.Actor(ctx)); err != nil {
 			return err
 		}
-		// Written before the commit: a failed write rolls the row back; a failed commit leaves an orphan file.
-		// shortcut: no sweep of orphan files; add one when the store grows.
+		// Written before the commit: a failed write rolls the row back; a failed commit leaves stored bytes SweepFiles never sees.
 		return s.Files.Put(ctx, fileKeyPrefix+f.ID, data)
 	})
 	if err != nil {
@@ -262,4 +262,29 @@ func (s *Service) File(ctx context.Context, id string) (*domain.File, []byte, er
 		return nil, nil, err
 	}
 	return f, data, nil
+}
+
+const (
+	// orphanAge spares files uploaded for a record that is still being filled in.
+	orphanAge  = 24 * time.Hour
+	sweepBatch = 100
+)
+
+// SweepFiles deletes files no record names any more (a replaced or removed
+// attachment), then the stored bytes of every deleted file row, a purged
+// collection's included. Each run handles one batch.
+func (s *Service) SweepFiles(ctx context.Context) error {
+	if _, err := s.Store.Tools().DropOrphanFiles(ctx, time.Now().Add(-orphanAge), sweepBatch); err != nil {
+		return err
+	}
+	ids, err := s.Store.Tools().GoneFiles(ctx, sweepBatch)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := s.Files.Delete(ctx, fileKeyPrefix+id); err != nil {
+			return err
+		}
+	}
+	return s.Store.Tools().ForgetGoneFiles(ctx, ids)
 }

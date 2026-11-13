@@ -39,36 +39,7 @@ func New(repo output.RecordRepository, collections output.CollectionRepository, 
 }
 
 func (s *Service) List(ctx context.Context, filter domain.RecordFilter) ([]domain.Record, int64, error) {
-	if err := validate.ID(filter.CollectionID); err != nil {
-		return nil, 0, apperror.New(apperror.CodeInvalidInput, "collection_id is required").WithField("collection_id")
-	}
-	filter.Search = strings.TrimSpace(filter.Search)
-	if err := validate.Search(filter.Search, maxSearchBytes); err != nil {
-		return nil, 0, err
-	}
-	if field := filter.SortField(); field != "" {
-		// Any top-level field; the value is a bind parameter, never SQL text.
-		if len(field) > 200 || strings.ContainsRune(field, 0) {
-			return nil, 0, apperror.New(apperror.CodeInvalidInput, "sort field is too long").WithField("sort")
-		}
-		if filter.Order == "" {
-			filter.Order = "asc"
-		}
-		if filter.Order != "asc" && filter.Order != "desc" {
-			return nil, 0, apperror.New(apperror.CodeInvalidInput, "order must be asc or desc").WithField("order")
-		}
-	} else if err := validate.Sort(&filter.Sort, &filter.Order, []string{"created_at", "updated_at"}, "created_at", "desc"); err != nil {
-		return nil, 0, err
-	}
-	if len(filter.IDs) > maxBatch {
-		return nil, 0, apperror.New(apperror.CodeInvalidInput, "ids must hold up to 100 ids").WithField("ids")
-	}
-	for _, id := range filter.IDs {
-		if err := validate.ID(id); err != nil {
-			return nil, 0, err
-		}
-	}
-	if err := checkMatch(filter.Match); err != nil {
+	if err := checkFilter(&filter); err != nil {
 		return nil, 0, err
 	}
 	filter.Page = domain.NewPage(filter.Page.Number, filter.Page.Limit)
@@ -76,6 +47,91 @@ func (s *Service) List(ctx context.Context, filter domain.RecordFilter) ([]domai
 		return nil, 0, err
 	}
 	return s.Repo.List(ctx, filter)
+}
+
+// checkFilter checks and normalizes what selects records: search, sort, ids and rules.
+func checkFilter(filter *domain.RecordFilter) error {
+	if err := validate.ID(filter.CollectionID); err != nil {
+		return apperror.New(apperror.CodeInvalidInput, "collection_id is required").WithField("collection_id")
+	}
+	filter.Search = strings.TrimSpace(filter.Search)
+	if err := validate.Search(filter.Search, maxSearchBytes); err != nil {
+		return err
+	}
+	if field := filter.SortField(); field != "" {
+		// Any top-level field; the value is a bind parameter, never SQL text.
+		if len(field) > 200 || strings.ContainsRune(field, 0) {
+			return apperror.New(apperror.CodeInvalidInput, "sort field is too long").WithField("sort")
+		}
+		if filter.Order == "" {
+			filter.Order = "asc"
+		}
+		if filter.Order != "asc" && filter.Order != "desc" {
+			return apperror.New(apperror.CodeInvalidInput, "order must be asc or desc").WithField("order")
+		}
+	} else if err := validate.Sort(&filter.Sort, &filter.Order, []string{"created_at", "updated_at"}, "created_at", "desc"); err != nil {
+		return err
+	}
+	if len(filter.IDs) > maxBatch {
+		return apperror.New(apperror.CodeInvalidInput, "ids must hold up to 100 ids").WithField("ids")
+	}
+	for _, id := range filter.IDs {
+		if err := validate.ID(id); err != nil {
+			return err
+		}
+	}
+	if err := checkMatch(filter.Match); err != nil {
+		return err
+	}
+	if err := checkWhere(filter.Where); err != nil {
+		return err
+	}
+	return nil
+}
+
+// linksShown is how many pointing records Links returns per collection and field.
+const linksShown = 10
+
+func (s *Service) Links(ctx context.Context, id string) ([]domain.RecordLinks, error) {
+	if err := validate.ID(id); err != nil {
+		return nil, err
+	}
+	of, err := s.Repo.CollectionsOf(ctx, []string{id})
+	if err != nil {
+		return nil, err
+	}
+	notFound := apperror.New(apperror.CodeNotFound, "record not found")
+	collectionID, ok := of[id]
+	if !ok {
+		return nil, notFound
+	}
+	if _, err := policy.CollectionRole(ctx, s.Collections, collectionID, domain.RoleViewer); err != nil {
+		if apperror.IsCode(err, apperror.CodeNotFound) {
+			return nil, notFound
+		}
+		return nil, err
+	}
+	referrers, err := s.Collections.Referrers(ctx, collectionID, reqctx.Actor(ctx))
+	if err != nil {
+		return nil, err
+	}
+	value, _ := json.Marshal(id)
+	out := []domain.RecordLinks{}
+	for _, ref := range referrers {
+		// One id or a list holding it.
+		where := &domain.Where{Any: true, Rules: []domain.Condition{{Field: ref.Field, Op: domain.OpEq, Value: value}, {Field: ref.Field, Op: domain.OpHas, Value: value}}}
+		items, total, err := s.List(ctx, domain.RecordFilter{CollectionID: ref.CollectionID, Page: domain.NewPage(1, linksShown), Where: where, Sort: "updated_at", Order: "desc"})
+		if apperror.IsCode(err, apperror.CodeNotFound) {
+			continue // an API key sees only its own collection
+		}
+		if err != nil {
+			return nil, err
+		}
+		if total > 0 {
+			out = append(out, domain.RecordLinks{Referrer: ref, Total: total, Records: items})
+		}
+	}
+	return out, nil
 }
 
 func (s *Service) Get(ctx context.Context, id string) (*domain.Record, error) {
@@ -107,10 +163,11 @@ func (s *Service) Create(ctx context.Context, cmd input.CreateRecordCommand) (*d
 		if _, err := policy.CollectionRole(ctx, uow.Collections(), cmd.CollectionID, domain.RoleEditor); err != nil {
 			return err
 		}
-		raw, err := checkData(ctx, uow, cmd.CollectionID, "", cmd.Data)
+		raw, data, err := checkData(ctx, uow, cmd.CollectionID, "", cmd.Data)
 		if err != nil {
 			return err
 		}
+		r.Data = data
 		if err := uow.Records().Create(ctx, r); err != nil {
 			return err
 		}
@@ -141,11 +198,11 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateRecordCommand) (*d
 		if err := editor(ctx, uow, current.CollectionID); err != nil {
 			return err
 		}
-		raw, err := checkData(ctx, uow, current.CollectionID, cmd.ID, cmd.Data)
+		raw, data, err := checkData(ctx, uow, current.CollectionID, cmd.ID, cmd.Data)
 		if err != nil {
 			return err
 		}
-		if updated, err = uow.Records().Update(ctx, cmd.ID, cmd.Data, cmd.Version); err != nil {
+		if updated, err = uow.Records().Update(ctx, cmd.ID, data, cmd.Version); err != nil {
 			return err
 		}
 		if err := policy.Audit(ctx, uow, "record.update", updated.ID, auditDetails(updated.CollectionID, raw, cmd.Data)); err != nil {
@@ -225,32 +282,37 @@ func auditDetails(collectionID string, raw, data []byte) map[string]any {
 // returns the schema it checked.
 // shortcut: compiles the schema on every write; cache by collection id and version
 // when bulk imports make it show up in profiles.
-func checkData(ctx context.Context, uow output.UnitOfWork, collectionID, recordID string, data []byte) ([]byte, error) {
-	raw, err := uow.Collections().SchemaForWrite(ctx, collectionID)
+func checkData(ctx context.Context, uow output.UnitOfWork, collectionID, recordID string, data []byte) (raw, filled []byte, err error) {
+	raw, err = uow.Collections().SchemaForWrite(ctx, collectionID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	docs := [][]byte{data}
+	if err := fill(ctx, uow, raw, collectionID, docs, recordID == ""); err != nil {
+		return nil, nil, err
+	}
+	data = docs[0]
 	compiled, err := schema.Compile(raw)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := schema.Validate(compiled, data); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	issues, err := takenIn(ctx, uow, collectionID, recordID, schema.UniqueKeys(raw), [][]byte{data})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	missing, err := linksIn(ctx, uow, raw, collectionID, [][]byte{data})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	issues[0] = append(issues[0], missing[0]...)
 	if len(issues[0]) > 0 {
-		return nil, apperror.New(apperror.CodeValidationFailed, "a unique field repeats another record's value").
+		return nil, nil, apperror.New(apperror.CodeValidationFailed, "a unique field repeats another record's value").
 			WithField("data").WithDetails("issues", issues[0])
 	}
-	return raw, nil
+	return raw, data, nil
 }
 
 // hookData is a record as a webhook sends it.
@@ -271,12 +333,10 @@ func linksIn(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionI
 	for i, doc := range docs {
 		_ = json.Unmarshal(doc, &parsed[i]) // not an object: the schema already refused it
 	}
-	check := func(key, target string, idOf func(json.RawMessage) string, exist func(context.Context, string, []string) (map[string]bool, error)) error {
+	check := func(key, target string, idsOf func(json.RawMessage) []string, exist func(context.Context, string, []string) (map[string]bool, error)) error {
 		var ids []string
 		for _, p := range parsed {
-			if id := idOf(p[key]); id != "" {
-				ids = append(ids, id)
-			}
+			ids = append(ids, idsOf(p[key])...)
 		}
 		if len(ids) == 0 {
 			return nil
@@ -286,31 +346,54 @@ func linksIn(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionI
 			return err
 		}
 		for i, p := range parsed {
-			if id := idOf(p[key]); id != "" && !found[id] {
-				out[i] = append(out[i], schema.MissingIssue(key))
+			for _, id := range idsOf(p[key]) {
+				if !found[id] {
+					out[i] = append(out[i], schema.MissingIssue(key))
+					break
+				}
 			}
 		}
 		return nil
 	}
-	refID := func(v json.RawMessage) string {
-		var s string
-		if json.Unmarshal(v, &s) != nil || validate.ID(s) != nil {
-			return ""
+	// A reference holds one record id, or a list of them (several records).
+	refIDs := func(v json.RawMessage) []string {
+		var one string
+		if json.Unmarshal(v, &one) == nil {
+			if validate.ID(one) != nil {
+				return nil
+			}
+			return []string{one}
 		}
-		return s
+		var many []string
+		if json.Unmarshal(v, &many) != nil {
+			return nil
+		}
+		return slices.DeleteFunc(many, func(id string) bool { return validate.ID(id) != nil })
 	}
-	fileID := func(v json.RawMessage) string {
-		var f struct {
+	// A file field holds one {"id", ...} or a list of them (several files).
+	fileID := func(v json.RawMessage) []string {
+		type ref struct {
 			ID string `json:"id"`
 		}
-		if json.Unmarshal(v, &f) != nil || validate.ID(f.ID) != nil {
-			return ""
+		var many []ref
+		if json.Unmarshal(v, &many) != nil {
+			var one ref
+			if json.Unmarshal(v, &one) != nil {
+				return nil
+			}
+			many = []ref{one}
 		}
-		return f.ID
+		var ids []string
+		for _, f := range many {
+			if validate.ID(f.ID) == nil {
+				ids = append(ids, f.ID)
+			}
+		}
+		return ids
 	}
 	for _, key := range slices.Sorted(maps.Keys(refs)) {
 		// shortcut: existence only; the caller may not read the referenced collection.
-		if err := check(key, refs[key], refID, uow.Tools().RecordsExist); err != nil {
+		if err := check(key, refs[key], refIDs, uow.Tools().RecordsExist); err != nil {
 			return nil, err
 		}
 	}

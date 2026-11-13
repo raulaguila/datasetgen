@@ -24,6 +24,7 @@ API_PROXY_HEADER='X-Real-IP'                    # Client IP header, must be over
 API_RATE_LIMIT_GLOBAL='300'                     # Requests per client IP per minute, all routes (an office behind NAT shares one)
 WEBHOOK_ALLOW_PRIVATE='0'                       # 1 lets webhooks call loopback and private addresses (local tests only)
 BACKUP_KEEP_DAYS='7'                            # Days the backup container keeps its daily dumps
+BACKUP_DIR=''                                   # Host folder for backups (external disk, synced folder); empty keeps a Docker volume on this disk
 API_RATE_LIMIT_AUTH='10'                        # Requests per client per minute on register, activate and login
 API_RATE_LIMIT_PASSWORD='3'                     # Requests per client per minute on password reset
 API_READ_TIMEOUT='30s'                          # Server read timeout

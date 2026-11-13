@@ -105,13 +105,13 @@ test("reference and file fields", async ({ page }) => {
   await page.getByRole("button", { name: "Adicionar campo", exact: true }).click();
   await form.getByLabel("Nome do campo").fill("Dono");
   await form.getByRole("combobox", { name: "Tipo" }).click();
-  await page.getByRole("option", { name: /^Referência/ }).click();
+  await page.getByRole("option", { name: "Referência", exact: true }).click();
   await form.getByRole("combobox", { name: "Coleção referenciada" }).click();
   await page.getByRole("option", { name: target }).click();
   await form.getByRole("button", { name: "Adicionar campo" }).click();
   await form.getByLabel("Nome do campo").fill("Anexo");
   await form.getByRole("combobox", { name: "Tipo" }).click();
-  await page.getByRole("option", { name: /^Arquivo/ }).click();
+  await page.getByRole("option", { name: "Arquivo", exact: true }).click();
   await form.getByRole("button", { name: "Adicionar campo" }).click();
   await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
   await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);

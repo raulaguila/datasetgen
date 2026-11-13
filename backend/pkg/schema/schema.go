@@ -60,6 +60,11 @@ func Compile(raw []byte) (*jsonschema.Schema, error) {
 	if err != nil {
 		return nil, invalid(err.Error())
 	}
+	for key, src := range Formulas(raw) {
+		if _, err := ParseFormula(src); err != nil {
+			return nil, invalid("formula of " + key + ": " + err.Error())
+		}
+	}
 	return compiled, nil
 }
 
@@ -210,8 +215,8 @@ func FieldChanges(before, after []byte) map[string][]string {
 	return out
 }
 
-// RefKeyword holds, on a top-level string property, the id of the collection
-// whose record its value names; FileKeyword marks a property holding an attached
+// RefKeyword holds, on a top-level string (one record) or array of strings
+// (several) property, the id of the collection whose records its value names; FileKeyword marks a property holding an attached
 // file ({"id", "name", "size", "type"}). The server checks both exist.
 const (
 	RefKeyword  = "x-ref"

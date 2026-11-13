@@ -1,6 +1,12 @@
 // One function per API route the screens use. Paths match the backend Swagger.
 import { apiDownload, apiFetch } from "@/lib/api/client";
 import type {
+  Automation,
+  AutomationInput,
+  PublicLink,
+  WebhookDelivery,
+  RecordComment, RecordLinks,
+  ShareLink,
   Action,
   AuditRecord,
   InviteResult,
@@ -35,6 +41,7 @@ import type {
   SchemaVersion,
   SavedView,
   FileRef,
+  RecordGroup,
 } from "@/lib/api/types";
 
 function query(params: Record<string, string | number | boolean | undefined>): string {
@@ -157,22 +164,29 @@ export const collections = {
 export const records = {
   /** filter: a JSON object of top-level fields and exact values. */
   /** sort: created_at, updated_at or data.<field>; ids: up to 100 record ids, comma separated. */
-  list: (p: { collection_id: string; page: number; limit: number; search?: string; sort?: string; order?: SortOrder; filter?: string; ids?: string }, signal?: AbortSignal) =>
+  list: (p: { collection_id: string; page: number; limit: number; search?: string; sort?: string; order?: SortOrder; filter?: string; where?: string; ids?: string }, signal?: AbortSignal) =>
     apiFetch<Paged<DataRecord>>(`/v1/records${query(p)}`, { signal }),
   versions: (recordId: string, signal?: AbortSignal) => apiFetch<{ items: RecordVersion[] }>(`/v1/records/${id(recordId)}/versions`, { signal }),
   restore: (recordId: string, version: number, current_version?: number) =>
     apiFetch<DataRecord>(`/v1/records/${id(recordId)}/restore`, { method: "POST", json: { version, current_version } }),
   /** One batch of a file import; dry_run only checks. */
-  importBatch: (body: { collection_id: string; records: unknown[]; dry_run?: boolean; skip_invalid?: boolean }) =>
+  importBatch: (body: { collection_id: string; records: unknown[]; dry_run?: boolean; skip_invalid?: boolean; upsert_key?: string }) =>
     apiFetch<ImportResult>("/v1/records/import", { method: "POST", json: body }),
   export: (collection_id: string, format: "jsonl" | "csv", valid: boolean) =>
     apiDownload(`/v1/records/export${query({ collection_id, format, valid: valid || undefined })}`, `records.${format}`),
+  /** Counts the selected records by a field (or all together) with sums and averages of numeric fields. */
+  aggregate: (p: { collection_id: string; search?: string; filter?: string; where?: string; group?: string; sum?: string }, signal?: AbortSignal) =>
+    apiFetch<{ items: RecordGroup[] }>(`/v1/records/aggregate${query(p)}`, { signal }),
   get: (recordId: string) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`),
   create: (collection_id: string, data: unknown) => apiFetch<DataRecord>("/v1/records", { method: "POST", json: { collection_id, data } }),
   update: (recordId: string, data: unknown, version?: number) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`, { method: "PATCH", json: { data, version } }),
   remove: (ids: string[]) => apiFetch<void>("/v1/records/delete", { method: "POST", json: { ids } }),
   /** Sets the same fields on records of one collection, all or none; null removes a field. */
   bulkUpdate: (ids: string[], set: Record<string, unknown>) => apiFetch<{ count: number }>("/v1/records/bulk-update", { method: "POST", json: { ids, set } }),
+  links: (recordId: string) => apiFetch<{ items: RecordLinks[] }>(`/v1/records/${id(recordId)}/links`),
+  comments: (recordId: string) => apiFetch<{ items: RecordComment[] }>(`/v1/records/${id(recordId)}/comments`),
+  addComment: (recordId: string, body: string) => apiFetch<RecordComment>(`/v1/records/${id(recordId)}/comments`, { method: "POST", json: { body } }),
+  deleteComment: (recordId: string, commentId: string) => apiFetch<void>(`/v1/records/${id(recordId)}/comments/${id(commentId)}`, { method: "DELETE" }),
 };
 
 const col = (collectionId: string) => `/v1/collections/${id(collectionId)}`;
@@ -182,11 +196,22 @@ export const tools = {
   keys: (collectionId: string) => apiFetch<{ items: ApiKey[] }>(`${col(collectionId)}/keys`),
   createKey: (collectionId: string, name: string, can_write: boolean) => apiFetch<ApiKey & { secret: string }>(`${col(collectionId)}/keys`, { method: "POST", json: { name, can_write } }),
   deleteKey: (collectionId: string, keyId: string) => apiFetch<void>(`${col(collectionId)}/keys/${id(keyId)}`, { method: "DELETE" }),
+  shares: (collectionId: string) => apiFetch<{ items: ShareLink[] }>(`${col(collectionId)}/shares`),
+  createShare: (collectionId: string, kind: ShareLink["kind"]) => apiFetch<ShareLink>(`${col(collectionId)}/shares`, { method: "POST", json: { kind } }),
+  deleteShare: (collectionId: string, shareId: string) => apiFetch<void>(`${col(collectionId)}/shares/${id(shareId)}`, { method: "DELETE" }),
   webhooks: (collectionId: string) => apiFetch<{ items: Webhook[] }>(`${col(collectionId)}/webhooks`),
   createWebhook: (collectionId: string, url: string, events: WebhookEvent[]) => apiFetch<Webhook & { secret: string }>(`${col(collectionId)}/webhooks`, { method: "POST", json: { url, events } }),
   deleteWebhook: (collectionId: string, hookId: string) => apiFetch<void>(`${col(collectionId)}/webhooks/${id(hookId)}`, { method: "DELETE" }),
   /** Sends a test delivery now; answers the hook with its new last status. */
   testWebhook: (collectionId: string, hookId: string) => apiFetch<Webhook>(`${col(collectionId)}/webhooks/${id(hookId)}/test`, { method: "POST" }),
+  deliveries: (collectionId: string, hookId: string) => apiFetch<{ items: WebhookDelivery[] }>(`${col(collectionId)}/webhooks/${id(hookId)}/deliveries`),
+  redeliver: (collectionId: string, hookId: string, deliveryId: string) =>
+    apiFetch<WebhookDelivery>(`${col(collectionId)}/webhooks/${id(hookId)}/deliveries/${id(deliveryId)}/redeliver`, { method: "POST" }),
+  automations: (collectionId: string) => apiFetch<{ items: Automation[] }>(`${col(collectionId)}/automations`),
+  createAutomation: (collectionId: string, input: AutomationInput) => apiFetch<Automation>(`${col(collectionId)}/automations`, { method: "POST", json: input }),
+  updateAutomation: (collectionId: string, autoId: string, input: AutomationInput) => apiFetch<Automation>(`${col(collectionId)}/automations/${id(autoId)}`, { method: "PUT", json: input }),
+  deleteAutomation: (collectionId: string, autoId: string) => apiFetch<void>(`${col(collectionId)}/automations/${id(autoId)}`, { method: "DELETE" }),
+  runAutomation: (collectionId: string, autoId: string) => apiFetch<Automation>(`${col(collectionId)}/automations/${id(autoId)}/run`, { method: "POST" }),
   trash: (collectionId: string, signal?: AbortSignal) => apiFetch<{ items: TrashedRecord[]; retention_days: number }>(`${col(collectionId)}/trash`, { signal }),
   restoreRecords: (collectionId: string, ids: string[]) => apiFetch<{ count: number }>(`${col(collectionId)}/trash/restore`, { method: "POST", json: { ids } }),
   purgeRecords: (collectionId: string, ids: string[]) => apiFetch<{ count: number }>(`${col(collectionId)}/trash/purge`, { method: "POST", json: { ids } }),
@@ -206,4 +231,12 @@ export const audit = {
     apiFetch<Paged<AuditRecord>>(`/v1/audit${query(p)}`, { signal }),
   /** Downloads the filtered log as CSV; more than 10 000 records is a 400 asking for narrower filters. */
   export: (p: { action?: string; user_id?: string; from?: string; to?: string }) => apiDownload(`/v1/audit/export${query(p)}`, "audit.csv"),
+};
+
+/** A share link, opened by anyone holding it (no session). */
+export const publicLinks = {
+  get: (token: string) => apiFetch<PublicLink>(`/v1/public/${id(token)}`),
+  records: (token: string, p: { page: number; limit: number; search?: string }, signal?: AbortSignal) =>
+    apiFetch<Paged<DataRecord>>(`/v1/public/${id(token)}/records${query(p)}`, { signal }),
+  submit: (token: string, data: unknown) => apiFetch<{ id: string }>(`/v1/public/${id(token)}/records`, { method: "POST", json: { data } }),
 };

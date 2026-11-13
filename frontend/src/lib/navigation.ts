@@ -1,4 +1,4 @@
-import { Database, FileJson, LayoutDashboard, Package, KeyRound, ListChecks, ListTree, Plug, ScrollText, Settings2, Trash2, UserCog, Users, type LucideIcon } from "lucide-react";
+import { Database, FileJson, KeyRound, LayoutDashboard, ListChecks, ListTree, Package, Plug, ScrollText, Settings2, Trash2, UserCog, Users, Zap, type LucideIcon } from "lucide-react";
 import type { Action, MemberRole } from "@/lib/api/types";
 import type { MessageKey } from "@/lib/i18n/messages";
 
@@ -55,6 +55,7 @@ export const COLLECTION_MONITORING_NAV: CollectionSection[] = [
 export const COLLECTION_SETTINGS_NAV: CollectionSection[] = [
   { seg: "/settings", key: "collections.tab.general", icon: Settings2, need: "owner", shortcut: "," },
   { seg: "/members", key: "collections.tab.members", icon: UserCog, need: "owner", shortcut: "m" },
+  { seg: "/automations", key: "collections.tab.automations", icon: Zap, need: "owner", shortcut: "u" },
   { seg: "/integrations", key: "collections.tab.integrations", icon: Plug, need: "owner", shortcut: "i" },
 ];
 

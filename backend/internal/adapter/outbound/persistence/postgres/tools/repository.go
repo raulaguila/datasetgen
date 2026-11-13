@@ -341,3 +341,42 @@ func (r *Repository) RecordsExist(ctx context.Context, collectionID string, ids 
 func (r *Repository) FilesExist(ctx context.Context, collectionID string, ids []string) (map[string]bool, error) {
 	return r.existing(ctx, "app.file", collectionID, ids)
 }
+
+// DropOrphanFiles looks for the file id in the JSON text of the records that
+// could name it.
+// shortcut: a text scan of the collection's records and of every record version; index file ids if sweeps grow slow.
+func (r *Repository) DropOrphanFiles(ctx context.Context, before time.Time, limit int) (int64, error) {
+	res := r.db.WithContext(ctx).Exec(`
+		DELETE FROM app.file WHERE id IN (
+			SELECT f.id FROM app.file f
+			WHERE f.created_at < ?
+			  AND NOT EXISTS (SELECT 1 FROM app.record x WHERE x.collection_id = f.collection_id AND strpos(x.data::text, f.id::text) > 0)
+			  AND NOT EXISTS (SELECT 1 FROM app.record_trash x WHERE x.collection_id = f.collection_id AND strpos(x.data::text, f.id::text) > 0)
+			  AND NOT EXISTS (SELECT 1 FROM app.record_version x WHERE strpos(x.data::text, f.id::text) > 0)
+			ORDER BY f.created_at
+			LIMIT ?)`, before, limit)
+	if res.Error != nil {
+		return 0, shared.WrapError(res.Error, "file")
+	}
+	return res.RowsAffected, nil
+}
+
+func (r *Repository) GoneFiles(ctx context.Context, limit int) ([]string, error) {
+	var ids []uuid.UUID
+	err := r.db.WithContext(ctx).Raw(`SELECT id FROM app.file_gone ORDER BY deleted_at LIMIT ?`, limit).Find(&ids).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "file")
+	}
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = id.String()
+	}
+	return out, nil
+}
+
+func (r *Repository) ForgetGoneFiles(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return shared.WrapError(r.db.WithContext(ctx).Exec(`DELETE FROM app.file_gone WHERE id IN `+idList, jsonIDs(ids)).Error, "file")
+}

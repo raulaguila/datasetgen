@@ -1,6 +1,8 @@
 package composition
 
 import (
+	"context"
+	"errors"
 	"maps"
 	"time"
 
@@ -72,22 +74,51 @@ func NewFiles(cfg config.StorageConfig) output.FileStore {
 // adds its handlers here.
 func NewJobs(cfg *config.Environment, res *infra.Resources, log *logger.Logger) *jobs.Worker {
 	handlers := map[string]policy.JobHandler{}
-	maps.Copy(handlers, NewIntegrations(cfg, res).Jobs())
+	integrations := NewIntegrations(cfg, res)
+	maps.Copy(handlers, integrations.Jobs())
 	maps.Copy(handlers, product.Jobs(log))
 	store := postgres.NewStore(res.PostgresDB)
 	maps.Copy(handlers, collection.Jobs(store.Collections(), store.Records()))
+	files := &tools.Service{Store: store, Tx: store, Files: NewFiles(cfg.Storage)}
 	return &jobs.Worker{
 		Repo:     job.NewRepository(res.PostgresDB),
 		Handlers: handlers,
 		Log:      log,
 		Clock:    output.RealClock{},
+		// Daily automations are checked once a minute; unused files are swept hourly.
+		Every:    time.Minute,
+		Periodic: periodic(integrations.Schedule, hourly(files.SweepFiles)),
+	}
+}
+
+// periodic runs each step in turn; a failing step does not stop the next.
+func periodic(steps ...func(context.Context) error) func(context.Context) error {
+	return func(ctx context.Context) error {
+		var errs []error
+		for _, step := range steps {
+			errs = append(errs, step(ctx))
+		}
+		return errors.Join(errs...)
+	}
+}
+
+// hourly runs fn at most once an hour; the worker calls it every minute.
+func hourly(fn func(context.Context) error) func(context.Context) error {
+	var last time.Time
+	return func(ctx context.Context) error {
+		if time.Since(last) < time.Hour {
+			return nil
+		}
+		last = time.Now()
+		return fn(ctx)
 	}
 }
 
 // NewIntegrations wires API keys and webhooks; hook secrets are sealed with the SMTP master key.
 func NewIntegrations(cfg *config.Environment, res *infra.Resources) *integration.Service {
 	store := postgres.NewStore(res.PostgresDB)
-	return &integration.Service{Store: store, Tx: store, Send: webhook.New(cfg.API.WebhookAllowPrivate), SealKey: cfg.SMTP.TokenKey()}
+	return &integration.Service{Store: store, Tx: store, Send: webhook.New(cfg.API.WebhookAllowPrivate), SealKey: cfg.SMTP.TokenKey(),
+		Records: record.New(store.Records(), store.Collections(), store)}
 }
 
 // NewApplication wires concrete adapters into use cases / inbound ports.

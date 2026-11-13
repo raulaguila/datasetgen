@@ -72,7 +72,7 @@ func (r *Repository) List(ctx context.Context, filter domain.CollectionFilter) (
 	matching := func() *gorm.DB {
 		q := visible(r.db.WithContext(ctx).Table("app.collection c"), filter.UserID)
 		if filter.Search != "" {
-			q = q.Where("c.name ILIKE ?", shared.Contains(filter.Search))
+			q = q.Where("(c.name ILIKE ? OR c.description ILIKE ?)", shared.Contains(filter.Search), shared.Contains(filter.Search))
 		}
 		return q
 	}
@@ -217,6 +217,31 @@ func (r *Repository) Access(ctx context.Context, id, userID string) (domain.Memb
 		return "", shared.WrapError(err, "collection")
 	}
 	return domain.MemberRole(*m.Role), nil
+}
+
+// shortcut: at most 20 referring fields; a collection pointed at from more places shows the first 20.
+func (r *Repository) Referrers(ctx context.Context, targetID, userID string) ([]domain.Referrer, error) {
+	var rows []struct {
+		ID     uuid.UUID `gorm:"column:id"`
+		Name   string    `gorm:"column:name"`
+		Field  string    `gorm:"column:field"`
+		Schema []byte    `gorm:"column:schema"`
+	}
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT c.id, c.name, p.key AS field, c.schema
+		FROM app.collection c
+		JOIN app.collection_member m ON m.collection_id = c.id AND m.user_id = ?
+		CROSS JOIN LATERAL json_each(c.schema -> 'properties') p
+		WHERE c.deleted_at IS NULL AND p.value ->> 'x-ref' = ?
+		ORDER BY c.name, p.key LIMIT 20`, userID, targetID).Find(&rows).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "collection")
+	}
+	out := make([]domain.Referrer, 0, len(rows))
+	for _, m := range rows {
+		out = append(out, domain.Referrer{CollectionID: m.ID.String(), Name: m.Name, Field: m.Field, Schema: m.Schema})
+	}
+	return out, nil
 }
 
 type memberRow struct {

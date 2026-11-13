@@ -17,6 +17,50 @@ type RecordFilter struct {
 	Match json.RawMessage
 	// IDs keeps only these records (up to 100), to look up several by id.
 	IDs []string
+	// Where keeps records that pass its rules (all, or any of them).
+	Where *Where
+}
+
+// Where operators. Values compare as JSON: numbers as numbers, strings
+// (ISO dates too) as text, so gt and lt work on both.
+const (
+	OpEq       = "eq"
+	OpNeq      = "neq"
+	OpContains = "contains" // text holds the value, ignoring case
+	OpGt       = "gt"
+	OpGte      = "gte"
+	OpLt       = "lt"
+	OpLte      = "lte"
+	OpEmpty    = "empty" // absent, null, "" or []
+	OpNotEmpty = "not_empty"
+	OpIn       = "in"  // value is an array; the field equals one of its items
+	OpHas      = "has" // the field is an array holding the value
+)
+
+// WhereOps lists the operators a rule may use.
+var WhereOps = []string{OpEq, OpNeq, OpContains, OpGt, OpGte, OpLt, OpLte, OpEmpty, OpNotEmpty, OpIn, OpHas}
+
+// Condition compares one top-level field with a JSON value.
+type Condition struct {
+	Field string          `json:"field"`
+	Op    string          `json:"op"`
+	Value json.RawMessage `json:"value,omitempty"`
+}
+
+// Where is a set of rules joined by AND, or by OR when Any is set.
+type Where struct {
+	Any   bool        `json:"any"`
+	Rules []Condition `json:"rules"`
+}
+
+// RecordGroup is the count of records sharing one value of a field, with
+// the sum and average of numeric fields over them. Key is null for the
+// totals of the whole selection.
+type RecordGroup struct {
+	Key   json.RawMessage
+	Count int64
+	Sums  map[string]float64
+	Avgs  map[string]float64
 }
 
 // SortField is the data field a Sort of "data.<field>" orders by, "" otherwise.
@@ -59,3 +103,28 @@ const (
 	FixRename     = "rename"
 	FixRemove     = "remove"
 )
+
+// Referrer is a collection with a reference field pointing at another collection.
+type Referrer struct {
+	CollectionID string
+	Name         string
+	Field        string
+	Schema       json.RawMessage
+}
+
+// RecordLinks are the records of one collection whose reference field names a record.
+type RecordLinks struct {
+	Referrer
+	Total   int64
+	Records []Record // the newest few, previews
+}
+
+// RecordComment is a note left on a record.
+type RecordComment struct {
+	ID         string
+	RecordID   string
+	UserID     string // empty once the author's account is gone
+	AuthorName string
+	Body       string
+	CreatedAt  time.Time
+}

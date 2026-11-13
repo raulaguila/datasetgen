@@ -16,6 +16,7 @@ import (
 	permissionhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/permission"
 	preferencehttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/preference"
 	producthttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/product"
+	publichttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/public"
 	recordhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/record"
 	rolehttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/role"
 	sessionhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/session"
@@ -116,6 +117,8 @@ func New(cfg *config.Environment, app *input.Application, hits middleware.Hits, 
 	recordhttp.New(app.Records).Routes(records)
 	tools.FileRoutes(v1.Group("/files", keyOrBearer))
 	audithttp.New(app.Audit).Routes(v1.Group("/audit", token), app.Authorizer)
+	// Share links: no session; the token is the access. Form posts share the sign-in limit.
+	publichttp.New(app.Integrations, app.Collections, app.Records).Routes(v1.Group("/public"), middleware.RateLimit("public", cfg.API.AuthRateLimit, hits))
 
 	return fiberApp
 }

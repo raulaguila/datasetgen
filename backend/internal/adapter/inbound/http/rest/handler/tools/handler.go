@@ -35,10 +35,20 @@ func (h *Handler) CollectionRoutes(r fiber.Router) {
 	r.Get("/:id/keys", h.Keys)
 	r.Post("/:id/keys", h.CreateKey)
 	r.Delete("/:id/keys/:keyId", h.DeleteKey)
+	r.Get("/:id/shares", h.Shares)
+	r.Post("/:id/shares", h.CreateShare)
+	r.Delete("/:id/shares/:shareId", h.DeleteShare)
 	r.Get("/:id/webhooks", h.Webhooks)
 	r.Post("/:id/webhooks", h.CreateWebhook)
 	r.Delete("/:id/webhooks/:hookId", h.DeleteWebhook)
 	r.Post("/:id/webhooks/:hookId/test", h.TestWebhook)
+	r.Get("/:id/webhooks/:hookId/deliveries", h.Deliveries)
+	r.Post("/:id/webhooks/:hookId/deliveries/:deliveryId/redeliver", h.Redeliver)
+	r.Get("/:id/automations", h.Automations)
+	r.Post("/:id/automations", h.CreateAutomation)
+	r.Put("/:id/automations/:autoId", h.UpdateAutomation)
+	r.Delete("/:id/automations/:autoId", h.DeleteAutomation)
+	r.Post("/:id/automations/:autoId/run", h.RunAutomation)
 	r.Get("/:id/trash", h.TrashedRecords)
 	r.Post("/:id/trash/restore", h.RestoreRecords)
 	r.Post("/:id/trash/purge", h.PurgeRecords)
@@ -145,6 +155,79 @@ func (h *Handler) CreateKey(c fiber.Ctx) error {
 // @Router /v1/collections/{id}/keys/{keyId} [delete]
 func (h *Handler) DeleteKey(c fiber.Ctx) error {
 	if err := h.integrations.DeleteKey(c.Context(), c.Params("id"), c.Params("keyId")); err != nil {
+		return fail(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+type shareDTO struct {
+	ID         string     `json:"id"`
+	Kind       string     `json:"kind" example:"form"`
+	Token      string     `json:"token"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+}
+
+func toShareDTO(s domain.Share) shareDTO {
+	return shareDTO{ID: s.ID, Kind: s.Kind, Token: s.Token, CreatedAt: s.CreatedAt, LastUsedAt: s.LastUsedAt}
+}
+
+// @Summary A collection's share links; owners
+// @Tags Integrations
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Security BearerAuth
+// @Success 200 {object} object{items=[]shareDTO}
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Router /v1/collections/{id}/shares [get]
+func (h *Handler) Shares(c fiber.Ctx) error {
+	shares, err := h.integrations.Shares(c.Context(), c.Params("id"))
+	if err != nil {
+		return fail(c, err)
+	}
+	out := make([]shareDTO, 0, len(shares))
+	for _, s := range shares {
+		out = append(out, toShareDTO(s))
+	}
+	return c.JSON(fiber.Map{"items": out})
+}
+
+// @Summary Make a share link: a public form (kind form) or a read-only list (kind view); owners
+// @Tags Integrations
+// @Accept json
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Param body body object{kind=string} true "Link"
+// @Security BearerAuth
+// @Success 201 {object} shareDTO
+// @Failure 400 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Router /v1/collections/{id}/shares [post]
+func (h *Handler) CreateShare(c fiber.Ctx) error {
+	var body struct {
+		Kind string `json:"kind"`
+	}
+	if err := c.Bind().Body(&body); err != nil {
+		return badBody(c)
+	}
+	s, err := h.integrations.CreateShare(c.Context(), c.Params("id"), body.Kind)
+	if err != nil {
+		return fail(c, err)
+	}
+	return c.Status(fiber.StatusCreated).JSON(toShareDTO(*s))
+}
+
+// @Summary Delete a share link; owners
+// @Tags Integrations
+// @Param id path string true "Collection ID"
+// @Param shareId path string true "Link ID"
+// @Security BearerAuth
+// @Success 204
+// @Failure 404 {object} mapper.errorBody
+// @Router /v1/collections/{id}/shares/{shareId} [delete]
+func (h *Handler) DeleteShare(c fiber.Ctx) error {
+	if err := h.integrations.DeleteShare(c.Context(), c.Params("id"), c.Params("shareId")); err != nil {
 		return fail(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -486,7 +569,7 @@ type fileDTO struct {
 }
 
 // @Summary Upload a file to attach to the collection's records; editors
-// @Description The body is the file itself (up to 1 MB); name goes in the query. Put the answer in a file field's value.
+// @Description The body is the file itself (up to 8 MB); name goes in the query. Put the answer in a file field's value.
 // @Tags Collections
 // @Accept application/octet-stream
 // @Produce json

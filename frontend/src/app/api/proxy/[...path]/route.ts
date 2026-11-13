@@ -31,9 +31,11 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   const routed = target.pathname.slice(new URL(apiUrl("/")).pathname.length);
   if (!routed.startsWith("v1/") || TOKEN_PATHS.test(routed)) return NextResponse.json({ code: "NOT_FOUND", message: "use /api/auth" }, { status: 404 });
 
+  // A share link's token is in its path: anyone may open it, no session sent.
+  const open = routed.startsWith("v1/public/");
   const apiKey = req.headers.get("x-api-key") ?? req.headers.get("authorization")?.match(/^Bearer (dsk_\S+)$/)?.[1];
-  const { session, present } = apiKey ? { session: null, present: false } : await readSession();
-  if (!session && !apiKey) return unauthorized(present);
+  const { session, present } = apiKey || open ? { session: null, present: false } : await readSession();
+  if (!session && !apiKey && !open) return unauthorized(present);
 
   // Bytes, not text: an image body would not survive a UTF-8 round trip.
   const raw = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
@@ -41,12 +43,12 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   if (body && body.byteLength > MAX_BODY) return NextResponse.json({ code: "INVALID_INPUT", message: "request body too large" }, { status: 413 });
 
   const headers = forwardHeaders(req);
-  const send = (token: string) =>
+  const send = (token: string | undefined) =>
     fetch(target, {
       method: req.method,
       headers: {
         ...headers,
-        authorization: `Bearer ${token}`,
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(body ? { "content-type": req.headers.get("content-type") ?? "application/json" } : {}),
       },
       body,
@@ -57,7 +59,7 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   let rotated: Session | null = null;
   let upstream: Response;
   try {
-    upstream = await send(apiKey ?? session!.access_token);
+    upstream = await send(apiKey ?? session?.access_token);
     if (upstream.status === 401 && session) {
       await upstream.body?.cancel();
       const next = await refreshSession(session, headers);
@@ -84,7 +86,7 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
     const value = upstream.headers.get(name);
     if (value) out.headers.set(name, value);
   }
-  if (apiKey) return out;
+  if (apiKey || open) return out;
   if (upstream.status === 401) await clearSessionCookie(out);
   else if (rotated) await writeSessionCookie(out, rotated);
   return out;

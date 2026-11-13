@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC = ["/login", "/register", "/activate", "/forgot-password", "/reset-password"];
+const PUBLIC = ["/login", "/register", "/activate", "/forgot-password", "/reset-password", "/f", "/s"];
 
 // Coarse gate by cookie presence; the API validates the session. A present but
 // invalid cookie is cleared by the BFF on 401, so /login never loops.

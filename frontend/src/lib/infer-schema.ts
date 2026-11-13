@@ -94,6 +94,11 @@ const TEXT_TYPES: FieldType[] = ["string", "text", "enum", "date", "datetime", "
 
 /** A CSV cell as the field's type stores it; what does not read as the type stays text, for the server to report. */
 function cellValue(cell: string, type: FieldType | undefined): unknown {
+  // A spreadsheet date arrives as days since 1899-12-30.
+  if ((type === "date" || type === "datetime") && /^\d+(\.\d+)?$/.test(cell.trim())) {
+    const iso = new Date(Date.UTC(1899, 11, 30) + Math.round(Number(cell) * 86_400_000)).toISOString();
+    return type === "date" ? iso.slice(0, 10) : iso.replace(".000Z", "Z");
+  }
   if (!type || TEXT_TYPES.includes(type)) return cell;
   const v = cell.trim();
   if (type === "boolean") {
@@ -113,21 +118,33 @@ function cellValue(cell: string, type: FieldType | undefined): unknown {
 }
 
 /**
- * Records from a CSV with a header line, as the export writes it. A column
- * names a field by its key or its label; empty cells are left out.
+ * The field each column of a table fills, by the header naming its key or
+ * label; a header no field matches keeps its own text (the server reports it).
  */
-export function csvRecords(text: string, schema: Record<string, unknown> | null): ParsedFile {
-  const [header, ...rows] = parseCsv(text);
-  const fields = fieldsOf(schema);
-  const byName = new Map<string, Field>();
-  for (const r of fields) byName.set(r.field.name.trim().toLowerCase(), r.field);
-  for (const r of fields) byName.set(r.key.toLowerCase(), r.field);
-  const columns = (header ?? []).map((h) => byName.get(h.trim().toLowerCase()) ?? { ...blankField, key: h.trim(), type: undefined as unknown as FieldType });
+export function guessColumns(header: string[], schema: Record<string, unknown> | null): string[] {
+  const byName = new Map<string, string>();
+  for (const r of fieldsOf(schema)) byName.set(r.field.name.trim().toLowerCase(), r.key);
+  for (const r of fieldsOf(schema)) byName.set(r.key.toLowerCase(), r.key);
+  return header.map((h) => byName.get(h.trim().toLowerCase()) ?? h.trim());
+}
+
+/**
+ * Records from table rows (CSV or a sheet) whose first row is the header;
+ * columns maps each column to a field key ("" skips it), guessed when absent.
+ * Empty cells are left out.
+ */
+export function tableRecords(rows: string[][], schema: Record<string, unknown> | null, columns?: string[]): ParsedFile {
+  const [header = [], ...body] = rows;
+  const keys = columns ?? guessColumns(header, schema);
+  const types = new Map(fieldsOf(schema).map((r) => [r.key, r.field.type]));
   return {
     errors: [],
-    records: rows.map((row, i) => ({
+    records: body.map((row, i) => ({
       line: i + 2,
-      data: Object.fromEntries(columns.flatMap((c, j) => (row[j] === undefined || row[j] === "" || !c.key ? [] : [[c.key, cellValue(row[j], c.type)]]))),
+      data: Object.fromEntries(keys.flatMap((k, j) => (row[j] === undefined || row[j] === "" || !k ? [] : [[k, cellValue(row[j], types.get(k))]]))),
     })),
   };
 }
+
+/** Records from a CSV with a header line, as the export writes it. */
+export const csvRecords = (text: string, schema: Record<string, unknown> | null): ParsedFile => tableRecords(parseCsv(text), schema);

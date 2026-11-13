@@ -31,7 +31,7 @@ test("records come in, go out and keep their history", async ({ page }) => {
 
   // An exact-value filter, shown as a removable chip.
   await page.getByRole("button", { name: "Filtros" }).click();
-  await page.getByLabel("Notas").fill("b");
+  await page.getByRole("textbox", { name: "Notas" }).fill("b");
   await page.getByRole("button", { name: "Aplicar" }).click();
   await expect(page.getByRole("row").filter({ hasText: "Segundo" })).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: "Primeiro" })).toHaveCount(0);
@@ -83,9 +83,10 @@ test("records come in, go out and keep their history", async ({ page }) => {
   // Duplicating copies fields and, when asked, records.
   await page.goto("/collections");
   // A short list has no search box; a long one narrows to this collection.
-  await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
   const search = page.getByRole("textbox", { name: "Buscar por nome" });
+  await expect(search.or(page.getByRole("button", { name, exact: true })).first()).toBeVisible();
   if (await search.isVisible()) await search.fill(name);
+  await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
   await page.getByRole("button", { name: `Ações: ${name}` }).click();
   await page.getByRole("menuitem", { name: "Duplicar" }).click();
   const dup = page.getByRole("dialog", { name: "Duplicar" });

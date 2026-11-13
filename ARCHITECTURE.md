@@ -48,7 +48,7 @@ core/domain → stdlib only
 
 | Store | Role | Consistency notes |
 |-------|------|-------------------|
-| PostgreSQL schemas `usr`, `sys`, `app` | Source of truth | Single DB; migrations 000001–000014 |
+| PostgreSQL schemas `usr`, `sys`, `app` | Source of truth | Single DB; migrations 000001–000018 |
 
 **`usr` ownership (backend auth and account use cases):** users, credentials, sessions, email tokens, login attempts, role assignment, preferences, notifications; RBAC reader uses `vw_user_effective_permissions` + `is_superuser`.
 
@@ -56,13 +56,21 @@ core/domain → stdlib only
 
 **`app.product`:** owned by backend product use case (CRUD); kept as the template `make module` copies.
 
-**`app.collection` / `app.record`:** a collection holds a JSON Schema in a `json` column, not `jsonb`: jsonb sorts object keys by length, and the key order of `properties` is the field order of the generated form. A record's `data` is `jsonb` (≤ 256 KB), checked by `pkg/schema` inside the write transaction after reading the schema `FOR SHARE`, so a concurrent schema change waits. A schema change does not revalidate stored records (marked `shortcut:`); the schema it replaced is kept in `app.collection_schema_version` (`GET .../schema-versions`, owners) and the Fields page loads one back into the editor. Deleting a collection sets `deleted_at`/`deleted_by` (every collection query filters `deleted_at IS NULL`) and keeps its records. The record list returns a preview (top-level plain values, strings cut to 120 characters, and `{id,name}` of an object holding both, an attached file); `GET /v1/records/{id}` returns the full data. Access to both follows collection membership (see Authorization). In the browser, `frontend/src/lib/schema-validator.ts` validates with `@cfworker/json-schema`: ajv compiles with `new Function`, which the production CSP blocks.
+**`app.collection` / `app.record`:** a collection holds a JSON Schema in a `json` column, not `jsonb`: jsonb sorts object keys by length, and the key order of `properties` is the field order of the generated form. A record's `data` is `jsonb` (≤ 256 KB), checked by `pkg/schema` inside the write transaction after reading the schema `FOR SHARE`, so a concurrent schema change waits. A schema change does not revalidate stored records (marked `shortcut:`); the schema it replaced is kept in `app.collection_schema_version` (`GET .../schema-versions`, owners) and the Fields page loads one back into the editor. Deleting a collection sets `deleted_at`/`deleted_by` (every collection query filters `deleted_at IS NULL`) and keeps its records. The record list returns a preview (top-level plain values, strings cut to 120 characters, `{id,name}` of an object holding both (an attached file), and the first 10 of a list of strings or of such objects); `GET /v1/records/{id}` returns the full data. Access to both follows collection membership (see Authorization). In the browser, `frontend/src/lib/schema-validator.ts` validates with `@cfworker/json-schema`: ajv compiles with `new Function`, which the production CSP blocks.
 
 **Trash:** deleted records move to `app.record_trash` in one statement (their `app.record_version` rows stay: the foreign key was dropped so a restore keeps the history). Editors list and restore; owners purge. `app.fn_purge_trash()` (pg_cron `dataset_trash`, daily 03:37) deletes trashed records and collections older than 30 days, with their versions.
 
 **API keys and webhooks:** `app.api_key` keeps the SHA-256 of a `dsk_` key and its first 12 characters; a key reaches one collection as the member who made it, capped to viewer (read) or editor (write), and stops when that member is disabled. Only the `/v1/records` and `/v1/files` groups take a key (`Authorization: Bearer dsk_…` or `X-API-Key`); audit entries name the key. `app.webhook` keeps the URL, events and the `whsec_` secret sealed with the SMTP key. A record change enqueues one `webhook.deliver` job per matching hook inside its transaction (`policy.Notify`); the job worker POSTs it with `X-Dataset-Event` and `X-Dataset-Signature: t=<unix>,v1=<hex HMAC-SHA256 of "t.body">`, retries like any job and stores the last status. Limits: 20 keys and 10 hooks per collection. The web proxy passes a key through as it is, so programs use the web address.
 
-**Files and references:** `app.file` rows name files kept in the file store under `files/<id>` (1 MB each). A top-level property with `x-file: true` stores `{id,name,size,type}`; one with `x-ref: <collection id>` stores a record id. Saves check both exist (issue keyword `exists`). Downloads (`GET /v1/files/:id`, viewers) serve images inline and anything else as an `octet-stream` attachment with `nosniff` and a sandbox CSP. Orphan files are not swept (`shortcut:`).
+**Files and references:** `app.file` rows name files kept in the file store under `files/<id>` (8 MB each, under the web proxy's 10 MB body limit). A top-level property with `x-file: true` stores `{id,name,size,type}`, or a list of them when the property is an array (several files, up to 20 in the field builder); one with `x-ref: <collection id>` stores a record id, or a list of ids. Saves check every one exists (issue keyword `exists`). `GET /v1/records/:id/links` lists the records of other collections pointing at one (backlinks, 20 per field). Downloads (`GET /v1/files/:id`, viewers) serve images inline and anything else as an `octet-stream` attachment with `nosniff` and a sandbox CSP. The job worker sweeps files hourly (`tools.SweepFiles`): a file row older than a day that no record, trashed record or record version names is deleted, and a trigger lists every deleted file row (a purged collection's included) in `app.file_gone` until its stored bytes are removed. The search for a name is a text scan (`shortcut:`).
+
+**Fields the server fills:** `x-auto: "number"` (integer, the collection's highest plus one), `"created_by"`/`"updated_by"` (string, the user's name) and `x-formula: "<expression>"` (number; `+ - * /`, parentheses and number field keys, checked when the schema is saved) are filled on every create, update, restore, import and bulk edit before the schema check (`record/auto.go`, `pkg/schema/auto.go`); the form shows them read-only. Import takes `upsert_key`, a unique field: a row whose value a record already holds merges into that record (`updated` in the answer). `x-private: true` keeps a top-level field off share links (below).
+
+**Comments:** `app.record_comment` holds notes on a record, oldest first (200 shown); any member writes, the author or an owner deletes.
+
+**Share links:** an `app.api_key` row with `share` (`form` or `view`) and a sealed `dss_` token, made by an owner. `/v1/public/:token` (no session, rate limited) acts as the link's maker capped to the one collection: a form adds records, a view lists them read-only. Private fields leave the schema and the data, a form refusing them; a view of a collection with private fields does not search, since a search over the whole record would tell which records hold a hidden value. The web pages are `/f/<token>` and `/s/<token>`.
+
+**Automations:** `app.automation` (20 per collection, owners): a trigger (`record.created`, `record.updated`, or `daily` at an hour), conditions (the list's `where` rules) and an action (`set_field` through bulk update, or `notify`, an in-app notification to its maker). A record change enqueues an `automation.run` job per enabled match (`policy.Notify`); the worker checks daily ones every minute. A run acts as its maker on at most 100 matching records, and its own changes start no automation (`policy.WithoutAutomations`). Each webhook delivery is logged in `app.webhook_delivery` (newest 50 shown per hook) and can be sent again.
 
 **Saved views:** `app.saved_view` keeps a named list query string; a view is the user's own or shared (editors) with every member.
 
@@ -134,6 +142,12 @@ Every query reads only what its caller uses. A hot path pays for each extra colu
 | GET | `/v1/collections/:id/schema-versions` (owner) |
 | GET/POST, DELETE | `/v1/collections/:id/views`, `.../views/:viewId` (viewer; shared views need editor; delete only your own) |
 | POST | `/v1/collections/:id/files?name=`, the raw file as body (editor); GET `/v1/files/:id` (viewer; Bearer or key) |
+| GET | `/v1/records/:id/links` (backlinks); GET/POST, DELETE `/v1/records/:id/comments`, `.../comments/:commentId` (viewer writes; author or owner deletes) |
+| POST | `/v1/records/import`, also `upsert_key` (a unique field) |
+| GET/POST, DELETE | `/v1/collections/:id/shares`, `.../shares/:shareId` (owner) |
+| GET, POST | `/v1/public/:token`, `/v1/public/:token/records` (no session; a form posts, a view lists) |
+| GET/POST, PUT, DELETE, POST | `/v1/collections/:id/automations`, `.../automations/:automationId`, `.../automations/:automationId/run` (owner) |
+| GET, POST | `/v1/collections/:id/webhooks/:hookId/deliveries`, `.../deliveries/:deliveryId/redeliver` (owner) |
 
 **Auth tokens:** EdDSA (Ed25519), a base64 PEM from `openssl genpkey -algorithm ed25519`; access claims `sub`, `sid`, `jti`, `iat`, `exp`; refresh same with `jti` hashed at rest. Defaults: access 15m, refresh 60m. **Key rotation:** set the new key in `ACCESS_TOKEN`/`REFRESH_TOKEN` and the old one in `ACCESS_TOKEN_PREVIOUS`/`REFRESH_TOKEN_PREVIOUS`; the old key is only verified, never used to sign, and is removed after one refresh lifetime. An access key may never equal a refresh key, current or previous.
 
@@ -177,7 +191,7 @@ Every query reads only what its caller uses. A hot path pays for each extra colu
 | Postgres down | Backend/mailer boot fails; health `postgres=fail` |
 | Fiber timeouts | `API_READ/WRITE/IDLE_TIMEOUT` (30s/30s/120s); shutdown `API_SHUTDOWN_TIMEOUT` 30s |
 | Login abuse | DB-backed attempt counters per client+account (5), client (`/64` on IPv6) and account (50) → `TOO_MANY_REQUESTS` with `Retry-After` (seconds until the oldest counted failure leaves the window); lockout at 50 answers `INVALID_CREDENTIALS`. One client cannot lock the owner out. Each attempt is reserved under an advisory lock before hashing, so parallel requests cannot outrun a limit. Passwords need 8 to 128 bytes and may not be a common first guess, one repeated character, or the account's own name or email. A password reset request answers no sooner than 300 ms, so an unknown email is not told apart by timing. `AUTH_ALLOW_REGISTRATION=0` closes public sign-up and leaves invitations only (register answers 403). |
-| Memory | Body limit 1 MiB + 4 KiB (an attached file is the largest body; the web proxy refuses larger first); at most 4 Argon2 hashes (256 MiB live); `GOMEMLIMIT` and container limits in compose; Argon2 runs outside transactions; waiting for a hashing slot is cancellable, but a running Argon2 calculation finishes. PHC version, costs, salt and digest lengths are bounded before allocation |
+| Memory | Body limit 8 MiB + 4 KiB (an attached file is the largest body; the web proxy refuses larger first); at most 4 Argon2 hashes (256 MiB live); `GOMEMLIMIT` and container limits in compose; Argon2 runs outside transactions; waiting for a hashing slot is cancellable, but a running Argon2 calculation finishes. PHC version, costs, salt and digest lengths are bounded before allocation |
 | Email flood | `AUTH_EMAIL_TOKEN_COOLDOWN` (60 s) and `AUTH_EMAIL_TOKEN_HOURLY_MAX` (5) per account and purpose; over the cap the live link survives |
 | Refresh reuse | Session revoked `token_reuse` |
 
@@ -212,7 +226,7 @@ Do not log refresh tokens, passwords, or email token plaintext (payload in outbo
 - Dev: Air (`make dev-backend` / `dev-mailer`); binaries `make build-*`
 - Config: `config/.env` from `config/env.sh` / `make init`
 - `make compose-build` recreates the backend and mailer containers after the build, so a rebuilt image under the same tag always runs (the web Makefile passes `--force-recreate`)
-- Backups: the `backup` service dumps the database (`pg_dump -Fc`) and tars the file store daily into `dataset_backup_volume`, keeping `BACKUP_KEEP_DAYS` (7). `make db-backup` dumps now into `backend/backups/`; `make db-restore FILE=...` restores one over the current data. Copy the volume off the host: a backup on the same disk dies with it
+- Backups: the `backup` service runs `deploy/docker/backup.sh`: daily, it dumps the database (`pg_dump -Fc`), tars the file store, restores the dump into a scratch database (`<base>_restore_check`, dropped after) and reads the archive back; a backup that fails any step is logged `FAILED` and old ones are kept. It keeps `BACKUP_KEEP_DAYS` (7) in `BACKUP_DIR`, a host folder (an external disk, a synced or network folder) or, when empty, `dataset_backup_volume` on this disk, which dies with it. `make backup-now` and `make backup-verify` run it by hand; `make db-backup` dumps into `backend/backups/`; `make db-restore FILE=...` restores one over the current data
 
 **CI:** vet, tests with `-race` and Postgres, lint, `govulncheck`, and a check that `make swagger` changes nothing.
 
@@ -232,7 +246,7 @@ Do not log refresh tokens, passwords, or email token plaintext (payload in outbo
 - Each permission check → one query, no cache
 - Login attempt inserts + rate-limit counts
 - Login, refresh and `/v1/me` each run user + permissions + preferences queries (roles without member counts)
-- `search` is a leading-wildcard `ILIKE`, and lists use `OFFSET` plus a count: scans grow with the table
+- `search` is a leading-wildcard `ILIKE`, and lists use `OFFSET` plus a count: scans grow with the table. Measured on records (100 000 in one collection, 2026-11): first page 0.04 ms, search 0.5 ms (trigram index), exact filter 16 ms, number range 27 ms, sort by a field 43 ms, page 3 600 56 ms. Per-field indexes and keyset paging wait for ~1 000 000 records
 
 ## ADR index
 

@@ -12,24 +12,41 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { collections } from "@/lib/api/endpoints";
 import type { MessageKey } from "@/lib/i18n/messages";
+import type { FileRef } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
-export const FIELD_TYPES = ["string", "text", "number", "integer", "boolean", "enum", "strings", "date", "datetime", "email", "url", "reference", "file", "group", "json"] as const;
+export const FIELD_TYPES = ["string", "text", "number", "integer", "boolean", "enum", "strings", "date", "datetime", "email", "url", "reference", "references", "file", "files", "autonumber", "formula", "created_by", "updated_by", "group", "json"] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
+/** Types the server fills on every write; the form shows them read-only. */
+export const AUTO_TYPES: readonly FieldType[] = ["autonumber", "formula", "created_by", "updated_by"];
 /** Groups hold one level of subfields: no group inside a group; the server checks references and files on top-level fields only. */
-const SUBFIELD_TYPES = FIELD_TYPES.filter((t) => t !== "group" && t !== "reference" && t !== "file");
+const SUBFIELD_TYPES = FIELD_TYPES.filter((t) => t !== "group" && t !== "reference" && t !== "references" && t !== "file" && t !== "files" && !AUTO_TYPES.includes(t));
 /** Plain values the server can compare across records: these can be marked unique. */
 const UNIQUE_TYPES: readonly FieldType[] = ["string", "number", "integer", "enum", "date", "datetime", "email", "url"];
 /** The keyword the server reads (schema.UniqueKeyword): no two records share the value. */
 const UNIQUE = "x-unique";
+/** The server keeps these fields off share links (schema.PrivateKeyword). */
+const PRIVATE = "x-private";
 /** The keywords the server reads (schema.RefKeyword, schema.FileKeyword): a record of another collection, an attached file. */
 export const REF = "x-ref";
+/** The keywords the server reads (schema.AutoKeyword, schema.FormulaKeyword): fields it fills itself. */
+export const AUTO = "x-auto";
+export const FORMULA = "x-formula";
 export const FILE = "x-file";
 /** Types with no default the builder edits; any default is kept as it was. */
-const isObjectType = (t: FieldType) => t === "group" || t === "json" || t === "file" || t === "reference";
+const isObjectType = (t: FieldType) => t === "group" || t === "json" || t === "file" || t === "files" || t === "reference" || t === "references" || AUTO_TYPES.includes(t);
 /** How a record stores an attached file (tools.upload answers it). */
-const FILE_PROP = { type: "object", [FILE]: true, required: ["id"], properties: { id: { type: "string" }, name: { type: "string" }, size: { type: "integer" }, type: { type: "string" } } };
+const FILE_ITEM = { type: "object", required: ["id"], properties: { id: { type: "string" }, name: { type: "string" }, size: { type: "integer" }, type: { type: "string" } } };
+const FILE_PROP = { ...FILE_ITEM, [FILE]: true };
+const FILES_PROP = { type: "array", [FILE]: true, items: FILE_ITEM, maxItems: 20 };
+
+/** The files a file field holds: one {id, ...} or a list of them. */
+export function fileRefs(v: unknown): FileRef[] {
+  const list = Array.isArray(v) ? v : v ? [v] : [];
+  return list.filter((f): f is FileRef => !!f && typeof f === "object" && typeof (f as FileRef).id === "string");
+}
+export const isImage = (f: FileRef) => /^image\//.test(f.type ?? "") || /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(f.name ?? "");
 
 /** Long text: SchemaForm draws a text area for strings allowed this long. */
 export const LONG_TEXT = 5000;
@@ -50,6 +67,8 @@ export type Field = {
   required: boolean;
   /** No two records may hold the same value; top-level fields only. */
   unique: boolean;
+  /** Kept off share links. */
+  private: boolean;
   options: string;
   description: string;
   placeholder: string;
@@ -65,7 +84,7 @@ export type FieldRow = { key: string; field: Field; advanced: boolean };
 type Schema = Record<string, unknown>;
 type Props = Record<string, Record<string, unknown>>;
 
-export const blankField: Field = { name: "", key: "", type: "string", required: false, unique: false, options: "", description: "", placeholder: "", default: "", min: "", max: "", ref: "" };
+export const blankField: Field = { name: "", key: "", type: "string", required: false, unique: false, private: false, options: "", description: "", placeholder: "", default: "", min: "", max: "", ref: "" };
 
 const optionsOf = (f: Pick<Field, "options">) => f.options.split(",").map((o) => o.trim()).filter(Boolean);
 
@@ -74,13 +93,13 @@ function limitKeys(type: FieldType): [string, string] | null {
   switch (type) {
     case "string": case "text": case "email": case "url": return ["minLength", "maxLength"];
     case "number": case "integer": return ["minimum", "maximum"];
-    case "strings": return ["minItems", "maxItems"];
+    case "strings": case "references": return ["minItems", "maxItems"];
     default: return null;
   }
 }
 
 /** Keywords the builder writes; any other keyword of a property is kept as it was. */
-const RULE_KEYS = ["title", "description", "examples", "default", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", UNIQUE, REF];
+const RULE_KEYS = ["title", "description", "examples", "default", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", UNIQUE, PRIVATE, REF];
 
 /** A storage key from a label: "Nome do Cliente" → "nome_do_cliente". */
 export function keyOf(name: string): string {
@@ -129,7 +148,12 @@ function typeBase(f: Field): Record<string, unknown> {
     case "group": return { type: "object", properties: {} };
     case "json": return { type: "object" };
     case "reference": return { type: "string", format: "uuid" };
+    case "references": return { type: "array", items: { type: "string", format: "uuid" }, uniqueItems: true };
+    case "autonumber": return { type: "integer", [AUTO]: "number" };
+    case "formula": return { type: "number", [FORMULA]: f.options.trim() };
+    case "created_by": case "updated_by": return { type: "string", [AUTO]: f.type };
     case "file": return FILE_PROP;
+    case "files": return FILES_PROP;
     default: return { type: f.type };
   }
 }
@@ -150,8 +174,9 @@ function withRules(base: Record<string, unknown>, f: Field): Record<string, unkn
   }
   if (f.type === "text" && out.maxLength === undefined) out.maxLength = LONG_TEXT;
   if (f.unique && UNIQUE_TYPES.includes(f.type)) out[UNIQUE] = true;
+  if (f.private) out[PRIVATE] = true;
   if (f.type === "enum") out.enum = optionsOf(f);
-  if (f.type === "reference") out[REF] = f.ref;
+  if (f.type === "reference" || f.type === "references") out[REF] = f.ref;
   // Title first, as people read it in the JSON.
   const { title, ...rest } = out;
   return { title, ...rest };
@@ -163,8 +188,13 @@ export function typeOf(p: unknown): FieldType | undefined {
   const s = p as Record<string, unknown>;
   // Options are edited comma separated, so an option holding a comma stays in JSON.
   if (Array.isArray(s.enum)) return s.enum.every((v) => typeof v === "string" && !v.includes(",")) ? "enum" : undefined;
+  if (typeof s[FORMULA] === "string" && s.type === "number") return "formula";
+  if (s[AUTO] === "number" && s.type === "integer") return "autonumber";
+  if ((s[AUTO] === "created_by" || s[AUTO] === "updated_by") && s.type === "string") return s[AUTO] as FieldType;
   if (s.type === "string" && typeof s[REF] === "string") return "reference";
+  if (s.type === "array" && typeof s[REF] === "string") return "references";
   if (s.type === "object" && s[FILE] === true) return "file";
+  if (s.type === "array" && s[FILE] === true) return "files";
   switch (s.type) {
     case "string": {
       const format = Object.entries(FORMATS).find(([, f]) => f === s.format)?.[0] as FieldType | undefined;
@@ -220,7 +250,8 @@ export function fieldsOf(schema: Schema | null): FieldRow[] {
         type,
         required: required.includes(key),
         unique: p?.[UNIQUE] === true,
-        options: Array.isArray(p?.enum) ? p.enum.join(", ") : "",
+        private: p?.[PRIVATE] === true,
+        options: Array.isArray(p?.enum) ? p.enum.join(", ") : typeof p?.[FORMULA] === "string" ? p[FORMULA] : "",
         description: typeof p?.description === "string" ? p.description : "",
         placeholder: typeof examples[0] === "string" ? examples[0] : "",
         default: isObjectType(type) ? "" : defaultText(p?.default, type),
@@ -243,7 +274,8 @@ export function fieldProblem(f: Field, taken: (key: string) => boolean, initialK
   if (key !== initialKey && !KEY_FORMAT.test(key)) return "collections.field_key_invalid";
   if (key !== initialKey && taken(key)) return "collections.field_exists";
   if (f.type === "enum" && optionsOf(f).length === 0) return "collections.field_options_needed";
-  if (f.type === "reference" && !f.ref) return "collections.field_ref_needed";
+  if (f.type === "formula" && !f.options.trim()) return "collections.field_formula_needed";
+  if ((f.type === "reference" || f.type === "references") && !f.ref) return "collections.field_ref_needed";
   const limits = limitKeys(f.type);
   const lo = f.min.trim() ? Number(f.min) : undefined;
   const hi = f.max.trim() ? Number(f.max) : undefined;
@@ -282,7 +314,7 @@ function rebuild(schema: Schema, entries: [string, unknown][], required: string[
 export function addField(schema: Schema, f: Field): Schema {
   const key = f.key.trim() || keyOf(f.name);
   const required = requiredOf(schema);
-  return rebuild(schema, [...Object.entries(propsOf(schema)), [key, withRules(typeBase(f), f)]], f.required && !required.includes(key) ? [...required, key] : required);
+  return rebuild(schema, [...Object.entries(propsOf(schema)), [key, withRules(typeBase(f), f)]], f.required && !AUTO_TYPES.includes(f.type) && !required.includes(key) ? [...required, key] : required);
 }
 
 /**
@@ -296,7 +328,7 @@ export function updateField(schema: Schema, key: string, f: Field): Schema {
     return [to, typeOf(old) === f.type ? withRules(old, f) : withRules(typeBase(f), f)];
   });
   const required = requiredOf(schema).filter((k) => k !== key);
-  return rebuild(schema, entries, f.required ? [...required, to] : required);
+  return rebuild(schema, entries, f.required && !AUTO_TYPES.includes(f.type) ? [...required, to] : required);
 }
 
 /** Replaces one property as a whole, as a group's subfield editor hands it back. */
@@ -429,14 +461,22 @@ function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, 
           </Select>
         </div>
         <div className="flex h-[var(--control-h)] items-center gap-4">
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={field.required} onCheckedChange={(on) => set({ required: on === true })} />
-            {t("collections.field_required")}
-          </label>
+          {!AUTO_TYPES.includes(field.type) && (
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={field.required} onCheckedChange={(on) => set({ required: on === true })} />
+              {t("collections.field_required")}
+            </label>
+          )}
           {uniqueAllowed && UNIQUE_TYPES.includes(field.type) && (
             <label className="flex items-center gap-2 text-sm" title={t("collections.field_unique_hint")}>
               <Checkbox checked={field.unique} onCheckedChange={(on) => set({ unique: on === true })} />
               {t("collections.field_unique")}
+            </label>
+          )}
+          {uniqueAllowed && (
+            <label className="flex items-center gap-2 text-sm" title={t("collections.field_private_hint")}>
+              <Checkbox checked={field.private} onCheckedChange={(on) => set({ private: on === true })} />
+              {t("collections.field_private")}
             </label>
           )}
         </div>
@@ -447,7 +487,15 @@ function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, 
           <Input id={`${id}-options`} value={field.options} aria-invalid={shown === "collections.field_options_needed"} onChange={(e) => set({ options: e.target.value })} />
         </div>
       )}
-      {field.type === "reference" && <RefSelect id={`${id}-ref`} value={field.ref} invalid={shown === "collections.field_ref_needed"} onChange={(ref) => set({ ref })} />}
+      {field.type === "formula" && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${id}-formula`}>{t("collections.field_formula")}</Label>
+          <Input id={`${id}-formula`} className="font-mono" placeholder="preco * quantidade" value={field.options} aria-invalid={shown === "collections.field_formula_needed"} aria-describedby={`${id}-formula-hint`} onChange={(e) => set({ options: e.target.value })} />
+          <p id={`${id}-formula-hint`} className="text-xs text-muted-foreground">{t("collections.field_formula_hint")}</p>
+        </div>
+      )}
+      {AUTO_TYPES.includes(field.type) && field.type !== "formula" && <p className="text-xs text-muted-foreground">{t("collections.field_auto_hint")}</p>}
+      {(field.type === "reference" || field.type === "references") && <RefSelect id={`${id}-ref`} value={field.ref} invalid={shown === "collections.field_ref_needed"} onChange={(ref) => set({ ref })} />}
       {(field.type === "group" || field.type === "json") && (
         <p className={cn("text-xs", field.type === "json" ? "text-warn" : "text-muted-foreground")}>
           {t(field.type === "json" ? "collections.json_hint" : "collections.group_hint")}
@@ -482,7 +530,7 @@ function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, 
             <Input id={`${id}-desc`} value={field.description} maxLength={500} aria-describedby={`${id}-desc-hint`} onChange={(e) => set({ description: e.target.value })} />
             <p id={`${id}-desc-hint`} className="text-xs text-muted-foreground">{t("collections.field_description_hint")}</p>
           </div>
-          {field.type !== "group" && field.type !== "file" && (
+          {field.type !== "group" && field.type !== "file" && field.type !== "files" && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${id}-ph`}>{t("collections.field_placeholder")}</Label>
               <Input id={`${id}-ph`} value={field.placeholder} maxLength={200} onChange={(e) => set({ placeholder: e.target.value })} />

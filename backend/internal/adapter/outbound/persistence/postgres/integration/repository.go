@@ -46,7 +46,7 @@ func (r *Repository) Keys(ctx context.Context, collectionID string) ([]domain.AP
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT k.id, k.collection_id, k.name, k.prefix, k.can_write, k.created_by, u.name AS creator_name, k.created_at, k.last_used_at
 		FROM app.api_key k JOIN usr.usr_user u ON u.id = k.created_by
-		WHERE k.collection_id = ? ORDER BY k.created_at DESC`, collectionID).Find(&rows).Error
+		WHERE k.collection_id = ? AND k.share IS NULL ORDER BY k.created_at DESC`, collectionID).Find(&rows).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "api key")
 	}
@@ -88,22 +88,68 @@ func (r *Repository) Grant(ctx context.Context, hash []byte) (*domain.KeyGrant, 
 		CollectionID uuid.UUID `gorm:"column:collection_id"`
 		CanWrite     bool      `gorm:"column:can_write"`
 		CreatedBy    uuid.UUID `gorm:"column:created_by"`
+		Share        *string   `gorm:"column:share"`
 	}
 	// One statement: find the key of an active member and stamp its use, at most once a minute.
 	err := r.db.WithContext(ctx).Raw(`
 		WITH k AS (
-			SELECT k.id, k.name, k.collection_id, k.can_write, k.created_by, k.last_used_at
+			SELECT k.id, k.name, k.collection_id, k.can_write, k.created_by, k.share, k.last_used_at
 			FROM app.api_key k JOIN usr.usr_user u ON u.id = k.created_by AND u.status = 'active'
 			WHERE k.key_hash = ?
 		), used AS (
 			UPDATE app.api_key a SET last_used_at = now() FROM k
 			WHERE a.id = k.id AND (k.last_used_at IS NULL OR k.last_used_at < now() - INTERVAL '1 minute')
 		)
-		SELECT id, name, collection_id, can_write, created_by FROM k`, hash).Take(&m).Error
+		SELECT id, name, collection_id, can_write, created_by, share FROM k`, hash).Take(&m).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "api key")
 	}
-	return &domain.KeyGrant{KeyID: m.ID.String(), Name: m.Name, CollectionID: m.CollectionID.String(), CanWrite: m.CanWrite, UserID: m.CreatedBy.String()}, nil
+	g := &domain.KeyGrant{KeyID: m.ID.String(), Name: m.Name, CollectionID: m.CollectionID.String(), CanWrite: m.CanWrite, UserID: m.CreatedBy.String()}
+	if m.Share != nil {
+		g.Share = *m.Share
+	}
+	return g, nil
+}
+
+type shareRow struct {
+	ID         uuid.UUID  `gorm:"column:id"`
+	Share      string     `gorm:"column:share"`
+	Sealed     string     `gorm:"column:sealed"`
+	CreatedAt  time.Time  `gorm:"column:created_at"`
+	LastUsedAt *time.Time `gorm:"column:last_used_at"`
+}
+
+func (m shareRow) toDomain() domain.Share {
+	return domain.Share{ID: m.ID.String(), Kind: m.Share, Token: m.Sealed, CreatedAt: m.CreatedAt, LastUsedAt: m.LastUsedAt}
+}
+
+// Shares lists at most maxShares links: CreateShare caps them.
+func (r *Repository) Shares(ctx context.Context, collectionID string) ([]domain.Share, error) {
+	var rows []shareRow
+	err := r.db.WithContext(ctx).Table("app.api_key").Select("id, share, sealed, created_at, last_used_at").
+		Where("collection_id = ? AND share IS NOT NULL", collectionID).Order("created_at DESC").Limit(50).Find(&rows).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "share link")
+	}
+	out := make([]domain.Share, 0, len(rows))
+	for _, m := range rows {
+		out = append(out, m.toDomain())
+	}
+	return out, nil
+}
+
+func (r *Repository) CreateShare(ctx context.Context, collectionID, kind, sealed string, hash []byte, by string) (*domain.Share, error) {
+	var m shareRow
+	// A form adds records (editor cap); a list only reads them.
+	err := r.db.WithContext(ctx).Raw(`
+		INSERT INTO app.api_key (collection_id, name, prefix, key_hash, can_write, created_by, share, sealed)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, share, created_at`,
+		collectionID, "link:"+kind, domain.SharePrefix, hash, kind == domain.ShareForm, by, kind, sealed).Take(&m).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "share link")
+	}
+	s := m.toDomain()
+	return &s, nil
 }
 
 type hookRow struct {

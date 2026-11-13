@@ -48,7 +48,9 @@ import (
 //	@tag.description	Collections and the JSON Schema their records follow
 //	@tag.name			Records
 //	@tag.description	Records of a collection, validated against its schema
-//	@x-tagGroups		[{"name":"System","tags":["Health"]},{"name":"Authentication","tags":["Auth","Registration","Password reset"]},{"name":"Account","tags":["Profile","Sessions","Preferences","Notifications"]},{"name":"Administration","tags":["Users","Roles","Audit"]},{"name":"Catalog","tags":["Products"]},{"name":"Data","tags":["Collections","Records"]}]
+//	@tag.name			Public
+//	@tag.description	Share links: a collection's form or read-only list, opened without a session
+//	@x-tagGroups		[{"name":"System","tags":["Health"]},{"name":"Authentication","tags":["Auth","Registration","Password reset"]},{"name":"Account","tags":["Profile","Sessions","Preferences","Notifications"]},{"name":"Administration","tags":["Users","Roles","Audit"]},{"name":"Catalog","tags":["Products"]},{"name":"Data","tags":["Collections","Records","Public"]}]
 
 var (
 	//go:embed docs/swagger.css

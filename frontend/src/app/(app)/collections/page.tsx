@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Copy, Database, FileJson, ListTree, LogOut, MoreVertical, Plus, RotateCcw, Search, Settings2, Star, Trash2, UserCog, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader, useRelativeTime } from "@/components/bits";
@@ -20,13 +20,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { collections, tools } from "@/lib/api/endpoints";
 import type { Collection, TrashedCollection } from "@/lib/api/types";
 import { errorMessage } from "@/lib/errors";
+import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useMe } from "@/lib/context/me";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
 import { can, roleAllows } from "@/lib/permissions";
 import { useUIStore } from "@/lib/store/ui";
 
-// shortcut: one request of up to 100 collections, filtered and grouped in the browser; page on the server past that.
+// shortcut: one request of up to 100 collections, grouped in the browser; a search goes to the server too, so it
+// reaches past the first 100. Page on the server when one person holds more than 100.
 const LIMIT = 100;
 
 function byActivity(a: Collection, b: Collection): number {
@@ -48,9 +50,11 @@ export default function CollectionsPage() {
   const client = useQueryClient();
   const router = useRouter();
   const [q, setQ] = useState("");
+  const search = useDebounced(q.trim(), 300);
   const list = useQuery({
-    queryKey: ["collections", "manage"],
-    queryFn: ({ signal }) => collections.list({ page: 1, limit: LIMIT, sort: "name", order: "asc", details: true }, signal),
+    queryKey: ["collections", "manage", search],
+    queryFn: ({ signal }) => collections.list({ page: 1, limit: LIMIT, sort: "name", order: "asc", details: true, search: search || undefined }, signal),
+    placeholderData: keepPreviousData,
   });
   const pinned = useUIStore((s) => s.pinned);
   const togglePin = useUIStore((s) => s.togglePin);
