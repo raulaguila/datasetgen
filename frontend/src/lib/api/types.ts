@@ -268,3 +268,68 @@ export interface InviteResult {
   status: UserStatus;
   activation_token?: string;
 }
+
+/** A program's access to one collection's records; the secret shows once, at creation. */
+export interface ApiKey {
+  id: string;
+  name: string;
+  /** The first characters of the key, to tell keys apart. */
+  prefix: string;
+  can_write: boolean;
+  creator_name?: string;
+  created_at: string;
+  last_used_at?: string;
+}
+
+export type WebhookEvent = "record.created" | "record.updated" | "record.deleted" | "records.imported";
+export const WEBHOOK_EVENTS: WebhookEvent[] = ["record.created", "record.updated", "record.deleted", "records.imported"];
+
+export interface Webhook {
+  id: string;
+  url: string;
+  events: WebhookEvent[];
+  created_at: string;
+  last_status?: number;
+  last_error?: string;
+  last_at?: string;
+}
+
+export interface TrashedRecord {
+  id: string;
+  data: unknown;
+  deleted_at: string;
+  deleted_by_name?: string;
+}
+
+export interface TrashedCollection {
+  id: string;
+  name: string;
+  icon: string;
+  record_count: number;
+  deleted_at: string;
+}
+
+export interface SchemaVersion {
+  version: number;
+  schema: Record<string, unknown>;
+  saved_at: string;
+  saved_by_name?: string;
+}
+
+/** A named record list query (the list's URL parameters). */
+export interface SavedView {
+  id: string;
+  name: string;
+  query: string;
+  shared: boolean;
+  mine: boolean;
+  created_at: string;
+}
+
+/** An attached file as a record stores it. */
+export interface FileRef {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+}

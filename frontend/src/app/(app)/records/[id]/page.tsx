@@ -110,7 +110,7 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
       }}>
       <FormSections>
         <FormSection title={collection.name} description={[collection.description.trim(), t("records.required_legend")].filter(Boolean).join(" ")}>
-          <SchemaForm schema={collection.schema ?? {}} data={data} disabled={!editable} onChange={setData} formRef={formRef} liveValidate={checked} issues={issues} />
+          <SchemaForm schema={collection.schema ?? {}} collectionId={collection.id} data={data} disabled={!editable} onChange={setData} formRef={formRef} liveValidate={checked} issues={issues} />
         </FormSection>
         {canSubmit && (
           <SaveBar

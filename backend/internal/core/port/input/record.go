@@ -34,6 +34,8 @@ type RecordService interface {
 	Import(ctx context.Context, cmd ImportRecordsCommand) (*ImportResult, error)
 	// Export returns every record of the collection (viewers).
 	Export(ctx context.Context, collectionID string, validOnly bool) (*Export, error)
+	// BulkUpdate sets the same values in several records of one collection (editors).
+	BulkUpdate(ctx context.Context, cmd BulkUpdateCommand) (int, error)
 }
 
 type RestoreRecordCommand struct {

@@ -19,6 +19,7 @@ import (
 	recordhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/record"
 	rolehttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/role"
 	sessionhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/session"
+	toolshttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/tools"
 	usershttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/user"
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/mapper"
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
@@ -28,10 +29,10 @@ import (
 )
 
 // maxBodyBytes bounds what a client makes the server buffer: the body is read
-// before any middleware runs, rate limit included. The largest route is the
-// profile picture (domain.AvatarMaxBytes); larger uploads need their own listener
+// before any middleware runs, rate limit included. The largest route is an
+// attached file (domain.FileMaxBytes); larger uploads need their own listener
 // or a streamed body, not a higher limit for every route.
-const maxBodyBytes = domain.AvatarMaxBytes + 4*1024
+const maxBodyBytes = domain.FileMaxBytes + 4*1024
 
 func serverConfig(api config.APIConfig) fiber.Config {
 	cfg := fiber.Config{
@@ -104,8 +105,16 @@ func New(cfg *config.Environment, app *input.Application, hits middleware.Hits, 
 	roles.UserRoutes(users, app.Authorizer)
 	producthttp.New(app.Products).Routes(v1.Group("/products", token), app.Authorizer)
 	// Collections and records check the caller's role per collection, so they need the full session check.
-	collectionhttp.New(app.Collections).Routes(v1.Group("/collections", bearer), app.Authorizer)
-	recordhttp.New(app.Records).Routes(v1.Group("/records", bearer))
+	// Records and files also take a collection's API key, capped to that collection (policy.CollectionRole).
+	tools := toolshttp.New(app.Integrations, app.Tools, app.Records)
+	collections := v1.Group("/collections", bearer)
+	tools.CollectionRoutes(collections) // before /:id, which would swallow /trash
+	collectionhttp.New(app.Collections).Routes(collections, app.Authorizer)
+	keyOrBearer := middleware.BearerOrKey(app.Auth, app.Integrations)
+	records := v1.Group("/records", keyOrBearer)
+	tools.RecordRoutes(records)
+	recordhttp.New(app.Records).Routes(records)
+	tools.FileRoutes(v1.Group("/files", keyOrBearer))
 	audithttp.New(app.Audit).Routes(v1.Group("/audit", token), app.Authorizer)
 
 	return fiberApp

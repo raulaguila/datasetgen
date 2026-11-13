@@ -2,6 +2,7 @@ package collection
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"unicode"
@@ -179,6 +180,7 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateCollectionCommand)
 	var updated *domain.Collection
 	err := s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
 		var err error
+		var before json.RawMessage // the schema a change replaces, kept in the field history
 		role, err := policy.CollectionRole(ctx, uow.Collections(), cmd.ID, domain.RoleOwner)
 		if err != nil {
 			return err
@@ -189,8 +191,7 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateCollectionCommand)
 			if err := checkUniqueHolds(ctx, uow, cmd.ID, patch.Schema); err != nil {
 				return err
 			}
-			before, err := uow.Collections().SchemaForWrite(ctx, cmd.ID)
-			if err != nil {
+			if before, err = uow.Collections().SchemaForWrite(ctx, cmd.ID); err != nil {
 				return err
 			}
 			// The log says which fields moved; true when the text changed but none did.
@@ -204,6 +205,11 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateCollectionCommand)
 			return err
 		}
 		updated.Role = role
+		if before != nil {
+			if err := uow.Tools().SaveSchemaVersion(ctx, cmd.ID, updated.Version-1, before, reqctx.Actor(ctx)); err != nil {
+				return err
+			}
+		}
 		changes["name"] = updated.Name // the audit log labels the record by name
 		return policy.Audit(ctx, uow, "collection.update", updated.ID, changes)
 	})
@@ -249,7 +255,8 @@ func (s *Service) DeleteMany(ctx context.Context, ids []string) error {
 				return err
 			}
 		}
-		names, err := uow.Collections().DeleteMany(ctx, ids)
+		// The collection, its records and members wait in the trash (domain.TrashRetention).
+		names, err := uow.Tools().TrashCollections(ctx, ids, reqctx.Actor(ctx))
 		if err != nil {
 			return err
 		}

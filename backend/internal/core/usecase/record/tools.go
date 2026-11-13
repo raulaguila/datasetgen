@@ -3,6 +3,7 @@ package record
 import (
 	"context"
 	"encoding/json"
+	"slices"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/policy"
@@ -59,7 +60,10 @@ func (s *Service) Restore(ctx context.Context, cmd input.RestoreRecordCommand) (
 		}
 		details := auditDetails(current.CollectionID, raw, data)
 		details["version"] = cmd.Version
-		return policy.Audit(ctx, uow, "record.restore", cmd.ID, details)
+		if err := policy.Audit(ctx, uow, "record.restore", cmd.ID, details); err != nil {
+			return err
+		}
+		return policy.Notify(ctx, uow, current.CollectionID, domain.EventRecordUpdated, hookData(restored))
 	})
 	return restored, err
 }
@@ -107,8 +111,12 @@ func (s *Service) Import(ctx context.Context, cmd input.ImportRecordsCommand) (*
 		if err != nil {
 			return err
 		}
+		missing, err := linksIn(ctx, uow, raw, cmd.CollectionID, docs)
+		if err != nil {
+			return err
+		}
 		for n, issues := range taken {
-			if len(issues) > 0 {
+			if issues = append(issues, missing[n]...); len(issues) > 0 {
 				bad[passed[n]] = issues
 			}
 		}
@@ -129,7 +137,10 @@ func (s *Service) Import(ctx context.Context, cmd input.ImportRecordsCommand) (*
 		if res.Created, err = uow.Records().CreateMany(ctx, cmd.CollectionID, valid); err != nil {
 			return err
 		}
-		return policy.Audit(ctx, uow, "record.import", cmd.CollectionID, map[string]any{"collection_id": cmd.CollectionID, "count": res.Created})
+		if err := policy.Audit(ctx, uow, "record.import", cmd.CollectionID, map[string]any{"collection_id": cmd.CollectionID, "count": res.Created}); err != nil {
+			return err
+		}
+		return policy.Notify(ctx, uow, cmd.CollectionID, domain.EventRecordsImported, map[string]any{"count": res.Created})
 	})
 	if err != nil {
 		return nil, err
@@ -206,4 +217,124 @@ func checkMatch(match json.RawMessage) error {
 		}
 	}
 	return nil
+}
+
+// BulkUpdate sets the same top-level values in every listed record of one
+// collection (null removes the field); every record must still pass its
+// schema, or none changes. Each keeps its previous version. Editors.
+func (s *Service) BulkUpdate(ctx context.Context, cmd input.BulkUpdateCommand) (int, error) {
+	if len(cmd.IDs) == 0 || len(cmd.IDs) > maxBatch {
+		return 0, apperror.New(apperror.CodeInvalidInput, "ids must hold 1 to 100 ids").WithField("ids")
+	}
+	if len(cmd.Set) == 0 || len(cmd.Set) > 50 {
+		return 0, apperror.New(apperror.CodeInvalidInput, "set must hold 1 to 50 fields").WithField("set")
+	}
+	ids := slices.Compact(slices.Sorted(slices.Values(cmd.IDs)))
+	for _, id := range ids {
+		if err := validate.ID(id); err != nil {
+			return 0, err
+		}
+	}
+	for k, v := range cmd.Set {
+		if k == "" || len(k) > 200 || !json.Valid(v) {
+			return 0, apperror.New(apperror.CodeInvalidInput, "set must map field names to JSON values").WithField("set")
+		}
+	}
+	err := s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		owners, err := uow.Records().CollectionsOf(ctx, ids)
+		if err != nil {
+			return err
+		}
+		if len(owners) != len(ids) {
+			return apperror.New(apperror.CodeNotFound, "record not found")
+		}
+		collectionID := owners[ids[0]]
+		for _, c := range owners {
+			if c != collectionID {
+				return apperror.New(apperror.CodeInvalidInput, "the records must belong to one collection").WithField("ids")
+			}
+		}
+		if err := editor(ctx, uow, collectionID); err != nil {
+			return err
+		}
+		raw, err := uow.Collections().SchemaForWrite(ctx, collectionID)
+		if err != nil {
+			return err
+		}
+		if len(ids) > 1 {
+			for _, k := range schema.UniqueKeys(raw) {
+				if v, ok := cmd.Set[k]; ok && string(v) != "null" {
+					return apperror.New(apperror.CodeInvalidInput, "a unique field cannot be filled in bulk; edit its records one by one").WithField("set")
+				}
+			}
+		}
+		compiled, err := schema.Compile(raw)
+		if err != nil {
+			return err
+		}
+		docs := make([][]byte, len(ids))
+		for i, id := range ids {
+			current, err := uow.Records().FindByID(ctx, id)
+			if err != nil {
+				return err
+			}
+			var data map[string]json.RawMessage
+			if err := json.Unmarshal(current.Data, &data); err != nil || data == nil {
+				data = map[string]json.RawMessage{}
+			}
+			for k, v := range cmd.Set {
+				if string(v) == "null" {
+					delete(data, k)
+				} else {
+					data[k] = v
+				}
+			}
+			if docs[i], err = json.Marshal(data); err != nil {
+				return err
+			}
+			if issues, err := schema.Check(compiled, docs[i]); err != nil || len(issues) > 0 {
+				if err == nil {
+					err = apperror.New(apperror.CodeValidationFailed, "a record would break the collection's fields").
+						WithField("set").WithDetails("issues", issues).WithDetails("id", id)
+				}
+				return err
+			}
+		}
+		if len(ids) == 1 { // one record may take a unique value nobody else holds
+			taken, err := takenIn(ctx, uow, collectionID, ids[0], schema.UniqueKeys(raw), docs)
+			if err != nil {
+				return err
+			}
+			if len(taken[0]) > 0 {
+				return apperror.New(apperror.CodeValidationFailed, "a unique field repeats another record's value").WithField("set").WithDetails("issues", taken[0])
+			}
+		}
+		missing, err := linksIn(ctx, uow, raw, collectionID, docs)
+		if err != nil {
+			return err
+		}
+		for i, id := range ids {
+			if len(missing[i]) > 0 {
+				return apperror.New(apperror.CodeValidationFailed, "a value points at something that does not exist").
+					WithField("set").WithDetails("issues", missing[i]).WithDetails("id", id)
+			}
+			updated, err := uow.Records().Update(ctx, id, docs[i], nil)
+			if err != nil {
+				return err
+			}
+			details := auditDetails(collectionID, raw, docs[i])
+			details["bulk"] = true
+			if err := policy.Audit(ctx, uow, "record.update", id, details); err != nil {
+				return err
+			}
+			if err := policy.Notify(ctx, uow, collectionID, domain.EventRecordUpdated, hookData(updated)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return len(ids), nil
 }

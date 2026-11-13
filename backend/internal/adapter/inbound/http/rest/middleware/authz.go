@@ -76,3 +76,29 @@ func SessionID(c fiber.Ctx) string {
 	sessionID, _ := c.Locals(LocalSessionID).(string)
 	return sessionID
 }
+
+// BearerOrKey accepts a signed in person's access token or, for programs, an
+// API key ("Authorization: Bearer dsk_..." or "X-API-Key: dsk_..."). A key acts
+// as the member who made it, capped to its collection and role (policy.CollectionRole).
+func BearerOrKey(authn input.Authenticator, keys input.IntegrationService) fiber.Handler {
+	person := Bearer(authn)
+	return func(c fiber.Ctx) error {
+		key := c.Get("X-API-Key")
+		if key == "" {
+			if token := strings.TrimPrefix(c.Get("Authorization"), "Bearer "); strings.HasPrefix(token, domain.APIKeyPrefix) {
+				key = token
+			}
+		}
+		if key == "" {
+			return person(c)
+		}
+		grant, err := keys.AuthenticateKey(c.Context(), strings.TrimSpace(key))
+		if err != nil {
+			return mapper.WriteError(c, err)
+		}
+		c.Locals(LocalUserID, grant.UserID)
+		ctx := reqctx.WithActor(c.Context(), grant.UserID)
+		c.SetContext(reqctx.WithAPIKey(ctx, reqctx.APIKey{ID: grant.KeyID, Name: grant.Name, CollectionID: grant.CollectionID, CanWrite: grant.CanWrite}))
+		return c.Next()
+	}
+}

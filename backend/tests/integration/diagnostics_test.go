@@ -2,6 +2,8 @@ package integration_test
 
 import (
 	"encoding/json"
+	"io"
+	"strings"
 	"net/http"
 	"testing"
 
@@ -16,7 +18,7 @@ func TestPrivateDiagnostics(t *testing.T) {
 	}
 	defer stop()
 	d.Heartbeat()
-	for _, path := range []string{"/health", "/metrics"} {
+	for _, path := range []string{"/health", "/metrics", "/metrics/prometheus"} {
 		res, err := http.Get("http://" + d.Address + path)
 		if err != nil {
 			t.Fatal(err)
@@ -33,6 +35,14 @@ func TestPrivateDiagnostics(t *testing.T) {
 			for _, key := range []string{"http", "hashing", "database", "outbox", "heap_bytes"} {
 				if _, ok := data[key]; !ok {
 					t.Fatalf("missing %s", key)
+				}
+			}
+		}
+		if path == "/metrics/prometheus" {
+			body, _ := io.ReadAll(res.Body)
+			for _, want := range []string{"dataset_http_requests_total", `dataset_http_request_duration_seconds_bucket{le="+Inf"}`, "dataset_jobs_pending"} {
+				if !strings.Contains(string(body), want) {
+					t.Fatalf("prometheus output misses %s:\n%s", want, body)
 				}
 			}
 		}

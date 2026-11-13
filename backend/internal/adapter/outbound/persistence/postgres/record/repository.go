@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/shared"
 	"github.com/raulaguila/dataset/internal/core/domain"
@@ -45,10 +46,14 @@ const columns = "id, collection_id, data::text AS data, version, created_at, upd
 
 // preview keeps the top-level plain values of data, strings cut to 120 characters:
 // the list screen shows a one-line summary, so arrays, objects and long text stay behind.
-const preview = `(SELECT coalesce(jsonb_object_agg(key, CASE WHEN jsonb_typeof(value) = 'string'
-	THEN to_jsonb(left(value #>> '{}', 120)) ELSE value END), '{}')
+// An object with an id and a name (an attached file) keeps just those two, for its link.
+const preview = `(SELECT coalesce(jsonb_object_agg(key, CASE
+	WHEN jsonb_typeof(value) = 'string' THEN to_jsonb(left(value #>> '{}', 120))
+	WHEN jsonb_typeof(value) = 'object' THEN jsonb_build_object('id', value -> 'id', 'name', left(value ->> 'name', 120))
+	ELSE value END), '{}')
 	FROM jsonb_each(CASE WHEN jsonb_typeof(data) = 'object' THEN data ELSE '{}' END)
-	WHERE jsonb_typeof(value) IN ('string', 'number', 'boolean'))::text`
+	WHERE jsonb_typeof(value) IN ('string', 'number', 'boolean')
+		OR (jsonb_typeof(value) = 'object' AND jsonb_typeof(value -> 'id') = 'string' AND jsonb_typeof(value -> 'name') = 'string'))::text`
 
 // shortcut: search is a trigram ILIKE over the whole JSON text, so keys match too;
 // move to full-text or per-field filters when collections hold tens of thousands of records.
@@ -60,6 +65,10 @@ func (r *Repository) List(ctx context.Context, filter domain.RecordFilter) ([]do
 		}
 		if len(filter.Match) > 0 {
 			q = q.Where("data @> ?::jsonb", string(filter.Match)) // idx_app_record_data_path
+		}
+		if len(filter.IDs) > 0 {
+			ids, _ := json.Marshal(filter.IDs)
+			q = q.Where("id IN (SELECT jsonb_array_elements_text(?::jsonb)::uuid)", string(ids))
 		}
 		return q
 	}
@@ -75,8 +84,15 @@ func (r *Repository) List(ctx context.Context, filter domain.RecordFilter) ([]do
 	if filter.Sort == "updated_at" {
 		sort = "updated_at" // idx_app_record_collection_updated
 	}
+	order := clause.OrderBy{Expression: clause.Expr{SQL: sort + " " + direction + ", id " + direction}}
+	if field := filter.SortField(); field != "" {
+		// jsonb order: null, strings, numbers, booleans; numbers compare as numbers.
+		// shortcut: no index behind it, so each page sorts the collection's matching rows;
+		// add an expression index per sorted field past ~100 000 records.
+		order = clause.OrderBy{Expression: clause.Expr{SQL: "data -> ? " + direction + " NULLS LAST, id " + direction, Vars: []any{field}}}
+	}
 	var rows []row
-	err := matching().Select("id, collection_id, " + preview + " AS data, version, created_at, updated_at").Order(sort + " " + direction + ", id " + direction).
+	err := matching().Select("id, collection_id, " + preview + " AS data, version, created_at, updated_at").Order(order).
 		Offset(filter.Page.Offset()).Limit(filter.Page.Limit).Find(&rows).Error
 	if err != nil {
 		return nil, 0, shared.WrapError(err, "record")
@@ -137,22 +153,6 @@ func (r *Repository) Update(ctx context.Context, id string, data json.RawMessage
 	}
 	rec := rows[0].toDomain()
 	return &rec, nil
-}
-
-func (r *Repository) DeleteMany(ctx context.Context, ids []string) error {
-	var deleted []uuid.UUID
-	err := r.db.WithContext(ctx).Raw(`
-		DELETE FROM app.record WHERE id IN ?
-		AND (SELECT count(*) FROM app.record WHERE id IN ?) = ?
-		RETURNING id
-	`, ids, ids, len(ids)).Find(&deleted).Error
-	if err != nil {
-		return shared.WrapError(err, "record")
-	}
-	if len(deleted) == 0 {
-		return shared.WrapError(gorm.ErrRecordNotFound, "record")
-	}
-	return nil
 }
 
 func (r *Repository) CollectionsOf(ctx context.Context, ids []string) (map[string]string, error) {

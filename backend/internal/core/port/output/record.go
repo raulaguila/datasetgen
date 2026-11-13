@@ -16,8 +16,6 @@ type RecordRepository interface {
 	Create(ctx context.Context, r *domain.Record) error
 	// Update replaces data; with version set, a row changed since that version is a conflict.
 	Update(ctx context.Context, id string, data json.RawMessage, version *int) (*domain.Record, error)
-	// DeleteMany deletes every listed record or, when one is missing, none.
-	DeleteMany(ctx context.Context, ids []string) error
 	// CollectionsOf maps each listed record that exists to its collection id.
 	CollectionsOf(ctx context.Context, ids []string) (map[string]string, error)
 	// Scan returns up to limit records of the collection after afterID (by id),

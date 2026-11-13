@@ -62,7 +62,7 @@ const platformAdmin = `EXISTS (
 // visible joins the caller's membership and keeps the rows they may see.
 func visible(q *gorm.DB, userID string) *gorm.DB {
 	return q.Joins("LEFT JOIN app.collection_member m ON m.collection_id = c.id AND m.user_id = ?", userID).
-		Where("(m.user_id IS NOT NULL OR "+platformAdmin+")", userID)
+		Where("c.deleted_at IS NULL AND (m.user_id IS NOT NULL OR "+platformAdmin+")", userID)
 }
 
 const columns = "id, name, description, icon, schema::text AS schema, version, created_at, updated_at"
@@ -133,7 +133,7 @@ func (r *Repository) ListOptions(ctx context.Context, userID string, limit int) 
 
 func (r *Repository) FindByID(ctx context.Context, id string) (*domain.Collection, error) {
 	var m row
-	err := r.db.WithContext(ctx).Raw(`SELECT `+columns+` FROM app.collection WHERE id = ?`, id).Take(&m).Error
+	err := r.db.WithContext(ctx).Raw(`SELECT `+columns+` FROM app.collection WHERE id = ? AND deleted_at IS NULL`, id).Take(&m).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "collection")
 	}
@@ -143,7 +143,7 @@ func (r *Repository) FindByID(ctx context.Context, id string) (*domain.Collectio
 
 func (r *Repository) SchemaForWrite(ctx context.Context, id string) (json.RawMessage, error) {
 	var m row
-	err := r.db.WithContext(ctx).Raw(`SELECT schema::text AS schema FROM app.collection WHERE id = ? FOR SHARE`, id).Take(&m).Error
+	err := r.db.WithContext(ctx).Raw(`SELECT schema::text AS schema FROM app.collection WHERE id = ? AND deleted_at IS NULL FOR SHARE`, id).Take(&m).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "collection")
 	}
@@ -188,28 +188,6 @@ func (r *Repository) Update(ctx context.Context, id string, patch domain.Collect
 	return &c, nil
 }
 
-// DeleteMany is one statement: the count check and the delete see the same snapshot.
-// A collection that still has records fails on the foreign key (RESOURCE_IN_USE).
-func (r *Repository) DeleteMany(ctx context.Context, ids []string) (map[string]string, error) {
-	var rows []row
-	err := r.db.WithContext(ctx).Raw(`
-		DELETE FROM app.collection WHERE id IN ?
-		AND (SELECT count(*) FROM app.collection WHERE id IN ?) = ?
-		RETURNING id, name
-	`, ids, ids, len(ids)).Find(&rows).Error
-	if err != nil {
-		return nil, shared.WrapError(err, "collection")
-	}
-	if len(rows) == 0 {
-		return nil, shared.WrapError(gorm.ErrRecordNotFound, "collection")
-	}
-	names := make(map[string]string, len(rows))
-	for _, m := range rows {
-		names[m.ID.String()] = m.Name
-	}
-	return names, nil
-}
-
 // missOrStale tells a missing row from one changed since the caller read it.
 func missOrStale(ctx context.Context, db *gorm.DB, table, resource, id string, version *int) error {
 	if version == nil {
@@ -230,7 +208,7 @@ func (r *Repository) Access(ctx context.Context, id, userID string) (domain.Memb
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT CASE WHEN `+platformAdmin+` THEN 'owner'
 		       ELSE (SELECT m.role FROM app.collection_member m WHERE m.collection_id = c.id AND m.user_id = ?) END AS role
-		FROM app.collection c WHERE c.id = ?
+		FROM app.collection c WHERE c.id = ? AND c.deleted_at IS NULL
 	`, userID, userID, id).Take(&m).Error
 	if err == nil && m.Role == nil {
 		err = gorm.ErrRecordNotFound // not a member: the collection stays hidden

@@ -28,6 +28,8 @@ type UnitOfWork interface {
 	Records() RecordRepository
 	Collections() CollectionRepository
 	Jobs() JobRepository
+	Integrations() IntegrationRepository
+	Tools() ToolsRepository
 }
 
 // AccountStore exposes only the repositories this application service reads or updates.

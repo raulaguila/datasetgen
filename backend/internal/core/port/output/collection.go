@@ -26,9 +26,6 @@ type CollectionRepository interface {
 	// Update writes only the fields set in patch; with patch.Version set, a row
 	// changed since that version is a conflict.
 	Update(ctx context.Context, id string, patch domain.CollectionPatch) (*domain.Collection, error)
-	// DeleteMany deletes every listed collection or, when one is missing, none,
-	// and returns the deleted names by id for the audit log.
-	DeleteMany(ctx context.Context, ids []string) (map[string]string, error)
 
 	// Members lists the collection's members, owners first, then by name.
 	Members(ctx context.Context, id string) ([]domain.CollectionMember, error)

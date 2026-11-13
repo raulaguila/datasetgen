@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { records } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/errors";
 import { batches, parseImport, type ParsedRecord } from "@/lib/import-file";
+import { csvRecords } from "@/lib/infer-schema";
 import { useI18n } from "@/lib/i18n/provider";
 
 const SHOWN_ERRORS = 20;
@@ -25,11 +26,11 @@ interface Checked {
 }
 
 /**
- * Imports a JSON Lines or JSON array file in two steps: every batch is checked
+ * Imports a JSON Lines, JSON array or CSV file in two steps: every batch is checked
  * first (dry run), then sent. Batches commit one by one, so a failure midway
  * leaves the earlier batches saved; the result says how many were created.
  */
-export function RecordImportDialog({ collectionId, open, onOpenChange }: { collectionId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
+export function RecordImportDialog({ collectionId, schema, open, onOpenChange }: { collectionId: string; schema?: Record<string, unknown>; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { t } = useI18n();
   const client = useQueryClient();
   const [checked, setChecked] = useState<Checked | null>(null);
@@ -52,7 +53,8 @@ export function RecordImportDialog({ collectionId, open, onOpenChange }: { colle
     reset();
     setBusy(t("import.checking"));
     try {
-      const parsed = parseImport(await file.text());
+      const text = await file.text();
+      const parsed = /\.csv$/i.test(file.name) ? csvRecords(text, schema ?? null) : parseImport(text);
       const split = batches(parsed.records);
       const problems = [
         ...parsed.errors.map((e) => ({ line: e.line, message: t("import.not_json") })),
@@ -117,7 +119,7 @@ export function RecordImportDialog({ collectionId, open, onOpenChange }: { colle
           <input
             id="import-file"
             type="file"
-            accept=".jsonl,.ndjson,.json,application/json,application/x-ndjson"
+            accept=".jsonl,.ndjson,.json,.csv,application/json,application/x-ndjson,text/csv"
             className="sr-only"
             disabled={!!busy}
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void check(f); }}

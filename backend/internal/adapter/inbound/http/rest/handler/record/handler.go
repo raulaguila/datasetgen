@@ -2,6 +2,7 @@ package record
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -90,6 +91,9 @@ func (h *Handler) List(c fiber.Ctx) error {
 	}
 	if f := c.Query("filter"); f != "" {
 		filter.Match = json.RawMessage(f) // the service checks its shape
+	}
+	if ids := c.Query("ids"); ids != "" {
+		filter.IDs = strings.Split(ids, ",")
 	}
 	items, total, err := h.svc.List(c.Context(), filter)
 	if err != nil {

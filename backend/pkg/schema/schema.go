@@ -210,6 +210,54 @@ func FieldChanges(before, after []byte) map[string][]string {
 	return out
 }
 
+// RefKeyword holds, on a top-level string property, the id of the collection
+// whose record its value names; FileKeyword marks a property holding an attached
+// file ({"id", "name", "size", "type"}). The server checks both exist.
+const (
+	RefKeyword  = "x-ref"
+	FileKeyword = "x-file"
+)
+
+// RefKeys maps each reference property to the collection it points at.
+func RefKeys(raw []byte) map[string]string {
+	var doc struct {
+		Properties map[string]map[string]any `json:"properties"`
+	}
+	if json.Unmarshal(raw, &doc) != nil {
+		return nil
+	}
+	out := map[string]string{}
+	for k, p := range doc.Properties {
+		if id, _ := p[RefKeyword].(string); id != "" {
+			out[k] = id
+		}
+	}
+	return out
+}
+
+// FileKeys lists the properties holding attached files, sorted.
+func FileKeys(raw []byte) []string {
+	var doc struct {
+		Properties map[string]map[string]any `json:"properties"`
+	}
+	if json.Unmarshal(raw, &doc) != nil {
+		return nil
+	}
+	var keys []string
+	for k, p := range doc.Properties {
+		if on, _ := p[FileKeyword].(bool); on {
+			keys = append(keys, k)
+		}
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// MissingIssue names a reference or file the value points at that does not exist.
+func MissingIssue(key string) Issue {
+	return Issue{Path: "/" + pointerEscape.Replace(key), Keyword: "exists", Message: "points at a record or file that does not exist"}
+}
+
 // UniqueKeyword marks a top-level property whose value no two records of a
 // collection may share. JSON Schema has no such rule; the server checks it.
 const UniqueKeyword = "x-unique"

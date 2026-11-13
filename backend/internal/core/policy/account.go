@@ -15,6 +15,12 @@ import (
 // Audit records an administrative change in the caller's transaction, with the
 // actor and request id the context carries.
 func Audit(ctx context.Context, uow output.UnitOfWork, action, targetID string, details map[string]any) error {
+	if key, ok := reqctx.Key(ctx); ok { // the log says the change came through a program
+		if details == nil {
+			details = map[string]any{}
+		}
+		details["api_key"] = key.Name
+	}
 	return uow.Audit().Record(ctx, domain.AuditEntry{
 		ActorID:   reqctx.Actor(ctx),
 		RequestID: reqctx.RequestID(ctx),

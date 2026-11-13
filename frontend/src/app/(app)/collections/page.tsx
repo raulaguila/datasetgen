@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Copy, Database, FileJson, ListTree, LogOut, MoreVertical, Plus, Search, Settings2, Star, Trash2, UserCog, Users, X } from "lucide-react";
+import { ArrowRight, Copy, Database, FileJson, ListTree, LogOut, MoreVertical, Plus, RotateCcw, Search, Settings2, Star, Trash2, UserCog, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader, useRelativeTime } from "@/components/bits";
 import { CollectionAvatar } from "@/components/collection-avatar";
@@ -17,8 +17,9 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { collections } from "@/lib/api/endpoints";
-import type { Collection } from "@/lib/api/types";
+import { collections, tools } from "@/lib/api/endpoints";
+import type { Collection, TrashedCollection } from "@/lib/api/types";
+import { errorMessage } from "@/lib/errors";
 import { useMe } from "@/lib/context/me";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
@@ -124,21 +125,23 @@ export default function CollectionsPage() {
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
         title={t(removing?.kind === "delete" ? "collections.delete" : "collections.leave")}
-        description={removing?.kind === "delete" ? t("collections.delete_hint") : t("collections.leave_confirm").replace("{name}", removing?.c.name ?? "")}
+        description={removing?.kind === "delete" ? t("collections.delete_trash_hint").replace("{n}", String(removing.c.record_count ?? 0)) : t("collections.leave_confirm").replace("{name}", removing?.c.name ?? "")}
         destructive
         confirmLabel={t(removing?.kind === "delete" ? "collections.delete" : "collections.leave")}
         onConfirm={async () => {
           if (!removing) return;
           const { c, kind } = removing;
-          // The dialog shows a refusal, such as the last owner leaving or records left.
+          // The dialog shows a refusal, such as the last owner leaving.
           await (kind === "delete" ? collections.remove([c.id]) : collections.leave(c.id));
           if (storedId === c.id) setCollection(null);
           if (pinned.includes(c.id)) togglePin(c.id);
           setRemoving(null);
           toast.success(t(kind === "delete" ? "collections.deleted" : "collections.left"));
           void client.invalidateQueries({ queryKey: ["collections"] });
+          void client.invalidateQueries({ queryKey: ["trash", "collections"] });
         }}
       />
+      <DeletedCollections />
     </div>
   );
 }
@@ -207,12 +210,73 @@ function Row({ c, pinned, onPin, onRemove, onDuplicate }: RowProps) {
               <DropdownMenuItem onClick={() => router.push(`${base}/settings`)}><Settings2 className="size-4" aria-hidden />{t("collections.general_settings")}</DropdownMenuItem>
             </>}
             {onDuplicate && <DropdownMenuItem onClick={() => onDuplicate(c)}><Copy className="size-4" aria-hidden />{t("duplicate.title")}</DropdownMenuItem>}
-            {(c.member !== false || (owner && !c.record_count)) && <DropdownMenuSeparator />}
+            {(c.member !== false || owner) && <DropdownMenuSeparator />}
             {c.member !== false && <DropdownMenuItem variant="destructive" onClick={() => onRemove(c, "leave")}><LogOut className="size-4" aria-hidden />{t("collections.leave")}</DropdownMenuItem>}
-            {owner && !c.record_count && <DropdownMenuItem variant="destructive" onClick={() => onRemove(c, "delete")}><Trash2 className="size-4" aria-hidden />{t("collections.delete")}</DropdownMenuItem>}
+            {owner && <DropdownMenuItem variant="destructive" onClick={() => onRemove(c, "delete")}><Trash2 className="size-4" aria-hidden />{t("collections.delete")}</DropdownMenuItem>}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
     </li>
+  );
+}
+
+/** Collections deleted in the last days: their owner restores them or deletes them for good. */
+function DeletedCollections() {
+  const { t } = useI18n();
+  const client = useQueryClient();
+  const relative = useRelativeTime();
+  const list = useQuery({ queryKey: ["trash", "collections"], queryFn: () => tools.trashedCollections() });
+  const [purging, setPurging] = useState<TrashedCollection | null>(null);
+  const items = list.data?.items ?? [];
+  if (!items.length) return null;
+  const refresh = () => {
+    void client.invalidateQueries({ queryKey: ["trash", "collections"] });
+    void client.invalidateQueries({ queryKey: ["collections"] });
+  };
+  const restore = async (c: TrashedCollection) => {
+    try {
+      await tools.restoreCollection(c.id);
+      toast.success(t("trash.collection_restored").replace("{name}", c.name));
+      refresh();
+    } catch (err) {
+      toast.error(errorMessage(err, "common.save_failed", t));
+    }
+  };
+  return (
+    <details className="collection-management-body mt-6">
+      <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
+        {t("trash.collections").replace("{n}", String(items.length))}
+      </summary>
+      <p className="mt-2 text-xs text-muted-foreground">{t("trash.retention").replace("{n}", String(list.data?.retention_days ?? 30))}</p>
+      <ul className="mt-2 divide-y rounded-lg border">
+        {items.map((c) => (
+          <li key={c.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
+            <CollectionAvatar collection={c} className="size-8 rounded-md text-xs font-semibold" />
+            <div className="min-w-40 flex-1">
+              <p className="truncate text-sm font-medium">{c.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {t(c.record_count === 1 ? "nav.record_one" : "nav.record_many").replace("{n}", String(c.record_count))} · {t("trash.deleted_when").replace("{when}", relative(c.deleted_at).rel)}
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => void restore(c)}><RotateCcw className="size-4" />{t("trash.restore")}</Button>
+            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setPurging(c)}><Trash2 className="size-4" />{t("trash.purge")}</Button>
+          </li>
+        ))}
+      </ul>
+      <ConfirmDialog
+        open={!!purging}
+        onOpenChange={(o) => !o && setPurging(null)}
+        title={t("trash.purge_collection_title").replace("{name}", purging?.name ?? "")}
+        description={t("trash.purge_desc")}
+        confirmLabel={t("trash.purge")}
+        destructive
+        onConfirm={async () => {
+          if (!purging) return;
+          await tools.purgeCollection(purging.id);
+          setPurging(null);
+          refresh();
+        }}
+      />
+    </details>
   );
 }

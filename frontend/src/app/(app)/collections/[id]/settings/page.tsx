@@ -35,7 +35,7 @@ export default function CollectionSettingsPage() {
             destructive
             confirmLabel={t("common.delete")}
             onConfirm={async () => {
-              await collections.remove([id]); // the dialog shows a refusal, such as records still inside
+              await collections.remove([id]); // the dialog shows a refusal
               setCollection(null);
               router.push("/collections");
               client.removeQueries({ queryKey: ["collections", "detail", id] });

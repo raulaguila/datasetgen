@@ -76,5 +76,51 @@ func (d *Diagnostics) handler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"http": telemetry.HTTPStats(), "hashing": password.Stats(), "database": db.Stats(), "outbox": queue, "heap_bytes": mem.HeapAlloc, "heap_objects": mem.HeapObjects, "gc_cycles": mem.NumGC, "goroutines": runtime.NumGoroutine()})
 	})
+	// The same numbers for a Prometheus scrape: HTTP, pool, queues and memory.
+	mux.HandleFunc("GET /metrics/prometheus", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		db, err := d.resources.PostgresDB.DB()
+		if err != nil {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		var q struct {
+			OutboxPending int64
+			OutboxFailed  int64
+			JobsPending   int64
+			JobsFailed    int64
+		}
+		err = d.resources.PostgresDB.WithContext(ctx).Raw(`SELECT
+			(SELECT count(*) FROM sys.outbox WHERE status IN ('pending','processing')) AS outbox_pending,
+			(SELECT count(*) FROM sys.outbox WHERE status = 'failed') AS outbox_failed,
+			(SELECT count(*) FROM sys.job WHERE status IN ('pending','processing')) AS jobs_pending,
+			(SELECT count(*) FROM sys.job WHERE status = 'failed') AS jobs_failed`).Find(&q).Error
+		if err != nil {
+			http.Error(w, "queues unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		var mem runtime.MemStats
+		runtime.ReadMemStats(&mem)
+		stats := db.Stats()
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		telemetry.WritePrometheus(w)
+		for _, g := range []struct {
+			name, help string
+			value      float64
+		}{
+			{"dataset_db_open_connections", "Open database connections.", float64(stats.OpenConnections)},
+			{"dataset_db_in_use_connections", "Database connections in use.", float64(stats.InUse)},
+			{"dataset_db_wait_count", "Waits for a free database connection, since start.", float64(stats.WaitCount)},
+			{"dataset_outbox_pending", "Emails waiting to be sent.", float64(q.OutboxPending)},
+			{"dataset_outbox_failed", "Emails that gave up.", float64(q.OutboxFailed)},
+			{"dataset_jobs_pending", "Background jobs waiting or running.", float64(q.JobsPending)},
+			{"dataset_jobs_failed", "Background jobs that gave up.", float64(q.JobsFailed)},
+			{"dataset_heap_bytes", "Heap in use.", float64(mem.HeapAlloc)},
+			{"dataset_goroutines", "Goroutines.", float64(runtime.NumGoroutine())},
+		} {
+			fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s gauge\n%s %g\n", g.name, g.help, g.name, g.name, g.value)
+		}
+	})
 	return mux
 }

@@ -172,7 +172,7 @@ install-tools: ## Install pinned Go tooling into GOPATH/bin
 # =========================
 # 1. Environment & Setup
 # =========================
-.PHONY: clean clean-go-cache clean-go-mod-cache init swagger tidy dev-backend dev-mailer list-updates
+.PHONY: db-backup db-restore clean clean-go-cache clean-go-mod-cache init swagger tidy dev-backend dev-mailer list-updates
 
 clean: ## Clean local build artifacts
 	@echo "$(BLUE)🏗️  Cleaning local build artifacts...$(RESET)"
@@ -347,6 +347,19 @@ migrate-up: ## Run migrations and configure backend and mailer logins
 	@echo "$(GREEN)✅ Migrations and database logins configured!$(RESET)"
 	@echo
 
+db-backup: ## Dump the database now into backups/ (custom-format pg_dump)
+	$(call require_env_file)
+	@mkdir -p backups
+	@set -a && . ./config/.env && set +a; \
+	file="backups/db-$$(date +%Y%m%d-%H%M%S)"; \
+	$(DOCKER) exec dataset_postgres pg_dump -Fc -U "$${POSTGRES_USER}" -d "$${POSTGRES_BASE}" -p "$${POSTGRES_PORT}" > "$$file.part" && mv "$$file.part" "$$file.dump" && echo "$(GREEN)✅ $$file.dump$(RESET)"
+
+db-restore: ## Restore a dump over the database, replacing current data (Usage: make db-restore FILE=backups/db-....dump)
+	$(call require_env_file)
+	@test -f "$(FILE)" || { echo "Set FILE to a dump made by db-backup"; exit 1; }
+	@set -a && . ./config/.env && set +a; \
+	$(DOCKER) exec -i dataset_postgres pg_restore --clean --if-exists --no-owner -U "$${POSTGRES_USER}" -d "$${POSTGRES_BASE}" -p "$${POSTGRES_PORT}" < "$(FILE)" && echo "$(GREEN)✅ restored $(FILE)$(RESET)"
+
 migrate-down: ## Rollback the last migration
 	@echo "$(BLUE)🔄 Rolling back last migration...$(RESET)"
 	$(call run_migrate,down 1)
@@ -399,6 +412,8 @@ compose-build: ## Build, create and start containers
 	@echo "$(BLUE)🚢 Building and starting Docker containers...$(RESET)"
 	$(call require_env_file)
 	@$(COMPOSE_COMMAND) up -d --build
+	@# A rebuilt image under the same tag can leave the old container running.
+	@$(COMPOSE_COMMAND) up -d --no-deps --force-recreate backend mailer
 	@echo "$(GREEN)✅ Containers are up and running!$(RESET)"
 	@echo
 	@$(clean_dangling_images)

@@ -35,6 +35,10 @@ type APIConfig struct {
 	TrustedProxies string `env:"API_TRUSTED_PROXIES" default:""`
 	ProxyHeader    string `env:"API_PROXY_HEADER" default:"X-Real-IP"`
 
+	// WebhookAllowPrivate lets webhooks reach loopback and private addresses; off,
+	// a hook pointed inside the network is refused when it connects (SSRF).
+	WebhookAllowPrivate bool `env:"WEBHOOK_ALLOW_PRIVATE" default:"0"`
+
 	GlobalRateLimit   int `env:"API_RATE_LIMIT_GLOBAL" default:"300"` // per IP: behind NAT a whole office shares it
 	AuthRateLimit     int `env:"API_RATE_LIMIT_AUTH" default:"10"`
 	PasswordRateLimit int `env:"API_RATE_LIMIT_PASSWORD" default:"3"`

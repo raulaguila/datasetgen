@@ -1,16 +1,18 @@
 // BFF proxy. The browser calls /api/proxy/v1/...; this route attaches the bearer
 // token from the httpOnly cookie, refreshes it once on 401, and returns the
 // upstream answer. Token endpoints stay behind /api/auth, so a token never
-// reaches the browser.
+// reaches the browser. A program's API key (dsk_…) passes through as it is,
+// so the API answers on this one public address; the backend scopes the key.
 import { NextRequest, NextResponse } from "next/server";
 import { apiUrl, forwardHeaders, refreshSession } from "@/lib/api/upstream";
 import { clearSessionCookie, readSession, unauthorized, writeSessionCookie, type Session } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-const MAX_BODY = 104 * 1024; // the backend refuses more: a 100 KB picture is its largest body
+const MAX_BODY = 1028 * 1024; // the backend refuses more: an attached file (1 MB) is its largest body
 const TOKEN_PATHS = /^v1\/auth\/(login|refresh|logout|register|activate|password-reset)(\/|$)/;
-const PASSTHROUGH = ["content-type", "content-disposition", "retry-after", "x-request-id"];
+// The download headers keep an attached file from running as a page on this origin.
+const PASSTHROUGH = ["content-type", "content-disposition", "retry-after", "x-request-id", "x-content-type-options", "content-security-policy", "cache-control"];
 const COMPRESSIBLE = /^(application\/json|text\/)/;
 const MIN_GZIP = 1024; // below this the gzip header costs more than it saves
 
@@ -29,8 +31,9 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   const routed = target.pathname.slice(new URL(apiUrl("/")).pathname.length);
   if (!routed.startsWith("v1/") || TOKEN_PATHS.test(routed)) return NextResponse.json({ code: "NOT_FOUND", message: "use /api/auth" }, { status: 404 });
 
-  const { session, present } = await readSession();
-  if (!session) return unauthorized(present);
+  const apiKey = req.headers.get("x-api-key") ?? req.headers.get("authorization")?.match(/^Bearer (dsk_\S+)$/)?.[1];
+  const { session, present } = apiKey ? { session: null, present: false } : await readSession();
+  if (!session && !apiKey) return unauthorized(present);
 
   // Bytes, not text: an image body would not survive a UTF-8 round trip.
   const raw = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
@@ -54,8 +57,8 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   let rotated: Session | null = null;
   let upstream: Response;
   try {
-    upstream = await send(session.access_token);
-    if (upstream.status === 401) {
+    upstream = await send(apiKey ?? session!.access_token);
+    if (upstream.status === 401 && session) {
       await upstream.body?.cancel();
       const next = await refreshSession(session, headers);
       if (!next.ok) {
@@ -81,6 +84,7 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
     const value = upstream.headers.get(name);
     if (value) out.headers.set(name, value);
   }
+  if (apiKey) return out;
   if (upstream.status === 401) await clearSessionCookie(out);
   else if (rotated) await writeSessionCookie(out, rotated);
   return out;

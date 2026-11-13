@@ -3,6 +3,7 @@ package record
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"slices"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/internal/core/port/output"
 	"github.com/raulaguila/dataset/pkg/apperror"
+	"github.com/raulaguila/dataset/pkg/reqctx"
 	"github.com/raulaguila/dataset/pkg/schema"
 	"github.com/raulaguila/dataset/pkg/validate"
 )
@@ -44,8 +46,27 @@ func (s *Service) List(ctx context.Context, filter domain.RecordFilter) ([]domai
 	if err := validate.Search(filter.Search, maxSearchBytes); err != nil {
 		return nil, 0, err
 	}
-	if err := validate.Sort(&filter.Sort, &filter.Order, []string{"created_at", "updated_at"}, "created_at", "desc"); err != nil {
+	if field := filter.SortField(); field != "" {
+		// Any top-level field; the value is a bind parameter, never SQL text.
+		if len(field) > 200 || strings.ContainsRune(field, 0) {
+			return nil, 0, apperror.New(apperror.CodeInvalidInput, "sort field is too long").WithField("sort")
+		}
+		if filter.Order == "" {
+			filter.Order = "asc"
+		}
+		if filter.Order != "asc" && filter.Order != "desc" {
+			return nil, 0, apperror.New(apperror.CodeInvalidInput, "order must be asc or desc").WithField("order")
+		}
+	} else if err := validate.Sort(&filter.Sort, &filter.Order, []string{"created_at", "updated_at"}, "created_at", "desc"); err != nil {
 		return nil, 0, err
+	}
+	if len(filter.IDs) > maxBatch {
+		return nil, 0, apperror.New(apperror.CodeInvalidInput, "ids must hold up to 100 ids").WithField("ids")
+	}
+	for _, id := range filter.IDs {
+		if err := validate.ID(id); err != nil {
+			return nil, 0, err
+		}
 	}
 	if err := checkMatch(filter.Match); err != nil {
 		return nil, 0, err
@@ -93,7 +114,10 @@ func (s *Service) Create(ctx context.Context, cmd input.CreateRecordCommand) (*d
 		if err := uow.Records().Create(ctx, r); err != nil {
 			return err
 		}
-		return policy.Audit(ctx, uow, "record.create", r.ID, auditDetails(r.CollectionID, raw, cmd.Data))
+		if err := policy.Audit(ctx, uow, "record.create", r.ID, auditDetails(r.CollectionID, raw, cmd.Data)); err != nil {
+			return err
+		}
+		return policy.Notify(ctx, uow, r.CollectionID, domain.EventRecordCreated, hookData(r))
 	})
 	if err != nil {
 		return nil, err
@@ -124,7 +148,10 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateRecordCommand) (*d
 		if updated, err = uow.Records().Update(ctx, cmd.ID, cmd.Data, cmd.Version); err != nil {
 			return err
 		}
-		return policy.Audit(ctx, uow, "record.update", updated.ID, auditDetails(updated.CollectionID, raw, cmd.Data))
+		if err := policy.Audit(ctx, uow, "record.update", updated.ID, auditDetails(updated.CollectionID, raw, cmd.Data)); err != nil {
+			return err
+		}
+		return policy.Notify(ctx, uow, updated.CollectionID, domain.EventRecordUpdated, hookData(updated))
 	})
 	if err != nil {
 		return nil, err
@@ -156,12 +183,16 @@ func (s *Service) DeleteMany(ctx context.Context, ids []string) error {
 				checked[c] = true
 			}
 		}
-		if err := uow.Records().DeleteMany(ctx, ids); err != nil {
+		// Deleted records wait in the trash (domain.TrashRetention) before they go for good.
+		if err := uow.Tools().TrashRecords(ctx, ids, reqctx.Actor(ctx)); err != nil {
 			return err
 		}
 		for _, id := range ids {
 			// collection_id puts the delete in the collection's own log.
 			if err := policy.Audit(ctx, uow, "record.delete", id, map[string]any{"collection_id": owners[id]}); err != nil {
+				return err
+			}
+			if err := policy.Notify(ctx, uow, owners[id], domain.EventRecordDeleted, map[string]any{"id": id}); err != nil {
 				return err
 			}
 		}
@@ -210,11 +241,85 @@ func checkData(ctx context.Context, uow output.UnitOfWork, collectionID, recordI
 	if err != nil {
 		return nil, err
 	}
+	missing, err := linksIn(ctx, uow, raw, collectionID, [][]byte{data})
+	if err != nil {
+		return nil, err
+	}
+	issues[0] = append(issues[0], missing[0]...)
 	if len(issues[0]) > 0 {
 		return nil, apperror.New(apperror.CodeValidationFailed, "a unique field repeats another record's value").
 			WithField("data").WithDetails("issues", issues[0])
 	}
 	return raw, nil
+}
+
+// hookData is a record as a webhook sends it.
+func hookData(r *domain.Record) map[string]any {
+	return map[string]any{"id": r.ID, "data": r.Data, "version": r.Version, "updated_at": r.UpdatedAt}
+}
+
+// linksIn returns, per document, the reference and file fields whose value
+// names a record of the referenced collection, or a file of this one, that
+// does not exist.
+func linksIn(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionID string, docs [][]byte) ([][]schema.Issue, error) {
+	out := make([][]schema.Issue, len(docs))
+	refs, files := schema.RefKeys(raw), schema.FileKeys(raw)
+	if len(refs) == 0 && len(files) == 0 {
+		return out, nil
+	}
+	parsed := make([]map[string]json.RawMessage, len(docs))
+	for i, doc := range docs {
+		_ = json.Unmarshal(doc, &parsed[i]) // not an object: the schema already refused it
+	}
+	check := func(key, target string, idOf func(json.RawMessage) string, exist func(context.Context, string, []string) (map[string]bool, error)) error {
+		var ids []string
+		for _, p := range parsed {
+			if id := idOf(p[key]); id != "" {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+		found, err := exist(ctx, target, slices.Compact(slices.Sorted(slices.Values(ids))))
+		if err != nil {
+			return err
+		}
+		for i, p := range parsed {
+			if id := idOf(p[key]); id != "" && !found[id] {
+				out[i] = append(out[i], schema.MissingIssue(key))
+			}
+		}
+		return nil
+	}
+	refID := func(v json.RawMessage) string {
+		var s string
+		if json.Unmarshal(v, &s) != nil || validate.ID(s) != nil {
+			return ""
+		}
+		return s
+	}
+	fileID := func(v json.RawMessage) string {
+		var f struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(v, &f) != nil || validate.ID(f.ID) != nil {
+			return ""
+		}
+		return f.ID
+	}
+	for _, key := range slices.Sorted(maps.Keys(refs)) {
+		// shortcut: existence only; the caller may not read the referenced collection.
+		if err := check(key, refs[key], refID, uow.Tools().RecordsExist); err != nil {
+			return nil, err
+		}
+	}
+	for _, key := range files {
+		if err := check(key, collectionID, fileID, uow.Tools().FilesExist); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // takenIn returns, per document, the unique keys whose value another record

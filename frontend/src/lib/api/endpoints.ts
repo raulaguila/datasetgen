@@ -27,6 +27,14 @@ import type {
   UserCounts,
   UserDetails,
   UserStatus,
+  ApiKey,
+  Webhook,
+  WebhookEvent,
+  TrashedRecord,
+  TrashedCollection,
+  SchemaVersion,
+  SavedView,
+  FileRef,
 } from "@/lib/api/types";
 
 function query(params: Record<string, string | number | boolean | undefined>): string {
@@ -148,7 +156,8 @@ export const collections = {
 
 export const records = {
   /** filter: a JSON object of top-level fields and exact values. */
-  list: (p: { collection_id: string; page: number; limit: number; search?: string; sort?: "created_at" | "updated_at"; order?: SortOrder; filter?: string }, signal?: AbortSignal) =>
+  /** sort: created_at, updated_at or data.<field>; ids: up to 100 record ids, comma separated. */
+  list: (p: { collection_id: string; page: number; limit: number; search?: string; sort?: string; order?: SortOrder; filter?: string; ids?: string }, signal?: AbortSignal) =>
     apiFetch<Paged<DataRecord>>(`/v1/records${query(p)}`, { signal }),
   versions: (recordId: string, signal?: AbortSignal) => apiFetch<{ items: RecordVersion[] }>(`/v1/records/${id(recordId)}/versions`, { signal }),
   restore: (recordId: string, version: number, current_version?: number) =>
@@ -162,6 +171,34 @@ export const records = {
   create: (collection_id: string, data: unknown) => apiFetch<DataRecord>("/v1/records", { method: "POST", json: { collection_id, data } }),
   update: (recordId: string, data: unknown, version?: number) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`, { method: "PATCH", json: { data, version } }),
   remove: (ids: string[]) => apiFetch<void>("/v1/records/delete", { method: "POST", json: { ids } }),
+  /** Sets the same fields on records of one collection, all or none; null removes a field. */
+  bulkUpdate: (ids: string[], set: Record<string, unknown>) => apiFetch<{ count: number }>("/v1/records/bulk-update", { method: "POST", json: { ids, set } }),
+};
+
+const col = (collectionId: string) => `/v1/collections/${id(collectionId)}`;
+
+/** API keys, webhooks, trash, field history, saved views and files of a collection. */
+export const tools = {
+  keys: (collectionId: string) => apiFetch<{ items: ApiKey[] }>(`${col(collectionId)}/keys`),
+  createKey: (collectionId: string, name: string, can_write: boolean) => apiFetch<ApiKey & { secret: string }>(`${col(collectionId)}/keys`, { method: "POST", json: { name, can_write } }),
+  deleteKey: (collectionId: string, keyId: string) => apiFetch<void>(`${col(collectionId)}/keys/${id(keyId)}`, { method: "DELETE" }),
+  webhooks: (collectionId: string) => apiFetch<{ items: Webhook[] }>(`${col(collectionId)}/webhooks`),
+  createWebhook: (collectionId: string, url: string, events: WebhookEvent[]) => apiFetch<Webhook & { secret: string }>(`${col(collectionId)}/webhooks`, { method: "POST", json: { url, events } }),
+  deleteWebhook: (collectionId: string, hookId: string) => apiFetch<void>(`${col(collectionId)}/webhooks/${id(hookId)}`, { method: "DELETE" }),
+  /** Sends a test delivery now; answers the hook with its new last status. */
+  testWebhook: (collectionId: string, hookId: string) => apiFetch<Webhook>(`${col(collectionId)}/webhooks/${id(hookId)}/test`, { method: "POST" }),
+  trash: (collectionId: string, signal?: AbortSignal) => apiFetch<{ items: TrashedRecord[]; retention_days: number }>(`${col(collectionId)}/trash`, { signal }),
+  restoreRecords: (collectionId: string, ids: string[]) => apiFetch<{ count: number }>(`${col(collectionId)}/trash/restore`, { method: "POST", json: { ids } }),
+  purgeRecords: (collectionId: string, ids: string[]) => apiFetch<{ count: number }>(`${col(collectionId)}/trash/purge`, { method: "POST", json: { ids } }),
+  trashedCollections: () => apiFetch<{ items: TrashedCollection[]; retention_days: number }>("/v1/collections/trash"),
+  restoreCollection: (collectionId: string) => apiFetch<void>(`/v1/collections/trash/${id(collectionId)}/restore`, { method: "POST" }),
+  purgeCollection: (collectionId: string) => apiFetch<void>(`/v1/collections/trash/${id(collectionId)}`, { method: "DELETE" }),
+  schemaVersions: (collectionId: string, signal?: AbortSignal) => apiFetch<{ items: SchemaVersion[] }>(`${col(collectionId)}/schema-versions`, { signal }),
+  views: (collectionId: string) => apiFetch<{ items: SavedView[] }>(`${col(collectionId)}/views`),
+  createView: (collectionId: string, input: { name: string; query: string; shared: boolean }) => apiFetch<SavedView>(`${col(collectionId)}/views`, { method: "POST", json: input }),
+  deleteView: (collectionId: string, viewId: string) => apiFetch<void>(`${col(collectionId)}/views/${id(viewId)}`, { method: "DELETE" }),
+  upload: (collectionId: string, file: File) => apiFetch<FileRef>(`${col(collectionId)}/files?name=${encodeURIComponent(file.name)}`, { method: "POST", blob: file.type ? file : new Blob([file], { type: "application/octet-stream" }) }),
+  fileUrl: (fileId: string) => `/api/proxy/v1/files/${id(fileId)}`,
 };
 
 export const audit = {

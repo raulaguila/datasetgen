@@ -45,7 +45,7 @@ compose-up: ## Start the web container (the backend stack must be up)
 
 compose-build: ## Build and start the web container (the backend stack must be up)
 	$(call require_env_file)
-	@$(COMPOSE) up -d --build
+	@$(COMPOSE) up -d --build --force-recreate
 
 compose-down: ## Stop and remove the web container
 	$(call require_env_file)

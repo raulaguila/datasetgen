@@ -15,6 +15,7 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/rbac"
 	smtpmail "github.com/raulaguila/dataset/internal/adapter/outbound/smtp"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/tokens"
+	"github.com/raulaguila/dataset/internal/adapter/outbound/webhook"
 	"github.com/raulaguila/dataset/internal/core/policy"
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/internal/core/port/output"
@@ -25,11 +26,13 @@ import (
 	"github.com/raulaguila/dataset/internal/core/usecase/authorize"
 	"github.com/raulaguila/dataset/internal/core/usecase/collection"
 	"github.com/raulaguila/dataset/internal/core/usecase/health"
+	"github.com/raulaguila/dataset/internal/core/usecase/integration"
 	"github.com/raulaguila/dataset/internal/core/usecase/jobs"
 	"github.com/raulaguila/dataset/internal/core/usecase/mailer"
 	"github.com/raulaguila/dataset/internal/core/usecase/product"
 	"github.com/raulaguila/dataset/internal/core/usecase/record"
 	rolesvc "github.com/raulaguila/dataset/internal/core/usecase/role"
+	"github.com/raulaguila/dataset/internal/core/usecase/tools"
 	usersvc "github.com/raulaguila/dataset/internal/core/usecase/user"
 	"github.com/raulaguila/dataset/internal/infra"
 	"github.com/raulaguila/dataset/pkg/logger"
@@ -67,8 +70,9 @@ func NewFiles(cfg config.StorageConfig) output.FileStore {
 
 // NewJobs wires the background job worker that cmd/backend runs. Each module
 // adds its handlers here.
-func NewJobs(res *infra.Resources, log *logger.Logger) *jobs.Worker {
+func NewJobs(cfg *config.Environment, res *infra.Resources, log *logger.Logger) *jobs.Worker {
 	handlers := map[string]policy.JobHandler{}
+	maps.Copy(handlers, NewIntegrations(cfg, res).Jobs())
 	maps.Copy(handlers, product.Jobs(log))
 	store := postgres.NewStore(res.PostgresDB)
 	maps.Copy(handlers, collection.Jobs(store.Collections(), store.Records()))
@@ -78,6 +82,12 @@ func NewJobs(res *infra.Resources, log *logger.Logger) *jobs.Worker {
 		Log:      log,
 		Clock:    output.RealClock{},
 	}
+}
+
+// NewIntegrations wires API keys and webhooks; hook secrets are sealed with the SMTP master key.
+func NewIntegrations(cfg *config.Environment, res *infra.Resources) *integration.Service {
+	store := postgres.NewStore(res.PostgresDB)
+	return &integration.Service{Store: store, Tx: store, Send: webhook.New(cfg.API.WebhookAllowPrivate), SealKey: cfg.SMTP.TokenKey()}
 }
 
 // NewApplication wires concrete adapters into use cases / inbound ports.
@@ -117,18 +127,21 @@ func NewApplication(cfg *config.Environment, res *infra.Resources, log *logger.L
 
 	authorizer := authorize.New(permReader, output.RealClock{})
 	audit := auditsvc.New(store.Audit())
+	integrations := NewIntegrations(cfg, res)
 
 	return &input.Application{
-		Health:      health.New(pgHealth),
-		Authorizer:  authorizer,
-		Resources:   authorizer,
-		Roles:       rolesvc.New(store, store, permReader),
-		Users:       usersvc.New(store, store, output.RealClock{}, cfg.Auth.LoginAttemptEmailWindow),
-		Auth:        authSvc,
-		Account:     account.New(store, permReader, output.RealClock{}, NewFiles(cfg.Storage)),
-		Products:    product.New(store.Products(), store),
-		Records:     record.New(store.Records(), store.Collections(), store),
-		Collections: collection.New(store.Collections(), store.Records(), store, authSvc, audit),
-		Audit:       audit,
+		Health:       health.New(pgHealth),
+		Authorizer:   authorizer,
+		Resources:    authorizer,
+		Roles:        rolesvc.New(store, store, permReader),
+		Users:        usersvc.New(store, store, output.RealClock{}, cfg.Auth.LoginAttemptEmailWindow),
+		Auth:         authSvc,
+		Account:      account.New(store, permReader, output.RealClock{}, NewFiles(cfg.Storage)),
+		Products:     product.New(store.Products(), store),
+		Records:      record.New(store.Records(), store.Collections(), store),
+		Collections:  collection.New(store.Collections(), store.Records(), store, authSvc, audit),
+		Audit:        audit,
+		Integrations: integrations,
+		Tools:        &tools.Service{Store: store, Tx: store, Files: NewFiles(cfg.Storage)},
 	}
 }

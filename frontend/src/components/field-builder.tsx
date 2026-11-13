@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { IconAction } from "@/components/bits";
 import { Badge } from "@/components/ui/badge";
@@ -9,20 +10,26 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { collections } from "@/lib/api/endpoints";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
-export const FIELD_TYPES = ["string", "text", "number", "integer", "boolean", "enum", "strings", "date", "datetime", "email", "url", "group", "json"] as const;
+export const FIELD_TYPES = ["string", "text", "number", "integer", "boolean", "enum", "strings", "date", "datetime", "email", "url", "reference", "file", "group", "json"] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
-/** Groups hold one level of subfields: no group inside a group. */
-const SUBFIELD_TYPES = FIELD_TYPES.filter((t) => t !== "group");
+/** Groups hold one level of subfields: no group inside a group; the server checks references and files on top-level fields only. */
+const SUBFIELD_TYPES = FIELD_TYPES.filter((t) => t !== "group" && t !== "reference" && t !== "file");
 /** Plain values the server can compare across records: these can be marked unique. */
 const UNIQUE_TYPES: readonly FieldType[] = ["string", "number", "integer", "enum", "date", "datetime", "email", "url"];
 /** The keyword the server reads (schema.UniqueKeyword): no two records share the value. */
 const UNIQUE = "x-unique";
-/** Types stored as objects; their default, if any, is kept as it was. */
-const isObjectType = (t: FieldType) => t === "group" || t === "json";
+/** The keywords the server reads (schema.RefKeyword, schema.FileKeyword): a record of another collection, an attached file. */
+export const REF = "x-ref";
+export const FILE = "x-file";
+/** Types with no default the builder edits; any default is kept as it was. */
+const isObjectType = (t: FieldType) => t === "group" || t === "json" || t === "file" || t === "reference";
+/** How a record stores an attached file (tools.upload answers it). */
+const FILE_PROP = { type: "object", [FILE]: true, required: ["id"], properties: { id: { type: "string" }, name: { type: "string" }, size: { type: "integer" }, type: { type: "string" } } };
 
 /** Long text: SchemaForm draws a text area for strings allowed this long. */
 export const LONG_TEXT = 5000;
@@ -49,6 +56,8 @@ export type Field = {
   default: string;
   min: string;
   max: string;
+  /** A reference's collection id. */
+  ref: string;
 };
 /** A top-level field: `key` is where its value is stored, `field.name` its label. Advanced ones are edited as JSON. */
 export type FieldRow = { key: string; field: Field; advanced: boolean };
@@ -56,7 +65,7 @@ export type FieldRow = { key: string; field: Field; advanced: boolean };
 type Schema = Record<string, unknown>;
 type Props = Record<string, Record<string, unknown>>;
 
-export const blankField: Field = { name: "", key: "", type: "string", required: false, unique: false, options: "", description: "", placeholder: "", default: "", min: "", max: "" };
+export const blankField: Field = { name: "", key: "", type: "string", required: false, unique: false, options: "", description: "", placeholder: "", default: "", min: "", max: "", ref: "" };
 
 const optionsOf = (f: Pick<Field, "options">) => f.options.split(",").map((o) => o.trim()).filter(Boolean);
 
@@ -71,7 +80,7 @@ function limitKeys(type: FieldType): [string, string] | null {
 }
 
 /** Keywords the builder writes; any other keyword of a property is kept as it was. */
-const RULE_KEYS = ["title", "description", "examples", "default", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", UNIQUE];
+const RULE_KEYS = ["title", "description", "examples", "default", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", UNIQUE, REF];
 
 /** A storage key from a label: "Nome do Cliente" → "nome_do_cliente". */
 export function keyOf(name: string): string {
@@ -119,6 +128,8 @@ function typeBase(f: Field): Record<string, unknown> {
     case "strings": return { type: "array", items: { type: "string" } };
     case "group": return { type: "object", properties: {} };
     case "json": return { type: "object" };
+    case "reference": return { type: "string", format: "uuid" };
+    case "file": return FILE_PROP;
     default: return { type: f.type };
   }
 }
@@ -140,6 +151,7 @@ function withRules(base: Record<string, unknown>, f: Field): Record<string, unkn
   if (f.type === "text" && out.maxLength === undefined) out.maxLength = LONG_TEXT;
   if (f.unique && UNIQUE_TYPES.includes(f.type)) out[UNIQUE] = true;
   if (f.type === "enum") out.enum = optionsOf(f);
+  if (f.type === "reference") out[REF] = f.ref;
   // Title first, as people read it in the JSON.
   const { title, ...rest } = out;
   return { title, ...rest };
@@ -151,6 +163,8 @@ export function typeOf(p: unknown): FieldType | undefined {
   const s = p as Record<string, unknown>;
   // Options are edited comma separated, so an option holding a comma stays in JSON.
   if (Array.isArray(s.enum)) return s.enum.every((v) => typeof v === "string" && !v.includes(",")) ? "enum" : undefined;
+  if (s.type === "string" && typeof s[REF] === "string") return "reference";
+  if (s.type === "object" && s[FILE] === true) return "file";
   switch (s.type) {
     case "string": {
       const format = Object.entries(FORMATS).find(([, f]) => f === s.format)?.[0] as FieldType | undefined;
@@ -213,6 +227,7 @@ export function fieldsOf(schema: Schema | null): FieldRow[] {
         min: num(limits?.[0]),
         // The long-text default limit is how the type is stored, not a rule someone set.
         max: type === "text" && p?.maxLength === LONG_TEXT ? "" : num(limits?.[1]),
+        ref: typeof p?.[REF] === "string" ? p[REF] : "",
       },
     };
   });
@@ -228,6 +243,7 @@ export function fieldProblem(f: Field, taken: (key: string) => boolean, initialK
   if (key !== initialKey && !KEY_FORMAT.test(key)) return "collections.field_key_invalid";
   if (key !== initialKey && taken(key)) return "collections.field_exists";
   if (f.type === "enum" && optionsOf(f).length === 0) return "collections.field_options_needed";
+  if (f.type === "reference" && !f.ref) return "collections.field_ref_needed";
   const limits = limitKeys(f.type);
   const lo = f.min.trim() ? Number(f.min) : undefined;
   const hi = f.max.trim() ? Number(f.max) : undefined;
@@ -431,7 +447,8 @@ function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, 
           <Input id={`${id}-options`} value={field.options} aria-invalid={shown === "collections.field_options_needed"} onChange={(e) => set({ options: e.target.value })} />
         </div>
       )}
-      {objectType && (
+      {field.type === "reference" && <RefSelect id={`${id}-ref`} value={field.ref} invalid={shown === "collections.field_ref_needed"} onChange={(ref) => set({ ref })} />}
+      {(field.type === "group" || field.type === "json") && (
         <p className={cn("text-xs", field.type === "json" ? "text-warn" : "text-muted-foreground")}>
           {t(field.type === "json" ? "collections.json_hint" : "collections.group_hint")}
         </p>
@@ -465,7 +482,7 @@ function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, 
             <Input id={`${id}-desc`} value={field.description} maxLength={500} aria-describedby={`${id}-desc-hint`} onChange={(e) => set({ description: e.target.value })} />
             <p id={`${id}-desc-hint`} className="text-xs text-muted-foreground">{t("collections.field_description_hint")}</p>
           </div>
-          {field.type !== "group" && (
+          {field.type !== "group" && field.type !== "file" && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${id}-ph`}>{t("collections.field_placeholder")}</Label>
               <Input id={`${id}-ph`} value={field.placeholder} maxLength={200} onChange={(e) => set({ placeholder: e.target.value })} />
@@ -493,6 +510,27 @@ function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, 
           {!initialKey && <Plus className="size-4" />}{submitLabel}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** Picks the collection a reference points at, among those the user reaches. */
+function RefSelect({ id, value, invalid, onChange }: { id: string; value: string; invalid: boolean; onChange: (v: string) => void }) {
+  const { t } = useI18n();
+  // shortcut: the first 100 collections by name; a search box when people reach more.
+  const list = useQuery({ queryKey: ["collections", "options"], queryFn: () => collections.list({ page: 1, limit: 100, sort: "name", order: "asc" }) });
+  const items = Object.fromEntries((list.data?.items ?? []).map((c) => [c.id, c.name]));
+  if (value && !(value in items)) items[value] = t("collections.field_ref_unknown");
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id}>{t("collections.field_ref")}</Label>
+      <Select value={value || null} items={items} onValueChange={(v) => onChange(String(v ?? ""))}>
+        <SelectTrigger id={id} className="w-full" aria-invalid={invalid}><SelectValue placeholder={t("collections.field_ref_pick")} /></SelectTrigger>
+        <SelectContent>
+          {Object.entries(items).map(([v, label]) => <SelectItem key={v} value={v}>{label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">{t("collections.field_ref_hint")}</p>
     </div>
   );
 }

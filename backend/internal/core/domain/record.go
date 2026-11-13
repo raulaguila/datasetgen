@@ -10,11 +10,21 @@ type RecordFilter struct {
 	CollectionID string
 	Page         Page
 	Search       string // matched against the JSON text of data
-	Sort         string // created_at or updated_at
+	Sort         string // created_at, updated_at or data.<field> (a top-level field)
 	Order        string // asc or desc
 	// Match keeps records whose data contains this JSON object (data @> Match),
 	// so {"category": "trigger"} filters on one field's exact value.
 	Match json.RawMessage
+	// IDs keeps only these records (up to 100), to look up several by id.
+	IDs []string
+}
+
+// SortField is the data field a Sort of "data.<field>" orders by, "" otherwise.
+func (f RecordFilter) SortField() string {
+	if len(f.Sort) > 5 && f.Sort[:5] == "data." {
+		return f.Sort[5:]
+	}
+	return ""
 }
 
 // Record is one entry of a collection (app.record).

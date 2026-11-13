@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, FileUp } from "lucide-react";
+import { ChevronRight, FileUp, History, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { FieldNote, FormSection, FormSections, PageBody, PageHeader, SaveBar } from "@/components/bits";
+import { FieldNote, FormSection, FormSections, PageBody, PageHeader, SaveBar, useFormatDate } from "@/components/bits";
 import { CollectionAvatar } from "@/components/collection-avatar";
 import { IconPicker } from "@/components/icon-picker";
 import { EmptyState } from "@/components/empty-state";
@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api/client";
-import { collections, records } from "@/lib/api/endpoints";
+import { collections, records, tools } from "@/lib/api/endpoints";
 import type { Collection } from "@/lib/api/types";
 import { useMe } from "@/lib/context/me";
 import { errorMessage } from "@/lib/errors";
@@ -115,6 +115,49 @@ export function CollectionPage({ section, description, countRecords = false, act
         )}
       </PageBody>
     </>
+  );
+}
+
+/**
+ * The schemas the collection had before each change, newest first; one loads
+ * into the editor, and saving it is a change like any other.
+ */
+function SchemaHistory({ collection, onLoad }: { collection: Collection; onLoad: (schema: Record<string, unknown>) => void }) {
+  const { t } = useI18n();
+  const format = useFormatDate();
+  const [open, setOpen] = useState(false);
+  const list = useQuery({ queryKey: ["schema-versions", collection.id, collection.version], queryFn: ({ signal }) => tools.schemaVersions(collection.id, signal), enabled: open });
+  const items = list.data?.items ?? [];
+  return (
+    <details className="group rounded-lg border" onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
+        <History className="size-4" aria-hidden />{t("field_history.title")}
+      </summary>
+      <div className="space-y-2 border-t p-3">
+        {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("field_history.empty")}</p>
+        ) : (
+          <ul className="divide-y">
+            {items.map((v, i) => {
+              // What the change after this version did: compared with the next newer schema.
+              const changes = schemaChanges(v.schema, i === 0 ? collection.schema ?? null : items[i - 1].schema);
+              return (
+                <li key={v.version} className="flex flex-wrap items-start gap-x-3 gap-y-1 py-2">
+                  <div className="min-w-48 flex-1 text-sm">
+                    <p className="font-medium">{t("field_history.version").replace("{n}", String(v.version))}<span className="font-normal text-muted-foreground"> · {format(v.saved_at)}{v.saved_by_name && ` · ${v.saved_by_name}`}</span></p>
+                    <p className="text-xs text-muted-foreground">
+                      {changes.length ? `${t("field_history.then")} ${changes.map((c) => t(`collections.change_${c.kind}`).replace("{name}", c.name)).join(" · ")}` : t("field_history.no_field_changes")}
+                    </p>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" onClick={() => onLoad(v.schema)}><RotateCcw className="size-4" />{t("field_history.load")}</Button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </details>
   );
 }
 
@@ -290,6 +333,9 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                     </ul>
                     {risky && <p>{t("collections.schema_change_hint").replace("{n}", String(recordCount))}</p>}
                   </div>
+                )}
+                {collection && editable && (
+                  <SchemaHistory collection={collection} onLoad={(old) => { setSchemaText(pretty(old)); toast.info(t("field_history.loaded")); }} />
                 )}
                 <details className="group rounded-lg border" open={!schema || undefined}>
                   <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">

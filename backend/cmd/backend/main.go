@@ -54,7 +54,7 @@ func main() {
 	jobsDone := make(chan struct{})
 	go func() {
 		defer close(jobsDone)
-		_ = composition.NewJobs(res, log).Run(jobsCtx)
+		_ = composition.NewJobs(cfg, res, log).Run(jobsCtx)
 	}()
 	// Runs before the deferred shutdowns: a job in flight finishes its mark before the pool closes.
 	defer func() { stopJobs(); <-jobsDone }()

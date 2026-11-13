@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Download, FileJson, FileUp, Plus, Search, Trash2 } from "lucide-react";
+import { keepPreviousData, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, Download, FileJson, FileUp, Paperclip, PencilLine, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageBody, PageHeader, useFormatDate } from "@/components/bits";
 import { EmptyState } from "@/components/empty-state";
-import { fieldsOf } from "@/components/field-builder";
+import { BulkEditDialog } from "@/components/bulk-edit-dialog";
+import { fieldsOf, recordTitle, REF, type FieldRow } from "@/components/field-builder";
+import { SavedViews } from "@/components/saved-views";
 import { QueryErrorState } from "@/components/query-error-state";
 import { RecordFilters, filterableFields, type FieldFilters } from "@/components/record-filters";
 import { RecordImportDialog } from "@/components/record-import-dialog";
@@ -21,8 +23,8 @@ import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { records } from "@/lib/api/endpoints";
-import type { Collection, SortOrder } from "@/lib/api/types";
+import { collections, records, tools } from "@/lib/api/endpoints";
+import type { Collection, DataRecord, FileRef, SortOrder } from "@/lib/api/types";
 import { useMe } from "@/lib/context/me";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useGoToPage, useListParams } from "@/lib/hooks/use-list-params";
@@ -38,6 +40,33 @@ import { CollectionForm, CollectionPage } from "./_parts";
 /** Up to four plain top-level fields, the values the list preview carries, as table columns. */
 function columnsOf(schema: Record<string, unknown> | undefined) {
   return fieldsOf(schema ?? null).filter((r) => !r.advanced && !["strings", "group", "json"].includes(r.field.type)).slice(0, 4);
+}
+
+/**
+ * The titles of the records reference columns point at, one lookup per column
+ * for the page's ids. Absent until loaded; the id stands in meanwhile.
+ */
+function useRefLabels(columns: FieldRow[], items: DataRecord[], schema: Record<string, unknown> | undefined) {
+  const props = (schema?.properties ?? {}) as Record<string, Record<string, unknown>>;
+  const refs = columns.filter((c) => c.field.type === "reference").map((c) => {
+    const ids = [...new Set(items.map((r) => (r.data as Record<string, unknown> | null)?.[c.key]).filter((v): v is string => typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v)))];
+    return { target: String(props[c.key]?.[REF] ?? ""), ids };
+  }).filter((r) => r.target && r.ids.length);
+  const targets = [...new Set(refs.map((r) => r.target))];
+  const metas = useQueries({ queries: targets.map((target) => ({ queryKey: ["collections", "detail", target], queryFn: () => collections.get(target), retry: false })) });
+  const found = useQueries({
+    queries: refs.map((r) => ({
+      queryKey: ["records", r.target, "ids", r.ids.join(",")],
+      queryFn: ({ signal }: { signal: AbortSignal }) => records.list({ collection_id: r.target, page: 1, limit: 100, ids: r.ids.join(",") }, signal),
+      retry: false,
+    })),
+  });
+  const labels = new Map<string, string>();
+  refs.forEach((r, i) => {
+    const schemaOf = metas[targets.indexOf(r.target)]?.data?.schema ?? null;
+    for (const rec of found[i]?.data?.items ?? []) labels.set(rec.id, recordTitle(schemaOf, rec.data) ?? rec.id.slice(0, 8));
+  });
+  return labels;
 }
 
 /** The filters kept in the URL as JSON; anything else there reads as none. */
@@ -58,13 +87,17 @@ function RecordList({ collection }: { collection: Collection }) {
   // Kept in the URL like every other list: opening a record and coming back keeps the place.
   const [params, set] = useListParams({ page: 1, limit: 25, q: "", sort: "updated_at", order: "desc", filter: "" });
   const { page, limit } = params;
-  const sort = params.sort === "created_at" ? "created_at" : "updated_at";
+  const columns = columnsOf(collection.schema);
+  // Any shown column sorts, except files (their stored value is an object).
+  const sortable = columns.filter((c) => c.field.type !== "file");
+  const sort = params.sort === "created_at" || sortable.some((c) => params.sort === `data.${c.key}`) ? params.sort : "updated_at";
   const order: SortOrder = params.order === "asc" ? "asc" : "desc";
   const filters = params.filter ? parseFilters(params.filter) : {};
   const filter = Object.keys(filters).length ? JSON.stringify(filters) : undefined;
   const [search, setSearch] = useState(params.q);
   const [hidden, setHidden] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
+  const [bulk, setBulk] = useState(false);
   const q = searchTerm(useDebounced(params.q));
   const list = useQuery({
     queryKey: ["records", collection.id, page, limit, q, sort, order, filter],
@@ -74,8 +107,14 @@ function RecordList({ collection }: { collection: Collection }) {
   const fallback = list.isPlaceholderData ? null : emptyPageFallback(page, limit, list.data);
   useGoToPage(fallback, set); // the last rows of the last page went away
   const items = list.data?.items.filter((r) => !hidden.includes(r.id)) ?? [];
-  const columns = columnsOf(collection.schema);
-  const show = (v: unknown) => (typeof v === "boolean" ? t(v ? "common.yes" : "common.no") : v === undefined || v === null || v === "" ? "—" : String(v));
+  const refLabels = useRefLabels(columns, items, collection.schema);
+  const show = (v: unknown, c?: FieldRow) => {
+    if (v === undefined || v === null || v === "") return "—";
+    if (typeof v === "boolean") return t(v ? "common.yes" : "common.no");
+    if (c?.field.type === "reference" && typeof v === "string") return refLabels.get(v) ?? v.slice(0, 8);
+    if (c?.field.type === "file" && typeof v === "object") return (v as FileRef).name ?? "—";
+    return typeof v === "object" ? JSON.stringify(v) : String(v);
+  };
   const canEdit = roleAllows(collection.role, "editor");
   // Out-of-format records come from the latest quality check (editors only), as long as it is current.
   const { q: quality, stale } = useQuality(collection, canEdit);
@@ -90,12 +129,16 @@ function RecordList({ collection }: { collection: Collection }) {
   const download = (format: "jsonl" | "csv", valid: boolean) =>
     void records.export(collection.id, format, valid).catch((err) => toast.error(errorMessage(err, "common.save_failed", t)));
   const clear = () => { setSearch(""); set({ q: "", filter: "", page: 1 }); };
+  const applyView = (query: string) => {
+    window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+    setSearch(new URLSearchParams(query).get("q") ?? "");
+  };
   const removeSelected = () => {
     const ids = selection.ids;
     selection.clear();
     setHidden((h) => [...h, ...ids]);
     deleteWithUndo({
-      message: t("common.deleted_n").replace("{n}", String(ids.length)),
+      message: t("records.trashed_n").replace("{n}", String(ids.length)),
       undoLabel: t("common.undo"),
       run: () => records.remove(ids),
       onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
@@ -117,7 +160,7 @@ function RecordList({ collection }: { collection: Collection }) {
           <Input type="search" aria-label={t("common.search")} placeholder={t("records.search")} className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); set({ q: e.target.value.trim(), page: 1 }); }} />
         </div>
         <RecordFilters fields={filterableFields(fieldsOf(collection.schema ?? null))} value={filters} onChange={(f) => set({ filter: Object.keys(f).length ? JSON.stringify(f) : "", page: 1 })} />
-        <SortSelect fields={[{ field: "updated_at", label: t("common.updated_at") }, { field: "created_at", label: t("common.created_at") }]} {...sortProps} className="max-sm:col-span-2" />
+        <SortSelect fields={[{ field: "updated_at", label: t("common.updated_at") }, { field: "created_at", label: t("common.created_at") }, ...sortable.map((c) => ({ field: `data.${c.key}`, label: c.field.name }))]} {...sortProps} className="max-sm:col-span-2" />
         <div className="ml-auto flex flex-wrap gap-2 max-sm:contents">
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="outline" />}><Download className="size-4" />{t("export.title")}</DropdownMenuTrigger>
@@ -129,11 +172,12 @@ function RecordList({ collection }: { collection: Collection }) {
               <DropdownMenuItem onClick={() => download("csv", true)}>{t("export.csv_valid")}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <SavedViews collectionId={collection.id} canShare={canEdit} onApply={applyView} />
           {canEdit && <Button variant="outline" onClick={() => setImporting(true)}><FileUp className="size-4" />{t("import.title")}</Button>}
         </div>
         {search.trim() !== "" && !searchTerm(search) && <p className="basis-full text-xs text-muted-foreground max-sm:col-span-2" role="status">{t("common.search_min")}</p>}
       </div>
-      {canEdit && <RecordImportDialog collectionId={collection.id} open={importing} onOpenChange={setImporting} />}
+      {canEdit && <RecordImportDialog collectionId={collection.id} schema={collection.schema} open={importing} onOpenChange={setImporting} />}
       {list.isPending ? (
         <ListSkeleton rows={3} />
       ) : list.isError ? (
@@ -151,14 +195,16 @@ function RecordList({ collection }: { collection: Collection }) {
               <TableRow>
                 {canEdit && <SelectAllHead selection={selection} />}
                 {/* The first column, the record's name, gets the room; the others what is left. */}
-                {columns.length ? columns.map((c, i) => <TableHead key={c.key} className={i === 0 ? "w-[40%]" : undefined}>{c.field.name}</TableHead>) : <TableHead>{t("records.record")}</TableHead>}
+                {columns.length ? columns.map((c, i) => c.field.type === "file"
+                  ? <TableHead key={c.key} className={i === 0 ? "w-[40%]" : undefined}>{c.field.name}</TableHead>
+                  : <SortHead key={c.key} field={`data.${c.key}`} label={c.field.name} className={i === 0 ? "w-[40%]" : undefined} {...sortProps} />) : <TableHead>{t("records.record")}</TableHead>}
                 <SortHead field="updated_at" label={t("common.updated_at")} className="w-44" {...sortProps} />
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.map((r) => {
                 const data = (r.data ?? {}) as Record<string, unknown>;
-                const cells = columns.length ? columns.map((c) => ({ key: c.key, label: c.field.name, text: show(data[c.key]) })) : [{ key: "", label: t("records.record"), text: JSON.stringify(r.data) }];
+                const cells = columns.length ? columns.map((c) => ({ key: c.key, label: c.field.name, text: show(data[c.key], c), file: c.field.type === "file" ? (data[c.key] as FileRef | undefined) : undefined })) : [{ key: "", label: t("records.record"), text: JSON.stringify(r.data), file: undefined }];
                 return (
                   <TableRow key={r.id} className="cursor-pointer hover:bg-muted/60" onClick={() => router.push(`/records/${r.id}`)}>
                     {canEdit && <SelectCell selection={selection} id={r.id} label={cells[0].text} />}
@@ -171,6 +217,10 @@ function RecordList({ collection }: { collection: Collection }) {
                             )}
                             <Link href={`/records/${r.id}`} className="block truncate font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{c.text}</Link>
                           </span>
+                        ) : c.file?.id ? (
+                          <a href={tools.fileUrl(c.file.id)} target="_blank" rel="noopener" className="flex min-w-0 items-center gap-1 hover:underline" onClick={(e) => e.stopPropagation()}>
+                            <Paperclip className="size-3.5 shrink-0" /><span className="truncate">{c.text}</span>
+                          </a>
                         ) : (
                           <span className="block truncate">{c.text}</span>
                         )}
@@ -191,8 +241,10 @@ function RecordList({ collection }: { collection: Collection }) {
         </Card>
       )}
       <SelectionBar selection={selection}>
+        <Button variant="outline" onClick={() => setBulk(true)}><PencilLine className="size-4" />{t("bulk.title")}</Button>
         <Button variant="destructive" onClick={removeSelected}><Trash2 className="size-4" />{t("common.delete_selected")}</Button>
       </SelectionBar>
+      {canEdit && <BulkEditDialog collection={collection} ids={selection.ids} open={bulk} onOpenChange={setBulk} onDone={selection.clear} />}
     </>
   );
 }

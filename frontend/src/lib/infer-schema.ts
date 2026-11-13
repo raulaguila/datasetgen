@@ -1,5 +1,5 @@
-import { addField, blankField, keyOf, type Field, type FieldType } from "@/components/field-builder";
-import { parseImport } from "@/lib/import-file";
+import { addField, blankField, fieldsOf, keyOf, type Field, type FieldType } from "@/components/field-builder";
+import { parseImport, type ParsedFile } from "@/lib/import-file";
 
 /** How many records are read to guess each field's type. */
 const SAMPLE = 200;
@@ -88,4 +88,46 @@ export function schemaFromFile(name: string, text: string): Record<string, unkno
 /** Ready-made field sets; names come from the caller's language, keys from the names. */
 export function templateSchema(fields: Partial<Field>[]): Record<string, unknown> {
   return fields.reduce<Record<string, unknown>>((schema, f) => addField(schema, { ...blankField, ...f, key: keyOf(f.name ?? "") }), { type: "object" });
+}
+
+const TEXT_TYPES: FieldType[] = ["string", "text", "enum", "date", "datetime", "email", "url", "reference"];
+
+/** A CSV cell as the field's type stores it; what does not read as the type stays text, for the server to report. */
+function cellValue(cell: string, type: FieldType | undefined): unknown {
+  if (!type || TEXT_TYPES.includes(type)) return cell;
+  const v = cell.trim();
+  if (type === "boolean") {
+    const b = v.toLowerCase();
+    return ["true", "sim", "yes", "1", "verdadeiro"].includes(b) ? true : ["false", "não", "nao", "no", "0", "falso"].includes(b) ? false : cell;
+  }
+  if (type === "number" || type === "integer") {
+    const n = Number(/^-?\d+,\d+$/.test(v) ? v.replace(",", ".") : v);
+    return v !== "" && Number.isFinite(n) ? n : cell;
+  }
+  // Lists, groups, files and JSON: the export writes them as JSON; a list may also be "a; b".
+  try {
+    return JSON.parse(v);
+  } catch {
+    return type === "strings" ? v.split(";").map((x) => x.trim()).filter(Boolean) : cell;
+  }
+}
+
+/**
+ * Records from a CSV with a header line, as the export writes it. A column
+ * names a field by its key or its label; empty cells are left out.
+ */
+export function csvRecords(text: string, schema: Record<string, unknown> | null): ParsedFile {
+  const [header, ...rows] = parseCsv(text);
+  const fields = fieldsOf(schema);
+  const byName = new Map<string, Field>();
+  for (const r of fields) byName.set(r.field.name.trim().toLowerCase(), r.field);
+  for (const r of fields) byName.set(r.key.toLowerCase(), r.field);
+  const columns = (header ?? []).map((h) => byName.get(h.trim().toLowerCase()) ?? { ...blankField, key: h.trim(), type: undefined as unknown as FieldType });
+  return {
+    errors: [],
+    records: rows.map((row, i) => ({
+      line: i + 2,
+      data: Object.fromEntries(columns.flatMap((c, j) => (row[j] === undefined || row[j] === "" || !c.key ? [] : [[c.key, cellValue(row[j], c.type)]]))),
+    })),
+  };
 }

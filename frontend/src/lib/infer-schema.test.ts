@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCsv, schemaFromFile, templateSchema } from "./infer-schema";
+import { csvRecords, parseCsv, schemaFromFile, templateSchema } from "./infer-schema";
 
 describe("parseCsv", () => {
   it("reads quoted cells, either separator and blank lines", () => {
@@ -40,5 +40,25 @@ it("builds a template from labels", () => {
     type: "object",
     required: ["codigo"],
     properties: { codigo: { title: "Código", type: "string", "x-unique": true }, qtd: { title: "Qtd", type: "integer" } },
+  });
+});
+
+describe("csvRecords", () => {
+  it("reads columns by key or label and converts cells by the field type", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        nome: { type: "string", title: "Nome" },
+        idade: { type: "integer" },
+        peso: { type: "number" },
+        ativo: { type: "boolean" },
+        tags: { type: "array", items: { type: "string" } },
+      },
+    };
+    const out = csvRecords('Nome;idade;peso;ativo;tags;outro\nAna;30;61,5;sim;"a; b";\nBia;x;;0;"[""c""]";1\n', schema);
+    expect(out.records).toEqual([
+      { line: 2, data: { nome: "Ana", idade: 30, peso: 61.5, ativo: true, tags: ["a", "b"] } },
+      { line: 3, data: { nome: "Bia", idade: "x", ativo: false, tags: ["c"], outro: "1" } },
+    ]);
   });
 });

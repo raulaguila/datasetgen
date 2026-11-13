@@ -94,19 +94,13 @@ func TestCollectionRecordsFollowTheSchema(t *testing.T) {
 		t.Fatalf("list with counts: %+v, %v", list, err)
 	}
 
-	// A collection with records cannot be deleted; once empty it can.
-	if err := collections.DeleteMany(ctx, []string{wired.ID}); !apperror.IsCode(err, apperror.CodeResourceInUse) {
+	// Deleting moves the collection, records and all, to the trash: it is gone from every read.
+	if err := collections.DeleteMany(ctx, []string{wired.ID}); err != nil {
 		t.Fatalf("delete with records: %v", err)
 	}
-	ids := []string{}
-	for _, r := range mustList(ctx, t, records, wired.ID) {
-		ids = append(ids, r.ID)
-	}
-	if err := records.DeleteMany(ctx, ids); err != nil {
-		t.Fatal(err)
-	}
-	if err := collections.DeleteMany(ctx, []string{wired.ID}); err != nil {
-		t.Fatalf("delete empty: %v", err)
+	wantCode(t, ignore(collections.Get(ctx, wired.ID)), apperror.CodeNotFound)
+	if list, _, err := collections.List(ctx, domain.CollectionFilter{Search: "Wired"}); err != nil || len(list) != 0 {
+		t.Fatalf("a trashed collection must not list: %+v, %v", list, err)
 	}
 }
 

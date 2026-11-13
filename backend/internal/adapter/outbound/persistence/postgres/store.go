@@ -9,6 +9,7 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/audit"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/collection"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/credential"
+	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/integration"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/job"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/notification"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/outbox"
@@ -19,6 +20,7 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/session"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/shared"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/token"
+	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/tools"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/user"
 	"github.com/raulaguila/dataset/internal/core/port/output"
 )
@@ -45,6 +47,10 @@ func (s *Store) Products() output.ProductRepository       { return product.NewRe
 func (s *Store) Collections() output.CollectionRepository { return collection.NewRepository(s.db) }
 func (s *Store) Records() output.RecordRepository         { return record.NewRepository(s.db) }
 func (s *Store) Jobs() output.JobRepository               { return job.NewRepository(s.db) }
+func (s *Store) Tools() output.ToolsRepository            { return tools.NewRepository(s.db) }
+func (s *Store) Integrations() output.IntegrationRepository {
+	return integration.NewRepository(s.db)
+}
 func (s *Store) Notifications() output.NotificationRepository {
 	return notification.NewRepository(s.db)
 }
