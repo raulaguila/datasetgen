@@ -78,3 +78,28 @@ func TestRequiredPointsAtTheMissingField(t *testing.T) {
 		t.Fatalf("issues %+v", got)
 	}
 }
+
+// The field builder writes these rules; each must hold on the server too.
+func TestBuilderRulesHold(t *testing.T) {
+	s, err := Compile([]byte(`{"type":"object","properties":{
+		"quando":{"title":"Quando","type":"string","format":"date-time","examples":["agora"]},
+		"email":{"type":"string","format":"email"},
+		"site":{"type":"string","format":"uri"},
+		"nome":{"type":"string","minLength":2,"maxLength":5,"default":"abc","description":"Ajuda"},
+		"nota":{"type":"integer","minimum":0,"maximum":10,"default":5},
+		"tags":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":2}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(s, []byte(`{"quando":"2026-11-12T10:00:00Z","email":"a@b.io","site":"https://x.io","nome":"abc","nota":10,"tags":["a"]}`)); err != nil {
+		t.Fatalf("valid record: %v", err)
+	}
+	for _, bad := range []string{
+		`{"quando":"2026-11-12 10:00"}`, `{"email":"a@"}`, `{"site":"x.io"}`,
+		`{"nome":"a"}`, `{"nome":"abcdef"}`, `{"nota":11}`, `{"nota":-1}`, `{"tags":[]}`, `{"tags":["a","b","c"]}`,
+	} {
+		if err := Validate(s, []byte(bad)); !apperror.IsCode(err, apperror.CodeValidationFailed) {
+			t.Errorf("%s accepted: %v", bad, err)
+		}
+	}
+}

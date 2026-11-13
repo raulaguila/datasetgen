@@ -53,12 +53,17 @@ export function issueErrors(issues: SchemaIssue[], translate: Translate = () => 
   return root as ErrorSchema;
 }
 
-/** Text areas for strings allowed to run long (the field builder's "long text"), at any depth. */
+/**
+ * Text areas for strings allowed to run long (the field builder's "long text"),
+ * and the first example as the placeholder, at any depth.
+ */
 export function uiFor(schema: unknown): UiSchema {
   if (!schema || typeof schema !== "object") return {};
-  const s = schema as { type?: unknown; maxLength?: unknown; properties?: Record<string, unknown>; items?: unknown };
-  if (s.type === "string" && typeof s.maxLength === "number" && s.maxLength >= 500) return { "ui:widget": "textarea" };
+  const s = schema as { type?: unknown; maxLength?: unknown; examples?: unknown; properties?: Record<string, unknown>; items?: unknown };
   const out: UiSchema = {};
+  if (Array.isArray(s.examples) && typeof s.examples[0] === "string") out["ui:placeholder"] = s.examples[0];
+  if (s.type === "string" && typeof s.maxLength === "number" && s.maxLength >= 500) out["ui:widget"] = "textarea";
+  if (s.type === "string") return out;
   for (const [key, sub] of Object.entries(s.properties ?? {})) {
     const ui = uiFor(sub);
     if (Object.keys(ui).length) out[key] = ui;

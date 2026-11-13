@@ -1,16 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { useId, useState } from "react";
+import { ArrowDown, ArrowUp, ChevronRight, GripVertical, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { IconAction } from "@/components/bits";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
+import { cn } from "@/lib/utils";
 
-export const FIELD_TYPES = ["string", "text", "number", "integer", "boolean", "enum", "strings"] as const;
+export const FIELD_TYPES = ["string", "text", "number", "integer", "boolean", "enum", "strings", "date", "datetime", "email", "url"] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 
 /** Long text: SchemaForm draws a text area for strings allowed this long. */
@@ -18,23 +21,115 @@ export const LONG_TEXT = 5000;
 /** The shortest maxLength SchemaForm (uiFor) draws as a text area. */
 const TEXT_AREA_FROM = 500;
 
-export type Field = { name: string; type: FieldType; required: boolean; options: string };
+/** String formats the builder offers as types; the server asserts them. */
+const FORMATS: Partial<Record<FieldType, string>> = { date: "date", datetime: "date-time", email: "email", url: "uri" };
+
+/**
+ * A field as the builder edits it. Rules are text while typed: empty means none.
+ * `key` is where the value is stored, `name` its label.
+ */
+export type Field = {
+  name: string;
+  key: string;
+  type: FieldType;
+  required: boolean;
+  options: string;
+  description: string;
+  placeholder: string;
+  default: string;
+  min: string;
+  max: string;
+};
 /** A top-level field: `key` is where its value is stored, `field.name` its label. Advanced ones are edited as JSON. */
 export type FieldRow = { key: string; field: Field; advanced: boolean };
 
 type Schema = Record<string, unknown>;
 type Props = Record<string, Record<string, unknown>>;
 
-const optionsOf = (f: Field) => f.options.split(",").map((o) => o.trim()).filter(Boolean);
+export const blankField: Field = { name: "", key: "", type: "string", required: false, options: "", description: "", placeholder: "", default: "", min: "", max: "" };
 
-function property(f: Field): Record<string, unknown> {
-  const title = f.name.trim();
-  switch (f.type) {
-    case "text": return { type: "string", title, maxLength: LONG_TEXT };
-    case "enum": return { type: "string", title, enum: optionsOf(f) };
-    case "strings": return { type: "array", title, items: { type: "string" } };
-    default: return { type: f.type, title };
+const optionsOf = (f: Pick<Field, "options">) => f.options.split(",").map((o) => o.trim()).filter(Boolean);
+
+/** The JSON Schema keywords holding a type's lower and upper limit, if it has them. */
+function limitKeys(type: FieldType): [string, string] | null {
+  switch (type) {
+    case "string": case "text": case "email": case "url": return ["minLength", "maxLength"];
+    case "number": case "integer": return ["minimum", "maximum"];
+    case "strings": return ["minItems", "maxItems"];
+    default: return null;
   }
+}
+
+/** Keywords the builder writes; any other keyword of a property is kept as it was. */
+const RULE_KEYS = ["title", "description", "examples", "default", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems"];
+
+/** A storage key from a label: "Nome do Cliente" → "nome_do_cliente". */
+export function keyOf(name: string): string {
+  const k = name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 64);
+  return !k ? "" : /^[a-z]/.test(k) ? k : `f_${k}`;
+}
+const KEY_FORMAT = /^[a-z][a-z0-9_]{0,63}$/;
+
+/** The default value as stored, or undefined for none (or one that cannot be read as the type). */
+function parseDefault(f: Field): unknown {
+  const raw = f.default.trim();
+  if (!raw) return undefined;
+  switch (f.type) {
+    case "number": case "integer": return raw === "" || !Number.isFinite(Number(raw)) ? undefined : Number(raw);
+    case "boolean": return raw === "true";
+    // datetime-local has no zone; the schema's date-time wants one.
+    case "datetime": return Number.isNaN(Date.parse(raw)) ? undefined : new Date(raw).toISOString();
+    case "strings": return raw.split(",").map((s) => s.trim()).filter(Boolean);
+    default: return raw;
+  }
+}
+
+/** "2026-11-12T13:05:00.000Z" as the local time a datetime-local input shows. */
+function localDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function defaultText(v: unknown, type: FieldType): string {
+  if (v === undefined || v === null) return "";
+  if (type === "datetime" && typeof v === "string") return localDateTime(v);
+  if (Array.isArray(v)) return v.join(", ");
+  return typeof v === "object" ? JSON.stringify(v) : String(v);
+}
+
+/** The bare property of a type, before its rules. */
+function typeBase(f: Field): Record<string, unknown> {
+  const format = FORMATS[f.type];
+  if (format) return { type: "string", format };
+  switch (f.type) {
+    case "text": return { type: "string" };
+    case "enum": return { type: "string", enum: optionsOf(f) };
+    case "strings": return { type: "array", items: { type: "string" } };
+    default: return { type: f.type };
+  }
+}
+
+/** Writes the builder's rules onto a property, removing the ones left empty. */
+function withRules(base: Record<string, unknown>, f: Field): Record<string, unknown> {
+  const out = { ...base };
+  for (const k of RULE_KEYS) delete out[k];
+  out.title = f.name.trim();
+  if (f.description.trim()) out.description = f.description.trim();
+  if (f.placeholder.trim()) out.examples = [f.placeholder.trim()];
+  const def = parseDefault(f);
+  if (def !== undefined) out.default = def;
+  const limits = limitKeys(f.type);
+  if (limits) {
+    if (f.min.trim()) out[limits[0]] = Number(f.min);
+    if (f.max.trim()) out[limits[1]] = Number(f.max);
+  }
+  if (f.type === "text" && out.maxLength === undefined) out.maxLength = LONG_TEXT;
+  if (f.type === "enum") out.enum = optionsOf(f);
+  // Title first, as people read it in the JSON.
+  const { title, ...rest } = out;
+  return { title, ...rest };
 }
 
 /** The builder type that draws this property, or undefined when only JSON can describe it. */
@@ -44,16 +139,25 @@ export function typeOf(p: unknown): FieldType | undefined {
   // Options are edited comma separated, so an option holding a comma stays in JSON.
   if (Array.isArray(s.enum)) return s.enum.every((v) => typeof v === "string" && !v.includes(",")) ? "enum" : undefined;
   switch (s.type) {
-    case "string": return typeof s.maxLength === "number" && s.maxLength >= TEXT_AREA_FROM ? "text" : "string";
+    case "string": {
+      const format = Object.entries(FORMATS).find(([, f]) => f === s.format)?.[0] as FieldType | undefined;
+      if (format) return format;
+      return typeof s.maxLength === "number" && s.maxLength >= TEXT_AREA_FROM ? "text" : "string";
+    }
     case "number":
     case "integer":
     case "boolean": return s.type;
     case "array": {
       const items = s.items as Record<string, unknown> | undefined;
-      return items?.type === "string" && !items.enum ? "strings" : undefined;
+      return items?.type === "string" && !items.enum && !items.format ? "strings" : undefined;
     }
   }
   return undefined;
+}
+
+/** JSON with object keys sorted, so a reordered property compares equal. */
+function canonical(v: unknown): string {
+  return JSON.stringify(v, (_, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => a.localeCompare(b))) : x));
 }
 
 const propsOf = (schema: Schema) => (schema.properties ?? {}) as Props;
@@ -70,18 +174,65 @@ export function fieldsOf(schema: Schema | null): FieldRow[] {
   if (!schema) return [];
   const required = requiredOf(schema);
   return Object.entries(propsOf(schema)).map(([key, p]) => {
-    const type = typeOf(p);
+    const type = typeOf(p) ?? "string";
+    const limits = limitKeys(type);
+    const num = (k?: string) => (k && typeof p?.[k] === "number" ? String(p[k]) : "");
+    const examples = Array.isArray(p?.examples) ? p.examples : [];
     return {
       key,
-      advanced: !type,
+      advanced: !typeOf(p),
       field: {
         name: typeof p?.title === "string" && p.title ? p.title : key,
-        type: type ?? "string",
+        key,
+        type,
         required: required.includes(key),
         options: Array.isArray(p?.enum) ? p.enum.join(", ") : "",
+        description: typeof p?.description === "string" ? p.description : "",
+        placeholder: typeof examples[0] === "string" ? examples[0] : "",
+        default: defaultText(p?.default, type),
+        min: num(limits?.[0]),
+        // The long-text default limit is how the type is stored, not a rule someone set.
+        max: type === "text" && p?.maxLength === LONG_TEXT ? "" : num(limits?.[1]),
       },
     };
   });
+}
+
+/**
+ * Why the field cannot be saved yet, or null. `taken` says whether a key is used
+ * by another field.
+ */
+export function fieldProblem(f: Field, taken: (key: string) => boolean, initialKey?: string): MessageKey | null {
+  if (!f.name.trim()) return "collections.field_name_needed";
+  const key = f.key.trim();
+  if (key !== initialKey && !KEY_FORMAT.test(key)) return "collections.field_key_invalid";
+  if (key !== initialKey && taken(key)) return "collections.field_exists";
+  if (f.type === "enum" && optionsOf(f).length === 0) return "collections.field_options_needed";
+  const limits = limitKeys(f.type);
+  const lo = f.min.trim() ? Number(f.min) : undefined;
+  const hi = f.max.trim() ? Number(f.max) : undefined;
+  if (limits) {
+    const counts = limits[0] !== "minimum"; // lengths and item counts are whole numbers
+    const bad = (n?: number) => n !== undefined && (!Number.isFinite(n) || (counts && (!Number.isInteger(n) || n < 0)));
+    if (bad(lo) || bad(hi) || (lo !== undefined && hi !== undefined && lo > hi)) return "collections.field_limits_invalid";
+    if (f.type === "text" && hi !== undefined && hi < TEXT_AREA_FROM) return "collections.field_text_max";
+    if (f.type === "string" && hi !== undefined && hi >= TEXT_AREA_FROM) return "collections.field_string_max";
+  }
+  const raw = f.default.trim();
+  if (raw) {
+    const def = parseDefault(f);
+    const within = (n: number) => (lo === undefined || n >= lo) && (hi === undefined || n <= hi);
+    const ok =
+      f.type === "number" ? def !== undefined && within(def as number)
+      : f.type === "integer" ? def !== undefined && Number.isInteger(def) && within(def as number)
+      : f.type === "enum" ? optionsOf(f).includes(raw)
+      : f.type === "strings" ? within((def as string[]).length)
+      : f.type === "boolean" || f.type === "date" ? true
+      : f.type === "datetime" ? def !== undefined
+      : within(raw.length);
+    if (!ok) return "collections.field_default_invalid";
+  }
+  return null;
 }
 
 /** The schema with these properties (in this order) and required list, every other key kept. */
@@ -93,163 +244,334 @@ function rebuild(schema: Schema, entries: [string, unknown][], required: string[
 
 /** Adds one top-level field to an object schema, keeping every other key as it was. */
 export function addField(schema: Schema, f: Field): Schema {
-  const name = f.name.trim();
+  const key = f.key.trim() || keyOf(f.name);
   const required = requiredOf(schema);
-  return rebuild(schema, [...Object.entries(propsOf(schema)), [name, property(f)]], f.required && !required.includes(name) ? [...required, name] : required);
+  return rebuild(schema, [...Object.entries(propsOf(schema)), [key, withRules(typeBase(f), f)]], f.required && !required.includes(key) ? [...required, key] : required);
 }
 
 /**
- * Changes a field in place. The key never changes, so stored records keep their
- * values; on the same type the property's other rules (description, limits) stay.
+ * Changes a field in place, under a new key when `f.key` differs. On the same
+ * type the property's other keywords (pattern, format…) stay; a new type starts fresh.
  */
 export function updateField(schema: Schema, key: string, f: Field): Schema {
+  const to = f.key.trim() || key;
   const entries = Object.entries(propsOf(schema)).map(([k, old]): [string, unknown] => {
     if (k !== key) return [k, old];
-    if (typeOf(old) !== f.type) return [k, { ...(old?.description ? { description: old.description } : {}), ...property(f) }];
-    return [k, { ...old, title: f.name.trim(), ...(f.type === "enum" ? { enum: optionsOf(f) } : {}) }];
+    return [to, typeOf(old) === f.type ? withRules(old, f) : withRules(typeBase(f), f)];
   });
-  const required = requiredOf(schema);
-  const next = !f.required ? required.filter((k) => k !== key) : required.includes(key) ? required : [...required, key];
-  return rebuild(schema, entries, next);
+  const required = requiredOf(schema).filter((k) => k !== key);
+  return rebuild(schema, entries, f.required ? [...required, to] : required);
 }
 
 export function removeField(schema: Schema, key: string): Schema {
   return rebuild(schema, Object.entries(propsOf(schema)).filter(([k]) => k !== key), requiredOf(schema).filter((k) => k !== key));
 }
 
-/** Moves a field one place up (-1) or down (+1); the form follows this order. */
-export function moveField(schema: Schema, key: string, delta: -1 | 1): Schema {
+/** Moves a field to position `to`; the form follows this order. */
+export function moveFieldTo(schema: Schema, key: string, to: number): Schema {
   const entries = Object.entries(propsOf(schema));
   const i = entries.findIndex(([k]) => k === key);
-  const j = i + delta;
-  if (i < 0 || j < 0 || j >= entries.length) return schema;
-  [entries[i], entries[j]] = [entries[j], entries[i]];
+  if (i < 0 || to < 0 || to >= entries.length || to === i) return schema;
+  const [moved] = entries.splice(i, 1);
+  entries.splice(to, 0, moved);
   return rebuild(schema, entries, requiredOf(schema));
 }
 
-const blank: Field = { name: "", type: "string", required: false, options: "" };
+/** Moves a field one place up (-1) or down (+1). */
+export function moveField(schema: Schema, key: string, delta: -1 | 1): Schema {
+  const i = Object.keys(propsOf(schema)).indexOf(key);
+  return i < 0 ? schema : moveFieldTo(schema, key, i + delta);
+}
 
-/** One row that writes a field into the schema, so nobody types JSON for the common cases. */
-function FieldForm({ initial, taken, submitLabel, onSubmit, onCancel }: {
+/** Puts a removed field back as it was in `original`, near its old place. */
+export function restoreField(schema: Schema, original: Schema, key: string): Schema {
+  const prop = propsOf(original)[key];
+  if (!prop || key in propsOf(schema)) return schema;
+  const entries = Object.entries(propsOf(schema));
+  entries.splice(Math.min(Object.keys(propsOf(original)).indexOf(key), entries.length), 0, [key, prop]);
+  const required = requiredOf(schema);
+  return rebuild(schema, entries, requiredOf(original).includes(key) ? [...required, key] : required);
+}
+
+export type SchemaChange = { kind: "added" | "removed" | "required" | "type" | "rules"; name: string; risky: boolean };
+
+/** What saving `next` over `original` changes, field by field; risky ones can leave records out of format. */
+export function schemaChanges(original: Schema | null, next: Schema | null): SchemaChange[] {
+  if (!original || !next) return [];
+  const before = new Map(fieldsOf(original).map((r) => [r.key, r]));
+  const after = fieldsOf(next);
+  const out: SchemaChange[] = [];
+  for (const r of after) {
+    const old = before.get(r.key);
+    if (!old) {
+      out.push({ kind: "added", name: r.field.name, risky: r.field.required });
+      continue;
+    }
+    if (r.field.required && !old.field.required) out.push({ kind: "required", name: r.field.name, risky: true });
+    if (r.advanced !== old.advanced || r.field.type !== old.field.type) out.push({ kind: "type", name: r.field.name, risky: true });
+    else if (canonical(propsOf(original)[r.key]) !== canonical(propsOf(next)[r.key])) out.push({ kind: "rules", name: r.field.name, risky: true });
+  }
+  const kept = new Set(after.map((r) => r.key));
+  for (const r of before.values()) if (!kept.has(r.key)) out.push({ kind: "removed", name: r.field.name, risky: true });
+  return out;
+}
+
+/** The form that writes one field into the schema, so nobody types JSON for the common cases. */
+function FieldForm({ label, initial, initialKey, keyLocked, taken, submitLabel, onSubmit, onCancel }: {
+  /** Names the group for assistive tech: adding, or editing which field. */
+  label: string;
   initial: Field;
-  taken: (name: string) => boolean;
+  /** The key the field has today; unset for a new field. */
+  initialKey?: string;
+  keyLocked?: boolean;
+  taken: (key: string) => boolean;
   submitLabel: string;
   onSubmit: (f: Field) => void;
   onCancel?: () => void;
 }) {
   const { t } = useI18n();
+  const id = useId();
   const [field, setField] = useState<Field>(initial);
-  const set = (patch: Partial<Field>) => setField((f) => ({ ...f, ...patch }));
-  const name = field.name.trim();
-  const isTaken = !!name && taken(name);
-  const ready = !!name && !isTaken && (field.type !== "enum" || optionsOf(field).length > 0);
+  // A new field's key follows its name until someone types a key.
+  const [keyTouched, setKeyTouched] = useState(!!initialKey);
+  const [tried, setTried] = useState(false);
+  const set = (patch: Partial<Field>) => setField((f) => ({ ...f, ...patch, ...(patch.name !== undefined && !keyTouched ? { key: keyOf(patch.name) } : {}) }));
+  const problem = fieldProblem(field, taken, initialKey);
+  // The key clash shows at once; the rest once a save was tried.
+  const shown = problem === "collections.field_exists" || tried ? problem : null;
   const types = Object.fromEntries(FIELD_TYPES.map((k) => [k, t(`collections.type.${k}`)]));
+  const limits = limitKeys(field.type);
+  const [minLabel, maxLabel]: [MessageKey, MessageKey] = limits?.[0] === "minimum" ? ["collections.field_min", "collections.field_max"]
+    : limits?.[0] === "minItems" ? ["collections.field_min_items", "collections.field_max_items"]
+    : ["collections.field_min_length", "collections.field_max_length"];
+  const hasRules = !!(initial.description || initial.placeholder || initial.default || initial.min || initial.max);
   const submit = () => {
-    if (!ready) return;
-    onSubmit(field);
-    setField(blank);
+    setTried(true);
+    if (problem) return;
+    onSubmit({ ...field, key: field.key.trim() });
+    setField(blankField);
+    setKeyTouched(false);
+    setTried(false);
   };
+  // Enter saves the field instead of submitting the collection form.
+  const enter = (e: React.KeyboardEvent) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") { e.preventDefault(); submit(); } };
+  const note = `${id}-note`;
 
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-lg border border-dashed p-3">
-      <div className="min-w-40 flex-1 space-y-1.5">
-        <Label htmlFor="fb-name">{t("collections.field_name")}</Label>
-        <Input
-          id="fb-name"
-          value={field.name}
-          autoFocus={!!onCancel}
-          aria-invalid={isTaken}
-          aria-describedby="fb-note"
-          onChange={(e) => set({ name: e.target.value })}
-          // Enter adds the field instead of submitting the collection form.
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
-        />
-      </div>
-      <div className="w-48 space-y-1.5 max-sm:w-full">
-        <Label>{t("collections.field_type")}</Label>
-        <Select value={field.type} items={types} onValueChange={(v) => set({ type: v as FieldType })}>
-          <SelectTrigger className="w-full" aria-label={t("collections.field_type")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {FIELD_TYPES.map((k) => <SelectItem key={k} value={k}>{types[k]}</SelectItem>)}
-          </SelectContent>
-        </Select>
+    <div role="group" aria-label={label} className="space-y-3 rounded-lg border border-dashed p-3" onKeyDown={enter}>
+      <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto]">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${id}-name`}>{t("collections.field_name")}</Label>
+          <Input id={`${id}-name`} value={field.name} autoFocus={!!onCancel} maxLength={120} aria-invalid={shown === "collections.field_name_needed"} aria-describedby={note} onChange={(e) => set({ name: e.target.value })} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${id}-type`}>{t("collections.field_type")}</Label>
+          <Select value={field.type} items={types} onValueChange={(v) => set({ type: v as FieldType, default: "", min: "", max: "" })}>
+            <SelectTrigger id={`${id}-type`} className="w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {FIELD_TYPES.map((k) => <SelectItem key={k} value={k}>{types[k]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <label className="flex h-[var(--control-h)] items-center gap-2 text-sm">
+          <Checkbox checked={field.required} onCheckedChange={(on) => set({ required: on === true })} />
+          {t("collections.field_required")}
+        </label>
       </div>
       {field.type === "enum" && (
-        <div className="min-w-48 flex-1 space-y-1.5">
-          <Label htmlFor="fb-options">{t("collections.field_options")}</Label>
-          <Input id="fb-options" value={field.options} onChange={(e) => set({ options: e.target.value })} />
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${id}-options`}>{t("collections.field_options")}</Label>
+          <Input id={`${id}-options`} value={field.options} aria-invalid={shown === "collections.field_options_needed"} onChange={(e) => set({ options: e.target.value })} />
         </div>
       )}
-      <label className="flex h-9 items-center gap-2 text-sm">
-        <Checkbox checked={field.required} onCheckedChange={(on) => set({ required: on === true })} />
-        {t("collections.field_required")}
-      </label>
-      <div className="flex gap-2">
+      <details className="group" open={hasRules || undefined}>
+        <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+          <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
+          {t("collections.field_more")}
+        </summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${id}-key`}>{t("collections.field_key")}</Label>
+            <Input id={`${id}-key`} className="font-mono" value={field.key} maxLength={64} disabled={keyLocked} spellCheck={false} aria-describedby={`${id}-key-hint`}
+              aria-invalid={shown === "collections.field_key_invalid" || shown === "collections.field_exists"}
+              onChange={(e) => { setKeyTouched(true); setField((f) => ({ ...f, key: e.target.value })); }} />
+            <p id={`${id}-key-hint`} className="text-xs text-muted-foreground">{t(keyLocked ? "collections.field_key_locked" : "collections.field_key_hint")}</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${id}-default`}>{t("collections.field_default")}</Label>
+            {field.type === "boolean" || field.type === "enum" ? (
+              <DefaultSelect id={`${id}-default`} field={field} onChange={(v) => set({ default: v })} />
+            ) : (
+              <Input id={`${id}-default`} value={field.default} aria-invalid={shown === "collections.field_default_invalid"}
+                type={field.type === "number" || field.type === "integer" ? "number" : field.type === "date" ? "date" : field.type === "datetime" ? "datetime-local" : "text"}
+                aria-describedby={field.type === "strings" ? `${id}-default-hint` : undefined} onChange={(e) => set({ default: e.target.value })} />
+            )}
+            {field.type === "strings" && <p id={`${id}-default-hint`} className="text-xs text-muted-foreground">{t("collections.field_default_list_hint")}</p>}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${id}-desc`}>{t("collections.field_description")}</Label>
+            <Input id={`${id}-desc`} value={field.description} maxLength={500} aria-describedby={`${id}-desc-hint`} onChange={(e) => set({ description: e.target.value })} />
+            <p id={`${id}-desc-hint`} className="text-xs text-muted-foreground">{t("collections.field_description_hint")}</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${id}-ph`}>{t("collections.field_placeholder")}</Label>
+            <Input id={`${id}-ph`} value={field.placeholder} maxLength={200} onChange={(e) => set({ placeholder: e.target.value })} />
+          </div>
+          {limits && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${id}-min`}>{t(minLabel)}</Label>
+                <Input id={`${id}-min`} type="number" value={field.min} aria-invalid={shown === "collections.field_limits_invalid"} onChange={(e) => set({ min: e.target.value })} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${id}-max`}>{t(maxLabel)}</Label>
+                <Input id={`${id}-max`} type="number" value={field.max} placeholder={field.type === "text" ? String(LONG_TEXT) : undefined}
+                  aria-invalid={shown === "collections.field_limits_invalid" || shown === "collections.field_text_max" || shown === "collections.field_string_max"} onChange={(e) => set({ max: e.target.value })} />
+              </div>
+            </>
+          )}
+        </div>
+      </details>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {shown && <p id={note} role="alert" className="mr-auto text-xs text-destructive">{t(shown)}</p>}
         {onCancel && <Button type="button" variant="ghost" onClick={onCancel}>{t("common.cancel")}</Button>}
-        <Button type="button" variant="outline" disabled={!ready} onClick={submit}>
+        <Button type="button" variant={onCancel ? "default" : "outline"} onClick={submit}>
           {!onCancel && <Plus className="size-4" />}{submitLabel}
         </Button>
       </div>
-      {isTaken && <p id="fb-note" className="basis-full text-xs text-destructive" role="status">{t("collections.field_exists")}</p>}
     </div>
   );
 }
 
-/** The schema's fields as a list: add, edit, remove and reorder without touching JSON. */
-export function FieldsEditor({ schema, editable, onChange }: { schema: Schema | null; editable: boolean; onChange: (next: Schema) => void }) {
+function DefaultSelect({ id, field, onChange }: { id: string; field: Field; onChange: (v: string) => void }) {
+  const { t } = useI18n();
+  const NONE = "\u0000none";
+  const choices = field.type === "boolean" ? [["true", t("common.yes")], ["false", t("common.no")]] : optionsOf(field).map((o) => [o, o]);
+  const items: Record<string, string> = { [NONE]: t("collections.field_default_none"), ...Object.fromEntries(choices) };
+  return (
+    <Select value={field.default || NONE} items={items} onValueChange={(v) => onChange(v === NONE ? "" : String(v))}>
+      <SelectTrigger id={id} className="w-full"><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {Object.entries(items).map(([v, label]) => <SelectItem key={v} value={v}>{label}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/**
+ * The schema's fields as a list: add, edit in place, remove and reorder (drag or
+ * arrows) without touching JSON. Against `original`, the saved schema, rows show
+ * what is new or changed and removed fields can come back.
+ */
+export function FieldsEditor({ schema, original, editable, keysLocked = false, onChange }: {
+  schema: Schema | null;
+  original?: Schema | null;
+  editable: boolean;
+  /** Records exist: existing keys stay as they are. */
+  keysLocked?: boolean;
+  onChange: (next: Schema) => void;
+}) {
   const { t } = useI18n();
   const [editing, setEditing] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<number | null>(null);
   const rows = fieldsOf(schema);
   const keys = new Set(rows.map((r) => r.key));
-  const current = rows.find((r) => r.key === editing);
+  const saved = original ? propsOf(original) : {};
+  const savedRequired = original ? requiredOf(original) : [];
+  const removed = fieldsOf(original ?? null).filter((r) => !keys.has(r.key));
 
   if (!schema) return <p className="text-sm text-muted-foreground">{t("collections.fields_need_json")}</p>;
+  const mark = (key: string, required: boolean): MessageKey | null => {
+    if (!original) return null;
+    if (!(key in saved)) return "collections.field_new";
+    return canonical(saved[key]) !== canonical(propsOf(schema)[key]) || required !== savedRequired.includes(key) ? "collections.field_changed" : null;
+  };
+  const drop = (to: number) => {
+    if (dragging) onChange(moveFieldTo(schema, dragging, to));
+    setDragging(null);
+    setOver(null);
+  };
+
   return (
     <div className="space-y-3">
       {rows.length === 0 ? (
         <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">{t("collections.fields_empty")}</p>
       ) : (
         <ul aria-label={t("collections.fields")} className="divide-y rounded-lg border">
-          {rows.map(({ key, field, advanced }, i) => (
-            <li key={key} className="flex items-center gap-3 px-3 py-2" data-editing={key === editing || undefined}>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">
-                  {field.name}
-                  {field.required && <span className="ml-1 text-destructive" title={t("collections.field_required")}>*</span>}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {advanced ? t("collections.type.advanced") : t(`collections.type.${field.type}`)}
-                  {field.type === "enum" && !advanced && `: ${field.options}`}
-                  {key !== field.name && <span className="font-mono"> · {key}</span>}
-                </p>
-              </div>
-              {editable && (
-                <div className="flex shrink-0">
-                  <IconAction label={t("collections.field_up")} target={field.name} className={i === 0 ? "invisible" : undefined} onClick={() => onChange(moveField(schema, key, -1))}><ArrowUp className="size-4" /></IconAction>
-                  <IconAction label={t("collections.field_down")} target={field.name} className={i === rows.length - 1 ? "invisible" : undefined} onClick={() => onChange(moveField(schema, key, 1))}><ArrowDown className="size-4" /></IconAction>
-                  {!advanced && <IconAction label={t("collections.field_edit")} target={field.name} onClick={() => setEditing(key)}><Pencil className="size-4" /></IconAction>}
-                  <IconAction label={t("collections.field_remove")} target={field.name} className="text-destructive" onClick={() => { if (editing === key) setEditing(null); onChange(removeField(schema, key)); }}><Trash2 className="size-4" /></IconAction>
+          {rows.map(({ key, field, advanced }, i) => {
+            const badge = mark(key, field.required);
+            if (editable && key === editing) {
+              return (
+                <li key={key} className="bg-muted/30 p-2">
+                  <FieldForm
+                    label={`${t("collections.field_editing")} ${field.name}`}
+                    initial={field}
+                    initialKey={key}
+                    keyLocked={keysLocked && key in saved}
+                    taken={(k) => k !== key && keys.has(k)}
+                    submitLabel={t("collections.field_save")}
+                    onSubmit={(f) => { onChange(updateField(schema, key, f)); setEditing(null); }}
+                    onCancel={() => setEditing(null)}
+                  />
+                </li>
+              );
+            }
+            return (
+              <li
+                key={key}
+                className={cn("flex items-center gap-2 px-2 py-2 transition-colors", dragging === key && "opacity-50", over === i && dragging !== key && "bg-primary/10")}
+                draggable={editable}
+                onDragStart={(e) => { setDragging(key); e.dataTransfer.effectAllowed = "move"; }}
+                onDragOver={(e) => { if (!dragging) return; e.preventDefault(); setOver(i); }}
+                onDragLeave={() => setOver((o) => (o === i ? null : o))}
+                onDrop={(e) => { e.preventDefault(); drop(i); }}
+                onDragEnd={() => { setDragging(null); setOver(null); }}
+              >
+                {editable && <GripVertical className="size-4 shrink-0 cursor-grab text-muted-foreground" aria-label={t("collections.field_drag")} />}
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2 truncate text-sm font-medium">
+                    <span className="truncate">
+                      {field.name}
+                      {field.required && <span className="ml-1 text-destructive" title={t("collections.field_required")}>*</span>}
+                    </span>
+                    {badge && <Badge variant={badge === "collections.field_new" ? "default" : "secondary"}>{t(badge)}</Badge>}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {advanced ? t("collections.type.advanced") : t(`collections.type.${field.type}`)}
+                    {field.type === "enum" && !advanced && `: ${field.options}`}
+                    <span className="font-mono"> · {key}</span>
+                  </p>
                 </div>
-              )}
+                {editable && (
+                  <div className="flex shrink-0">
+                    <IconAction label={t("collections.field_up")} target={field.name} disabled={i === 0} onClick={() => onChange(moveField(schema, key, -1))}><ArrowUp className="size-4" /></IconAction>
+                    <IconAction label={t("collections.field_down")} target={field.name} disabled={i === rows.length - 1} onClick={() => onChange(moveField(schema, key, 1))}><ArrowDown className="size-4" /></IconAction>
+                    <IconAction label={t("collections.field_edit")} target={field.name} disabled={advanced} onClick={() => setEditing(key)}><Pencil className="size-4" /></IconAction>
+                    <IconAction label={t("collections.field_remove")} target={field.name} className="text-destructive" onClick={() => { if (editing === key) setEditing(null); onChange(removeField(schema, key)); }}><Trash2 className="size-4" /></IconAction>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {editable && removed.length > 0 && original && (
+        <ul aria-label={t("collections.field_removed")} className="flex flex-wrap items-center gap-2 text-sm">
+          <li className="text-muted-foreground">{t("collections.field_removed")}</li>
+          {removed.map((r) => (
+            <li key={r.key} className="flex items-center gap-1 rounded-full border border-dashed py-0.5 pl-2.5 pr-0.5">
+              <span className="line-through">{r.field.name}</span>
+              <Button type="button" size="sm" variant="ghost" className="h-6 px-2" onClick={() => onChange(restoreField(schema, original, r.key))}>
+                <RotateCcw className="size-3.5" />{t("collections.field_restore")}
+              </Button>
             </li>
           ))}
         </ul>
       )}
-      {editable && (current ? (
-        <div className="space-y-1.5">
-          <p className="text-sm font-medium">{t("collections.field_editing")} {current.field.name}</p>
-          <FieldForm
-            key={current.key}
-            initial={current.field}
-            taken={() => false}
-            submitLabel={t("collections.field_save")}
-            onSubmit={(f) => { onChange(updateField(schema, current.key, f)); setEditing(null); }}
-            onCancel={() => setEditing(null)}
-          />
-        </div>
-      ) : (
-        <FieldForm key="new" initial={blank} taken={(name) => keys.has(name)} submitLabel={t("collections.add_field")} onSubmit={(f) => onChange(addField(schema, f))} />
-      ))}
+      {editable && (
+        <FieldForm key="new" label={t("collections.add_field")} initial={blankField} taken={(k) => keys.has(k)} submitLabel={t("collections.add_field")} onSubmit={(f) => onChange(addField(schema, f))} />
+      )}
     </div>
   );
 }

@@ -10,7 +10,9 @@ import { toast } from "sonner";
 import { FieldNote, FormSection, FormSections, PageBody, PageHeader, SaveBar } from "@/components/bits";
 import { IconPicker } from "@/components/icon-picker";
 import { EmptyState } from "@/components/empty-state";
-import { FieldsEditor } from "@/components/field-builder";
+import { FieldsEditor, schemaChanges, type SchemaChange } from "@/components/field-builder";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { Badge } from "@/components/ui/badge";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,7 @@ import type { MessageKey } from "@/lib/i18n/messages";
 import { can, roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
 import { useUIStore } from "@/lib/store/ui";
+import { cn } from "@/lib/utils";
 import { collectionName, description as descriptionRule, ready } from "@/lib/validation";
 
 /** The fields a new collection starts with, named in the user's language. */
@@ -130,22 +133,27 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
   const preview = useMemo(() => parseSchema(previewText).schema, [previewText]);
   const [previewData, setPreviewData] = useState<unknown>({});
   const schemaChanged = schemaText !== original;
+  const changes = useMemo(() => (collection ? schemaChanges(collection.schema ?? null, schema) : []), [collection, schema]);
+  // Changes that can leave stored records out of format: confirmed first, then Quality is a click away.
+  const risky = !!recordCount && changes.some((c) => c.risky);
+  const [confirming, setConfirming] = useState(false);
   const dirty = collection
     ? name.trim() !== collection.name || desc.trim() !== collection.description || icon !== collection.icon || schemaChanged
     : name.trim() !== "";
   useUnsavedGuard(editable && dirty, t("roles.leave_unsaved"));
 
-  const save = useMutation({
+  // The variable says whether the save was risky, for the toast that follows.
+  const save = useMutation<Collection, unknown, boolean>({
     mutationFn: () => {
       const input = { name: name.trim(), description: desc.trim(), icon, schema };
       if (!collection) return collections.create(input);
       return collections.update(collection.id, { name: input.name, description: input.description, icon: icon !== collection.icon ? icon : undefined, schema: schemaChanged ? schema : undefined, version });
     },
-    onSuccess: (saved) => {
+    onSuccess: (saved, wasRisky) => {
       setError(null);
       client.setQueryData(["collections", "detail", saved.id], saved);
       void client.invalidateQueries({ queryKey: ["collections"] });
-      toast.success(t("common.saved"));
+      toast.success(t("common.saved"), wasRisky ? { action: { label: t("collections.check_quality"), onClick: () => router.push(`/collections/${saved.id}/quality`) } } : undefined);
       if (!collection) router.replace(`/collections/${saved.id}`);
       else setVersion(saved.version);
     },
@@ -166,12 +174,11 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
     setError(null);
   };
 
-  // Removing a field, making one required or changing a type can leave stored records out of format.
-  const warning = collection && schemaChanged && recordCount ? t("collections.schema_change_hint").replace("{n}", String(recordCount)) : undefined;
+  const changeText = (c: SchemaChange) => t(`collections.change_${c.kind}`).replace("{name}", c.name);
 
   return (
     // noValidate: required fields in the preview are a demo, not part of this save.
-    <form noValidate onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+    <form noValidate onSubmit={(e) => { e.preventDefault(); if (risky) setConfirming(true); else save.mutate(false); }}>
       <FormSections>
         {!editable && <p role="status" className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{t("collections.readonly")}</p>}
         {parts.includes("details") && (
@@ -196,14 +203,32 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
         {parts.includes("fields") && (
           // No side heading here: the list and the preview need the width.
           <section className="space-y-4 border-t pt-8 first:border-t-0 first:pt-0">
-            <div className="space-y-1">
-              <h2 className="font-heading text-base font-semibold">{t("collections.fields")}</h2>
-              <p className="text-sm text-muted-foreground">{t("collections.fields_desc")}</p>
+            {/* The Fields page names the section in its header; the new-collection page needs a heading here. */}
+            <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+              <div className="min-w-0 flex-1 space-y-1">
+                {parts.includes("details") && <h2 className="font-heading text-base font-semibold">{t("collections.fields")}</h2>}
+                <p className="text-sm text-muted-foreground">{t("collections.fields_desc")}</p>
+              </div>
+              {collection && schemaChanged && <Badge variant="outline" className="border-warn/50 text-warn">{t("collections.unsaved_fields")}</Badge>}
             </div>
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
               <div className="min-w-0 space-y-4">
-                <FieldsEditor schema={schema} editable={editable} onChange={(next) => setSchemaText(pretty(next))} />
-                {warning && <p role="status" className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-sm">{warning}</p>}
+                <FieldsEditor
+                  schema={schema}
+                  original={collection?.schema ?? null}
+                  editable={editable}
+                  keysLocked={!!collection && recordCount !== 0}
+                  onChange={(next) => setSchemaText(pretty(next))}
+                />
+                {changes.length > 0 && (
+                  <div role="status" className={cn("space-y-1.5 rounded-md border px-3 py-2 text-sm", risky ? "border-warn/40 bg-warn/10" : "bg-muted/40")}>
+                    <p className="font-medium">{t("collections.changes_title")}</p>
+                    <ul className="list-inside list-disc space-y-0.5">
+                      {changes.map((c, i) => <li key={i}>{changeText(c)}</li>)}
+                    </ul>
+                    {risky && <p>{t("collections.schema_change_hint").replace("{n}", String(recordCount))}</p>}
+                  </div>
+                )}
                 <details className="group rounded-lg border" open={!schema || undefined}>
                   <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
                     <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
@@ -253,6 +278,14 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
           />
         )}
       </FormSections>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={t("collections.save_fields_title")}
+        description={`${changes.filter((c) => c.risky).map(changeText).join(" · ")}. ${t("collections.save_fields_desc").replace("{n}", String(recordCount ?? 0))}`}
+        confirmLabel={t("common.save")}
+        onConfirm={async () => { await save.mutateAsync(true).catch(() => undefined); }}
+      />
     </form>
   );
 }

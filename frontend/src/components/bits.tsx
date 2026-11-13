@@ -116,10 +116,10 @@ export function FormError({ message }: { message: string | null }) {
 }
 
 /** Icon button with a tooltip naming what it does. */
-export function IconAction({ label, target, className, onClick, children }: { label: string; target: string; className?: string; onClick: () => void; children: React.ReactNode }) {
+export function IconAction({ label, target, className, disabled, onClick, children }: { label: string; target: string; className?: string; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <Tooltip>
-      <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className={className} aria-label={`${label}: ${target}`} onClick={onClick} />}>{children}</TooltipTrigger>
+      <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className={className} aria-label={`${label}: ${target}`} disabled={disabled} onClick={onClick} />}>{children}</TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );

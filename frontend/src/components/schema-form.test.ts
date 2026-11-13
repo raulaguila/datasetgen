@@ -13,6 +13,10 @@ describe("uiFor", () => {
     };
     expect(uiFor(schema)).toEqual({ descricao: { "ui:widget": "textarea" }, exemplos: { items: { explicacao: { "ui:widget": "textarea" } } } });
   });
+
+  it("shows the first example as the placeholder", () => {
+    expect(uiFor({ properties: { nome: { type: "string", examples: ["Ao clicar"] }, n: { type: "number", examples: [3] } } })).toEqual({ nome: { "ui:placeholder": "Ao clicar" } });
+  });
 });
 
 describe("issueErrors", () => {

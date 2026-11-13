@@ -1,15 +1,22 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function addField(page: Page, name: string, opts: { required?: boolean; options?: string } = {}) {
-  await page.locator("#fb-name").fill(name);
+async function addField(page: Page, name: string, opts: { required?: boolean; options?: string; help?: string } = {}) {
+  const form = page.getByRole("group", { name: "Adicionar campo" });
+  await form.getByLabel("Nome do campo").fill(name);
   if (opts.options) {
-    await page.getByRole("combobox", { name: "Tipo" }).click();
+    await form.getByRole("combobox", { name: "Tipo" }).click();
     await page.getByRole("option", { name: "Uma opção da lista" }).click();
-    await page.locator("#fb-options").fill(opts.options);
+    await form.getByLabel("Opções, separadas por vírgula").fill(opts.options);
   }
-  if (opts.required) await page.getByRole("checkbox", { name: "Obrigatório" }).click();
-  await page.getByRole("button", { name: "Adicionar campo" }).click();
+  if (opts.help) {
+    await form.getByText("Mais regras").click();
+    await form.getByLabel("Texto de ajuda").fill(opts.help);
+  }
+  if (opts.required) await form.getByRole("checkbox", { name: "Obrigatório" }).click();
+  await form.getByRole("button", { name: "Adicionar campo" }).click();
 }
+
+const fieldsList = (page: Page) => page.getByRole("list", { name: "Campos" });
 
 // The whole path in a real browser: fields built without JSON, their order, the
 // save of a schema with required fields, errors under each field, the record
@@ -24,7 +31,7 @@ test("a collection's records follow its fields", async ({ page }) => {
   await page.getByRole("button", { name: "Remover campo: Título" }).click();
   await page.getByRole("button", { name: "Remover campo: Notas" }).click();
   await addField(page, "Nome", { required: true });
-  await addField(page, "Nota");
+  await addField(page, "Nota", { help: "De 0 a 10" });
   await addField(page, "Categoria", { required: true, options: "gatilho, efeito" });
   await page.getByRole("button", { name: "Subir: Categoria" }).click();
   await expect(fields.getByRole("listitem")).toHaveText([/^Nome\*/, /^Categoria\*/, /^Nota/]);
@@ -38,14 +45,16 @@ test("a collection's records follow its fields", async ({ page }) => {
   await page.getByRole("button", { name: "Novo registro" }).click();
   await expect(page).toHaveURL(/\/records\/new\?collection=/);
   await expect(page.locator(".rjsf label.control-label")).toHaveText([/Nome/, /Categoria/, /Nota/]);
+  // Keys come from the labels; the help text shows under its field.
+  await expect(page.getByText("De 0 a 10")).toBeVisible();
 
   // The browser checks before the server: the error lands under the field.
-  await page.locator("#rec_Nome").fill("Ao clicar");
+  await page.locator("#rec_nome").fill("Ao clicar");
   const save = page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true });
   await save.click();
   await expect(page.getByText("Campo obrigatório.")).toBeVisible();
 
-  await page.locator("#rec_Categoria").selectOption("gatilho");
+  await page.locator("#rec_categoria").selectOption("gatilho");
   await expect(page.getByText("Campo obrigatório.")).toHaveCount(0);
   await save.click();
   await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
@@ -66,10 +75,20 @@ test("a collection's records follow its fields", async ({ page }) => {
   // Fields live in their own section; changing them with records stored warns.
   await page.getByRole("link", { name: "Campos" }).click();
   await expect(page).toHaveURL(/\/fields$/);
+  // With records stored, keys stay fixed; the edit happens in the row.
   await page.getByRole("button", { name: "Editar campo: Nota" }).click();
-  await page.getByRole("checkbox", { name: "Obrigatório" }).click();
-  await page.getByRole("button", { name: "Salvar campo" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Esta coleção tem 1 registro(s)" })).toBeVisible();
+  const edit = page.getByRole("group", { name: "Editando: Nota" });
+  await expect(edit.getByLabel("Chave")).toBeDisabled();
+  await edit.getByRole("checkbox", { name: "Obrigatório" }).click();
+  await edit.getByRole("button", { name: "Salvar campo" }).click();
+  await expect(fieldsList(page).getByRole("listitem").filter({ hasText: "Nota" })).toContainText("Alterado");
+  const summary = page.getByRole("status").filter({ hasText: "Esta coleção tem 1 registro(s)" });
+  await expect(summary).toContainText("Passa a ser obrigatório: Nota");
+  // Saving a risky change asks first.
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  const confirm = page.getByRole("dialog", { name: "Salvar mudanças nos campos?" });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole("button", { name: "Cancelar" }).click();
   await page.getByRole("button", { name: "Descartar" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Esta coleção tem" })).toHaveCount(0);
 

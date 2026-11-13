@@ -15,7 +15,7 @@ export type FieldFilters = Record<string, string | number | boolean>;
 /** The "any value" choice; real values are never this. */
 const ANY = "\u0000any";
 
-const FILTERABLE = new Set(["string", "text", "number", "integer", "boolean", "enum"]);
+const FILTERABLE = new Set(["string", "text", "number", "integer", "boolean", "enum", "date", "email", "url"]);
 
 /** The fields a list can filter on: plain top-level values, matched exactly. */
 export function filterableFields(rows: FieldRow[]) {
