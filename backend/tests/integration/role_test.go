@@ -195,7 +195,8 @@ func TestDefaultRoleCanChangeButNotLeave(t *testing.T) {
 	if _, err := svc.SetPermissions(ctx, def.ID, map[string]domain.Action{domain.ResourceProducts: domain.ActionRead}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.SetPermissions(ctx, def.ID, map[string]domain.Action{}); err != nil {
+	// Back to the seeded grant: every account may create collections.
+	if _, err := svc.SetPermissions(ctx, def.ID, map[string]domain.Action{domain.ResourceCollections: domain.ActionCreate}); err != nil {
 		t.Fatal(err)
 	}
 }

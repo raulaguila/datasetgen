@@ -101,6 +101,7 @@ export default function CollectionsPage() {
           <EmptyState
             icon={Database}
             title={t(term ? "common.no_results" : "collections.empty")}
+            description={term ? undefined : t(canCreate ? "collections.empty_desc" : "collections.empty_ask")}
             action={term ? <Button variant="outline" onClick={() => setQ("")}>{t("common.clear_filters")}</Button>
               : can(user, "collections", "create") && <Button onClick={() => router.push("/collections/new")}><Plus className="size-4" />{t("collections.new")}</Button>}
           />

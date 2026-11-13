@@ -13,8 +13,12 @@ test("an invited person activates the account and signs in", async ({ page, brow
   await expect(guest.getByText("Conta ativada")).toBeVisible();
 
   await login(guest, email, strongPassword);
-  // Member of no collection yet: the app opens on the (empty) collection list.
-  await expect(guest).toHaveURL(/\/collections$/);
+  // Invited by an admin, not into a collection: the account starts with its own,
+  // where the app opens, and may create more.
+  await expect(guest).toHaveURL(/\/collections\/[0-9a-f-]{36}\/overview$/);
+  await expect(guest.getByText("Minha coleção").first()).toBeVisible();
+  await guest.goto("/collections");
+  await expect(guest.getByRole("button", { name: "Nova coleção" })).toBeVisible();
   await guest.close();
 });
 

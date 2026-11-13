@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -127,3 +128,21 @@ const (
 	QualityDone    = "done"
 	QualityFailed  = "failed"
 )
+
+// StarterCollection is the collection a new account starts with, so its first
+// screen is a place to work: a title and notes, named in the account's language.
+func StarterCollection(lang string) Collection {
+	name, title, notes := "My collection", "Title", "Notes"
+	if strings.HasPrefix(lang, "pt") {
+		name, title, notes = "Minha coleção", "Título", "Notas"
+	}
+	schema, _ := json.Marshal(map[string]any{ // plain maps and strings: Marshal cannot fail
+		"type":     "object",
+		"required": []string{"title"},
+		"properties": map[string]any{
+			"title": map[string]string{"type": "string", "title": title},
+			"notes": map[string]string{"type": "string", "title": notes},
+		},
+	})
+	return Collection{Name: name, Schema: schema}
+}

@@ -107,6 +107,9 @@ func (s *Service) Activate(ctx context.Context, cmd input.ActivateCommand) error
 		if err := policy.AssignDefaultRoles(ctx, uow, user.ID); err != nil {
 			return err
 		}
+		if err := policy.GiveStarterCollection(ctx, uow, user.ID); err != nil {
+			return err
+		}
 		return uow.Tokens().MarkUsed(ctx, tok.ID, now)
 	})
 	return err

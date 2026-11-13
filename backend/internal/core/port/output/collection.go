@@ -46,6 +46,8 @@ type CollectionRepository interface {
 	StartQuality(ctx context.Context, id string, schemaVersion int, stale time.Duration) (bool, error)
 	// FinishQuality stores the result of the running check.
 	FinishQuality(ctx context.Context, id string, run domain.QualityRun) error
+	// HasMembership reports whether userID belongs to any collection.
+	HasMembership(ctx context.Context, userID string) (bool, error)
 	// Owners counts the collection's owner members.
 	Owners(ctx context.Context, id string) (int64, error)
 }

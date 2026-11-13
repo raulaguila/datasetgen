@@ -82,7 +82,7 @@ func TestCollectionRecordsFollowTheSchema(t *testing.T) {
 		t.Fatalf("update must follow the schema: %v", err)
 	}
 
-	list, _, err := collections.List(ctx, domain.CollectionFilter{})
+	list, _, err := collections.List(ctx, domain.CollectionFilter{Search: "Wired"})
 	if err != nil || len(list) != 1 || list[0].RecordCount != 2 || list[0].Role != domain.RoleOwner {
 		t.Fatalf("list with counts: %+v, %v", list, err)
 	}
@@ -128,7 +128,7 @@ func TestCollectionMembersDecideAccess(t *testing.T) {
 
 	// A non-member neither sees nor reaches it.
 	wantCode(t, ignore(collections.Get(outsider, c.ID)), apperror.CodeNotFound)
-	if list, _, _ := collections.List(outsider, domain.CollectionFilter{}); len(list) != 1 || list[0].ID == c.ID {
+	if list, _, _ := collections.List(outsider, domain.CollectionFilter{Search: "Privada"}); len(list) != 1 || list[0].ID == c.ID {
 		t.Fatalf("outsider sees %+v", list)
 	}
 	_, _, err = records.List(outsider, domain.RecordFilter{CollectionID: c.ID})
@@ -320,11 +320,11 @@ func TestCollectionStatsLeaveAndIcon(t *testing.T) {
 		t.Fatalf("stats: %+v, %v", st, err)
 	}
 	// The list adds the aggregates only when asked.
-	plain, _, err := collections.List(helper, domain.CollectionFilter{Page: domain.NewPage(1, 10)})
+	plain, _, err := collections.List(helper, domain.CollectionFilter{Page: domain.NewPage(1, 10), Search: "Painel"})
 	if err != nil || len(plain) != 1 || plain[0].MemberCount != 0 || !plain[0].LastActivity.IsZero() {
 		t.Fatalf("plain list: %+v, %v", plain, err)
 	}
-	full, _, err := collections.List(helper, domain.CollectionFilter{Page: domain.NewPage(1, 10), Details: true})
+	full, _, err := collections.List(helper, domain.CollectionFilter{Page: domain.NewPage(1, 10), Search: "Painel", Details: true})
 	if err != nil || len(full) != 1 || full[0].MemberCount != 2 || full[0].FieldCount != 0 || full[0].LastActivity.Before(*st.LastUpdate) {
 		t.Fatalf("detailed list: %+v, %v", full, err)
 	}
@@ -333,7 +333,7 @@ func TestCollectionStatsLeaveAndIcon(t *testing.T) {
 	}
 
 	// The helper leaves and loses access; the last owner cannot leave.
-	if list, _, _ := collections.List(helper, domain.CollectionFilter{}); len(list) != 1 || !list[0].Member {
+	if list, _, _ := collections.List(helper, domain.CollectionFilter{Search: "Painel"}); len(list) != 1 || !list[0].Member {
 		t.Fatalf("member flag: %+v", list)
 	}
 	if err := collections.Leave(helper, c.ID); err != nil {
