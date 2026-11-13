@@ -36,6 +36,8 @@ const BY_MESSAGE: [string, MessageKey][] = [
   ["your own account cannot be disabled", "error.msg.own_account"],
   ["end your own sessions from your profile", "error.msg.own_sessions"],
   ["the record was changed by someone else", "error.msg.stale"],
+  ["records repeat values of a field marked unique", "error.msg.unique_repeated"],
+  ["a unique field cannot be filled in bulk", "error.msg.unique_bulk"],
   ["picture must be at most", "error.msg.avatar_size"],
   ["picture must be PNG", "error.msg.avatar_type"],
 ];

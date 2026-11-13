@@ -400,6 +400,7 @@ type auditDTO struct {
 	Action      string         `json:"action" example:"record.update"`
 	TargetID    string         `json:"target_id,omitempty"`
 	TargetLabel string         `json:"target_label,omitempty"`
+	TargetGone  bool           `json:"target_gone,omitempty"`
 	Details     map[string]any `json:"details"`
 }
 
@@ -528,6 +529,8 @@ type fixDTO struct {
 	Field string          `json:"field"`
 	To    string          `json:"to"`
 	Value json.RawMessage `json:"value" swaggertype:"object"`
+	// DryRun answers how many records would change, changing none.
+	DryRun bool `json:"dry_run"`
 }
 
 type countDTO struct {
@@ -542,7 +545,7 @@ type countDTO struct {
 // @Param id path string true "Collection ID"
 // @Param body body fixDTO true "The change"
 // @Security BearerAuth
-// @Success 200 {object} countDTO "records changed"
+// @Success 200 {object} countDTO "records changed, or that would change with dry_run"
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
@@ -554,7 +557,7 @@ func (h *Handler) Fix(c fiber.Ctx) error {
 	if err := c.Bind().Body(&body); err != nil {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
-	n, err := h.svc.Fix(c.Context(), c.Params("id"), domain.RecordFix{Op: body.Op, Field: body.Field, To: body.To, Value: body.Value})
+	n, err := h.svc.Fix(c.Context(), c.Params("id"), domain.RecordFix{Op: body.Op, Field: body.Field, To: body.To, Value: body.Value, DryRun: body.DryRun})
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}

@@ -34,7 +34,17 @@ type RecordRepository interface {
 	// Fix applies a bulk change to the collection's records, saving a version of
 	// each record it changes, and returns how many changed.
 	Fix(ctx context.Context, collectionID string, fix domain.RecordFix) (int64, error)
+	// CountFix counts the records Fix would change.
+	CountFix(ctx context.Context, collectionID string, fix domain.RecordFix) (int64, error)
 	// DeleteListed deletes the listed records of the collection that were not
 	// changed after unchangedSince, and returns the ids it deleted.
 	DeleteListed(ctx context.Context, collectionID string, ids []string, unchangedSince time.Time) ([]string, error)
+	// LockUnique serializes, until the transaction ends, the writes of one
+	// collection that check unique fields, so two of them cannot both pass.
+	LockUnique(ctx context.Context, collectionID string) error
+	// TakenValues returns the positions in values of those another record of the
+	// collection (not excludeID) already holds under key.
+	TakenValues(ctx context.Context, collectionID, excludeID, key string, values []json.RawMessage) ([]int, error)
+	// DuplicatedKeys returns the listed keys that two or more records share a value of.
+	DuplicatedKeys(ctx context.Context, collectionID string, keys []string) ([]string, error)
 }

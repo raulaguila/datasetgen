@@ -10,7 +10,7 @@ import { CollectionPage } from "../_parts";
 export default function CollectionAuditPage() {
   const { t } = useI18n();
   return (
-    <CollectionPage section="collections.tab.audit">
+    <CollectionPage section="collections.tab.audit" description="audit.collection_subtitle">
       {(collection) => roleAllows(collection.role, "owner")
         ? <AuditLog collectionId={collection.id} />
         : <EmptyState icon={ScrollText} title={t("error.forbidden")} description={t("audit.owners_only")} />}

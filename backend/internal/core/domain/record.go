@@ -10,7 +10,8 @@ type RecordFilter struct {
 	CollectionID string
 	Page         Page
 	Search       string // matched against the JSON text of data
-	Order        string // created_at asc or desc
+	Sort         string // created_at or updated_at
+	Order        string // asc or desc
 	// Match keeps records whose data contains this JSON object (data @> Match),
 	// so {"category": "trigger"} filters on one field's exact value.
 	Match json.RawMessage
@@ -39,6 +40,8 @@ type RecordFix struct {
 	Field string          // the field changed; the old name for rename
 	To    string          // rename only: the new name
 	Value json.RawMessage // set_default only: the value given to records without the field
+	// DryRun counts the records the change would touch and changes nothing.
+	DryRun bool
 }
 
 const (

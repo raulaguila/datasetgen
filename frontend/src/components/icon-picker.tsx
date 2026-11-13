@@ -82,7 +82,7 @@ export function IconPicker({ value, onChange, label, noneLabel, disabled }: {
           className="flex h-9 items-center gap-2 rounded-lg border border-input bg-card px-2.5 text-sm hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-60 dark:bg-transparent"
         >
           {selected ? createElement(selected, { className: "size-4 text-primary" }) : <Ban className="size-4 text-muted-foreground/60" />}
-          <span className="flex-1 truncate text-left font-mono text-xs text-muted-foreground">{value || noneLabel}</span>
+          <span className={cn("flex-1 truncate text-left text-xs text-muted-foreground", value && "font-mono")}>{value || noneLabel}</span>
           <ChevronDown className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-180")} />
         </Popover.Trigger>
       </div>

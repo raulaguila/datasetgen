@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type Form from "@rjsf/core";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { DangerZone, FormSection, FormSections, PageBody, PageHeader, SaveBar, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -15,6 +16,7 @@ import { RecordHistory } from "@/components/record-history";
 import { SchemaForm } from "@/components/schema-form";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ApiError } from "@/lib/api/client";
 import { collections, records } from "@/lib/api/endpoints";
 import type { Collection, DataRecord, SchemaIssue } from "@/lib/api/types";
@@ -36,20 +38,27 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<SchemaIssue[]>([]);
   const formRef = useRef<Form>(null);
+  const formEl = useRef<HTMLFormElement>(null);
   const [checked, setChecked] = useState(false); // errors follow the typing once a save was tried
   const dirty = JSON.stringify(data) !== JSON.stringify(record?.data ?? {});
   useUnsavedGuard(editable && dirty, t("roles.leave_unsaved"));
   const back = `/collections/${collection.id}`;
+  const canSubmit = editable && (dirty || !record);
+  // A new record starts typing in its first field.
+  useEffect(() => {
+    if (!record && editable) formEl.current?.querySelector<HTMLElement>("input:not([type=hidden]), textarea, select")?.focus();
+  }, [record, editable]);
 
-  const save = useMutation({
+  // The variable is the message shown once saved.
+  const save = useMutation<DataRecord, unknown, string>({
     mutationFn: () => (record ? records.update(record.id, data, version) : records.create(collection.id, data)),
-    onSuccess: (saved) => {
+    onSuccess: (saved, message) => {
       setError(null);
       setIssues([]);
       client.setQueryData(["records", "detail", saved.id], saved);
       void client.invalidateQueries({ queryKey: ["records", collection.id] });
       void client.invalidateQueries({ queryKey: ["collections"] });
-      toast.success(t("common.saved"));
+      toast.success(message);
     },
     onError: (err) => {
       const found = err instanceof ApiError && err.code === "VALIDATION_FAILED" ? (err.details?.issues as SchemaIssue[] | undefined) : undefined;
@@ -68,42 +77,77 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
     setChecked(false);
   };
 
-  // The browser checks first, so broken fields light up without a round trip.
-  const submit = (again: boolean) => {
+  /**
+   * The browser checks first, so broken fields light up without a round trip.
+   * After saving: "blank" stays on an empty form, "copy" keeps what was typed
+   * so the next record changes only what differs; otherwise back to the list.
+   */
+  const submit = (again?: "blank" | "copy") => {
     setIssues([]);
     setChecked(true);
     if (!formRef.current?.validateForm()) return setError(t("records.invalid"));
     setError(null);
-    save.mutate(undefined, {
+    save.mutate(t(again === "copy" ? "records.copy_kept" : "common.saved"), {
       onSuccess: () => {
         if (!again) return router.push(back);
-        // Entering a batch: stay on a blank form for the next record.
-        setData({});
+        // Entering a batch: stay on the form for the next record.
+        if (again === "blank") setData({});
         setChecked(false);
         window.scrollTo({ top: 0, behavior: "smooth" });
+        formEl.current?.querySelector<HTMLElement>("input:not([type=hidden]), textarea, select")?.focus();
       },
     });
   };
 
   return (
     // noValidate: the browser's own bubbles would cut in before validateForm shows errors per field.
-    <form noValidate onSubmit={(e) => { e.preventDefault(); submit(false); }}>
+    <form ref={formEl} noValidate onSubmit={(e) => { e.preventDefault(); submit(); }}
+      // Ctrl/⌘+Enter saves from any field, text areas included; with Shift a new record keeps the data for the next one.
+      onKeyDown={(e) => {
+        if (!canSubmit || e.key !== "Enter" || !(e.ctrlKey || e.metaKey)) return;
+        e.preventDefault();
+        submit(e.shiftKey && !record ? "copy" : undefined);
+      }}>
       <FormSections>
-        <FormSection title={t("records.data")} description={t("records.data_desc")}>
+        <FormSection title={collection.name} description={[collection.description.trim(), t("records.required_legend")].filter(Boolean).join(" ")}>
           <SchemaForm schema={collection.schema ?? {}} data={data} disabled={!editable} onChange={setData} formRef={formRef} liveValidate={checked} issues={issues} />
         </FormSection>
-        {editable && (dirty || !record) && (
+        {canSubmit && (
           <SaveBar
             footer
             submit
             label={t(record ? "roles.unsaved" : "records.new")}
+            status={
+              <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                {dirty ? t("roles.unsaved") : t("records.nothing_typed")}
+                <span className="hidden text-xs font-normal text-muted-foreground sm:inline"><kbd className="font-mono">Ctrl</kbd>+<kbd className="font-mono">Enter</kbd> {t("records.shortcut_save")}</span>
+              </span>
+            }
             error={error}
             saving={save.isPending}
             canSave={dirty || !record}
             saveLabel={t(record ? "common.save" : "common.create")}
             discardLabel={t(record ? "common.discard" : "common.cancel")}
             onDiscard={discard}
-            extra={!record && <Button type="button" variant="outline" disabled={save.isPending} onClick={() => submit(true)}>{t("records.save_and_new")}</Button>}
+            extra={!record && (
+              // Split button: blank by default, the menu keeps the data for a near-copy.
+              <div className="flex">
+                <Button type="button" variant="outline" className="rounded-r-none" disabled={save.isPending} onClick={() => submit("blank")}>{t("records.save_and_new")}</Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger render={<Button type="button" variant="outline" size="icon" className="rounded-l-none border-l-0" disabled={save.isPending} aria-label={t("records.save_more")} />}>
+                    <ChevronDown className="size-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-64">
+                    <DropdownMenuItem onClick={() => submit("copy")}>
+                      <span className="flex flex-col">
+                        {t("records.save_and_copy")}
+                        <span className="text-xs text-muted-foreground">{t("records.save_and_copy_hint")}</span>
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
           />
         )}
       </FormSections>

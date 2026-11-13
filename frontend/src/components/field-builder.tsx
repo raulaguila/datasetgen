@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronRight, GripVertical, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { IconAction } from "@/components/bits";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,16 @@ import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
-export const FIELD_TYPES = ["string", "text", "number", "integer", "boolean", "enum", "strings", "date", "datetime", "email", "url"] as const;
+export const FIELD_TYPES = ["string", "text", "number", "integer", "boolean", "enum", "strings", "date", "datetime", "email", "url", "group", "json"] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
+/** Groups hold one level of subfields: no group inside a group. */
+const SUBFIELD_TYPES = FIELD_TYPES.filter((t) => t !== "group");
+/** Plain values the server can compare across records: these can be marked unique. */
+const UNIQUE_TYPES: readonly FieldType[] = ["string", "number", "integer", "enum", "date", "datetime", "email", "url"];
+/** The keyword the server reads (schema.UniqueKeyword): no two records share the value. */
+const UNIQUE = "x-unique";
+/** Types stored as objects; their default, if any, is kept as it was. */
+const isObjectType = (t: FieldType) => t === "group" || t === "json";
 
 /** Long text: SchemaForm draws a text area for strings allowed this long. */
 export const LONG_TEXT = 5000;
@@ -33,6 +41,8 @@ export type Field = {
   key: string;
   type: FieldType;
   required: boolean;
+  /** No two records may hold the same value; top-level fields only. */
+  unique: boolean;
   options: string;
   description: string;
   placeholder: string;
@@ -46,7 +56,7 @@ export type FieldRow = { key: string; field: Field; advanced: boolean };
 type Schema = Record<string, unknown>;
 type Props = Record<string, Record<string, unknown>>;
 
-export const blankField: Field = { name: "", key: "", type: "string", required: false, options: "", description: "", placeholder: "", default: "", min: "", max: "" };
+export const blankField: Field = { name: "", key: "", type: "string", required: false, unique: false, options: "", description: "", placeholder: "", default: "", min: "", max: "" };
 
 const optionsOf = (f: Pick<Field, "options">) => f.options.split(",").map((o) => o.trim()).filter(Boolean);
 
@@ -61,7 +71,7 @@ function limitKeys(type: FieldType): [string, string] | null {
 }
 
 /** Keywords the builder writes; any other keyword of a property is kept as it was. */
-const RULE_KEYS = ["title", "description", "examples", "default", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems"];
+const RULE_KEYS = ["title", "description", "examples", "default", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", UNIQUE];
 
 /** A storage key from a label: "Nome do Cliente" → "nome_do_cliente". */
 export function keyOf(name: string): string {
@@ -73,7 +83,7 @@ const KEY_FORMAT = /^[a-z][a-z0-9_]{0,63}$/;
 /** The default value as stored, or undefined for none (or one that cannot be read as the type). */
 function parseDefault(f: Field): unknown {
   const raw = f.default.trim();
-  if (!raw) return undefined;
+  if (!raw || isObjectType(f.type)) return undefined;
   switch (f.type) {
     case "number": case "integer": return raw === "" || !Number.isFinite(Number(raw)) ? undefined : Number(raw);
     case "boolean": return raw === "true";
@@ -107,6 +117,8 @@ function typeBase(f: Field): Record<string, unknown> {
     case "text": return { type: "string" };
     case "enum": return { type: "string", enum: optionsOf(f) };
     case "strings": return { type: "array", items: { type: "string" } };
+    case "group": return { type: "object", properties: {} };
+    case "json": return { type: "object" };
     default: return { type: f.type };
   }
 }
@@ -114,7 +126,7 @@ function typeBase(f: Field): Record<string, unknown> {
 /** Writes the builder's rules onto a property, removing the ones left empty. */
 function withRules(base: Record<string, unknown>, f: Field): Record<string, unknown> {
   const out = { ...base };
-  for (const k of RULE_KEYS) delete out[k];
+  for (const k of RULE_KEYS) if (k !== "default" || !isObjectType(f.type)) delete out[k];
   out.title = f.name.trim();
   if (f.description.trim()) out.description = f.description.trim();
   if (f.placeholder.trim()) out.examples = [f.placeholder.trim()];
@@ -126,6 +138,7 @@ function withRules(base: Record<string, unknown>, f: Field): Record<string, unkn
     if (f.max.trim()) out[limits[1]] = Number(f.max);
   }
   if (f.type === "text" && out.maxLength === undefined) out.maxLength = LONG_TEXT;
+  if (f.unique && UNIQUE_TYPES.includes(f.type)) out[UNIQUE] = true;
   if (f.type === "enum") out.enum = optionsOf(f);
   // Title first, as people read it in the JSON.
   const { title, ...rest } = out;
@@ -150,6 +163,12 @@ export function typeOf(p: unknown): FieldType | undefined {
     case "array": {
       const items = s.items as Record<string, unknown> | undefined;
       return items?.type === "string" && !items.enum && !items.format ? "strings" : undefined;
+    }
+    case "object": {
+      // No properties: anything goes, edited as JSON in the record form.
+      if (s.properties === undefined) return s.patternProperties === undefined && s.additionalProperties === undefined ? "json" : undefined;
+      if (!s.properties || typeof s.properties !== "object") return undefined;
+      return Object.values(s.properties).every((sub) => { const t = typeOf(sub); return t && t !== "group"; }) ? "group" : undefined;
     }
   }
   return undefined;
@@ -186,10 +205,11 @@ export function fieldsOf(schema: Schema | null): FieldRow[] {
         key,
         type,
         required: required.includes(key),
+        unique: p?.[UNIQUE] === true,
         options: Array.isArray(p?.enum) ? p.enum.join(", ") : "",
         description: typeof p?.description === "string" ? p.description : "",
         placeholder: typeof examples[0] === "string" ? examples[0] : "",
-        default: defaultText(p?.default, type),
+        default: isObjectType(type) ? "" : defaultText(p?.default, type),
         min: num(limits?.[0]),
         // The long-text default limit is how the type is stored, not a rule someone set.
         max: type === "text" && p?.maxLength === LONG_TEXT ? "" : num(limits?.[1]),
@@ -263,6 +283,11 @@ export function updateField(schema: Schema, key: string, f: Field): Schema {
   return rebuild(schema, entries, f.required ? [...required, to] : required);
 }
 
+/** Replaces one property as a whole, as a group's subfield editor hands it back. */
+export function setProp(schema: Schema, key: string, prop: Schema): Schema {
+  return rebuild(schema, Object.entries(propsOf(schema)).map(([k, p]) => [k, k === key ? prop : p]), requiredOf(schema));
+}
+
 export function removeField(schema: Schema, key: string): Schema {
   return rebuild(schema, Object.entries(propsOf(schema)).filter(([k]) => k !== key), requiredOf(schema).filter((k) => k !== key));
 }
@@ -293,7 +318,7 @@ export function restoreField(schema: Schema, original: Schema, key: string): Sch
   return rebuild(schema, entries, requiredOf(original).includes(key) ? [...required, key] : required);
 }
 
-export type SchemaChange = { kind: "added" | "removed" | "required" | "type" | "rules"; name: string; risky: boolean };
+export type SchemaChange = { kind: "added" | "removed" | "required" | "unique" | "type" | "rules"; name: string; risky: boolean };
 
 /** What saving `next` over `original` changes, field by field; risky ones can leave records out of format. */
 export function schemaChanges(original: Schema | null, next: Schema | null): SchemaChange[] {
@@ -308,8 +333,18 @@ export function schemaChanges(original: Schema | null, next: Schema | null): Sch
       continue;
     }
     if (r.field.required && !old.field.required) out.push({ kind: "required", name: r.field.name, risky: true });
+    // Safe for records: the server refuses the save if stored values repeat.
+    if (r.field.unique && !old.field.unique) out.push({ kind: "unique", name: r.field.name, risky: false });
+    // Unique has its own line above; the rest of the keywords compare as rules.
+    const strip = (p: Record<string, unknown>) => ({ ...p, [UNIQUE]: undefined });
+    const [was, now] = [strip(propsOf(original)[r.key]), strip(propsOf(next)[r.key])];
     if (r.advanced !== old.advanced || r.field.type !== old.field.type) out.push({ kind: "type", name: r.field.name, risky: true });
-    else if (canonical(propsOf(original)[r.key]) !== canonical(propsOf(next)[r.key])) out.push({ kind: "rules", name: r.field.name, risky: true });
+    else if (r.field.type === "group" && !r.advanced) {
+      // A group reports its subfields by name; its own rules apart from them.
+      const bare = (p: Record<string, unknown>) => canonical({ ...p, properties: undefined, required: undefined });
+      if (bare(was) !== bare(now)) out.push({ kind: "rules", name: r.field.name, risky: true });
+      for (const c of schemaChanges(was, now)) out.push({ ...c, name: `${r.field.name} › ${c.name}` });
+    } else if (canonical(was) !== canonical(now)) out.push({ kind: "rules", name: r.field.name, risky: true });
   }
   const kept = new Set(after.map((r) => r.key));
   for (const r of before.values()) if (!kept.has(r.key)) out.push({ kind: "removed", name: r.field.name, risky: true });
@@ -317,9 +352,12 @@ export function schemaChanges(original: Schema | null, next: Schema | null): Sch
 }
 
 /** The form that writes one field into the schema, so nobody types JSON for the common cases. */
-function FieldForm({ label, initial, initialKey, keyLocked, taken, submitLabel, onSubmit, onCancel }: {
+function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, initial, initialKey, keyLocked, taken, submitLabel, onSubmit, onCancel }: {
   /** Names the group for assistive tech: adding, or editing which field. */
   label: string;
+  types?: readonly FieldType[];
+  /** False inside a group: the server checks unique values on top-level fields only. */
+  uniqueAllowed?: boolean;
   initial: Field;
   /** The key the field has today; unset for a new field. */
   initialKey?: string;
@@ -339,7 +377,8 @@ function FieldForm({ label, initial, initialKey, keyLocked, taken, submitLabel, 
   const problem = fieldProblem(field, taken, initialKey);
   // The key clash shows at once; the rest once a save was tried.
   const shown = problem === "collections.field_exists" || tried ? problem : null;
-  const types = Object.fromEntries(FIELD_TYPES.map((k) => [k, t(`collections.type.${k}`)]));
+  const types = Object.fromEntries(offered.map((k) => [k, t(`collections.type.${k}`)]));
+  const objectType = isObjectType(field.type);
   const limits = limitKeys(field.type);
   const [minLabel, maxLabel]: [MessageKey, MessageKey] = limits?.[0] === "minimum" ? ["collections.field_min", "collections.field_max"]
     : limits?.[0] === "minItems" ? ["collections.field_min_items", "collections.field_max_items"]
@@ -358,8 +397,8 @@ function FieldForm({ label, initial, initialKey, keyLocked, taken, submitLabel, 
   const note = `${id}-note`;
 
   return (
-    <div role="group" aria-label={label} className="space-y-3 rounded-lg border border-dashed p-3" onKeyDown={enter}>
-      <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto]">
+    <div role="group" aria-label={label} className="@container space-y-3 rounded-lg border border-dashed p-3" onKeyDown={enter}>
+      <div className="grid items-end gap-3 @sm:grid-cols-[minmax(0,1fr)_12rem_auto]">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${id}-name`}>{t("collections.field_name")}</Label>
           <Input id={`${id}-name`} value={field.name} autoFocus={!!onCancel} maxLength={120} aria-invalid={shown === "collections.field_name_needed"} aria-describedby={note} onChange={(e) => set({ name: e.target.value })} />
@@ -369,14 +408,22 @@ function FieldForm({ label, initial, initialKey, keyLocked, taken, submitLabel, 
           <Select value={field.type} items={types} onValueChange={(v) => set({ type: v as FieldType, default: "", min: "", max: "" })}>
             <SelectTrigger id={`${id}-type`} className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {FIELD_TYPES.map((k) => <SelectItem key={k} value={k}>{types[k]}</SelectItem>)}
+              {offered.map((k) => <SelectItem key={k} value={k} description={t(`collections.type_hint.${k}`)}>{types[k]}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
-        <label className="flex h-[var(--control-h)] items-center gap-2 text-sm">
-          <Checkbox checked={field.required} onCheckedChange={(on) => set({ required: on === true })} />
-          {t("collections.field_required")}
-        </label>
+        <div className="flex h-[var(--control-h)] items-center gap-4">
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={field.required} onCheckedChange={(on) => set({ required: on === true })} />
+            {t("collections.field_required")}
+          </label>
+          {uniqueAllowed && UNIQUE_TYPES.includes(field.type) && (
+            <label className="flex items-center gap-2 text-sm" title={t("collections.field_unique_hint")}>
+              <Checkbox checked={field.unique} onCheckedChange={(on) => set({ unique: on === true })} />
+              {t("collections.field_unique")}
+            </label>
+          )}
+        </div>
       </div>
       {field.type === "enum" && (
         <div className="flex flex-col gap-1.5">
@@ -384,12 +431,17 @@ function FieldForm({ label, initial, initialKey, keyLocked, taken, submitLabel, 
           <Input id={`${id}-options`} value={field.options} aria-invalid={shown === "collections.field_options_needed"} onChange={(e) => set({ options: e.target.value })} />
         </div>
       )}
+      {objectType && (
+        <p className={cn("text-xs", field.type === "json" ? "text-warn" : "text-muted-foreground")}>
+          {t(field.type === "json" ? "collections.json_hint" : "collections.group_hint")}
+        </p>
+      )}
       <details className="group" open={hasRules || undefined}>
         <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
           <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
           {t("collections.field_more")}
         </summary>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="mt-3 grid gap-3 @sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={`${id}-key`}>{t("collections.field_key")}</Label>
             <Input id={`${id}-key`} className="font-mono" value={field.key} maxLength={64} disabled={keyLocked} spellCheck={false} aria-describedby={`${id}-key-hint`}
@@ -397,7 +449,7 @@ function FieldForm({ label, initial, initialKey, keyLocked, taken, submitLabel, 
               onChange={(e) => { setKeyTouched(true); setField((f) => ({ ...f, key: e.target.value })); }} />
             <p id={`${id}-key-hint`} className="text-xs text-muted-foreground">{t(keyLocked ? "collections.field_key_locked" : "collections.field_key_hint")}</p>
           </div>
-          <div className="flex flex-col gap-1.5">
+          {!objectType && <div className="flex flex-col gap-1.5">
             <Label htmlFor={`${id}-default`}>{t("collections.field_default")}</Label>
             {field.type === "boolean" || field.type === "enum" ? (
               <DefaultSelect id={`${id}-default`} field={field} onChange={(v) => set({ default: v })} />
@@ -407,16 +459,18 @@ function FieldForm({ label, initial, initialKey, keyLocked, taken, submitLabel, 
                 aria-describedby={field.type === "strings" ? `${id}-default-hint` : undefined} onChange={(e) => set({ default: e.target.value })} />
             )}
             {field.type === "strings" && <p id={`${id}-default-hint`} className="text-xs text-muted-foreground">{t("collections.field_default_list_hint")}</p>}
-          </div>
+          </div>}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={`${id}-desc`}>{t("collections.field_description")}</Label>
             <Input id={`${id}-desc`} value={field.description} maxLength={500} aria-describedby={`${id}-desc-hint`} onChange={(e) => set({ description: e.target.value })} />
             <p id={`${id}-desc-hint`} className="text-xs text-muted-foreground">{t("collections.field_description_hint")}</p>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={`${id}-ph`}>{t("collections.field_placeholder")}</Label>
-            <Input id={`${id}-ph`} value={field.placeholder} maxLength={200} onChange={(e) => set({ placeholder: e.target.value })} />
-          </div>
+          {field.type !== "group" && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${id}-ph`}>{t("collections.field_placeholder")}</Label>
+              <Input id={`${id}-ph`} value={field.placeholder} maxLength={200} onChange={(e) => set({ placeholder: e.target.value })} />
+            </div>
+          )}
           {limits && (
             <>
               <div className="flex flex-col gap-1.5">
@@ -435,8 +489,8 @@ function FieldForm({ label, initial, initialKey, keyLocked, taken, submitLabel, 
       <div className="flex flex-wrap items-center justify-end gap-2">
         {shown && <p id={note} role="alert" className="mr-auto text-xs text-destructive">{t(shown)}</p>}
         {onCancel && <Button type="button" variant="ghost" onClick={onCancel}>{t("common.cancel")}</Button>}
-        <Button type="button" variant={onCancel ? "default" : "outline"} onClick={submit}>
-          {!onCancel && <Plus className="size-4" />}{submitLabel}
+        <Button type="button" onClick={submit}>
+          {!initialKey && <Plus className="size-4" />}{submitLabel}
         </Button>
       </div>
     </div>
@@ -463,18 +517,23 @@ function DefaultSelect({ id, field, onChange }: { id: string; field: Field; onCh
  * arrows) without touching JSON. Against `original`, the saved schema, rows show
  * what is new or changed and removed fields can come back.
  */
-export function FieldsEditor({ schema, original, editable, keysLocked = false, onChange }: {
+export function FieldsEditor({ schema, original, editable, keysLocked = false, group, onChange }: {
   schema: Schema | null;
   original?: Schema | null;
   editable: boolean;
   /** Records exist: existing keys stay as they are. */
   keysLocked?: boolean;
+  /** Set when this edits a group's subfields: the group's name. */
+  group?: string;
   onChange: (next: Schema) => void;
 }) {
   const { t } = useI18n();
   const [editing, setEditing] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<number | null>(null);
+  // One form at a time per list: adding closes the edit and the other way round.
+  const [adding, setAdding] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const rows = fieldsOf(schema);
   const keys = new Set(rows.map((r) => r.key));
   const saved = original ? propsOf(original) : {};
@@ -496,9 +555,9 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, o
   return (
     <div className="space-y-3">
       {rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">{t("collections.fields_empty")}</p>
+        <p className="rounded-lg border border-dashed px-4 py-4 text-center text-sm text-muted-foreground">{t(group ? "collections.subfields_empty" : "collections.fields_empty")}</p>
       ) : (
-        <ul aria-label={t("collections.fields")} className="divide-y rounded-lg border">
+        <ul aria-label={group ? `${t("collections.subfields")}: ${group}` : t("collections.fields")} className="divide-y rounded-lg border">
           {rows.map(({ key, field, advanced }, i) => {
             const badge = mark(key, field.required);
             if (editable && key === editing) {
@@ -506,6 +565,8 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, o
                 <li key={key} className="bg-muted/30 p-2">
                   <FieldForm
                     label={`${t("collections.field_editing")} ${field.name}`}
+                    types={group ? SUBFIELD_TYPES : FIELD_TYPES}
+                    uniqueAllowed={!group}
                     initial={field}
                     initialKey={key}
                     keyLocked={keysLocked && key in saved}
@@ -517,10 +578,15 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, o
                 </li>
               );
             }
+            const prop = propsOf(schema)[key];
+            const isGroup = field.type === "group" && !advanced;
+            const open = isGroup && !collapsed.has(key);
+            const subCount = isGroup ? Object.keys(propsOf(prop)).length : 0;
             return (
-              <li
-                key={key}
-                className={cn("flex items-center gap-2 px-2 py-2 transition-colors", dragging === key && "opacity-50", over === i && dragging !== key && "bg-primary/10")}
+              <li key={key}>
+              {/* The drag handlers sit on the row, so a group's subfields drag on their own. */}
+              <div
+                className={cn("group/row flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-2 transition-colors", dragging === key && "opacity-50", over === i && dragging !== key && "bg-primary/10")}
                 draggable={editable}
                 onDragStart={(e) => { setDragging(key); e.dataTransfer.effectAllowed = "move"; }}
                 onDragOver={(e) => { if (!dragging) return; e.preventDefault(); setOver(i); }}
@@ -529,28 +595,53 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, o
                 onDragEnd={() => { setDragging(null); setOver(null); }}
               >
                 {editable && <GripVertical className="size-4 shrink-0 cursor-grab text-muted-foreground" aria-label={t("collections.field_drag")} />}
-                <div className="min-w-0 flex-1">
+                {isGroup && (
+                  <IconAction label={t(open ? "collections.group_collapse" : "collections.group_expand")} target={field.name} expanded={open} className="-mx-1"
+                    onClick={() => setCollapsed((c) => { const n = new Set(c); if (open) n.add(key); else n.delete(key); return n; })}>
+                    {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                  </IconAction>
+                )}
+                <div className="min-w-32 flex-1">
                   <p className="flex items-center gap-2 truncate text-sm font-medium">
                     <span className="truncate">
                       {field.name}
                       {field.required && <span className="ml-1 text-destructive" title={t("collections.field_required")}>*</span>}
                     </span>
-                    {badge && <Badge variant={badge === "collections.field_new" ? "default" : "secondary"}>{t(badge)}</Badge>}
+                    {badge && <Badge variant="outline" className={badge === "collections.field_new" ? "border-primary/40 text-primary" : "text-muted-foreground"}>{t(badge)}</Badge>}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {advanced ? t("collections.type.advanced") : t(`collections.type.${field.type}`)}
                     {field.type === "enum" && !advanced && `: ${field.options}`}
+                    {field.unique && ` · ${t("collections.field_unique").toLowerCase()}`}
+                    {isGroup && ` · ${subCount === 1 ? t("collections.subfield_one") : t("collections.subfield_many").replace("{n}", String(subCount))}`}
                     <span className="font-mono"> · {key}</span>
                   </p>
                 </div>
                 {editable && (
-                  <div className="flex shrink-0">
+                  <div className="ml-auto flex shrink-0">
+                    {/* With a mouse the arrows wait for hover or focus; touch and keyboard keep them, as drag's stand-in. */}
+                    <span className="flex transition-opacity [@media(hover:hover)]:opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100">
                     <IconAction label={t("collections.field_up")} target={field.name} disabled={i === 0} onClick={() => onChange(moveField(schema, key, -1))}><ArrowUp className="size-4" /></IconAction>
                     <IconAction label={t("collections.field_down")} target={field.name} disabled={i === rows.length - 1} onClick={() => onChange(moveField(schema, key, 1))}><ArrowDown className="size-4" /></IconAction>
-                    <IconAction label={t("collections.field_edit")} target={field.name} disabled={advanced} onClick={() => setEditing(key)}><Pencil className="size-4" /></IconAction>
+                    </span>
+                    <IconAction label={t("collections.field_edit")} target={field.name} disabled={advanced} onClick={() => { setAdding(false); setEditing(key); }}><Pencil className="size-4" /></IconAction>
                     <IconAction label={t("collections.field_remove")} target={field.name} className="text-destructive" onClick={() => { if (editing === key) setEditing(null); onChange(removeField(schema, key)); }}><Trash2 className="size-4" /></IconAction>
                   </div>
                 )}
+              </div>
+              {open && (
+                <div className="mb-3 ml-3 mr-2 border-l-2 pl-2 sm:ml-8 sm:pl-3">
+                  <FieldsEditor
+                    schema={prop}
+                    // A new group is marked once, not again on each of its subfields.
+                    original={original && key in saved ? saved[key] : undefined}
+                    editable={editable}
+                    keysLocked={keysLocked && key in saved}
+                    group={field.name}
+                    onChange={(sub) => onChange(setProp(schema, key, sub))}
+                  />
+                </div>
+              )}
               </li>
             );
           })}
@@ -569,8 +660,24 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, o
           ))}
         </ul>
       )}
-      {editable && (
-        <FieldForm key="new" label={t("collections.add_field")} initial={blankField} taken={(k) => keys.has(k)} submitLabel={t("collections.add_field")} onSubmit={(f) => onChange(addField(schema, f))} />
+      {editable && !adding && (
+        <Button type="button" variant="outline" size={group ? "sm" : "default"} className="w-full border-dashed" onClick={() => { setEditing(null); setAdding(true); }}>
+          <Plus className="size-4" />{t(group ? "collections.add_subfield" : "collections.add_field")}
+        </Button>
+      )}
+      {editable && adding && (
+        <FieldForm
+          key="new"
+          label={group ? `${t("collections.add_subfield")}: ${group}` : t("collections.add_field")}
+          types={group ? SUBFIELD_TYPES : FIELD_TYPES}
+          uniqueAllowed={!group}
+          initial={blankField}
+          taken={(k) => keys.has(k)}
+          submitLabel={t(group ? "collections.add_subfield" : "collections.add_field")}
+          // Stays open for the next one; Cancel closes it.
+          onSubmit={(f) => onChange(addField(schema, f))}
+          onCancel={() => setAdding(false)}
+        />
       )}
     </div>
   );

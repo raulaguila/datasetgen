@@ -116,10 +116,10 @@ export function FormError({ message }: { message: string | null }) {
 }
 
 /** Icon button with a tooltip naming what it does. */
-export function IconAction({ label, target, className, disabled, onClick, children }: { label: string; target: string; className?: string; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
+export function IconAction({ label, target, className, disabled, expanded, onClick, children }: { label: string; target: string; className?: string; disabled?: boolean; /** For a toggle that shows or hides content. */ expanded?: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <Tooltip>
-      <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className={className} aria-label={`${label}: ${target}`} disabled={disabled} onClick={onClick} />}>{children}</TooltipTrigger>
+      <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className={className} aria-label={`${label}: ${target}`} aria-expanded={expanded} disabled={disabled} onClick={onClick} />}>{children}</TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );
@@ -161,8 +161,10 @@ export function FormSections({ danger = false, children }: { danger?: boolean; c
  * last child of FormSections, `footer` makes it the card's footer; otherwise it
  * sits inside its section. `submit` makes Save the form's submit button, so Enter saves.
  */
-export function SaveBar({ label, error, saving, canSave, saveLabel, discardLabel, onSave, onDiscard, submit = false, footer = false, extra }: {
+export function SaveBar({ label, status, error, saving, canSave, saveLabel, discardLabel, onSave, onDiscard, submit = false, footer = false, extra }: {
   label: string;
+  /** What the bar shows in place of `label`, which still names it for assistive tech. */
+  status?: React.ReactNode;
   error?: string | null;
   saving: boolean;
   canSave: boolean;
@@ -185,7 +187,7 @@ export function SaveBar({ label, error, saving, canSave, saveLabel, discardLabel
         footer ? "bottom-0 -mx-6 -mb-6 rounded-b-xl border-t bg-card px-6 py-4 sm:-mx-8 sm:-mb-8 sm:px-8" : "bottom-4 rounded-lg border bg-muted px-4 py-3",
       )}
     >
-      <span className="flex-1 text-sm font-medium">{label}</span>
+      <span className="flex-1 text-sm font-medium">{status ?? label}</span>
       {error && <div className="basis-full"><FormError message={error} /></div>}
       <Button type="button" variant="ghost" disabled={saving} onClick={onDiscard}>{discardLabel}</Button>
       {extra}

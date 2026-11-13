@@ -17,6 +17,11 @@ describe("uiFor", () => {
   it("shows the first example as the placeholder", () => {
     expect(uiFor({ properties: { nome: { type: "string", examples: ["Ao clicar"] }, n: { type: "number", examples: [3] } } })).toEqual({ nome: { "ui:placeholder": "Ao clicar" } });
   });
+
+  it("edits free objects below the root as JSON, groups as their fields", () => {
+    expect(uiFor({ type: "object" })).toEqual({});
+    expect(uiFor({ type: "object", properties: { meta: { type: "object" }, end: { type: "object", properties: { rua: { type: "string" } } } } })).toEqual({ meta: { "ui:field": "json" } });
+  });
 });
 
 describe("issueErrors", () => {

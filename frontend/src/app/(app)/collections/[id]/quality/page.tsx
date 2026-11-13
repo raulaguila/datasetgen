@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CircleCheck, ListChecks, RefreshCw, Trash2, Wrench } from "lucide-react";
+import { ChevronDown, CircleCheck, ListChecks, RefreshCw, Trash2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { FormSection, FormSections, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
-import { fieldsOf, recordTitle } from "@/components/field-builder";
+import { fieldsOf, recordTitle, type Field } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
@@ -25,39 +25,122 @@ import { useQuality } from "@/lib/hooks/use-quality";
 import { roleAllows } from "@/lib/permissions";
 import { CollectionPage } from "../_parts";
 
-/** The fix form: one bulk change, confirmed, then the check runs again. */
+type Fix = Omit<RecordFix, "dry_run">;
+
+/** A field's value typed the way its type reads: a number box, yes/no, its options, a date. */
+function ValueInput({ field, value, onChange }: { field?: Field; value: string; onChange: (v: string) => void }) {
+  const { t } = useI18n();
+  const props = { id: "fix-value", value, "aria-describedby": "fix-value-hint" };
+  const choices = field?.type === "boolean" ? { true: t("common.yes"), false: t("common.no") }
+    : field?.type === "enum" ? Object.fromEntries(field.options.split(",").map((o) => o.trim()).filter(Boolean).map((o) => [o, o]))
+    : null;
+  if (choices) return (
+    <Select value={value || null} items={choices} onValueChange={(v) => onChange(String(v ?? ""))}>
+      <SelectTrigger id="fix-value" className="w-full" aria-describedby="fix-value-hint"><SelectValue placeholder={t("fix.pick")} /></SelectTrigger>
+      <SelectContent>{Object.entries(choices).map(([v, label]) => <SelectItem key={v} value={v}>{label}</SelectItem>)}</SelectContent>
+    </Select>
+  );
+  const type = field?.type === "integer" || field?.type === "number" ? "number" : field?.type === "date" ? "date" : field?.type === "email" ? "email" : field?.type === "url" ? "url" : "text";
+  return <Input {...props} type={type} step={field?.type === "integer" ? 1 : "any"} onChange={(e) => onChange(e.target.value)} />;
+}
+
+/** The JSON a typed box's text stands for; free fields read JSON and fall back to text. */
+function valueOf(field: Field | undefined, text: string): unknown {
+  switch (field?.type) {
+    case "integer": case "number": return Number(text);
+    case "boolean": return text === "true";
+    case "string": case "text": case "enum": case "date": case "datetime": case "email": case "url": return text;
+  }
+  try { return JSON.parse(text) as unknown; } catch { return text; }
+}
+
+/** The fix form: one bulk change, counted, confirmed, then the check runs again. */
 function BulkFix({ collection, report, onDone }: { collection: Collection; report: QualityReport; onDone: () => void }) {
   const { t } = useI18n();
   const client = useQueryClient();
+  const [open, setOpen] = useState(report.invalid_count > 0);
   const [op, setOp] = useState<RecordFix["op"]>("set_default");
   const [field, setField] = useState("");
   const [to, setTo] = useState("");
   const [value, setValue] = useState("");
-  const [confirm, setConfirm] = useState<"fix" | "delete" | null>(null);
-  // Field keys of the schema plus those the issues name, which may be old ones.
-  const keys = [...new Set([
-    ...fieldsOf(collection.schema ?? null).map((r) => r.key),
-    ...report.invalid.flatMap((r) => [...r.issues.map((i) => (i.path.split("/")[1] ?? "")), ...Object.keys(r.data ?? {})]),
-  ].filter(Boolean))];
-  const parsed = (() => {
-    try { return JSON.parse(value) as unknown; } catch { return value; } // plain text is a string
-  })();
-  const ready = field.trim() !== "" && (op !== "rename" || (to.trim() !== "" && to.trim() !== field.trim())) && (op !== "set_default" || value !== "");
-  const fix: RecordFix = { op, field: field.trim(), ...(op === "rename" ? { to: to.trim() } : {}), ...(op === "set_default" ? { value: parsed } : {}) };
+  const [counting, setCounting] = useState(false);
+  // The change waiting for its confirmation, with how many records it touches.
+  const [confirm, setConfirm] = useState<{ fix: Fix; count: number } | { delete: true } | null>(null);
+  const rows = fieldsOf(collection.schema ?? null).filter((r) => r.field.type !== "group");
+  const known = new Set(rows.map((r) => r.key));
+  // Keys records still hold that the fields no longer have: renamed or removed ones.
+  const old = [...new Set(report.invalid.flatMap((r) => Object.keys(r.data ?? {})))].filter((k) => k && !known.has(k));
+  const options: Record<string, string> = Object.fromEntries([
+    ...rows.map((r) => [r.key, r.field.name] as const),
+    ...old.map((k) => [k, t("fix.old_field").replace("{key}", k)] as const),
+  ]);
+  const target = rows.find((r) => r.key === field)?.field;
+  const ready = field !== "" && (op !== "rename" || (to.trim() !== "" && to.trim() !== field)) && (op !== "set_default" || value !== "");
+
+  // One-click fixes for what the check found: fill a required field, drop a field gone from the schema.
+  const missing = [...new Set(report.invalid.flatMap((r) => r.issues.filter((i) => i.keyword === "required").map((i) => i.path.split("/")[1] ?? "")))].filter((k) => known.has(k));
+  const suggestions: { label: string; run: () => void }[] = [
+    ...missing.map((k) => {
+      const f = rows.find((r) => r.key === k)!.field;
+      return {
+        label: t("fix.suggest_fill").replace("{field}", f.name),
+        run: () => {
+          setOp("set_default"); setField(k); setValue(f.default);
+          if (f.default !== "") void review({ op: "set_default", field: k, value: valueOf(f, f.default) });
+          else setTimeout(() => document.getElementById("fix-value")?.focus());
+        },
+      };
+    }),
+    ...old.map((k) => ({
+      label: t("fix.suggest_remove").replace("{field}", k),
+      run: () => { setOp("remove"); setField(k); void review({ op: "remove", field: k }); },
+    })),
+  ];
+
   const after = (n: number, key: MessageKey) => {
     toast.success(t(key).replace("{n}", String(n)));
     void client.invalidateQueries({ queryKey: ["records", collection.id] });
     void client.invalidateQueries({ queryKey: ["collections"] });
     onDone();
   };
+  // Counts the records first, so the confirmation says how many change.
+  const review = async (fix: Fix) => {
+    setCounting(true);
+    try {
+      const { count } = await collections.fix(collection.id, { ...fix, dry_run: true });
+      if (count === 0) toast.info(t("fix.none"));
+      else setConfirm({ fix, count });
+    } catch (err) {
+      toast.error(errorMessage(err, "common.save_failed", t));
+    } finally {
+      setCounting(false);
+    }
+  };
   const canDelete = report.status === "done" && report.version === report.current_version && report.invalid_count > 0;
   const ops: Record<RecordFix["op"], string> = { set_default: t("fix.op.set_default"), rename: t("fix.op.rename"), remove: t("fix.op.remove") };
+  const pending = confirm && "fix" in confirm ? confirm : null;
 
+  if (!open) return (
+    <Button variant="ghost" className="-ml-2" aria-expanded={false} onClick={() => setOpen(true)}>
+      <Wrench className="size-4" />{t("fix.title")}<ChevronDown className="size-4" />
+    </Button>
+  );
   return (
     <FormSections>
       <FormSection title={t("fix.title")} description={t("fix.desc")}>
-        <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (ready) setConfirm("fix"); }}>
-          <div className="space-y-2">
+        {suggestions.length > 0 && (
+          <div className="mb-5 space-y-2">
+            <p className="text-sm font-medium">{t("fix.suggestions")}</p>
+            <div className="flex flex-wrap gap-2">
+              {suggestions.map((s) => <Button key={s.label} type="button" size="sm" variant="outline" disabled={counting} onClick={s.run}>{s.label}</Button>)}
+            </div>
+          </div>
+        )}
+        <form className="space-y-4" onSubmit={(e) => {
+          e.preventDefault();
+          if (ready) void review({ op, field, ...(op === "rename" ? { to: to.trim() } : {}), ...(op === "set_default" ? { value: valueOf(target, value) } : {}) });
+        }}>
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="fix-op">{t("fix.op")}</Label>
             <Select value={op} items={ops} onValueChange={(v) => setOp(v as RecordFix["op"])}>
               <SelectTrigger id="fix-op" className="w-full"><SelectValue /></SelectTrigger>
@@ -66,29 +149,32 @@ function BulkFix({ collection, report, onDone }: { collection: Collection; repor
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="fix-field">{t(op === "rename" ? "fix.from" : "fix.field")}</Label>
-            <Input id="fix-field" list="fix-keys" maxLength={200} value={field} onChange={(e) => setField(e.target.value)} />
-            <datalist id="fix-keys">{keys.map((k) => <option key={k} value={k} />)}</datalist>
+            <Select value={field || null} items={options} onValueChange={(v) => { setField(String(v ?? "")); setValue(""); }}>
+              <SelectTrigger id="fix-field" className="w-full"><SelectValue placeholder={t("fix.pick")} /></SelectTrigger>
+              <SelectContent>{Object.entries(options).map(([k, label]) => <SelectItem key={k} value={k}>{label}</SelectItem>)}</SelectContent>
+            </Select>
           </div>
           {op === "rename" && (
-            <div className="space-y-2">
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor="fix-to">{t("fix.to")}</Label>
               <Input id="fix-to" list="fix-keys" maxLength={200} value={to} onChange={(e) => setTo(e.target.value)} />
+              <datalist id="fix-keys">{rows.map((r) => <option key={r.key} value={r.key}>{r.field.name}</option>)}</datalist>
             </div>
           )}
           {op === "set_default" && (
-            <div className="space-y-2">
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor="fix-value">{t("fix.value")}</Label>
-              <Input id="fix-value" value={value} onChange={(e) => setValue(e.target.value)} aria-describedby="fix-value-hint" />
-              <p id="fix-value-hint" className="text-xs text-muted-foreground">{t("fix.value_hint")}</p>
+              <ValueInput key={field} field={target} value={value} onChange={setValue} />
+              <p id="fix-value-hint" className="text-xs text-muted-foreground">{t(target ? "fix.value_typed_hint" : "fix.value_hint")}</p>
             </div>
           )}
           <p className="text-xs text-muted-foreground">{t("fix.versions_hint")}</p>
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={!ready}><Wrench className="size-4" />{t("fix.apply")}</Button>
+            <Button type="submit" disabled={!ready || counting}><Wrench className="size-4" />{t("fix.apply")}</Button>
             {canDelete && (
-              <Button type="button" variant="outline" className="text-destructive" onClick={() => setConfirm("delete")}>
+              <Button type="button" variant="outline" className="text-destructive" onClick={() => setConfirm({ delete: true })}>
                 <Trash2 className="size-4" />{t("fix.delete_invalid").replace("{n}", String(report.invalid_count))}
               </Button>
             )}
@@ -98,14 +184,14 @@ function BulkFix({ collection, report, onDone }: { collection: Collection; repor
       <ConfirmDialog
         open={!!confirm}
         onOpenChange={(o) => !o && setConfirm(null)}
-        title={t(confirm === "delete" ? "fix.delete_title" : "fix.confirm_title")}
-        description={confirm === "delete" ? t("fix.delete_confirm").replace("{n}", String(report.invalid_count)) : t("fix.confirm")}
-        destructive={confirm === "delete" || op === "remove"}
-        confirmLabel={t(confirm === "delete" ? "common.delete" : "fix.apply")}
+        title={t(pending ? "fix.confirm_title" : "fix.delete_title")}
+        description={pending ? t(pending.count === 1 ? "fix.confirm_one" : "fix.confirm").replace("{n}", String(pending.count)) : t("fix.delete_confirm").replace("{n}", String(report.invalid_count))}
+        destructive={!pending || pending.fix.op === "remove"}
+        confirmLabel={t(pending ? "fix.apply" : "common.delete")}
         onConfirm={async () => {
           try {
-            if (confirm === "delete") after((await collections.deleteInvalid(collection.id)).count, "fix.deleted");
-            else after((await collections.fix(collection.id, fix)).count, "fix.changed");
+            if (pending) after((await collections.fix(collection.id, pending.fix)).count, "fix.changed");
+            else after((await collections.deleteInvalid(collection.id)).count, "fix.deleted");
           } catch (err) {
             toast.error(errorMessage(err, "common.save_failed", t));
           }
@@ -122,10 +208,16 @@ function Quality({ collection }: { collection: Collection }) {
   const format = useFormatDate();
   const { q, start, stale } = useQuality(collection);
   // Issues name the field by its key; show its label, as the form does.
-  const labels = new Map(fieldsOf(collection.schema ?? null).map((r) => [r.key, r.field.name]));
+  const schema = collection.schema ?? null;
+  const labels = new Map(fieldsOf(schema).map((r) => [r.key, r.field.name]));
+  // A group's subfield reads "Endereço › Rua".
   const field = (path: string) => {
-    const key = (path.split("/")[1] ?? "").replace(/~1/g, "/").replace(/~0/g, "~");
-    return key ? labels.get(key) ?? key : t("quality.root");
+    const [key = "", sub] = path.split("/").slice(1).map((p) => p.replace(/~1/g, "/").replace(/~0/g, "~"));
+    if (!key) return t("quality.root");
+    const name = labels.get(key) ?? key;
+    if (!sub) return name;
+    const group = (schema?.properties as Record<string, Record<string, unknown>> | undefined)?.[key];
+    return `${name} › ${fieldsOf(group ?? null).find((r) => r.key === sub)?.field.name ?? sub}`;
   };
   const issue = (keyword: string, message: string) => {
     const text = t(`quality.issue.${keyword}` as MessageKey);
@@ -145,10 +237,18 @@ function Quality({ collection }: { collection: Collection }) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <p className="text-sm text-muted-foreground" role="status">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
           {running ? t("quality.running_desc")
             : r.status === "failed" ? t("quality.failed")
             : stale ? t("quality.stale")
+            : r.status === "done" && r.invalid_count === 0 ? <>
+              <CircleCheck className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+              <span>
+                <span className="font-medium text-foreground">{t(r.checked === 1 ? "quality.all_valid_one" : "quality.all_valid").replace("{n}", String(r.checked))}</span>
+                {r.finished_at && ` · ${format(r.finished_at)}`}
+                {r.truncated && ` ${t("quality.truncated")}`}
+              </span>
+            </>
             : <>
               {t("quality.checked").replace("{n}", String(r.checked))}
               {r.finished_at && ` · ${format(r.finished_at)}`}
@@ -157,9 +257,7 @@ function Quality({ collection }: { collection: Collection }) {
         </p>
         <div className="ml-auto">{recheck}</div>
       </div>
-      {r.status === "done" && !stale && (r.invalid_count === 0 ? (
-        <EmptyState icon={CircleCheck} title={t("quality.all_valid")} />
-      ) : (
+      {r.status === "done" && !stale && r.invalid_count > 0 && (
         <Card className="gap-0 overflow-hidden p-0">
           <div className="border-b px-4 py-3">
             <h2 className="font-heading text-base font-semibold">{t("quality.invalid").replace("{n}", String(r.invalid_count))}</h2>
@@ -184,8 +282,8 @@ function Quality({ collection }: { collection: Collection }) {
             ))}
           </ul>
         </Card>
-      ))}
-      <BulkFix collection={collection} report={r} onDone={() => start.mutate()} />
+      )}
+      <BulkFix key={r.invalid_count > 0 ? "open" : "closed"} collection={collection} report={r} onDone={() => start.mutate()} />
     </div>
   );
 }
@@ -193,7 +291,7 @@ function Quality({ collection }: { collection: Collection }) {
 export default function CollectionQualityPage() {
   const { t } = useI18n();
   return (
-    <CollectionPage section="collections.tab.quality">
+    <CollectionPage section="collections.tab.quality" description="quality.subtitle">
       {(collection) => roleAllows(collection.role, "editor")
         ? <Quality collection={collection} />
         : <EmptyState icon={ListChecks} title={t("error.forbidden")} description={t("quality.editors_only")} />}

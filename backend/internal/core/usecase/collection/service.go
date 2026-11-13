@@ -175,7 +175,6 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateCollectionCommand)
 			return nil, err
 		}
 		patch.Schema = cmd.Schema
-		changes["schema"] = true
 	}
 	var updated *domain.Collection
 	err := s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
@@ -183,6 +182,23 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateCollectionCommand)
 		role, err := policy.CollectionRole(ctx, uow.Collections(), cmd.ID, domain.RoleOwner)
 		if err != nil {
 			return err
+		}
+		if patch.Schema != nil {
+			// The row lock taken by the update below would come too late: check while
+			// reading under the share lock writers also take, then write.
+			if err := checkUniqueHolds(ctx, uow, cmd.ID, patch.Schema); err != nil {
+				return err
+			}
+			before, err := uow.Collections().SchemaForWrite(ctx, cmd.ID)
+			if err != nil {
+				return err
+			}
+			// The log says which fields moved; true when the text changed but none did.
+			if diff := schema.FieldChanges(before, patch.Schema); diff != nil {
+				changes["fields"] = diff
+			} else {
+				changes["schema"] = true
+			}
 		}
 		if updated, err = uow.Collections().Update(ctx, cmd.ID, patch); err != nil {
 			return err
@@ -195,6 +211,26 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateCollectionCommand)
 		return nil, err
 	}
 	return updated, nil
+}
+
+// checkUniqueHolds refuses a schema that turns fields unique while two records share a value of one.
+func checkUniqueHolds(ctx context.Context, uow output.UnitOfWork, id string, next []byte) error {
+	current, err := uow.Collections().SchemaForWrite(ctx, id)
+	if err != nil {
+		return err
+	}
+	var added []string
+	for _, k := range schema.UniqueKeys(next) {
+		if !slices.Contains(schema.UniqueKeys(current), k) {
+			added = append(added, k)
+		}
+	}
+	dup, err := uow.Records().DuplicatedKeys(ctx, id, added)
+	if err != nil || len(dup) == 0 {
+		return err
+	}
+	return apperror.New(apperror.CodeInvalidInput, "records repeat values of a field marked unique: "+strings.Join(dup, ", ")).
+		WithField("schema").WithDetails("fields", dup)
 }
 
 func (s *Service) DeleteMany(ctx context.Context, ids []string) error {

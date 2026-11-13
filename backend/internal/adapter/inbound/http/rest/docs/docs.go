@@ -1282,7 +1282,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "records changed",
+                        "description": "records changed, or that would change with dry_run",
                         "schema": {
                             "$ref": "#/definitions/collection.countDTO"
                         }
@@ -3010,12 +3010,23 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
+                            "created_at",
+                            "updated_at"
+                        ],
+                        "type": "string",
+                        "default": "created_at",
+                        "description": "Sort field",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
                             "asc",
                             "desc"
                         ],
                         "type": "string",
                         "default": "desc",
-                        "description": "Creation order",
+                        "description": "Sort order",
                         "name": "order",
                         "in": "query"
                     },
@@ -5158,6 +5169,9 @@ const docTemplate = `{
                 "request_id": {
                     "type": "string"
                 },
+                "target_gone": {
+                    "type": "boolean"
+                },
                 "target_id": {
                     "type": "string"
                 },
@@ -5393,6 +5407,9 @@ const docTemplate = `{
                 "request_id": {
                     "type": "string"
                 },
+                "target_gone": {
+                    "type": "boolean"
+                },
                 "target_id": {
                     "type": "string"
                 },
@@ -5527,6 +5544,10 @@ const docTemplate = `{
         "collection.fixDTO": {
             "type": "object",
             "properties": {
+                "dry_run": {
+                    "description": "DryRun answers how many records would change, changing none.",
+                    "type": "boolean"
+                },
                 "field": {
                     "type": "string"
                 },

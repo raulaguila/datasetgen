@@ -71,8 +71,12 @@ func (r *Repository) List(ctx context.Context, filter domain.RecordFilter) ([]do
 	if filter.Order == "asc" {
 		direction = "ASC"
 	}
+	sort := "created_at" // idx_app_record_collection
+	if filter.Sort == "updated_at" {
+		sort = "updated_at" // idx_app_record_collection_updated
+	}
 	var rows []row
-	err := matching().Select("id, collection_id, " + preview + " AS data, version, created_at, updated_at").Order("created_at " + direction + ", id " + direction).
+	err := matching().Select("id, collection_id, " + preview + " AS data, version, created_at, updated_at").Order(sort + " " + direction + ", id " + direction).
 		Offset(filter.Page.Offset()).Limit(filter.Page.Limit).Find(&rows).Error
 	if err != nil {
 		return nil, 0, shared.WrapError(err, "record")
@@ -239,24 +243,39 @@ type versionRow struct {
 // ? operator, which GORM would read as a placeholder.
 // shortcut: one transaction over every matching record; batch it when
 // collections reach hundreds of thousands of records.
-func (r *Repository) Fix(ctx context.Context, collectionID string, fix domain.RecordFix) (int64, error) {
-	var where, set string
-	var whereArgs, setArgs []any
+// fixSQL is the records a fix touches (where) and the data it writes (set).
+func fixSQL(fix domain.RecordFix) (where string, whereArgs []any, set string, setArgs []any, err error) {
 	switch fix.Op {
 	case domain.FixSetDefault:
-		where, whereArgs = "jsonb_typeof(data) = 'object' AND NOT jsonb_exists(data, ?)", []any{fix.Field}
-		set, setArgs = "data || jsonb_build_object(?::text, ?::jsonb)", []any{fix.Field, string(fix.Value)}
+		return "jsonb_typeof(data) = 'object' AND NOT jsonb_exists(data, ?)", []any{fix.Field},
+			"data || jsonb_build_object(?::text, ?::jsonb)", []any{fix.Field, string(fix.Value)}, nil
 	case domain.FixRename:
-		where, whereArgs = "jsonb_exists(data, ?) AND NOT jsonb_exists(data, ?)", []any{fix.Field, fix.To}
-		set, setArgs = "(data - ?::text) || jsonb_build_object(?::text, data -> ?::text)", []any{fix.Field, fix.To, fix.Field}
+		return "jsonb_exists(data, ?) AND NOT jsonb_exists(data, ?)", []any{fix.Field, fix.To},
+			"(data - ?::text) || jsonb_build_object(?::text, data -> ?::text)", []any{fix.Field, fix.To, fix.Field}, nil
 	case domain.FixRemove:
-		where, whereArgs = "jsonb_exists(data, ?)", []any{fix.Field}
-		set, setArgs = "data - ?::text", []any{fix.Field}
-	default:
-		return 0, apperror.New(apperror.CodeInvalidInput, "unknown fix").WithField("op")
+		return "jsonb_exists(data, ?)", []any{fix.Field}, "data - ?::text", []any{fix.Field}, nil
+	}
+	return "", nil, "", nil, apperror.New(apperror.CodeInvalidInput, "unknown fix").WithField("op")
+}
+
+func (r *Repository) CountFix(ctx context.Context, collectionID string, fix domain.RecordFix) (int64, error) {
+	where, whereArgs, _, _, err := fixSQL(fix)
+	if err != nil {
+		return 0, err
+	}
+	var n int64
+	err = r.db.WithContext(ctx).Raw(`SELECT count(*) FROM app.record WHERE collection_id = ? AND `+where,
+		append([]any{collectionID}, whereArgs...)...).Scan(&n).Error
+	return n, shared.WrapError(err, "record")
+}
+
+func (r *Repository) Fix(ctx context.Context, collectionID string, fix domain.RecordFix) (int64, error) {
+	where, whereArgs, set, setArgs, err := fixSQL(fix)
+	if err != nil {
+		return 0, err
 	}
 	var ids []string
-	err := r.db.WithContext(ctx).Raw(`
+	err = r.db.WithContext(ctx).Raw(`
 		INSERT INTO app.record_version (record_id, version, data, saved_at)
 		SELECT id, version, data, updated_at FROM app.record WHERE collection_id = ? AND `+where+` FOR UPDATE
 		ON CONFLICT DO NOTHING RETURNING record_id::text`, append([]any{collectionID}, whereArgs...)...).Find(&ids).Error
@@ -290,4 +309,53 @@ func (r *Repository) DeleteListed(ctx context.Context, collectionID string, ids 
 func jsonList(ids []string) string {
 	b, _ := json.Marshal(ids) // strings always marshal
 	return string(b)
+}
+
+func (r *Repository) LockUnique(ctx context.Context, collectionID string) error {
+	err := r.db.WithContext(ctx).Exec("SELECT pg_advisory_xact_lock(hashtextextended('record-unique:' || ?, 0))", collectionID).Error
+	return shared.WrapError(err, "record")
+}
+
+func (r *Repository) TakenValues(ctx context.Context, collectionID, excludeID, key string, values []json.RawMessage) ([]int, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	parts := make([]string, len(values))
+	for i, v := range values {
+		parts[i] = string(v)
+	}
+	// One containment per value: idx_app_record_data_path answers each.
+	var out []int
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT (v.i - 1)::int FROM jsonb_array_elements(?::jsonb) WITH ORDINALITY AS v(val, i)
+		WHERE EXISTS (SELECT 1 FROM app.record rec
+			WHERE rec.collection_id = ? AND rec.id::text <> ? AND rec.data @> jsonb_build_object(?::text, v.val))
+		ORDER BY v.i`,
+		"["+strings.Join(parts, ",")+"]", collectionID, excludeID, key).Scan(&out).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "record")
+	}
+	return out, nil
+}
+
+func (r *Repository) DuplicatedKeys(ctx context.Context, collectionID string, keys []string) ([]string, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	list, err := json.Marshal(keys)
+	if err != nil {
+		return nil, err
+	}
+	// Runs on schema saves that turn a field unique: one pass per key over the collection.
+	var out []string
+	err = r.db.WithContext(ctx).Raw(`
+		SELECT k FROM jsonb_array_elements_text(?::jsonb) AS k
+		WHERE EXISTS (SELECT 1 FROM app.record rec
+			WHERE rec.collection_id = ? AND rec.data -> k IS NOT NULL AND rec.data -> k <> 'null'::jsonb
+			GROUP BY rec.data -> k HAVING count(*) > 1)`,
+		string(list), collectionID).Scan(&out).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "record")
+	}
+	return out, nil
 }

@@ -63,19 +63,29 @@ test("records come in, go out and keep their history", async ({ page }) => {
 
   // Quality runs in the background; a bulk fix then a new check.
   await page.goto(records.replace(/$/, "/quality"));
-  await expect(page.getByText("Todos os registros seguem os campos atuais.")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Todos os 2 registros seguem os campos atuais")).toBeVisible({ timeout: 15_000 });
+  // With nothing to fix, the bulk form starts folded.
+  await page.getByRole("button", { name: "Correções em lote" }).click();
   await page.getByLabel("O que fazer").click();
   await page.getByRole("option", { name: "Renomear o campo" }).click();
-  await page.getByLabel("Nome atual").fill("title");
+  await page.getByLabel("Nome atual").click();
+  await page.getByRole("option", { name: "Título" }).click();
   await page.getByLabel("Novo nome").fill("titulo");
   await page.getByRole("button", { name: "Aplicar" }).click();
-  await page.getByRole("dialog", { name: "Aplicar a todos os registros?" }).getByRole("button", { name: "Aplicar" }).click();
+  const apply = page.getByRole("dialog", { name: "Aplicar a todos os registros?" });
+  await expect(apply).toContainText("Vai alterar 2 registros.");
+  await apply.getByRole("button", { name: "Aplicar" }).click();
   await expect(page.getByText("2 registro(s) alterado(s)")).toBeVisible();
   await expect(page.getByRole("heading", { name: "2 registro(s) fora do formato" })).toBeVisible({ timeout: 15_000 });
+  // The check names what to do: fill the now missing title, drop the old key.
+  await expect(page.getByRole("button", { name: "Remover titulo" })).toBeVisible();
 
   // Duplicating copies fields and, when asked, records.
   await page.goto("/collections");
-  await page.getByRole("textbox", { name: "Buscar por nome" }).fill(name);
+  // A short list has no search box; a long one narrows to this collection.
+  await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+  const search = page.getByRole("textbox", { name: "Buscar por nome" });
+  if (await search.isVisible()) await search.fill(name);
   await page.getByRole("button", { name: `Ações: ${name}` }).click();
   await page.getByRole("menuitem", { name: "Duplicar" }).click();
   const dup = page.getByRole("dialog", { name: "Duplicar" });

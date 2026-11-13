@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -138,4 +139,100 @@ func PropertyOrder(raw []byte) []string {
 		}
 	}
 	return keys
+}
+
+// maxTitle caps the title an audit entry keeps for a record.
+const maxTitle = 120
+
+// Title is what a record reads as: its first top-level text value, in the
+// schema's field order, as the app shows it. "" when it has none.
+func Title(raw, data []byte) string {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(data, &fields) != nil {
+		return ""
+	}
+	for _, key := range PropertyOrder(raw) {
+		var s string
+		if json.Unmarshal(fields[key], &s) == nil && strings.TrimSpace(s) != "" {
+			if r := []rune(s); len(r) > maxTitle {
+				return string(r[:maxTitle-1]) + "…"
+			}
+			return s
+		}
+	}
+	return ""
+}
+
+// FieldChanges names the top-level fields a schema change added, removed or
+// changed, each by its title (its key when untitled). Nil when none moved.
+func FieldChanges(before, after []byte) map[string][]string {
+	props := func(raw []byte) map[string]json.RawMessage {
+		var doc struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+		}
+		_ = json.Unmarshal(raw, &doc)
+		return doc.Properties
+	}
+	label := func(key string, p json.RawMessage) string {
+		var f struct {
+			Title string `json:"title"`
+		}
+		if json.Unmarshal(p, &f) == nil && f.Title != "" {
+			return f.Title
+		}
+		return key
+	}
+	canon := func(p json.RawMessage) string {
+		var v any
+		_ = json.Unmarshal(p, &v)
+		b, _ := json.Marshal(v)
+		return string(b)
+	}
+	old, cur := props(before), props(after)
+	out := map[string][]string{}
+	for _, key := range PropertyOrder(after) {
+		p, ok := old[key]
+		switch {
+		case !ok:
+			out["added"] = append(out["added"], label(key, cur[key]))
+		case canon(p) != canon(cur[key]):
+			out["changed"] = append(out["changed"], label(key, cur[key]))
+		}
+	}
+	for _, key := range PropertyOrder(before) {
+		if _, ok := cur[key]; !ok {
+			out["removed"] = append(out["removed"], label(key, old[key]))
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// UniqueKeyword marks a top-level property whose value no two records of a
+// collection may share. JSON Schema has no such rule; the server checks it.
+const UniqueKeyword = "x-unique"
+
+// UniqueKeys lists the top-level properties marked unique, sorted.
+func UniqueKeys(raw []byte) []string {
+	var doc struct {
+		Properties map[string]map[string]any `json:"properties"`
+	}
+	if json.Unmarshal(raw, &doc) != nil {
+		return nil
+	}
+	var keys []string
+	for k, p := range doc.Properties {
+		if on, _ := p[UniqueKeyword].(bool); on {
+			keys = append(keys, k)
+		}
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// UniqueIssue says a record repeats a value another record holds under a unique property.
+func UniqueIssue(key string) Issue {
+	return Issue{Path: "/" + pointerEscape.Replace(key), Keyword: "unique", Message: "value already used by another record"}
 }

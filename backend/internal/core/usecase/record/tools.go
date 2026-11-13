@@ -50,13 +50,16 @@ func (s *Service) Restore(ctx context.Context, cmd input.RestoreRecordCommand) (
 		if err != nil {
 			return err
 		}
-		if err := checkData(ctx, uow, current.CollectionID, data); err != nil {
+		raw, err := checkData(ctx, uow, current.CollectionID, cmd.ID, data)
+		if err != nil {
 			return err
 		}
 		if restored, err = uow.Records().Update(ctx, cmd.ID, data, cmd.CurrentVersion); err != nil {
 			return err
 		}
-		return policy.Audit(ctx, uow, "record.restore", cmd.ID, map[string]any{"collection_id": current.CollectionID, "version": cmd.Version})
+		details := auditDetails(current.CollectionID, raw, data)
+		details["version"] = cmd.Version
+		return policy.Audit(ctx, uow, "record.restore", cmd.ID, details)
 	})
 	return restored, err
 }
@@ -83,13 +86,35 @@ func (s *Service) Import(ctx context.Context, cmd input.ImportRecordsCommand) (*
 		if err != nil {
 			return err
 		}
-		valid := make([]string, 0, len(cmd.Records))
+		// Schema first; the records that pass are then checked for unique values,
+		// against the collection and each other.
+		passed := make([]int, 0, len(cmd.Records))
+		docs := make([][]byte, 0, len(cmd.Records))
+		bad := map[int][]schema.Issue{}
 		for i, data := range cmd.Records {
 			issues, err := schema.Check(compiled, data)
 			if err != nil {
 				return err
 			}
 			if len(issues) > 0 {
+				bad[i] = issues
+				continue
+			}
+			passed = append(passed, i)
+			docs = append(docs, data)
+		}
+		taken, err := takenIn(ctx, uow, cmd.CollectionID, "", schema.UniqueKeys(raw), docs)
+		if err != nil {
+			return err
+		}
+		for n, issues := range taken {
+			if len(issues) > 0 {
+				bad[passed[n]] = issues
+			}
+		}
+		valid := make([]string, 0, len(cmd.Records))
+		for i, data := range cmd.Records {
+			if issues, ok := bad[i]; ok {
 				res.Invalid++
 				if len(res.Errors) < maxImportErrs {
 					res.Errors = append(res.Errors, input.ImportError{Index: i, Issues: issues})

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addField, blankField, fieldProblem, fieldsOf, keyOf, moveField, moveFieldTo, removeField, restoreField, schemaChanges, updateField, type Field } from "./field-builder";
+import { addField, blankField, fieldProblem, fieldsOf, keyOf, moveField, moveFieldTo, removeField, restoreField, schemaChanges, setProp, typeOf, updateField, type Field } from "./field-builder";
 
 const field = (patch: Partial<Field>): Field => ({ ...blankField, ...patch });
 
@@ -43,7 +43,7 @@ const wired = {
     descricao: { type: "string", title: "Descrição", maxLength: 5000, description: "Ajuda" },
     categoria: { type: "string", enum: ["gatilho", "efeito"] },
     site: { type: "string", format: "uri" },
-    params: { type: "object", properties: {} },
+    params: { type: "object", properties: { a: { type: "object", properties: {} } } },
   },
 };
 
@@ -124,4 +124,49 @@ it("summarizes what a save changes", () => {
     { kind: "removed", name: "site", risky: true },
   ]);
   expect(schemaChanges(wired, wired)).toEqual([]);
+});
+
+describe("groups and free objects", () => {
+  it("knows a group of plain subfields and a free object", () => {
+    expect(typeOf({ type: "object", properties: { rua: { type: "string" } } })).toBe("group");
+    expect(typeOf({ type: "object" })).toBe("json");
+    // A group inside a group, or closed objects, stay in JSON.
+    expect(typeOf({ type: "object", properties: { a: { type: "object", properties: {} } } })).toBeUndefined();
+    expect(typeOf({ type: "object", additionalProperties: false })).toBeUndefined();
+    expect(typeOf({ type: "object", properties: { extra: { type: "object" } } })).toBe("group");
+  });
+
+  it("adds a group, fills it and keeps its subfields when renamed", () => {
+    let s = addField({}, field({ name: "Endereço", key: "endereco", type: "group", required: true }));
+    s = addField(s, field({ name: "Meta", key: "meta", type: "json" }));
+    expect(s.properties).toEqual({ endereco: { title: "Endereço", type: "object", properties: {} }, meta: { title: "Meta", type: "object" } });
+    const group = (s.properties as Record<string, Record<string, unknown>>).endereco;
+    s = setProp(s, "endereco", addField(group, field({ name: "Cidade", key: "cidade", required: true })));
+    s = updateField(s, "endereco", { ...fieldsOf(s)[0].field, name: "Endereço de entrega" });
+    expect((s.properties as Record<string, unknown>).endereco).toEqual({
+      title: "Endereço de entrega", type: "object", properties: { cidade: { title: "Cidade", type: "string" } }, required: ["cidade"],
+    });
+    expect(s.required).toEqual(["endereco"]);
+    expect(fieldsOf(s).map((r) => [r.field.type, r.advanced])).toEqual([["group", false], ["json", false]]);
+  });
+
+  it("names subfield changes through their group", () => {
+    const before = { type: "object", properties: { end: { title: "Endereço", type: "object", properties: { rua: { title: "Rua", type: "string" } } } } };
+    const after = setProp(before, "end", addField(removeField(before.properties.end, "rua"), field({ name: "CEP", key: "cep" })));
+    expect(schemaChanges(before, after)).toEqual([
+      { kind: "added", name: "Endereço › CEP", risky: false },
+      { kind: "removed", name: "Endereço › Rua", risky: true },
+    ]);
+  });
+});
+
+it("marks top-level plain fields unique and reports turning it on", () => {
+  const s = addField({}, field({ name: "Código", key: "codigo", unique: true }));
+  expect((s.properties as Record<string, unknown>).codigo).toEqual({ title: "Código", type: "string", "x-unique": true });
+  // Lists and objects cannot be compared across records: the mark is dropped.
+  expect((addField({}, field({ name: "Tags", key: "tags", type: "strings", unique: true })).properties as Record<string, unknown>).tags).not.toHaveProperty("x-unique");
+  const before = addField({}, field({ name: "Nome", key: "nome" }));
+  const after = updateField(before, "nome", { ...fieldsOf(before)[0].field, unique: true });
+  expect(fieldsOf(after)[0].field.unique).toBe(true);
+  expect(schemaChanges(before, after)).toEqual([{ kind: "unique", name: "Nome", risky: false }]);
 });

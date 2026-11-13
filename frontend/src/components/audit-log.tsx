@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
@@ -42,18 +42,47 @@ function dayStart(day: string, plusDays = 0): string | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
-/** Detail keys and values in the app language; an unknown key or shape stays as the API sent it. */
+/** A local calendar day as YYYY-MM-DD, n days before today. */
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+const PRESETS = [["audit.today", 0], ["audit.last_7", 6], ["audit.last_30", 29]] as const;
+
+/** Adding reads green, removing red, any other change blue. */
+const GOOD = /\.(create|import|invite|reinvite|restore|enable|member_add|bootstrap|promote)$/;
+const BAD = /\.(delete|delete_invalid|disable|member_remove|member_leave|sessions_revoke)$/;
+function tone(action: string): string {
+  return GOOD.test(action) ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    : BAD.test(action) ? "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+    : "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+}
+
+/**
+ * Detail keys and values in the app language; an unknown key or shape stays as the API sent it.
+ * The collection and the target's name are left out: the page and the Target column say them.
+ */
 function useDetails() {
   const { t } = useI18n();
-  return (d: Record<string, unknown>): [string, string][] =>
-    Object.entries(d).map(([k, v]) => {
+  return (d: Record<string, unknown>, target?: string): [string, string][] =>
+    Object.entries(d).flatMap(([k, v]): [string, string][] => {
+      if (k === "collection_id" || (k === "name" && v === target)) return [];
+      // A change of fields names them: added, removed, changed.
+      if (k === "fields" && v && typeof v === "object") {
+        return (["added", "removed", "changed"] as const).flatMap((kind): [string, string][] => {
+          const names = (v as Record<string, unknown>)[kind];
+          return Array.isArray(names) && names.length ? [[t(`audit.fields_${kind}`), names.join(", ")]] : [];
+        });
+      }
+      if (k === "schema") return [[t("audit.fields_changed"), t("common.yes")]];
       const name = t(`audit.detail.${k}` as MessageKey);
       const value =
         typeof v === "boolean" ? t(v ? "common.yes" : "common.no")
         : typeof v === "string" ? v
         : k === "permissions" && v && typeof v === "object" ? permissionsText(t, v as Record<string, number>)
         : JSON.stringify(v);
-      return [name.startsWith("audit.detail.") ? k : name, value];
+      return [[name.startsWith("audit.detail.") ? k : name, value]];
     });
 }
 
@@ -141,7 +170,7 @@ function MemberFilter({ collectionId, onPick }: { collectionId: string; onPick: 
  * (export included) or, with collectionId, one collection's own entries.
  */
 export function AuditLog({ collectionId }: { collectionId?: string }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { user: me } = useMe();
   const pathname = usePathname();
   const format = useFormatDate();
@@ -168,6 +197,14 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
   const kindItems: Record<string, string> = { all: t("audit.all_actions"), ...Object.fromEntries(kinds.map((k) => [k, t(`audit.kind.${k.slice(0, -1)}` as MessageKey)])) };
   const details = useDetails();
   const [open, setOpen] = useState<AuditRecord | null>(null);
+  // Rows come grouped by day: Today, Yesterday, then the date.
+  const dayOf = (iso: string) => new Date(iso).toDateString();
+  const dayLabel = (iso: string) => {
+    const d = new Date(iso);
+    const ago = Math.round((new Date(new Date().toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86_400_000);
+    return ago === 0 ? t("audit.today") : ago === 1 ? t("audit.yesterday") : d.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+  };
+  const time = (iso: string) => new Date(iso).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
   const label = (a: string) => {
     const text = t(`audit.action.${a}` as MessageKey);
     return text.startsWith("audit.action.") ? a : text;
@@ -183,6 +220,12 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
               {Object.entries(kindItems).map(([value, text]) => <SelectItem key={value} value={value}>{text}</SelectItem>)}
             </SelectContent>
           </Select>
+          <div role="group" aria-label={t("audit.period")} className="flex gap-1 max-sm:col-span-2">
+            {PRESETS.map(([key, n]) => {
+              const on = from === daysAgo(n) && !to;
+              return <Button key={key} type="button" size="sm" variant={on ? "secondary" : "ghost"} aria-pressed={on} onClick={() => set({ from: on ? "" : daysAgo(n), to: "", page: 1 })}>{t(key)}</Button>;
+            })}
+          </div>
           <DateField label={t("audit.from")} value={from} max={to || undefined} onChange={(day) => set({ from: day, page: 1 })} />
           <DateField label={t("audit.to")} value={to} min={from || undefined} onChange={(day) => set({ to: day, page: 1 })} />
           {!user && pickable && (collectionId ? <MemberFilter collectionId={collectionId} onPick={(id) => set({ user: id, page: 1 })} /> : <UserFilter onPick={(id) => set({ user: id, page: 1 })} />)}
@@ -224,15 +267,21 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.data.items.map((r) => {
+                {list.data.items.map((r, i, all) => {
                   const href = targetHref(r);
                   const target = r.target_label || r.target_id?.slice(0, 8) || "-";
-                  const extra = details(r.details).map(([k, v]) => `${k}: ${v}`).join(" · ");
+                  const extra = details(r.details, r.target_label).map(([k, v]) => `${k}: ${v}`).join(" · ");
                   return (
-                    <TableRow key={r.id} className="cursor-pointer" onClick={() => setOpen(r)}>
+                    <Fragment key={r.id}>
+                    {(i === 0 || dayOf(all[i - 1].created_at) !== dayOf(r.created_at)) && (
+                      <TableRow className="hover:bg-transparent" data-day>
+                        <TableCell colSpan={5} className="bg-muted/50 py-1.5 text-xs font-medium text-muted-foreground first-letter:uppercase">{dayLabel(r.created_at)}</TableCell>
+                      </TableRow>
+                    )}
+                    <TableRow className="cursor-pointer" onClick={() => setOpen(r)}>
                       <TableCell data-label={t("audit.when")} data-cell="date" className="text-muted-foreground">
                         {/* the keyboard way to the full record; a click anywhere on the row does the same */}
-                        <button type="button" className="text-left hover:underline" aria-label={`${t("audit.open")}: ${format(r.created_at)}`}>{format(r.created_at)}</button>
+                        <button type="button" className="text-left tabular-nums hover:underline" title={format(r.created_at)} aria-label={`${t("audit.open")}: ${format(r.created_at)}`}>{time(r.created_at)}</button>
                       </TableCell>
                       <TableCell data-label={t("audit.actor")} data-cell="name" onClick={(e) => e.stopPropagation()}>
                         {r.actor_id ? (
@@ -241,25 +290,31 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
                           <span className="text-muted-foreground">{t("audit.system")}</span>
                         )}
                       </TableCell>
-                      <TableCell data-label={t("audit.action")} data-cell="status"><Badge variant="outline" className="font-normal">{label(r.action)}</Badge></TableCell>
+                      <TableCell data-label={t("audit.action")} data-cell="status"><Badge variant="outline" className={cn("font-normal", tone(r.action))}>{label(r.action)}</Badge></TableCell>
                       <TableCell data-label={t("audit.target")} data-cell="sub">
-                        <span className="block truncate lg:max-w-56 2xl:max-w-80" title={target}>
+                        <span className={cn("block truncate lg:max-w-56 2xl:max-w-80", r.target_gone && "text-muted-foreground line-through")} title={r.target_gone ? `${target} · ${t("audit.target_gone")}` : target}>
                           {href ? <Link href={href} className="hover:underline" onClick={(e) => e.stopPropagation()}>{target}</Link> : target}
                         </span>
                       </TableCell>
                       <TableCell data-label={t("audit.details")} data-cell="detail" className="text-muted-foreground"><span className="block truncate lg:max-w-56 2xl:max-w-80" title={extra || undefined}>{extra || "-"}</span></TableCell>
                     </TableRow>
+                    </Fragment>
                   );
                 })}
               </TableBody>
             </Table>
-            <TablePagination
-              page={page}
-              pageSize={limit}
-              totalItems={list.data.pagination.total_items}
-              onPageChange={(n) => set({ page: n })}
-              onPageSizeChange={(n) => set({ limit: n, page: 1 })}
-            />
+            {/* One page of the smallest size needs no paging controls, only the total. */}
+            {page === 1 && list.data.pagination.total_items <= Math.min(limit, 10) ? (
+              <p className="border-t px-4 py-2.5 text-xs text-muted-foreground">{t(list.data.pagination.total_items === 1 ? "audit.count_one" : "audit.count").replace("{n}", String(list.data.pagination.total_items))}</p>
+            ) : (
+              <TablePagination
+                page={page}
+                pageSize={limit}
+                totalItems={list.data.pagination.total_items}
+                onPageChange={(n) => set({ page: n })}
+                onPageSizeChange={(n) => set({ limit: n, page: 1 })}
+              />
+            )}
           </Card>
         )}
       </div>
@@ -273,8 +328,8 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
                 [t("audit.when"), format(open.created_at)],
                 [t("audit.actor"), open.actor_id ? [open.actor_name, open.actor_email].filter(Boolean).join(" · ") || open.actor_id : t("audit.system")],
                 [t("audit.action"), label(open.action)],
-                [t("audit.target"), open.target_label || open.target_id || "-"],
-                ...details(open.details),
+                [t("audit.target"), [open.target_label || open.target_id || "-", open.target_gone && t("audit.target_gone")].filter(Boolean).join(" · ")],
+                ...details(open.details, open.target_label),
                 ...(open.request_id ? [[t("audit.request"), open.request_id]] : []),
               ] as [string, string][]).map(([k, v]) => (
                 <div key={k} className="contents">

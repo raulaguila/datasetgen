@@ -40,6 +40,7 @@ type recordDTO struct {
 	Action      string         `json:"action" example:"role.update"`
 	TargetID    string         `json:"target_id,omitempty"`
 	TargetLabel string         `json:"target_label,omitempty"`
+	TargetGone  bool           `json:"target_gone,omitempty"`
 	Details     map[string]any `json:"details"`
 }
 

@@ -200,6 +200,8 @@ export interface RecordFix {
   field: string;
   to?: string;
   value?: unknown;
+  /** Only count the records the change would touch. */
+  dry_run?: boolean;
 }
 
 export interface RecordVersion {
@@ -256,6 +258,8 @@ export interface AuditRecord {
   action: string;
   target_id?: string;
   target_label?: string;
+  /** The target was deleted since. */
+  target_gone?: boolean;
   details: Record<string, unknown>;
 }
 

@@ -148,7 +148,7 @@ export const collections = {
 
 export const records = {
   /** filter: a JSON object of top-level fields and exact values. */
-  list: (p: { collection_id: string; page: number; limit: number; search?: string; order?: SortOrder; filter?: string }, signal?: AbortSignal) =>
+  list: (p: { collection_id: string; page: number; limit: number; search?: string; sort?: "created_at" | "updated_at"; order?: SortOrder; filter?: string }, signal?: AbortSignal) =>
     apiFetch<Paged<DataRecord>>(`/v1/records${query(p)}`, { signal }),
   versions: (recordId: string, signal?: AbortSignal) => apiFetch<{ items: RecordVersion[] }>(`/v1/records/${id(recordId)}/versions`, { signal }),
   restore: (recordId: string, version: number, current_version?: number) =>

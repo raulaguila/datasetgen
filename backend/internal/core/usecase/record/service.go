@@ -2,6 +2,7 @@ package record
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 
@@ -43,8 +44,7 @@ func (s *Service) List(ctx context.Context, filter domain.RecordFilter) ([]domai
 	if err := validate.Search(filter.Search, maxSearchBytes); err != nil {
 		return nil, 0, err
 	}
-	sort := "created_at"
-	if err := validate.Sort(&sort, &filter.Order, []string{"created_at"}, "created_at", "desc"); err != nil {
+	if err := validate.Sort(&filter.Sort, &filter.Order, []string{"created_at", "updated_at"}, "created_at", "desc"); err != nil {
 		return nil, 0, err
 	}
 	if err := checkMatch(filter.Match); err != nil {
@@ -86,13 +86,14 @@ func (s *Service) Create(ctx context.Context, cmd input.CreateRecordCommand) (*d
 		if _, err := policy.CollectionRole(ctx, uow.Collections(), cmd.CollectionID, domain.RoleEditor); err != nil {
 			return err
 		}
-		if err := checkData(ctx, uow, cmd.CollectionID, cmd.Data); err != nil {
+		raw, err := checkData(ctx, uow, cmd.CollectionID, "", cmd.Data)
+		if err != nil {
 			return err
 		}
 		if err := uow.Records().Create(ctx, r); err != nil {
 			return err
 		}
-		return policy.Audit(ctx, uow, "record.create", r.ID, map[string]any{"collection_id": r.CollectionID})
+		return policy.Audit(ctx, uow, "record.create", r.ID, auditDetails(r.CollectionID, raw, cmd.Data))
 	})
 	if err != nil {
 		return nil, err
@@ -116,13 +117,14 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateRecordCommand) (*d
 		if err := editor(ctx, uow, current.CollectionID); err != nil {
 			return err
 		}
-		if err := checkData(ctx, uow, current.CollectionID, cmd.Data); err != nil {
+		raw, err := checkData(ctx, uow, current.CollectionID, cmd.ID, cmd.Data)
+		if err != nil {
 			return err
 		}
 		if updated, err = uow.Records().Update(ctx, cmd.ID, cmd.Data, cmd.Version); err != nil {
 			return err
 		}
-		return policy.Audit(ctx, uow, "record.update", updated.ID, map[string]any{"collection_id": updated.CollectionID})
+		return policy.Audit(ctx, uow, "record.update", updated.ID, auditDetails(updated.CollectionID, raw, cmd.Data))
 	})
 	if err != nil {
 		return nil, err
@@ -177,17 +179,97 @@ func editor(ctx context.Context, uow output.UnitOfWork, collectionID string) err
 	return err
 }
 
-// checkData validates data against the collection schema.
+// auditDetails puts a record write in its collection's log, named by the record's
+// title so the entry still reads after a delete.
+func auditDetails(collectionID string, raw, data []byte) map[string]any {
+	d := map[string]any{"collection_id": collectionID}
+	if title := schema.Title(raw, data); title != "" {
+		d["name"] = title
+	}
+	return d
+}
+
+// checkData validates data against the collection's schema, then its unique
+// fields against the other records (all but recordID, "" when creating), and
+// returns the schema it checked.
 // shortcut: compiles the schema on every write; cache by collection id and version
 // when bulk imports make it show up in profiles.
-func checkData(ctx context.Context, uow output.UnitOfWork, collectionID string, data []byte) error {
+func checkData(ctx context.Context, uow output.UnitOfWork, collectionID, recordID string, data []byte) ([]byte, error) {
 	raw, err := uow.Collections().SchemaForWrite(ctx, collectionID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	compiled, err := schema.Compile(raw)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return schema.Validate(compiled, data)
+	if err := schema.Validate(compiled, data); err != nil {
+		return nil, err
+	}
+	issues, err := takenIn(ctx, uow, collectionID, recordID, schema.UniqueKeys(raw), [][]byte{data})
+	if err != nil {
+		return nil, err
+	}
+	if len(issues[0]) > 0 {
+		return nil, apperror.New(apperror.CodeValidationFailed, "a unique field repeats another record's value").
+			WithField("data").WithDetails("issues", issues[0])
+	}
+	return raw, nil
+}
+
+// takenIn returns, per document, the unique keys whose value another record
+// already holds or an earlier document of the same batch repeats. It takes the
+// collection's unique lock first, so the answer holds until commit.
+func takenIn(ctx context.Context, uow output.UnitOfWork, collectionID, recordID string, keys []string, docs [][]byte) ([][]schema.Issue, error) {
+	out := make([][]schema.Issue, len(docs))
+	if len(keys) == 0 {
+		return out, nil
+	}
+	if err := uow.Records().LockUnique(ctx, collectionID); err != nil {
+		return nil, err
+	}
+	for _, key := range keys {
+		var values []json.RawMessage
+		var owners []int
+		seen := map[string]bool{}
+		for i, doc := range docs {
+			var fields map[string]json.RawMessage
+			if json.Unmarshal(doc, &fields) != nil {
+				continue
+			}
+			v, ok := fields[key]
+			if !ok || string(v) == "null" {
+				continue // missing is not a value: only `required` asks for one
+			}
+			canon, err := canonical(v)
+			if err != nil {
+				return nil, err
+			}
+			if seen[canon] {
+				out[i] = append(out[i], schema.UniqueIssue(key))
+				continue
+			}
+			seen[canon] = true
+			values = append(values, json.RawMessage(canon))
+			owners = append(owners, i)
+		}
+		taken, err := uow.Records().TakenValues(ctx, collectionID, recordID, key, values)
+		if err != nil {
+			return nil, err
+		}
+		for _, n := range taken {
+			out[owners[n]] = append(out[owners[n]], schema.UniqueIssue(key))
+		}
+	}
+	return out, nil
+}
+
+// canonical rewrites a JSON value so equal values compare equal ("1.0" and "1", key order).
+func canonical(v json.RawMessage) (string, error) {
+	var x any
+	if err := json.Unmarshal(v, &x); err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(x)
+	return string(b), err
 }

@@ -1,10 +1,11 @@
 "use client";
 
 import Form from "@rjsf/core";
-import type { ErrorSchema, IconButtonProps, RJSFSchema, UiSchema, ValidatorType } from "@rjsf/utils";
-import { useMemo, type Ref } from "react";
+import type { ErrorSchema, FieldProps, IconButtonProps, RJSFSchema, UiSchema, ValidatorType } from "@rjsf/utils";
+import { useMemo, useState, type Ref } from "react";
 import { ArrowDown, ArrowUp, Copy, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import type { SchemaIssue } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/provider";
 import { LOCALES, messages, type Locale } from "@/lib/i18n/messages";
@@ -54,21 +55,53 @@ export function issueErrors(issues: SchemaIssue[], translate: Translate = () => 
 }
 
 /**
- * Text areas for strings allowed to run long (the field builder's "long text"),
- * and the first example as the placeholder, at any depth.
+ * A free object (no properties) typed as JSON. Text that does not parse is
+ * handed on as a string, so validation refuses it instead of keeping an old value.
  */
-export function uiFor(schema: unknown): UiSchema {
+function JsonField({ formData, onChange, fieldPathId, schema, name, required, disabled, readonly, uiSchema }: FieldProps) {
+  const { t } = useI18n();
+  // shortcut: the text is read once; a form reset from outside keeps it, fine while pages remount the form.
+  const [text, setText] = useState(() => (formData === undefined ? "" : JSON.stringify(formData, null, 2)));
+  const [bad, setBad] = useState(false);
+  const id = fieldPathId.$id;
+  const change = (v: string) => {
+    setText(v);
+    if (!v.trim()) { setBad(false); onChange(undefined, fieldPathId.path); return; }
+    try { const parsed: unknown = JSON.parse(v); setBad(false); onChange(parsed, fieldPathId.path); }
+    catch { setBad(true); onChange(v, fieldPathId.path); }
+  };
+  return (
+    <>
+      <label htmlFor={id} className="control-label">{schema.title ?? name}{required && <span className="required">*</span>}</label>
+      {schema.description && <p id={`${id}__description`} className="field-description">{schema.description}</p>}
+      <Textarea id={id} className="font-mono text-xs" rows={6} spellCheck={false} value={text} disabled={disabled || readonly}
+        placeholder={typeof uiSchema?.["ui:placeholder"] === "string" ? uiSchema["ui:placeholder"] : "{ }"}
+        aria-invalid={bad} aria-describedby={schema.description ? `${id}__description` : undefined} onChange={(e) => change(e.target.value)} />
+      {bad && <p className="text-xs text-destructive">{t("schema.json_invalid")}</p>}
+    </>
+  );
+}
+
+const fields = { json: JsonField };
+
+/**
+ * Text areas for strings allowed to run long (the field builder's "long text"),
+ * the first example as the placeholder, and a JSON box for free objects below
+ * the root, at any depth.
+ */
+export function uiFor(schema: unknown, nested = false): UiSchema {
   if (!schema || typeof schema !== "object") return {};
   const s = schema as { type?: unknown; maxLength?: unknown; examples?: unknown; properties?: Record<string, unknown>; items?: unknown };
   const out: UiSchema = {};
   if (Array.isArray(s.examples) && typeof s.examples[0] === "string") out["ui:placeholder"] = s.examples[0];
   if (s.type === "string" && typeof s.maxLength === "number" && s.maxLength >= 500) out["ui:widget"] = "textarea";
   if (s.type === "string") return out;
+  if (nested && s.type === "object" && s.properties === undefined) return { ...out, "ui:field": "json" };
   for (const [key, sub] of Object.entries(s.properties ?? {})) {
-    const ui = uiFor(sub);
+    const ui = uiFor(sub, true);
     if (Object.keys(ui).length) out[key] = ui;
   }
-  const items = uiFor(Array.isArray(s.items) ? null : s.items);
+  const items = uiFor(Array.isArray(s.items) ? null : s.items, true);
   if (Object.keys(items).length) out.items = items;
   return out;
 }
@@ -104,6 +137,7 @@ export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec",
       formData={data}
       validator={validators[locale]}
       templates={templates}
+      fields={fields}
       disabled={disabled}
       noHtml5Validate
       showErrorList={false}

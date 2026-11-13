@@ -2,6 +2,7 @@ package schema
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/raulaguila/dataset/pkg/apperror"
@@ -101,5 +102,28 @@ func TestBuilderRulesHold(t *testing.T) {
 		if err := Validate(s, []byte(bad)); !apperror.IsCode(err, apperror.CodeValidationFailed) {
 			t.Errorf("%s accepted: %v", bad, err)
 		}
+	}
+}
+
+func TestTitleFollowsFieldOrder(t *testing.T) {
+	raw := []byte(`{"properties":{"n":{"type":"integer"},"b":{"type":"string"},"a":{"type":"string"}}}`)
+	if got := Title(raw, []byte(`{"n":1,"a":"A","b":"  "}`)); got != "A" {
+		t.Fatalf("Title = %q, want A (blank b skipped, order kept)", got)
+	}
+	if got := Title(raw, []byte(`{"n":1}`)); got != "" {
+		t.Fatalf("Title = %q, want empty", got)
+	}
+}
+
+func TestFieldChanges(t *testing.T) {
+	before := []byte(`{"properties":{"a":{"type":"string","title":"A"},"b":{"type":"string"},"c":{"type":"string"}}}`)
+	after := []byte(`{"properties":{"a":{"title":"A","type":"string"},"b":{"type":"integer","title":"Bê"},"d":{"type":"string"}}}`)
+	got := FieldChanges(before, after)
+	want := map[string][]string{"changed": {"Bê"}, "added": {"d"}, "removed": {"c"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("FieldChanges = %v, want %v", got, want)
+	}
+	if FieldChanges(before, before) != nil {
+		t.Fatal("no change must be nil")
 	}
 }

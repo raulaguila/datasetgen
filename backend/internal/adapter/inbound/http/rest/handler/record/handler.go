@@ -70,7 +70,8 @@ func toDTO(r domain.Record) recordDTO {
 // @Param page query int false "Page" default(1)
 // @Param limit query int false "Items per page, up to 100" default(20)
 // @Param search query string false "Text anywhere in the record JSON"
-// @Param order query string false "Creation order" Enums(asc, desc) default(desc)
+// @Param sort query string false "Sort field" Enums(created_at, updated_at) default(created_at)
+// @Param order query string false "Sort order" Enums(asc, desc) default(desc)
 // @Param filter query string false "JSON object of top-level fields and exact values, up to 10, such as {\"category\":\"trigger\"}"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]recordDTO,pagination=mapper.PaginationDTO}
@@ -84,6 +85,7 @@ func (h *Handler) List(c fiber.Ctx) error {
 		CollectionID: c.Query("collection_id"),
 		Page:         domain.NewPage(fiber.Query[int](c, "page"), fiber.Query[int](c, "limit")),
 		Search:       c.Query("search"),
+		Sort:         c.Query("sort"),
 		Order:        c.Query("order"),
 	}
 	if f := c.Query("filter"); f != "" {

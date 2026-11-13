@@ -35,7 +35,6 @@ function byActivity(a: Collection, b: Collection): number {
 interface RowProps {
   c: Collection;
   pinned: boolean;
-  current: boolean;
   onPin: () => void;
   onRemove: (c: Collection, kind: "leave" | "delete") => void;
   /** Set when the caller may create collections. */
@@ -55,6 +54,8 @@ export default function CollectionsPage() {
   const pinned = useUIStore((s) => s.pinned);
   const togglePin = useUIStore((s) => s.togglePin);
   const storedId = useUIStore((s) => s.collectionId);
+  // A short list needs no search box or group headings.
+  const FEW = 6;
   const setCollection = useUIStore((s) => s.setCollection);
   const [removing, setRemoving] = useState<{ c: Collection; kind: "leave" | "delete" } | null>(null);
   const [duplicating, setDuplicating] = useState<Collection | null>(null);
@@ -75,6 +76,8 @@ export default function CollectionsPage() {
   const status = !list.data ? ""
     : term ? t("collections.search_results").replace("{shown}", String(filtered.length)).replace("{total}", String(all.length))
     : t(total === 1 ? "collections.count_one" : "collections.count").replace("{n}", String(total));
+  const searchable = all.length > FEW || !!term;
+  const headed = groups.filter(([, items]) => items.length > 0).length > 1;
 
   return (
     <div data-ui-collection-management>
@@ -85,11 +88,11 @@ export default function CollectionsPage() {
       />
       <div className="collection-management-body">
         <div className="collection-toolbar">
-          <div className="collection-search">
+          {searchable && <div className="collection-search">
             <Search className="size-4" aria-hidden />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("collections.search")} aria-label={t("collections.search")} />
             {q && <button type="button" aria-label={t("common.clear_filters")} onClick={() => setQ("")}><X className="size-4" aria-hidden /></button>}
-          </div>
+          </div>}
           <p className="collection-result-count" role="status" aria-live="polite">{status}</p>
         </div>
 
@@ -107,9 +110,9 @@ export default function CollectionsPage() {
           />
         ) : (
           groups.map(([title, items]) => items.length > 0 && (
-            <Group key={title} title={t(title)}>
+            <Group key={title} title={t(title)} headed={headed}>
               {items.sort(byActivity).map((c) => (
-                <Row key={c.id} c={c} pinned={isPinned(c)} current={storedId === c.id} onPin={() => togglePin(c.id)} onRemove={(c, kind) => setRemoving({ c, kind })} onDuplicate={canCreate ? setDuplicating : undefined} />
+                <Row key={c.id} c={c} pinned={isPinned(c)} onPin={() => togglePin(c.id)} onRemove={(c, kind) => setRemoving({ c, kind })} onDuplicate={canCreate ? setDuplicating : undefined} />
               ))}
             </Group>
           ))
@@ -140,17 +143,17 @@ export default function CollectionsPage() {
   );
 }
 
-function Group({ title, children }: { title: string; children: React.ReactNode[] }) {
+function Group({ title, headed, children }: { title: string; headed: boolean; children: React.ReactNode[] }) {
   const id = useId();
   return (
     <section className="collection-group" aria-labelledby={id}>
-      <h2 id={id}>{title}<span>{children.length}</span></h2>
+      <h2 id={id} className={headed ? undefined : "sr-only"}>{title}</h2>
       <ul aria-labelledby={id} className="collection-list">{children}</ul>
     </section>
   );
 }
 
-function Row({ c, pinned, current, onPin, onRemove, onDuplicate }: RowProps) {
+function Row({ c, pinned, onPin, onRemove, onDuplicate }: RowProps) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const relative = useRelativeTime();
@@ -165,14 +168,13 @@ function Row({ c, pinned, current, onPin, onRemove, onDuplicate }: RowProps) {
     [Users, c.member_count ?? 0, "collections.unit_member", "collections.unit_members"],
   ];
   return (
-    <li className="collection-row" data-current={current ? "" : undefined}>
+    <li className="collection-row">
       <button type="button" className="collection-open" onClick={open} aria-label={c.name}>
         <CollectionAvatar collection={c} className="collection-avatar" />
         <span className="collection-copy">
           <span className="collection-name">{c.name}</span>
           <span className="collection-details">
             {c.role && <Badge variant="secondary">{t(`members.role.${c.role}`)}</Badge>}
-            {current && <Badge variant="outline" className="collection-current">{t("collections.current")}</Badge>}
             {c.description && <span className="collection-description" title={c.description}>{c.description}</span>}
           </span>
         </span>
@@ -187,9 +189,6 @@ function Row({ c, pinned, current, onPin, onRemove, onDuplicate }: RowProps) {
         </Tooltip>
       </div>
       <div className="collection-actions">
-        <Button variant="ghost" size="sm" onClick={open} aria-label={`${t("collections.open")} ${c.name}`} className="collection-open-action">
-          {t("collections.open")}<ArrowRight className="size-4" aria-hidden />
-        </Button>
         <Tooltip>
           <TooltipTrigger render={
             <button type="button" onClick={onPin} aria-label={`${t(pinned ? "collections.unpin" : "collections.pin")}: ${c.name}`} aria-pressed={pinned} className="collection-icon-action" data-pinned={pinned ? "" : undefined}>

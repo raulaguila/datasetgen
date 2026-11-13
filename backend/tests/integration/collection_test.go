@@ -3,6 +3,8 @@ package integration_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -78,6 +80,11 @@ func TestCollectionRecordsFollowTheSchema(t *testing.T) {
 	if _, err := records.Update(ctx, input.UpdateRecordCommand{ID: clicked.ID, Data: json.RawMessage(`{"nome":"x","categoria":"gatilho"}`), Version: pointer.Of(1)}); !apperror.IsCode(err, apperror.CodeConflict) {
 		t.Fatalf("stale update: %v", err)
 	}
+	// By last change, the record just edited comes first though it was created first.
+	if items, _, err := records.List(ctx, domain.RecordFilter{CollectionID: wired.ID, Sort: "updated_at"}); err != nil || len(items) != 2 || items[0].ID != clicked.ID {
+		t.Fatalf("by updated_at: %v, %v", items, err)
+	}
+	wantCode(t, ignore2(records.List(ctx, domain.RecordFilter{CollectionID: wired.ID, Sort: "data"})), apperror.CodeInvalidInput)
 	if _, err := records.Update(ctx, input.UpdateRecordCommand{ID: clicked.ID, Data: json.RawMessage(`{"categoria":"gatilho"}`)}); !apperror.IsCode(err, apperror.CodeValidationFailed) {
 		t.Fatalf("update must follow the schema: %v", err)
 	}
@@ -249,8 +256,9 @@ func TestCollectionAuditAndQuality(t *testing.T) {
 	if err != nil || total != 5 {
 		t.Fatalf("audit: %d entries, %v: %+v", total, err, log)
 	}
-	if log[0].Action != "record.delete" {
-		t.Fatalf("newest first: %s", log[0].Action)
+	// The deleted record still reads by its title and says it is gone.
+	if log[0].Action != "record.delete" || log[0].TargetLabel != "a" || !log[0].TargetGone {
+		t.Fatalf("newest first, labelled and gone: %+v", log[0])
 	}
 	if _, _, err := collections.AuditLog(owner, c.ID, domain.AuditFilter{Action: "record.", Page: domain.NewPage(1, 50)}); err != nil {
 		t.Fatal(err)
@@ -425,6 +433,10 @@ func TestRecordFixesAndDuplicate(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Renaming the required field leaves both records invalid until renamed back.
+	// A dry run counts and changes nothing: the rename below still finds both.
+	if n, err := collections.Fix(helper, c.ID, domain.RecordFix{Op: domain.FixRename, Field: "nome", To: "titulo", DryRun: true}); err != nil || n != 2 {
+		t.Fatalf("dry run = %d, %v; want 2", n, err)
+	}
 	if n, err := collections.Fix(helper, c.ID, domain.RecordFix{Op: domain.FixRename, Field: "nome", To: "titulo"}); err != nil || n != 2 {
 		t.Fatalf("rename: %d, %v", n, err)
 	}
@@ -454,4 +466,60 @@ func TestRecordFixesAndDuplicate(t *testing.T) {
 	if err != nil || dup.Name != "Tools (copy)" || dup.RecordCount != 1 || dup.Role != domain.RoleOwner {
 		t.Fatalf("duplicate: %+v, %v", dup, err)
 	}
+}
+
+// A field marked unique refuses a value another record holds, on every way a
+// record is written, and cannot be turned on while records repeat a value.
+func TestUniqueFieldsHold(t *testing.T) {
+	e := newEnv(t)
+	ctx := reqctx.WithActor(context.Background(), e.userID(t, e.activeUser(t)))
+	collections, records := collectionServices(e)
+	c, err := collections.Create(ctx, input.CreateCollectionCommand{Name: "Unique", Schema: json.RawMessage(
+		`{"type":"object","properties":{"codigo":{"type":"string","x-unique":true},"nome":{"type":"string"}}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	create := func(data string) (*domain.Record, error) {
+		return records.Create(ctx, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(data)})
+	}
+	a, err := create(`{"codigo":"a1","nome":"x"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = create(`{"codigo":"a1"}`)
+	var ae *apperror.Error
+	if !apperror.IsCode(err, apperror.CodeValidationFailed) || !errors.As(err, &ae) || !strings.Contains(fmt.Sprint(ae.Details["issues"]), "unique") {
+		t.Fatalf("repeated value: %v", err)
+	}
+	// Missing is not a value: two records without one are fine.
+	if _, err := create(`{"nome":"x"}`); err != nil {
+		t.Fatal(err)
+	}
+	b, err := create(`{"codigo":"a2","nome":"x"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore(records.Update(ctx, input.UpdateRecordCommand{ID: b.ID, Data: json.RawMessage(`{"codigo":"a1"}`)})), apperror.CodeValidationFailed)
+	// A record keeps its own value on edit.
+	if _, err := records.Update(ctx, input.UpdateRecordCommand{ID: a.ID, Data: json.RawMessage(`{"codigo":"a1","nome":"z"}`)}); err != nil {
+		t.Fatal(err)
+	}
+
+	// An import refuses repeats of stored values and within the batch.
+	batch := []json.RawMessage{json.RawMessage(`{"codigo":"a3"}`), json.RawMessage(`{"codigo":"a3"}`), json.RawMessage(`{"codigo":"a1"}`)}
+	res, err := records.Import(ctx, input.ImportRecordsCommand{CollectionID: c.ID, Records: batch, SkipInvalid: true})
+	if err != nil || res.Created != 1 || res.Invalid != 2 {
+		t.Fatalf("import: %+v, %v", res, err)
+	}
+
+	// Filling one value into many records would repeat it.
+	wantCode(t, ignore(collections.Fix(ctx, c.ID, domain.RecordFix{Op: domain.FixSetDefault, Field: "codigo", Value: json.RawMessage(`"z"`)})), apperror.CodeInvalidInput)
+
+	// "nome" repeats "x" twice: it cannot become unique until that is fixed.
+	got, err := collections.Get(ctx, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unique := json.RawMessage(`{"type":"object","properties":{"codigo":{"type":"string","x-unique":true},"nome":{"type":"string","x-unique":true}}}`)
+	wantCode(t, ignore(collections.Update(ctx, input.UpdateCollectionCommand{ID: c.ID, Schema: unique, Version: pointer.Of(got.Version)})), apperror.CodeInvalidInput)
 }

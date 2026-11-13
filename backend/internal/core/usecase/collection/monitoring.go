@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -162,7 +163,22 @@ func (s *Service) Fix(ctx context.Context, id string, fix domain.RecordFix) (int
 		if _, err := policy.CollectionRole(ctx, uow.Collections(), id, domain.RoleEditor); err != nil {
 			return err
 		}
-		var err error
+		raw, err := uow.Collections().SchemaForWrite(ctx, id)
+		if err != nil {
+			return err
+		}
+		// One value for many records, or one field poured into another, would repeat values.
+		target := fix.Field
+		if fix.Op == domain.FixRename {
+			target = fix.To
+		}
+		if fix.Op != domain.FixRemove && slices.Contains(schema.UniqueKeys(raw), target) {
+			return apperror.New(apperror.CodeInvalidInput, "a unique field cannot be filled in bulk; edit its records one by one").WithField("field")
+		}
+		if fix.DryRun {
+			changed, err = uow.Records().CountFix(ctx, id, fix)
+			return err
+		}
 		if changed, err = uow.Records().Fix(ctx, id, fix); err != nil {
 			return err
 		}

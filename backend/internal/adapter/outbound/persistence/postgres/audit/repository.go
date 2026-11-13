@@ -46,6 +46,7 @@ type recordRow struct {
 	Action      string    `gorm:"column:action"`
 	TargetID    *string   `gorm:"column:target_id"`
 	TargetLabel *string   `gorm:"column:target_label"`
+	TargetGone  bool      `gorm:"column:target_gone"`
 	Details     []byte    `gorm:"column:details"`
 }
 
@@ -91,7 +92,11 @@ func (r *Repository) List(ctx context.Context, filter domain.AuditFilter) ([]dom
 		         SELECT n.details->>'name' FROM usr.usr_audit_log n
 		         WHERE n.target_id = a.target_id AND n.details->>'name' IS NOT NULL
 		         ORDER BY n.created_at DESC LIMIT 1
-		       )) AS target_label, a.details
+		       )) AS target_label,
+		       -- A later delete of the target; the log keeps its entries, the target is gone.
+		       EXISTS (SELECT 1 FROM usr.usr_audit_log d WHERE d.target_id = a.target_id
+		         AND d.action IN ('record.delete', 'collection.delete', 'product.delete', 'role.delete')) AS target_gone,
+		       a.details
 		FROM usr.usr_audit_log a
 		LEFT JOIN usr.usr_user au ON au.id = a.actor_id
 		LEFT JOIN usr.usr_user tu ON tu.id = a.target_id
@@ -108,7 +113,7 @@ func (r *Repository) List(ctx context.Context, filter domain.AuditFilter) ([]dom
 		rec := domain.AuditRecord{
 			ID: m.ID, CreatedAt: m.CreatedAt, Action: m.Action,
 			ActorID: deref(m.ActorID), ActorName: deref(m.ActorName), ActorEmail: deref(m.ActorEmail),
-			RequestID: deref(m.RequestID), TargetID: deref(m.TargetID), TargetLabel: deref(m.TargetLabel),
+			RequestID: deref(m.RequestID), TargetID: deref(m.TargetID), TargetLabel: deref(m.TargetLabel), TargetGone: m.TargetGone,
 		}
 		if err := json.Unmarshal(m.Details, &rec.Details); err != nil {
 			return nil, 0, shared.WrapError(err, "audit log")
