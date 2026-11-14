@@ -138,6 +138,41 @@
       "type": "boolean",
       "title": "Página em rascunho"
     },
+    "parametros": {
+      "type": "array",
+      "title": "Parâmetros",
+      "description": "Configurações da janela do wired, com os textos do cliente Habbo",
+      "items": {
+        "type": "object",
+        "title": "Parâmetro",
+        "required": [
+          "chave"
+        ],
+        "properties": {
+          "chave": {
+            "type": "string",
+            "title": "Chave",
+            "description": "Grupo em wiredfurni.params"
+          },
+          "rotulo": {
+            "type": "string",
+            "title": "Rótulo"
+          },
+          "opcoes": {
+            "type": "array",
+            "title": "Opções",
+            "items": {
+              "type": "string"
+            }
+          },
+          "descricao": {
+            "type": "string",
+            "title": "Descrição",
+            "maxLength": 2000
+          }
+        }
+      }
+    },
     "conteudo": {
       "type": "string",
       "title": "Conteúdo (Markdown)",

@@ -8,18 +8,20 @@ one per guide or reference article (guias.jsonl, keyed by url).
 
     git clone --depth 1 https://github.com/wiredclub/docs.git /tmp/wiredclub
     curl -o /tmp/furnidata.json https://www.habbo.com.br/gamedata/furnidata_json/1
-    python3 examples/wiredclub/convert.py /tmp/wiredclub out/ /tmp/furnidata.json
+    python3 examples/wiredclub/convert.py /tmp/wiredclub out/ --furnidata /tmp/furnidata.json --texts /tmp/texts.txt
 
 The furnidata (optional) gives each wired, and its negative version, the name
-the game shows ("EFEITO WIRED: Dar Pontos"); the docs shorten it.
+the game shows ("EFEITO WIRED: Dar Pontos"); the docs shorten it. The client
+texts (optional, habbo.com.br/gamedata/external_flash_texts/1) give each wired
+listed in parametros.json the settings its window shows, with their options.
 Import each file into the collection made from the schema beside it, with
 "update by" set to classname (wireds) or url (guias): a later run updates the
 same records. Needs PyYAML.
 """
+import argparse
 import json
 import os
 import re
-import sys
 
 import yaml
 
@@ -145,6 +147,61 @@ def furni_names(path):
     return names
 
 
+def client_texts(path):
+    """key -> text from the client's external texts, "${other.key}" references filled in."""
+    texts = {}
+    for line in open(path, encoding="utf-8"):
+        key, sep, value = line.rstrip("\n").partition("=")
+        if sep:
+            texts[key] = value
+    ref = re.compile(r"\$\{([^}]+)\}")
+    for _ in range(3):  # references nest a level or two
+        texts = {k: ref.sub(lambda m: texts.get(m.group(1), m.group(0)), v) for k, v in texts.items()}
+    return texts
+
+
+PARAMS = "wiredfurni.params."
+
+
+def setting_groups(texts):
+    """Each wiredfurni.params group as settings: a key with numbered children is a choice
+    (its text the label, the children the options); a group's own key without them is a field."""
+    by_group = {}
+    for k in texts:
+        if k.startswith(PARAMS):
+            by_group.setdefault(k[len(PARAMS):].split(".")[0], []).append(k[len(PARAMS):])
+    groups = {}
+    for g, keys in by_group.items():
+        keys = set(keys)
+        num = lambda k: k.rsplit(".", 1)[-1].isdigit()
+        parents = sorted({k.rsplit(".", 1)[0] for k in keys if "." in k and num(k)})
+        settings = []
+        if g in keys and g not in parents:
+            settings.append({"chave": g, "rotulo": texts[PARAMS + g]})
+        for p in parents:
+            kids = sorted((k for k in keys if k.rsplit(".", 1)[0] == p and num(k)), key=lambda k: int(k.rsplit(".", 1)[1]))
+            label = texts.get(PARAMS + p) or texts.get(PARAMS + p + "_selection") or ""
+            settings.append(drop_empty({"chave": p, "rotulo": label, "opcoes": [texts[PARAMS + k] for k in kids]}))
+        if not settings:
+            # A group of named fields only ("bot.name", "link.key"): each field, notes aside.
+            notes = ("info", "usage_info", "tooltip", "placeholder", "warning", "invalid_number")
+            leaves = [k for k in keys if "." in k and not any(o.startswith(k + ".") for o in keys) and not k.rsplit(".", 1)[1].endswith(notes)]
+            settings = [{"chave": k, "rotulo": texts[PARAMS + k]} for k in sorted(leaves)]
+        info = texts.get(PARAMS + g + ".usage_info") or texts.get(PARAMS + g + ".info")
+        if info:
+            for s in settings:
+                s.setdefault("descricao", info.replace("\\n", "\n"))
+        groups[g] = settings
+    return groups
+
+
+def wired_settings(classname, kind, groups, mapping):
+    names = list(mapping.get(classname, []))
+    # Every effect has a delay and every selector can filter the current selection.
+    names = (["delay"] if kind == "Efeito" else ["selector_option"] if kind == "Seletor" else []) + names
+    return [s for g in names for s in groups.get(g, [])]
+
+
 def drop_empty(d):
     return {k: v for k, v in d.items() if v not in (None, "", [], {})}
 
@@ -192,8 +249,10 @@ def guide(fm, body, rel, repo):
     })
 
 
-def main(repo, out, furnidata=None):
+def main(repo, out, furnidata=None, texts=None):
     names = furni_names(furnidata) if furnidata else {}
+    groups = setting_groups(client_texts(texts)) if texts else {}
+    mapping = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "parametros.json"), encoding="utf-8"))
     docs = os.path.join(repo, DOCS)
     wireds, guides = [], []
     for d, _, files in os.walk(docs):
@@ -208,7 +267,10 @@ def main(repo, out, furnidata=None):
             fm, body = front(open(path, encoding="utf-8").read())
             parts = rel.split("/")
             if fm.get("infobox") and parts[0] == "referencia" and len(parts) >= 3 and parts[1] in SECTIONS:
-                wireds.append(wired(fm, body, rel, repo, names))
+                w = wired(fm, body, rel, repo, names)
+                if groups:
+                    w["parametros"] = wired_settings(w["classname"], w["tipo"], groups, mapping) or None
+                wireds.append(drop_empty(w))
             else:
                 guides.append(guide(fm, body, rel, repo))
     os.makedirs(out, exist_ok=True)
@@ -221,6 +283,10 @@ def main(repo, out, furnidata=None):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) not in (3, 4):
-        sys.exit(__doc__)
-    main(*sys.argv[1:])
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("repo")
+    ap.add_argument("out")
+    ap.add_argument("--furnidata")
+    ap.add_argument("--texts")
+    a = ap.parse_args()
+    main(a.repo, a.out, a.furnidata, a.texts)
