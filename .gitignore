@@ -38,3 +38,7 @@ backend/data/
 **/.claude/
 **/.cursor/
 backend/backups/
+
+# Wired Club example: downloaded docs and generated files
+examples/wiredclub/.cache/
+examples/wiredclub/out/

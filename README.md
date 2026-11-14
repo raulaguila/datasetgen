@@ -7,6 +7,7 @@ Platform for building datasets to train and fine-tune AI models. Each collection
 - `backend/`: the Go service, with its own `go.mod`, `Makefile`, `config/`, migrations, Docker files and tests. Run every `make` target and `go` command from here.
 - `frontend/`: the Next.js app, with its own config, Docker files and Makefile.
 - At the root: documentation, `.specs/`, CI and `scripts/rename.sh`.
+- `examples/`: sample data. [examples/wiredclub](examples/wiredclub/README.md) builds the Habbo wireds dataset from the Wired Club docs (`make wireds` there).
 
 ## Run with Docker
 

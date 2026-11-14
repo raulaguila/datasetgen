@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """
+Usually run through `make wireds` (see README.md beside this file).
+
 Turns the Wired Club docs (github.com/wiredclub/docs) into two JSONL files for
 the record import: one record per wired (wireds.jsonl, keyed by classname) and
 one per guide or reference article (guias.jsonl, keyed by url).
