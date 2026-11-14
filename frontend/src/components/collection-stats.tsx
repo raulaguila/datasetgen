@@ -10,6 +10,7 @@ import { records, tools } from "@/lib/api/endpoints";
 import type { Collection, FieldProfile, StatsBucket, Widget } from "@/lib/api/types";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
+import { cn } from "@/lib/utils";
 
 const NUMERIC = ["number", "integer"];
 const DATES = ["date", "datetime"];
@@ -45,14 +46,17 @@ function useValueText() {
 }
 
 /** Counts by value, largest first, the tail folded into "others". */
-type Slice = { text: string; count: number; href?: string };
+type Slice = { text: string; count: number; href?: string; empty?: boolean };
 
 /** The top values and the rest folded into "others"; with `href` each value opens its records. */
 function useSlices(items: { key: unknown; count: number }[], total: number, label: (v: unknown) => string, href?: (key: unknown) => string): Slice[] {
   const { t } = useI18n();
+  const blank = (k: unknown) => k === null || k === undefined || k === "";
   const top = items.slice(0, TOP);
   const rest = total - top.reduce((n, g) => n + g.count, 0);
-  return [...top.map((g) => ({ text: label(g.key), count: g.count, href: href?.(g.key) })), ...(rest > 0 ? [{ text: t("analysis.others"), count: rest }] : [])];
+  const slice = (g: { key: unknown; count: number }): Slice => ({ text: label(g.key), count: g.count, href: href?.(g.key), empty: blank(g.key) });
+  // The records without a value close the list: they are a gap to fill, not one of the values.
+  return [...top.filter((g) => !blank(g.key)).map(slice), ...(rest > 0 ? [{ text: t("analysis.others"), count: rest }] : []), ...top.filter((g) => blank(g.key)).map(slice)];
 }
 
 /** A share in whole percent; a few records out of many read "<1%", never "0%". */
@@ -69,7 +73,8 @@ const pctOf = (n: number, total: number) => (total > 0 ? ` · ${percent(n, total
 export const mostlyDistinct = (distinct: number, filled: number) => filled >= 20 && distinct >= filled * 0.9;
 
 /** A slice's name: a link to its records when it has one. */
-function SliceName({ s, className }: { s: Slice; className?: string }) {
+function SliceName({ s, className: extra }: { s: Slice; className?: string }) {
+  const className = cn(extra, s.empty && "italic text-muted-foreground");
   return s.href ? <Link href={s.href} className={`truncate hover:underline ${className ?? ""}`} title={s.text}>{s.text}</Link> : <span className={`truncate ${className ?? ""}`} title={s.text}>{s.text}</span>;
 }
 
@@ -81,7 +86,7 @@ function Bars({ items, total, label, href }: { items: { key: unknown; count: num
   return (
     <ul className="space-y-1.5">
       {rows.map((g, i) => (
-        <li key={i} className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)_auto] items-center gap-2 text-sm" title={`${g.text}: ${num(g.count)}${pctOf(g.count, total)}`}>
+        <li key={i} className="grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)_auto] items-center gap-2 text-sm" title={`${g.text}: ${num(g.count)}${pctOf(g.count, total)}`}>
           <SliceName s={g} />
           <span className="h-2 rounded-full bg-primary/60" style={{ width: `${Math.max(2, (g.count / max) * 100)}%` }} aria-hidden />
           <span className="text-xs tabular-nums text-muted-foreground">{num(g.count)}{pctOf(g.count, total)}</span>

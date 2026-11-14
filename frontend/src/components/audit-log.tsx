@@ -78,6 +78,8 @@ function useDetails() {
         });
       }
       if (k === "schema") return [[t("audit.fields_changed"), t("common.yes")]];
+      // An import that only updated reads "Updated: 50", not "Created: 0 · Updated: 50".
+      if ((k === "count" || k === "updated") && "updated" in d && v === 0) return [];
       // An import's count is the records it created, next to the ones it updated.
       const name = t(`audit.detail.${k === "count" && "updated" in d ? "created" : k}` as MessageKey);
       // Codes with a label of their own: a member role, a share link kind, a bulk fix.
@@ -173,6 +175,30 @@ function MemberFilter({ collectionId, onPick }: { collectionId: string; onPick: 
 }
 
 /**
+ * Consecutive entries of one action by one person on one target, minutes apart, with the same
+ * details but their counts (an import in batches), read as one row; the counts add up.
+ */
+export function runs<T extends { created_at: string; action: string; actor_id?: string | null; target_id?: string | null; details: Record<string, unknown> }>(items: T[], gapMs = 5 * 60_000) {
+  const alike = (a: Record<string, unknown>, b: Record<string, unknown>) => {
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every((k) => k in b && (typeof a[k] === "number" ? typeof b[k] === "number" : JSON.stringify(a[k]) === JSON.stringify(b[k])));
+  };
+  const out: { lead: T; all: T[]; details: Record<string, unknown> }[] = [];
+  for (const r of items) {
+    const last = out[out.length - 1];
+    const prev = last?.all[last.all.length - 1];
+    const same = prev && prev.action === r.action && prev.actor_id === r.actor_id && prev.target_id === r.target_id && alike(prev.details, r.details)
+      && new Date(prev.created_at).toDateString() === new Date(r.created_at).toDateString()
+      && Math.abs(new Date(prev.created_at).getTime() - new Date(r.created_at).getTime()) <= gapMs;
+    if (same) {
+      last.all.push(r);
+      last.details = Object.fromEntries(Object.entries(last.details).map(([k, v]) => [k, typeof v === "number" ? v + (r.details[k] as number) : v]));
+    } else out.push({ lead: r, all: [r], details: r.details });
+  }
+  return out;
+}
+
+/**
  * The audit log with its filters, table and detail drawer: the whole platform's
  * (export included) or, with collectionId, one collection's own entries.
  */
@@ -204,6 +230,7 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
   const kindItems: Record<string, string> = { all: t("audit.all_actions"), ...Object.fromEntries(kinds.map((k) => [k, t(`audit.kind.${k.slice(0, -1)}` as MessageKey)])) };
   const details = useDetails();
   const [open, setOpen] = useState<AuditRecord | null>(null);
+  const [expanded, setExpanded] = useState<string[]>([]);
   // Rows come grouped by day: Today, Yesterday, then the date.
   const dayOf = (iso: string) => new Date(iso).toDateString();
   const dayLabel = (iso: string) => {
@@ -274,18 +301,20 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.data.items.map((r, i, all) => {
+                {runs(list.data.items).flatMap((g) => (g.all.length > 1 && expanded.includes(g.lead.id) ? g.all.map((r) => ({ lead: r, all: [r], details: r.details, of: g.lead.id })) : [{ ...g, of: undefined as string | undefined }])).map(({ lead: r, all: run, details: merged, of }, i, all) => {
                   const href = targetHref(r);
+                  // In a collection's own log, the collection as target is the page itself.
+                  const self = !!collectionId && r.target_id === collectionId;
                   const target = r.target_label || r.target_id?.slice(0, 8) || "-";
-                  const extra = details(r.details, r.target_label).map(([k, v]) => `${k}: ${v}`).join(" · ");
+                  const extra = details(merged, r.target_label).map(([k, v]) => `${k}: ${v}`).join(" · ");
                   return (
                     <Fragment key={r.id}>
-                    {(i === 0 || dayOf(all[i - 1].created_at) !== dayOf(r.created_at)) && (
+                    {(i === 0 || dayOf(all[i - 1].lead.created_at) !== dayOf(r.created_at)) && (
                       <TableRow className="hover:bg-transparent" data-day>
                         <TableCell colSpan={5} className="bg-muted/50 py-1.5 text-xs font-medium text-muted-foreground first-letter:uppercase">{dayLabel(r.created_at)}</TableCell>
                       </TableRow>
                     )}
-                    <TableRow className="cursor-pointer" onClick={() => setOpen(r)}>
+                    <TableRow className={cn("cursor-pointer", of && "bg-muted/30")} onClick={() => setOpen(r)}>
                       <TableCell data-label={t("audit.when")} data-cell="date" className="text-muted-foreground">
                         {/* the keyboard way to the full record; a click anywhere on the row does the same */}
                         <button type="button" className="text-left tabular-nums hover:underline" title={format(r.created_at)} aria-label={`${t("audit.open")}: ${format(r.created_at)}`}>{time(r.created_at)}</button>
@@ -297,11 +326,23 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
                           <span className="text-muted-foreground">{t("audit.system")}</span>
                         )}
                       </TableCell>
-                      <TableCell data-label={t("audit.action")} data-cell="status"><Badge variant="outline" className={cn("font-normal", tone(r.action))}>{label(r.action)}</Badge></TableCell>
-                      <TableCell data-label={t("audit.target")} data-cell="sub">
-                        <span className={cn("block truncate lg:max-w-56 2xl:max-w-80", r.target_gone && "text-muted-foreground line-through")} title={r.target_gone ? `${target} · ${t("audit.target_gone")}` : target}>
-                          {href ? <Link href={href} className="hover:underline" onClick={(e) => e.stopPropagation()}>{target}</Link> : target}
+                      <TableCell data-label={t("audit.action")} data-cell="status">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Badge variant="outline" className={cn("font-normal", tone(r.action))}>{label(r.action)}</Badge>
+                          {(run.length > 1 || of) && (
+                            <button type="button" className="rounded px-1 text-xs tabular-nums text-muted-foreground hover:bg-muted hover:text-foreground" aria-expanded={!!of}
+                              title={t(of ? "audit.run_collapse" : "audit.run_expand")} onClick={(e) => { e.stopPropagation(); const id = of ?? r.id; setExpanded((x) => (x.includes(id) ? x.filter((y) => y !== id) : [...x, id])); }}>
+                              {of ? t("audit.run_collapse") : `×${run.length}`}
+                            </button>
+                          )}
                         </span>
+                      </TableCell>
+                      <TableCell data-label={t("audit.target")} data-cell="sub">
+                        {self ? <span className="text-muted-foreground">{t("audit.this_collection")}</span> : (
+                          <span className={cn("block truncate lg:max-w-56 2xl:max-w-80", r.target_gone && "text-muted-foreground line-through")} title={r.target_gone ? `${target} · ${t("audit.target_gone")}` : target}>
+                            {href ? <Link href={href} className="hover:underline" onClick={(e) => e.stopPropagation()}>{target}</Link> : target}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell data-label={t("audit.details")} data-cell="detail" className="text-muted-foreground"><span className="block truncate lg:max-w-56 2xl:max-w-80" title={extra || undefined}>{extra || "-"}</span></TableCell>
                     </TableRow>

@@ -13,6 +13,9 @@ interface UIState {
   /** Collections pinned to the top of the sidebar, on this browser only. */
   pinned: string[];
   togglePin: (id: string) => void;
+  /** Collections whose "next steps" card was dismissed, on this browser only. */
+  stepsDismissed: string[];
+  dismissSteps: (id: string) => void;
   /** The record form's layout on wide screens. */
   formColumns: 1 | 2;
   setFormColumns: (n: 1 | 2) => void;
@@ -27,6 +30,8 @@ export const useUIStore = create<UIState>()(
       collectionId: null,
       setCollection: (id) => set({ collectionId: id }),
       pinned: [],
+      stepsDismissed: [],
+      dismissSteps: (id) => set((s) => ({ stepsDismissed: [...s.stepsDismissed.filter((x) => x !== id), id] })),
       formColumns: 2,
       setFormColumns: (n) => set({ formColumns: n }),
       togglePin: (id) => set((s) => ({ pinned: s.pinned.includes(id) ? s.pinned.filter((p) => p !== id) : [...s.pinned, id] })),

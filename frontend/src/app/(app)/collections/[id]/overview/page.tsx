@@ -16,6 +16,7 @@ import { useI18n } from "@/lib/i18n/provider";
 import { plural } from "@/lib/i18n/plural";
 import { useQuality } from "@/lib/hooks/use-quality";
 import { roleAllows } from "@/lib/permissions";
+import { useUIStore } from "@/lib/store/ui";
 import { cn } from "@/lib/utils";
 import { CollectionPage } from "../_parts";
 
@@ -59,6 +60,8 @@ const STARTER_KEYS = ["title", "notes"];
 /** What a new collection still needs, each step ticked off as it happens. */
 function NextSteps({ collection, records, members }: { collection: Collection; records: number; members: number }) {
   const { t } = useI18n();
+  const dismissed = useUIStore((s) => s.stepsDismissed.includes(collection.id));
+  const dismiss = useUIStore((s) => s.dismissSteps);
   const base = `/collections/${collection.id}`;
   const keys = Object.keys((collection.schema?.properties as Record<string, unknown> | undefined) ?? {});
   const steps = [
@@ -66,10 +69,14 @@ function NextSteps({ collection, records, members }: { collection: Collection; r
     { done: records > 0, label: t("overview.step_records"), href: base },
     ...(roleAllows(collection.role, "owner") ? [{ done: members > 1, label: t("overview.step_members"), href: `${base}/members` }] : []),
   ];
-  if (steps.every((s) => s.done)) return null;
+  if (steps.every((s) => s.done) || dismissed) return null;
   return (
     <Card className="gap-0 overflow-hidden p-0">
-      <div className="border-b px-4 py-3"><h2 className="font-heading text-base font-semibold">{t("overview.next_steps")}</h2></div>
+      <div className="flex items-center justify-between gap-2 border-b px-4 py-2">
+        <h2 className="font-heading text-base font-semibold">{t("overview.next_steps")}</h2>
+        {/* Someone working alone never ticks "invite": the card can go once the rest is done. */}
+        <Button size="sm" variant="ghost" onClick={() => dismiss(collection.id)}>{t("overview.steps_dismiss")}</Button>
+      </div>
       <ol className="divide-y">
         {steps.map((s) => (
           <li key={s.href}>
@@ -88,6 +95,7 @@ function NextSteps({ collection, records, members }: { collection: Collection; r
 function Overview({ collection }: { collection: Collection }) {
   const { t, locale } = useI18n();
   const relative = useRelativeTime();
+  const stepsGone = useUIStore((st) => st.stepsDismissed.includes(collection.id));
   const base = `/collections/${collection.id}`;
   const editor = roleAllows(collection.role, "editor");
   const owner = roleAllows(collection.role, "owner");
@@ -107,7 +115,7 @@ function Overview({ collection }: { collection: Collection }) {
   const dayLabel = (day: string) => new Date(`${day}T00:00:00`).toLocaleDateString(locale, { day: "numeric", month: "short" });
   // A handful of active days reads better as a sentence than as a row of empty bars.
   const active = days.filter((d) => d.count > 0);
-  const steps = editor ? <NextSteps collection={collection} records={s.records} members={s.members} /> : null;
+  const steps = editor && !stepsGone ? <NextSteps collection={collection} records={s.records} members={s.members} /> : null;
   // A single member makes the ranking say nothing.
   const side = steps ?? (s.members > 1 ? "contributors" : null);
 

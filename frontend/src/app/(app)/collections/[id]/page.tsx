@@ -40,7 +40,7 @@ import { plural } from "@/lib/i18n/plural";
 import { roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
 import { useSequenceStore } from "@/lib/store/sequence";
-import { searchTerm } from "@/lib/utils";
+import { cn, searchTerm } from "@/lib/utils";
 import { deleteWithUndo } from "@/lib/undo-delete";
 import { CollectionForm, CollectionPage } from "./_parts";
 
@@ -123,6 +123,10 @@ function RecordList({ collection }: { collection: Collection }) {
     if (typeof v === "number") return num(v);
     if (typeof v === "boolean") return t(v ? "common.yes" : "common.no");
     if (c?.field.type === "reference" && typeof v === "string") return refLabels.get(v) ?? v.slice(0, 8);
+    // A link reads by its path: the host repeats on every row and pushes the part that differs out of view.
+    if (c?.field.type === "url" && typeof v === "string") {
+      try { const u = new URL(v); return (u.pathname + u.search + u.hash).replace(/\/$/, "") || u.host; } catch { return v; }
+    }
     if (c?.field.type === "file" || c?.field.type === "files") {
       const files = fileRefs(v);
       return files.length ? `${files[0].name}${files.length > 1 ? ` +${files.length - 1}` : ""}` : "—";
@@ -290,7 +294,7 @@ function RecordList({ collection }: { collection: Collection }) {
                   <TableRow key={r.id} className="cursor-pointer hover:bg-muted/60" onClick={() => router.push(`/records/${r.id}`)}>
                     {canEdit && <SelectCell selection={selection} id={r.id} label={cells[0].text} />}
                     {cells.map((c, i) => (
-                      <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : "field"} className={i === 0 ? "max-w-0 min-w-40" : "max-w-0 min-w-24 text-muted-foreground"}>
+                      <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : "field"} className={cn(i === 0 ? "max-w-0 min-w-40" : "max-w-0 min-w-24 text-muted-foreground", i > 0 && c.row?.field.unique && "font-mono text-xs xl:min-w-48")} title={c.row?.field.type === "url" ? String(data[c.key] ?? "") : undefined}>
                         {i === 0 ? (
                           <span className="flex min-w-0 items-center gap-1.5">
                             {isInvalid(r.id, r.updated_at) && (

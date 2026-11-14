@@ -1,10 +1,12 @@
 "use client";
 
+import { createContext, useContext } from "react";
 import Link from "next/link";
 import { Check, ExternalLink, FileIcon } from "lucide-react";
 import { useFormatDate } from "@/components/bits";
 import { FILE, REF, fileRefs, isImage } from "@/components/field-builder";
 import { Markdown, looksLikeMarkdown } from "@/components/markdown";
+import { useTextLinks } from "@/components/text-links";
 import { useNumberFormat } from "@/components/record-groups";
 import { useRecordLabel } from "@/components/schema-form";
 import { tools } from "@/lib/api/endpoints";
@@ -18,6 +20,11 @@ const propsOf = (s: S) => obj(s.properties);
 const titleOf = (s: S, key: string) => (typeof s.title === "string" && s.title ? s.title : key);
 /** Fields that name the object they sit in, by key or title. */
 const NAMING = /^(r[oó]tulo|label|t[ií]tulo|title|nome|name)$/i;
+/** Fields holding a code (a key, a class name): their values read in the code face. */
+const CODE = /^(chave|key|classname|c[oó]digo|code|slug)$/i;
+
+/** Addresses in the record's text that other records stand for, address -> record id. */
+const Links = createContext<Map<string, string> | undefined>(undefined);
 
 export const isEmpty = (v: unknown) =>
   v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0) || (typeof v === "object" && !Array.isArray(v) && Object.keys(v as S).length === 0);
@@ -69,6 +76,7 @@ export function Value({ schema, value }: { schema: S; value: unknown }) {
   const { t, locale } = useI18n();
   const num = useNumberFormat();
   const formatDate = useFormatDate();
+  const links = useContext(Links);
   if (isEmpty(value)) return <span className="text-muted-foreground">—</span>;
   if (typeof value === "boolean")
     return value
@@ -86,7 +94,7 @@ export function Value({ schema, value }: { schema: S; value: unknown }) {
     }
     if (schema.format === "email") return <a href={`mailto:${value}`} className="text-primary underline-offset-2 hover:underline">{value}</a>;
     if (Array.isArray(schema.enum)) return <Chip>{value}</Chip>;
-    if (!isShort(schema, value)) return looksLikeMarkdown(value) ? <Markdown text={value} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed break-words">{value}</p>;
+    if (!isShort(schema, value)) return looksLikeMarkdown(value) ? <Markdown text={value} links={links} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed break-words">{value}</p>;
     return <span className="break-words">{value}</span>;
   }
   if (Array.isArray(value)) {
@@ -114,10 +122,10 @@ function Group({ schema, value, heading = false }: { schema: S; value: unknown; 
   const data = obj(value);
   const props = propsOf(schema);
   const keys = [...Object.keys(props), ...Object.keys(data).filter((k) => !(k in props))].filter((k) => !isEmpty(data[k]));
-  // The item's name leads: a label or title field first, else its first short text.
+  // A label or title field names the item and leads it; without one every field keeps its row, so items of one list read alike.
   const short = (k: string) => typeof data[k] === "string" && isShort(obj(props[k]), data[k]);
-  const named = (k: string) => NAMING.test(k) || NAMING.test(titleOf(obj(props[k]), k));
-  const lead = heading ? (keys.find((k) => named(k) && short(k)) ?? keys.find(short)) : undefined;
+  const is = (re: RegExp, k: string) => re.test(k) || re.test(titleOf(obj(props[k]), k));
+  const lead = heading ? keys.find((k) => is(NAMING, k) && short(k)) : undefined;
   if (typeof value !== "object" || value === null) return <span>{String(value)}</span>;
   return (
     <div className="space-y-2">
@@ -126,7 +134,7 @@ function Group({ schema, value, heading = false }: { schema: S; value: unknown; 
         {keys.filter((k) => k !== lead).map((k) => (
           <div key={k} className="contents">
             <dt className="text-muted-foreground">{titleOf(obj(props[k]), k)}</dt>
-            <dd className="min-w-0"><Value schema={obj(props[k])} value={data[k]} /></dd>
+            <dd className={cn("min-w-0", is(CODE, k) && typeof data[k] === "string" && "font-mono text-xs leading-5")}><Value schema={obj(props[k])} value={data[k]} /></dd>
           </div>
         ))}
       </dl>
@@ -149,12 +157,16 @@ export function RecordView({ collection, record, skip }: { collection: Collectio
   const blocks = keys.filter((k) => !short.includes(k) && !isEmpty(data[k]));
   // Yes/no fields read as one line: the ones that hold, then the ones that do not.
   const flag = (k: string) => typeof data[k] === "boolean" || obj(props[k]).type === "boolean";
-  const plain = short.filter((k) => !flag(k));
+  // Empty fields go to one line under the grid: they are what is missing, not values to read.
+  const plain = short.filter((k) => !flag(k) && !isEmpty(data[k]));
+  const unset = short.filter((k) => !flag(k) && isEmpty(data[k]));
   const yes = short.filter((k) => flag(k) && data[k] === true);
   const no = short.filter((k) => flag(k) && data[k] === false);
+  const links = useTextLinks(record);
   return (
+    <Links.Provider value={links}>
     <div className="space-y-4">
-      {(plain.length > 0 || yes.length > 0 || no.length > 0) && (
+      {(plain.length > 0 || yes.length > 0 || no.length > 0 || unset.length > 0) && (
         <section aria-label={t("records.summary")} className="@container rounded-xl border bg-card p-4">
           {plain.length > 0 && (
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 @lg:grid-cols-3">
@@ -166,7 +178,7 @@ export function RecordView({ collection, record, skip }: { collection: Collectio
               ))}
             </dl>
           )}
-          {(yes.length > 0 || no.length > 0) && (
+          {(yes.length > 0 || no.length > 0 || unset.length > 0) && (
             <div className={cn("space-y-1.5 text-sm", plain.length > 0 && "mt-3 border-t pt-3")}>
               {yes.length > 0 && (
                 <ul className="flex flex-wrap gap-1.5" aria-label={t("common.yes")}>
@@ -174,6 +186,7 @@ export function RecordView({ collection, record, skip }: { collection: Collectio
                 </ul>
               )}
               {no.length > 0 && <p className="text-xs text-muted-foreground">{t("common.no")}: {no.map((k) => titleOf(obj(props[k]), k)).join(" · ")}</p>}
+              {unset.length > 0 && <p className="text-xs text-muted-foreground">{t("records.unset")}: {unset.map((k) => titleOf(obj(props[k]), k)).join(" · ")}</p>}
             </div>
           )}
         </section>
@@ -189,5 +202,6 @@ export function RecordView({ collection, record, skip }: { collection: Collectio
         );
       })}
     </div>
+    </Links.Provider>
   );
 }

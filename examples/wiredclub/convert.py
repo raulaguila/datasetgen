@@ -120,6 +120,10 @@ def body_markdown(body, repo):
         return "\n".join("> " + line if line else ">" for line in (lead + inner).splitlines())
 
     body = re.sub(r"<Aside\b([^>]*)>(.*?)</Aside>", aside, body, flags=re.S)
+    # The site's lists of wireds, filled in by main() once every wired is read.
+    body = re.sub(r'<WiredGrid\s+type="([^"]*)"\s*/>', lambda m: f"\x00grid:type:{m.group(1)}\x00", body)
+    body = re.sub(r"<WiredGrid\s+classname_list=\{\[(.*?)\]\}\s*/>",
+                  lambda m: "\x00grid:classes:" + ",".join(re.findall(r'"([^"]+)"', m.group(1))) + "\x00", body, flags=re.S)
     body = re.sub(r'<TabItem\s+label="([^"]*)"[^>]*>', r"**\1**", body)
     body = re.sub(r'<Card\s+title="([^"]*)"[^>]*>', r"**\1**", body)
     # Every other component tag goes; its children stay.
@@ -128,6 +132,27 @@ def body_markdown(body, repo):
     body = re.sub(r"\]\((/[^)\s]*)\)", lambda m: f"]({SITE}{m.group(1)})", body)
     body = re.sub(r"!\[([^\]]*)\]\([^)]*\)", lambda m: f"[Imagem: {m.group(1)}]" if m.group(1) else "", body)
     return re.sub(r"\n{3,}", "\n\n", body).strip()
+
+
+def fill_grids(rows, wireds):
+    """Each placeholder body_markdown left for a <WiredGrid> becomes a list of links to those wireds,
+    by type or by classname (a negative version links to its positive's page)."""
+    by_class = {}
+    for w in wireds:
+        by_class[w["classname"]] = (w["nome"], w["url"])
+        neg = w.get("versao_negativa") or {}
+        if neg.get("classname"):
+            by_class.setdefault(neg["classname"], (neg.get("nome") or neg["classname"], w["url"]))
+
+    def grid(m):
+        kind, arg = m.group(1), m.group(2)
+        items = ([(w["nome"], w["url"]) for w in sorted(wireds, key=lambda w: w["nome"]) if w.get("tipo") == arg] if kind == "type"
+                 else [by_class[c] for c in arg.split(",") if c in by_class])
+        return "\n".join(f"- [{n}]({u})" for n, u in items)
+
+    for r in rows:
+        if "conteudo" in r:
+            r["conteudo"] = re.sub(r"\n{3,}", "\n\n", re.sub(r"\x00grid:(type|classes):([^\x00]*)\x00", grid, r["conteudo"])).strip()
 
 
 def page_url(rel):
@@ -318,6 +343,7 @@ def main(repo, out, furnidata=None, texts=None):
                 wireds.append(drop_empty(w))
             else:
                 guides.append(guide(fm, body, rel, repo))
+    fill_grids(wireds + guides, wireds)
     os.makedirs(out, exist_ok=True)
     for name, rows, key in (("wireds", wireds, "classname"), ("guias", guides, "url")):
         rows.sort(key=lambda r: r.get(key) or "")

@@ -172,7 +172,8 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
                 {!compact && <span>{t("collections.new")}</span>}
               </Link>
             ))}
-            {active && groups.length > 0 && (
+            {/* Outside a collection's pages (profile, notifications) they would point at a collection the page does not name. */}
+            {active && routeGroup && groups.length > 0 && (
               <section className="rail-admin">
                 {groups.map(({ group, label, icon: Icon, items: entries }) => (
                   <div key={`${active.id}:${group}`} className="rail-admin-group" data-open={open.includes(group) ? "" : undefined}>

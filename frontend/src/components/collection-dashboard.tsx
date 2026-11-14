@@ -19,7 +19,7 @@ import { errorMessage } from "@/lib/errors";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
-import { newId } from "@/lib/utils";
+import { cn, newId } from "@/lib/utils";
 
 const MAX = 24;
 const AUTO = "auto";
@@ -146,6 +146,28 @@ function WidgetDialog({ collection, initial, onClose, onSave }: { collection: Co
  * The collection's own dashboard: counts, sums, bars and lists the owners pick,
  * each over the records its conditions select. Every member sees it.
  */
+const SM_SPAN = ["", "sm:col-span-1", "sm:col-span-2"];
+const XL_SPAN = ["", "xl:col-span-1", "xl:col-span-2", "xl:col-span-3", "xl:col-span-4"];
+
+/** Widths in a grid of `cols`: a widget before a row break, and the last one, take what their row leaves, so no cell stays empty. */
+export function packSpans(sizes: number[], cols: number): number[] {
+  const out = sizes.map((n) => Math.min(n, cols));
+  let row = 0;
+  out.forEach((n, i) => {
+    if (row + n > cols) { out[i - 1] += cols - row; row = 0; }
+    row = (row + n) % cols;
+  });
+  if (row > 0) out[out.length - 1] += cols - row;
+  return out;
+}
+
+function spanOf(widgets: Widget[]) {
+  const sizes = widgets.map((w) => (w.size === 2 ? 2 : 1));
+  const sm = packSpans(sizes, 2);
+  const xl = packSpans(sizes, 4);
+  return (_: Widget, i: number) => cn(SM_SPAN[sm[i]], XL_SPAN[xl[i]]);
+}
+
 export function CollectionDashboard({ collection }: { collection: Collection }) {
   const { t } = useI18n();
   const client = useQueryClient();
@@ -163,6 +185,7 @@ export function CollectionDashboard({ collection }: { collection: Collection }) 
   });
   const rows = fieldsOf(collection.schema ?? null);
   const widgets = draft ?? q.data?.widgets ?? [];
+  const span = spanOf(widgets);
   if (q.isPending || q.isError) return null;
   if (!widgets.length && !draft && !owner) return null;
 
@@ -199,7 +222,7 @@ export function CollectionDashboard({ collection }: { collection: Collection }) 
       ) : (
         <ul className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {widgets.map((w, i) => (
-            <li key={w.id} className={w.size === 2 ? "relative sm:col-span-2" : "relative"}>
+            <li key={w.id} className={cn("relative", span(w, i))}>
               <WidgetView collection={collection} widget={w} rows={rows} scope={draft || whereEmpty(scope) ? undefined : scope} />
               {draft && (
                 <div className="absolute right-2 top-2 flex gap-0.5 rounded-md border bg-popover p-0.5 shadow-sm">

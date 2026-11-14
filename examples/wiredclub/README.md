@@ -11,6 +11,8 @@ Each wired keeps the infobox fields: type, section, availability, prices, releas
 
 `fontes` holds the advanced settings: where the wired takes its furni or users from (the triggering item, picked furni, the selector, the signal…). Each block has a kind (Mobi or Usuário), the client's title ("Selecione a fonte do Mobi:", "Selecione Bot fonte:") and the options the wired offers, in the client's words. The client does not say which options each wired offers; only the 17 docs pages with a "Configurações avançadas" list do, so only those wireds come filled in. The schema lists every option the client has, so the others can be completed on the record page.
 
+The docs' lists of wireds (the "Lista Completa" of each overview page, the picks in "Tipos de Wireds") are drawn by a site component; they become Markdown lists of links to each wired's page, in the game's names.
+
 The recent-changes pages are left out, since they repeat the others with older dates.
 
 ## Generate
