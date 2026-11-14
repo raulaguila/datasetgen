@@ -33,6 +33,10 @@ SECTIONS = {
 GUIDE_SECTIONS = {"vamos-comecar": "Vamos começar", "guias-praticos": "Guias práticos", "referencia": "Referência", "sobre-nos": "Sobre nós"}
 # Pages that are site plumbing, not knowledge.
 SKIP = {"index.mdx", "sobre-nos/contribuidores.mdx"}
+# Negative versions the game has but the docs' infobox leaves out (from the furnidata).
+MISSING_NEGATIVES = {
+    "wf_cnd_has_handitem": {"name": "Wired Condição Negativa: Habbo NÃO tem item de mão", "classname": "wf_cnd_not_has_handitem", "revision": 69021},
+}
 
 
 def front(text):
@@ -147,7 +151,7 @@ def wired(fm, body, rel, repo, names):
     ib = fm.get("infobox") or {}
     real = lambda classname, fallback: names.get(str(classname or "").lower()) or fallback
     price = ib.get("price")
-    neg = ib.get("negative_version") or {}
+    neg = ib.get("negative_version") or MISSING_NEGATIVES.get(ib.get("classname"), {})
     badge = ((fm.get("sidebar") or {}).get("badge") or {})
     return drop_empty({
         "nome": real(ib.get("classname"), str(ib.get("name") or fm.get("title") or "").strip()),
