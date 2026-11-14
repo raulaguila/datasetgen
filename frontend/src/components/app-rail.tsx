@@ -36,8 +36,9 @@ function collectionInPath(pathname: string): string | undefined {
 /**
  * Floating sidebar, after the reference app's workspace rail: the collections
  * listed at the top, the selected one opening its work sections (records,
- * fields) below it, then its monitoring and settings groups, each shown when the
- * caller's role reaches one of its items and open while the page is in it.
+ * fields) below it; its monitoring and settings form groups of their own under
+ * "New collection", each shown when the caller's role reaches one of its items.
+ * One group is open at a time, the one the page is in.
  * Platform administration closes the rail, for those who reach it (also in the account menu).
  */
 export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { collapsed: boolean; onToggle: () => void; mobile?: boolean; onNavigate?: () => void }) {
@@ -158,26 +159,8 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
                         {!compact && pinned.includes(c.id) && <Star className="rail-pin" fill="currentColor" aria-label={t("collections.pinned")} />}
                       </Link>
                     ))}
-                    {selected && (
-                      <>
-                        <nav className="rail-workspace-navigation" aria-label={c.name}>{sections.map((s) => link(s, "collection"))}</nav>
-                        {groups.length > 0 && (
-                          <section className="rail-admin">
-                            {groups.map(({ group, label, icon: Icon, items: entries }) => (
-                              <div key={`${c.id}:${group}`} className="rail-admin-group" data-open={open.includes(group) ? "" : undefined}>
-                                {tooltip(`${label} · ${c.name}`, (
-                                  <button type="button" className="rail-item rail-administration" aria-label={label} aria-expanded={open.includes(group)} aria-controls={`${groupId}-${group}`}
-                                    data-active={pageGroup === group ? "" : undefined} onClick={() => toggle(group)}>
-                                    <Icon className="size-5" aria-hidden />
-                                    {!compact && <><span>{label}</span><ChevronDown className="rail-admin-chevron size-4" aria-hidden /></>}
-                                  </button>
-                                ))}
-                                <nav id={`${groupId}-${group}`} aria-label={label} hidden={!open.includes(group)}>{entries.map((s) => link(s, group))}</nav>
-                              </div>
-                            ))}
-                          </section>
-                        )}
-                      </>
+                    {selected && open.includes("collection") && (
+                      <nav className="rail-workspace-navigation" aria-label={c.name}>{sections.map((s) => link(s, "collection"))}</nav>
                     )}
                   </li>
                 );
@@ -189,6 +172,22 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
                 {!compact && <span>{t("collections.new")}</span>}
               </Link>
             ))}
+            {active && groups.length > 0 && (
+              <section className="rail-admin">
+                {groups.map(({ group, label, icon: Icon, items: entries }) => (
+                  <div key={`${active.id}:${group}`} className="rail-admin-group" data-open={open.includes(group) ? "" : undefined}>
+                    {tooltip(`${label} · ${active.name}`, (
+                      <button type="button" className="rail-item rail-administration" aria-label={label} aria-expanded={open.includes(group)} aria-controls={`${groupId}-${group}`}
+                        data-active={pageGroup === group ? "" : undefined} onClick={() => toggle(group)}>
+                        <Icon className="size-5" aria-hidden />
+                        {!compact && <><span>{label}</span><ChevronDown className="rail-admin-chevron size-4" aria-hidden /></>}
+                      </button>
+                    ))}
+                    <nav id={`${groupId}-${group}`} aria-label={label} hidden={!open.includes(group)}>{entries.map((s) => link(s, group))}</nav>
+                  </div>
+                ))}
+              </section>
+            )}
             {admin.length > 0 && (
               <section className="rail-admin" aria-label={t("nav.admin_area")}>
                 <div className="rail-admin-group" data-open="">
