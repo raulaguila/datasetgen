@@ -26,7 +26,7 @@ export function KeyboardShortcutsDialog() {
 
   const groups: { title: string; rows: [string, string][] }[] = [
     { title: t("shortcuts.global"), rows: [["⌘K / Ctrl+K", t("shortcuts.palette")], ["?", t("shortcuts.this")]] },
-    { title: t("records.record"), rows: [["j", t("records.next")], ["k", t("records.prev")], ["Ctrl+Enter", t("records.shortcut_save")]] },
+    { title: t("records.record"), rows: [["j", t("records.next")], ["k", t("records.prev")], ["e", t("common.edit")], ["Ctrl+Enter", t("records.shortcut_save")]] },
     { title: t("shortcuts.goto"), rows: COLLECTION_SECTIONS.filter((s) => s.shortcut).map((s) => [`g ${s.shortcut}`, s.key === "collections.tab.general" ? `${t("collections.tab.settings")} · ${t(s.key)}` : t(s.key)]) },
   ];
 

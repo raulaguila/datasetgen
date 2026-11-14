@@ -52,18 +52,25 @@ test("records come in, go out and keep their history", async ({ page }) => {
   expect(lines.map((l) => JSON.parse(l).title).sort()).toEqual(["Primeiro", "Segundo"]);
 
   // An edit keeps the old version; restoring brings it back.
+  // A row opens the record to read; Edit opens its form, and saving comes back to it.
   await page.getByRole("link", { name: "Primeiro" }).click();
+  await page.getByRole("button", { name: "Editar", exact: true }).click();
   await page.locator("#rec_title").fill("Primeiro editado");
   await page.getByRole("button", { name: "Salvar" }).click();
-  await expect(page).toHaveURL(records);
-  await page.getByRole("link", { name: "Primeiro editado" }).click();
+  await expect(page).toHaveURL(/\/records\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Primeiro editado");
   const history = page.getByRole("list", { name: "Histórico" });
-  await expect(history.getByText(/^Versão \d+$/)).toHaveText(["Versão 1"]);
-  await expect(history).toContainText("Primeiro → Primeiro editado");
-  await history.getByRole("button", { name: "Restaurar" }).click();
+  await expect(history.getByRole("checkbox")).toHaveCount(2);
+  // Two versions ticked compare field by field.
+  await history.getByRole("checkbox").nth(0).click();
+  await history.getByRole("checkbox").nth(1).click();
+  const compare = page.getByRole("region", { name: /^Versão 1/ });
+  await expect(compare).toContainText("Primeiro");
+  await expect(compare).toContainText("Primeiro editado");
+  await history.getByRole("button", { name: "Restaurar 1" }).click();
   await page.getByRole("dialog", { name: "Restaurar" }).getByRole("button", { name: "Restaurar" }).click();
-  await expect(page.locator("#rec_title")).toHaveValue("Primeiro");
-  await expect(history.getByText(/^Versão \d+$/)).toHaveText(["Versão 2", "Versão 1"]);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Primeiro");
+  await expect(history.getByRole("checkbox")).toHaveCount(3);
 
   // Quality runs in the background; with nothing to fix there is nothing to do.
   await page.goto(records.replace(/$/, "/quality"));

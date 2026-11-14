@@ -185,6 +185,8 @@ test("groups hold subfields and free objects take JSON", async ({ page }) => {
   // The list carries plain values only; the record keeps the rest.
   await expect(row.getByRole("cell")).toHaveText(["", "Casa", /\d/]);
   await row.getByRole("link", { name: "Casa", exact: true }).click();
+  await expect(page.getByRole("main")).toContainText("Recife");
+  await page.getByRole("button", { name: "Editar", exact: true }).click();
   await expect(page.locator("#rec_endereco_cidade")).toHaveValue("Recife");
   await expect(page.locator("#rec_extra")).toHaveValue(/"bloco": "B"/);
 });
