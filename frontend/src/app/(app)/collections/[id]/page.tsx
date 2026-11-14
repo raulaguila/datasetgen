@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { keepPreviousData, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Download, FileJson, FileUp, Eye, MoreHorizontal, Paperclip, PencilLine, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { PageBody, PageHeader, useFormatDate } from "@/components/bits";
+import { PageBody, PageHeader, useRelativeTime } from "@/components/bits";
 import { EmptyState } from "@/components/empty-state";
 import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { fieldsOf, fileRefs, recordTitle, REF, type FieldRow } from "@/components/field-builder";
@@ -78,7 +78,7 @@ function RecordList({ collection }: { collection: Collection }) {
   const { t } = useI18n();
   const router = useRouter();
   const client = useQueryClient();
-  const format = useFormatDate();
+  const ago = useRelativeTime();
   // Kept in the URL like every other list: opening a record and coming back keeps the place.
   const [params, set] = useListParams({ page: 1, limit: 25, q: "", sort: "updated_at", order: "desc", filter: "", where: "", group: "", cols: "", layout: "table", by: "" });
   const { page, limit } = params;
@@ -228,7 +228,8 @@ function RecordList({ collection }: { collection: Collection }) {
               </div>
             </SheetContent>
           </Sheet>
-          <div className="flex items-center gap-2 sm:ml-auto">
+          {/* On phones its buttons join the row, so all of them space out evenly. */}
+          <div className="flex items-center gap-2 max-sm:contents sm:ml-auto">
             <SavedViews collectionId={collection.id} canShare={canEdit} onApply={applyView} />
             <DropdownMenu>
               <DropdownMenuTrigger render={<Button variant="outline" aria-label={t("common.more")} />}><MoreHorizontal className="size-4" /><span className="max-2xl:sr-only">{t("common.more")}</span></DropdownMenuTrigger>
@@ -278,7 +279,7 @@ function RecordList({ collection }: { collection: Collection }) {
                 {columns.length ? columns.map((c, i) => c.field.type === "file" || c.field.type === "files"
                   ? <TableHead key={c.key} className={i === 0 ? "w-[40%]" : undefined}>{c.field.name}</TableHead>
                   : <SortHead key={c.key} field={`data.${c.key}`} label={c.field.name} className={i === 0 ? "w-[40%]" : undefined} {...sortProps} />) : <TableHead>{t("records.record")}</TableHead>}
-                <SortHead field="updated_at" label={t("common.updated_at")} className="w-44" {...sortProps} />
+                <SortHead field="updated_at" label={t("common.updated_at")} className="w-32" {...sortProps} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -289,7 +290,7 @@ function RecordList({ collection }: { collection: Collection }) {
                   <TableRow key={r.id} className="cursor-pointer hover:bg-muted/60" onClick={() => router.push(`/records/${r.id}`)}>
                     {canEdit && <SelectCell selection={selection} id={r.id} label={cells[0].text} />}
                     {cells.map((c, i) => (
-                      <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : "field"} className={i === 0 ? "max-w-0 min-w-40" : "max-w-0 text-muted-foreground"}>
+                      <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : "field"} className={i === 0 ? "max-w-0 min-w-40" : "max-w-0 min-w-24 text-muted-foreground"}>
                         {i === 0 ? (
                           <span className="flex min-w-0 items-center gap-1.5">
                             {isInvalid(r.id, r.updated_at) && (
@@ -308,7 +309,7 @@ function RecordList({ collection }: { collection: Collection }) {
                         )}
                       </TableCell>
                     ))}
-                    <TableCell data-label={t("common.updated_at")} data-cell="date" className="whitespace-nowrap text-muted-foreground">{format(r.updated_at)}</TableCell>
+                    <TableCell data-label={t("common.updated_at")} data-cell="date" className="whitespace-nowrap text-muted-foreground" title={ago(r.updated_at).abs}>{ago(r.updated_at).rel}</TableCell>
                   </TableRow>
                 );
               })}

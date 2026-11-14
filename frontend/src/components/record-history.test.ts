@@ -29,5 +29,6 @@ describe("record view layout", () => {
     expect(isChip({ type: "string", "x-unique": true }, "wf_x")).toBe(true);
     expect(isChip({ type: "string", enum: ["a"] }, "a")).toBe(true);
     expect(isChip({ type: "string" }, "a")).toBe(false);
+    expect(isChip({ type: "string", format: "uri", "x-unique": true }, "https://x.test")).toBe(false);
   });
 });

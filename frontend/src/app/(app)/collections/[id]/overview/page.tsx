@@ -41,7 +41,8 @@ function Stat({ label, value, hint, href, title }: { label: string; value: React
         {label}
         {href && <ChevronRight className="size-3.5 opacity-60 transition-transform group-hover/stat:translate-x-0.5" aria-hidden />}
       </p>
-      <p className="mt-1 truncate font-heading text-xl font-semibold tabular-nums first-letter:uppercase sm:text-2xl" title={title}>{value}</p>
+      {/* Words ("3 minutes ago") take a smaller size and may wrap, so they read whole in a narrow tile. */}
+      <p className={cn("mt-1 font-heading font-semibold tabular-nums first-letter:uppercase", typeof value === "string" && /\p{L}/u.test(value) ? "line-clamp-2 text-base leading-snug sm:text-lg" : "truncate text-xl sm:text-2xl")} title={title}>{value}</p>
       {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
     </>
   );

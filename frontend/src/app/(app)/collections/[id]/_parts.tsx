@@ -298,7 +298,8 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
               </div>
             )}
             {/* The list stops at a readable width on wide screens; the preview takes the rest. */}
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] 2xl:grid-cols-[minmax(0,48rem)_minmax(24rem,1fr)]">
+            {/* Side by side only when the field list keeps room for its names; narrower, the preview goes below. */}
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] 2xl:grid-cols-[minmax(0,48rem)_minmax(24rem,1fr)]">
               <div className="min-w-0 space-y-4">
                 {!collection && editable && (
                   // A new collection starts from a ready-made set of fields, or from a data file's columns.
@@ -361,7 +362,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                   </div>
                 </details>
               </div>
-              <aside className="min-w-0 space-y-2 lg:sticky lg:top-4 lg:self-start" aria-label={t("collections.preview")}>
+              <aside className="min-w-0 space-y-2 xl:sticky xl:top-4 xl:self-start" aria-label={t("collections.preview")}>
                 <div>
                   <h3 className="text-sm font-semibold">{t("collections.preview")}</h3>
                   <p className="text-xs text-muted-foreground">{t("collections.preview_desc")}</p>

@@ -55,7 +55,18 @@ function useSlices(items: { key: unknown; count: number }[], total: number, labe
   return [...top.map((g) => ({ text: label(g.key), count: g.count, href: href?.(g.key) })), ...(rest > 0 ? [{ text: t("analysis.others"), count: rest }] : [])];
 }
 
-const pctOf = (n: number, total: number) => (total > 0 ? ` · ${Math.round((n / total) * 100)}%` : "");
+/** A share in whole percent; a few records out of many read "<1%", never "0%". */
+export const percent = (n: number, total: number) => {
+  if (total <= 0) return "0%";
+  const p = Math.round((n / total) * 100);
+  return n > 0 && p === 0 ? "<1%" : `${p}%`;
+};
+const pctOf = (n: number, total: number) => (total > 0 ? ` · ${percent(n, total)}` : "");
+/**
+ * Nearly every filled record holds its own value (names, codes, revisions): counts and sums of them say nothing.
+ * A handful of records proves nothing, so it takes 20 at least.
+ */
+export const mostlyDistinct = (distinct: number, filled: number) => filled >= 20 && distinct >= filled * 0.9;
 
 /** A slice's name: a link to its records when it has one. */
 function SliceName({ s, className }: { s: Slice; className?: string }) {
@@ -128,7 +139,7 @@ function CountTable({ items, total, label, href, head }: { items: { key: unknown
       <thead><tr className="text-left text-xs text-muted-foreground"><th className="py-1 font-medium">{head}</th><th className="py-1 text-right font-medium">{t("dashboard.kind.count")}</th><th className="py-1 text-right font-medium">%</th></tr></thead>
       <tbody className="divide-y">
         {rows.map((g, i) => (
-          <tr key={i}><td className="max-w-0 py-1.5"><SliceName s={g} className="block" /></td><td className="py-1.5 text-right tabular-nums">{num(g.count)}</td><td className="py-1.5 text-right tabular-nums text-muted-foreground">{total ? Math.round((g.count / total) * 100) : 0}%</td></tr>
+          <tr key={i}><td className="max-w-0 py-1.5"><SliceName s={g} className="block" /></td><td className="py-1.5 text-right tabular-nums">{num(g.count)}</td><td className="py-1.5 text-right tabular-nums text-muted-foreground">{percent(g.count, total)}</td></tr>
         ))}
       </tbody>
     </table>
@@ -162,10 +173,12 @@ function Series({ points, bucket, line = false }: { points: { at: string; count:
   const fmt = (at: string) => new Date(`${at}T00:00:00Z`).toLocaleDateString(locale, opts);
   const title = t("analysis.over_time").replace("{bucket}", t(`analysis.bucket.${bucket}` as MessageKey));
   if (!all.length) return null;
+  // Past a few dozen buckets columns get thinner than a pixel and push the card wide: a line fits any count.
+  const asLine = line || all.length > 60;
   return (
     <figure className="space-y-1">
       <figcaption className="text-xs text-muted-foreground">{title}</figcaption>
-      {line ? (
+      {asLine ? (
         // A 2px line over the buckets; each bucket's column is its hover target.
         <div className="relative h-24" role="img" aria-label={`${title}: ${all.map((p) => `${fmt(p.at)} ${num(p.count)}`).join(", ")}`}>
           <svg viewBox={`0 0 ${Math.max(1, all.length - 1)} 100`} preserveAspectRatio="none" className="absolute inset-0 size-full overflow-visible">
@@ -190,11 +203,12 @@ function Series({ points, bucket, line = false }: { points: { at: string; count:
 
 function Figures({ items }: { items: [string, string][] }) {
   return (
-    <dl className={`grid grid-cols-2 gap-x-4 gap-y-2 ${items.length > 2 ? "sm:grid-cols-4" : ""}`}>
+    // Four in a row only where the card has room for them; a value wraps rather than cut.
+    <dl className={`grid grid-cols-2 gap-x-4 gap-y-2 ${items.length > 2 ? "@sm:grid-cols-4" : ""}`}>
       {items.map(([k, v]) => (
         <div key={k} className="min-w-0">
           <dt className="text-xs text-muted-foreground">{k}</dt>
-          <dd className="truncate font-heading text-lg font-semibold tabular-nums" title={v}>{v}</dd>
+          <dd className="font-heading text-lg leading-snug font-semibold break-words tabular-nums">{v}</dd>
         </div>
       ))}
     </dl>
@@ -208,7 +222,8 @@ function Figures({ items }: { items: [string, string][] }) {
 /** A field whose card holds only how filled it is: no figures, dates or bars worth drawing. */
 export const isPlain = (profile?: FieldProfile) => {
   const top = profile?.top ?? [];
-  return profile?.sum === undefined && !profile?.first && (top.length === 0 || ((profile?.distinct ?? 0) > 1 && top.every((x) => x.count === 1)));
+  const distinct = profile?.distinct ?? 0;
+  return profile?.sum === undefined && !profile?.first && (top.length === 0 || (distinct > 1 && top.every((x) => x.count === 1)) || mostlyDistinct(distinct, profile?.filled ?? 0));
 };
 
 export function FieldStats({ row, profile, total, bucket }: { row: FieldRow; profile?: FieldProfile; total: number; bucket: StatsBucket }) {
@@ -217,25 +232,28 @@ export function FieldStats({ row, profile, total, bucket }: { row: FieldRow; pro
   const label = useValueText();
   const type = row.field.type;
   const n = profile?.filled ?? 0;
-  const pct = total ? Math.round((n / total) * 100) : 0;
+  const pct = total ? (n / total) * 100 : 0;
   const date = (v?: string) => (v ? new Date(`${v}T00:00:00`).toLocaleDateString(locale, { dateStyle: "medium" }) : "—");
   const top = profile?.top ?? [];
   const distinct = profile?.distinct ?? 0;
   return (
-    <section aria-label={row.field.name} className="space-y-3 rounded-xl border bg-card p-4">
-      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+    <section aria-label={row.field.name} className="@container space-y-3 rounded-xl border bg-card p-4">
+      {/* The type always sits under the name, so every card's header reads the same. */}
+      <header>
         <h3 className="font-heading text-base font-semibold">{row.field.name}</h3>
-        <span className="text-xs text-muted-foreground">{t(`collections.type.${type}` as MessageKey)} · <code className="font-mono">{row.key}</code></span>
+        <p className="truncate text-xs text-muted-foreground">{t(`collections.type.${type}` as MessageKey)} · <code className="font-mono">{row.key}</code></p>
       </header>
       <div className="space-y-1">
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>{t("analysis.filled")}</span>
-          <span className="tabular-nums">{`${num(n)} / ${num(total)} · ${pct}%`}</span>
+          <span className="tabular-nums">{`${num(n)} / ${num(total)} · ${percent(n, total)}`}</span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary/70" style={{ width: `${pct}%` }} /></div>
       </div>
       {profile?.sum !== undefined && (
-        <Figures items={[[t("analysis.min"), num(profile.min ?? 0)], [t("analysis.max"), num(profile.max ?? 0)], [t("analysis.avg"), num(profile.avg ?? 0)], [t("analysis.sum"), num(profile.sum)]]} />
+        <Figures items={[[t("analysis.min"), num(profile.min ?? 0)], [t("analysis.max"), num(profile.max ?? 0)], [t("analysis.avg"), num(profile.avg ?? 0)],
+          // A sum of codes or revisions means nothing.
+          ...(mostlyDistinct(distinct, n) ? [] : [[t("analysis.sum"), num(profile.sum)] as [string, string]])]} />
       )}
       {profile?.first && (
         <>
@@ -246,6 +264,8 @@ export function FieldStats({ row, profile, total, bucket }: { row: FieldRow; pro
       {top.length > 0 && (distinct > 1 && top.every((x) => x.count === 1) ? (
         // Bars of one each say nothing: a name or a code, different in every record.
         <p className="text-xs text-muted-foreground">{t("analysis.all_distinct")}</p>
+      ) : mostlyDistinct(distinct, n) ? (
+        <p className="text-xs text-muted-foreground">{t("analysis.mostly_distinct").replace("{n}", num(distinct))}</p>
       ) : (
         <>
           <p className="text-xs text-muted-foreground">{t("analysis.distinct").replace("{n}", num(distinct))}</p>

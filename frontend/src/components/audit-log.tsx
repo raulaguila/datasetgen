@@ -78,7 +78,8 @@ function useDetails() {
         });
       }
       if (k === "schema") return [[t("audit.fields_changed"), t("common.yes")]];
-      const name = t(`audit.detail.${k}` as MessageKey);
+      // An import's count is the records it created, next to the ones it updated.
+      const name = t(`audit.detail.${k === "count" && "updated" in d ? "created" : k}` as MessageKey);
       // Codes with a label of their own: a member role, a share link kind, a bulk fix.
       const coded = typeof v === "string" && ({ role: `members.role.${v}`, kind: `share.${v}`, op: `fix.op.${v}` } as Record<string, string>)[k];
       const label = coded ? t(coded as MessageKey) : "";

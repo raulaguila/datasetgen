@@ -24,6 +24,7 @@ import { roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
 import { neighbours, useSequenceStore } from "@/lib/store/sequence";
 import { useUIStore } from "@/lib/store/ui";
+import { cn } from "@/lib/utils";
 import RecordEditPage from "./edit/page";
 
 type S = Record<string, unknown>;
@@ -46,6 +47,7 @@ function RecordReader({ collection, record }: { collection: Collection; record: 
   const titleKey = Object.keys(props).find((k) => data[k] === recordTitle(collection.schema ?? null, record.data));
   const chips = Object.keys(props).filter((k) => k !== titleKey && isChip(props[k], data[k]));
   const skip = new Set([...(titleKey ? [titleKey] : []), ...chips]);
+  const history = pending || items.length > 1;
 
   return (
     <div className="space-y-4">
@@ -56,16 +58,19 @@ function RecordReader({ collection, record }: { collection: Collection; record: 
           ))}
         </ul>
       )}
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
+      {/* With one version there is nothing to compare: the record gets the whole width. */}
+      <div className={cn("grid items-start gap-4", history && "lg:grid-cols-[minmax(0,1fr)_17rem]")}>
         <div className="min-w-0 space-y-4">
           {pair.length === 2 && <VersionCompare collection={collection} from={pair[0]} to={pair[1]} onClose={() => setPicked([])} />}
           <RecordView collection={collection} record={record} skip={skip} />
           <RecordLinks recordId={record.id} />
           <RecordComments recordId={record.id} owner={roleAllows(collection.role, "owner")} />
         </div>
-        <div className="lg:sticky lg:top-4">
-          <RecordVersions record={record} snapshots={items} pending={pending} picked={picked} onPick={setPicked} editable={editable} />
-        </div>
+        {history && (
+          <div className="lg:sticky lg:top-4">
+            <RecordVersions record={record} snapshots={items} pending={pending} picked={picked} onPick={setPicked} editable={editable} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -116,7 +121,7 @@ function RecordViewPage({ id }: { id: string }) {
             {index >= 0 && sequence.length > 1 && (
               <div className="flex items-center gap-2" role="group" aria-label={t("records.steps")}>
                 {step(prev, "prev")}
-                <span className="text-sm tabular-nums text-muted-foreground">{`${index + 1} / ${sequence.length}`}</span>
+                <span className="text-sm tabular-nums text-muted-foreground">{t("records.step_of").replace("{i}", String(index + 1)).replace("{n}", String(sequence.length))}</span>
                 {step(next, "next")}
               </div>
             )}

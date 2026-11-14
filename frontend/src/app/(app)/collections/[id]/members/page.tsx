@@ -148,6 +148,8 @@ function MemberList({ collection }: { collection: Collection }) {
   if (list.isPending) return <ListSkeleton rows={3} />;
   if (list.isError) return <QueryErrorState error={list.error} onRetry={() => void list.refetch()} />;
   const items = list.data.items;
+  // The server keeps one owner at least; the controls say so up front instead of failing.
+  const lastOwner = (m: CollectionMember) => m.role === "owner" && items.filter((x) => x.role === "owner").length === 1;
   if (items.length === 0) return <EmptyState icon={Users} title={t("members.empty")} />;
   return (
     <Card className="gap-0 overflow-hidden p-0">
@@ -165,10 +167,10 @@ function MemberList({ collection }: { collection: Collection }) {
                 {m.user_id === user?.id && <span className="text-muted-foreground"> ({t("members.you")})</span>}
                 {m.status === "pending" && <Badge variant="outline" className="ml-2">{t("members.pending")}</Badge>}
               </p>
-              <p className="truncate text-xs text-muted-foreground">{m.email}</p>
+              <p className="truncate text-xs text-muted-foreground">{m.email}{lastOwner(m) && ` · ${t("members.last_owner")}`}</p>
             </div>
-            <RoleSelect value={m.role} label={`${t("members.role")}: ${m.name}`} disabled={setRole.isPending} onChange={(role) => role !== m.role && setRole.mutate({ m, role })} />
-            <IconAction label={t("members.remove")} target={m.name} className="text-destructive" onClick={() => setRemoving(m)}><Trash2 className="size-4" /></IconAction>
+            <RoleSelect value={m.role} label={`${t("members.role")}: ${m.name}`} disabled={setRole.isPending || lastOwner(m)} onChange={(role) => role !== m.role && setRole.mutate({ m, role })} />
+            <IconAction label={t("members.remove")} target={m.name} className="text-destructive" disabled={lastOwner(m)} onClick={() => setRemoving(m)}><Trash2 className="size-4" /></IconAction>
           </li>
         ))}
       </ul>

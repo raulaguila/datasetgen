@@ -65,7 +65,7 @@ test("a collection's records follow its fields", async ({ page }) => {
   // One column per field, named after it, after the selection box.
   await expect(page.getByRole("columnheader")).toHaveText(["", "Nome", "Categoria", "Nota", "Atualizado em"]);
   const row = page.getByRole("row").filter({ hasText: "Ao clicar" });
-  await expect(row.getByRole("cell")).toHaveText(["", "Ao clicar", "gatilho", "—", /\d/]);
+  await expect(row.getByRole("cell")).toHaveText(["", "Ao clicar", "gatilho", "—", /\S/]);
   // A choice field: its condition offers the options.
   await page.getByRole("button", { name: "Condições" }).click();
   const rules = page.getByRole("dialog", { name: "Condições" });
@@ -183,7 +183,7 @@ test("groups hold subfields and free objects take JSON", async ({ page }) => {
   await expect(page.getByRole("row").filter({ hasText: "Casa 2" })).toHaveCount(1);
   const row = page.getByRole("row").filter({ hasText: "Casa" }).filter({ hasNotText: "Casa 2" });
   // The list carries plain values only; the record keeps the rest.
-  await expect(row.getByRole("cell")).toHaveText(["", "Casa", /\d/]);
+  await expect(row.getByRole("cell")).toHaveText(["", "Casa", /\S/]);
   await row.getByRole("link", { name: "Casa", exact: true }).click();
   await expect(page.getByRole("main")).toContainText("Recife");
   await page.getByRole("button", { name: "Editar", exact: true }).click();

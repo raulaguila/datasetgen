@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fillSeries } from "./collection-stats";
+import { fillSeries, mostlyDistinct, percent } from "./collection-stats";
 
 describe("fillSeries", () => {
   it("adds empty months between the first and last", () => {
@@ -15,5 +15,22 @@ describe("fillSeries", () => {
     const out = fillSeries([{ at: "2020-01-01", count: 1 }, { at: "2026-01-01", count: 1 }], "day");
     expect(out).toHaveLength(400);
     expect(out[399].at).toBe("2026-01-01");
+  });
+});
+
+describe("percent", () => {
+  it("never shows 0% for a share that exists", () => {
+    expect(percent(1, 221)).toBe("<1%");
+    expect(percent(0, 221)).toBe("0%");
+    expect(percent(52, 221)).toBe("24%");
+    expect(percent(3, 0)).toBe("0%");
+  });
+});
+
+describe("mostlyDistinct", () => {
+  it("needs many records nearly all different", () => {
+    expect(mostlyDistinct(219, 221)).toBe(true);
+    expect(mostlyDistinct(8, 221)).toBe(false);
+    expect(mostlyDistinct(2, 2)).toBe(false);
   });
 });

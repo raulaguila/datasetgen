@@ -69,7 +69,8 @@ function ProfileHeader() {
         <div className="truncate text-lg font-semibold">{user.name}</div>
         <div className="text-sm break-all text-muted-foreground">{user.email}</div>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          {user.roles.map((r) => <Badge key={r} variant="secondary">{r}</Badge>)}
+          {/* The two roles the platform ships with read in the app language; others keep the name an admin gave them. */}
+          {user.roles.map((r) => <Badge key={r} variant="secondary">{r === "admin" ? t("roles.builtin.admin") : r === "user" ? t("roles.builtin.user") : r}</Badge>)}
           <span>{t("profile.member_since")} {new Date(user.created_at).toLocaleDateString(locale, { dateStyle: "medium" })}</span>
         </div>
       </div>

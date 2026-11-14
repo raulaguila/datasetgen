@@ -100,6 +100,7 @@ def body_markdown(body, repo):
         if src.startswith("@assets/"):
             assets[name] = os.path.join(repo, ASSETS, "assets", src[len("@assets/"):].split("?")[0])
     body = re.sub(r"^(import|export)\s.*$", "", body, flags=re.M)
+    body = re.sub(r"(?<!`)\{/\*.*?\*/\}(?!`)", "", body, flags=re.S)  # MDX comments; `{/* x */}` in code stays
 
     def video(m):
         tag = m.group(0)
@@ -283,7 +284,7 @@ def wired(fm, body, rel, repo, names):
 
 def guide(fm, body, rel, repo):
     return drop_empty({
-        "titulo": str(fm.get("title") or "").strip(),
+        "titulo": str(fm.get("title") or "").strip().strip("-").strip(),  # some titles wear "-…-" as decoration
         "secao": GUIDE_SECTIONS.get(rel.split("/")[0], "Outros"),
         "descricao": (fm.get("description") or "").strip(),
         "conteudo": body_markdown(body, repo),

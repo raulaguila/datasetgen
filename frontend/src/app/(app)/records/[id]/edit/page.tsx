@@ -230,7 +230,7 @@ export default function RecordEditPage() {
             {index >= 0 && sequence.length > 1 && (
               <div className="flex items-center gap-2" role="group" aria-label={t("records.steps")}>
                 {step(prev, "prev")}
-                <span className="text-sm tabular-nums text-muted-foreground">{`${index + 1} / ${sequence.length}`}</span>
+                <span className="text-sm tabular-nums text-muted-foreground">{t("records.step_of").replace("{i}", String(index + 1)).replace("{n}", String(sequence.length))}</span>
                 {step(next, "next")}
               </div>
             )}

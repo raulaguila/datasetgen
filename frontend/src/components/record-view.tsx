@@ -16,6 +16,8 @@ type S = Record<string, unknown>;
 const obj = (v: unknown): S => (v && typeof v === "object" && !Array.isArray(v) ? (v as S) : {});
 const propsOf = (s: S) => obj(s.properties);
 const titleOf = (s: S, key: string) => (typeof s.title === "string" && s.title ? s.title : key);
+/** Fields that name the object they sit in, by key or title. */
+const NAMING = /^(r[oó]tulo|label|t[ií]tulo|title|nome|name)$/i;
 
 export const isEmpty = (v: unknown) =>
   v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0) || (typeof v === "object" && !Array.isArray(v) && Object.keys(v as S).length === 0);
@@ -29,7 +31,8 @@ export function isShort(s: S, v: unknown): boolean {
 
 /** The header shows these as chips: the record's unique values and its picks from a list. */
 export function isChip(s: S, v: unknown): boolean {
-  return typeof v === "string" && v !== "" && (s["x-unique"] === true || Array.isArray(s.enum));
+  // A link stays a link in the summary, never a plain chip.
+  return typeof v === "string" && v !== "" && s.format !== "uri" && (s["x-unique"] === true || Array.isArray(s.enum));
 }
 
 export function Chip({ children, mono, strong, title }: { children: React.ReactNode; mono?: boolean; strong?: boolean; title?: string }) {
@@ -111,7 +114,10 @@ function Group({ schema, value, heading = false }: { schema: S; value: unknown; 
   const data = obj(value);
   const props = propsOf(schema);
   const keys = [...Object.keys(props), ...Object.keys(data).filter((k) => !(k in props))].filter((k) => !isEmpty(data[k]));
-  const lead = heading ? keys.find((k) => typeof data[k] === "string" && isShort(obj(props[k]), data[k])) : undefined;
+  // The item's name leads: a label or title field first, else its first short text.
+  const short = (k: string) => typeof data[k] === "string" && isShort(obj(props[k]), data[k]);
+  const named = (k: string) => NAMING.test(k) || NAMING.test(titleOf(obj(props[k]), k));
+  const lead = heading ? (keys.find((k) => named(k) && short(k)) ?? keys.find(short)) : undefined;
   if (typeof value !== "object" || value === null) return <span>{String(value)}</span>;
   return (
     <div className="space-y-2">
@@ -141,18 +147,35 @@ export function RecordView({ collection, record, skip }: { collection: Collectio
   const keys = [...Object.keys(props), ...Object.keys(data).filter((k) => !(k in props))].filter((k) => !skip.has(k));
   const short = keys.filter((k) => isShort(obj(props[k]), data[k]));
   const blocks = keys.filter((k) => !short.includes(k) && !isEmpty(data[k]));
+  // Yes/no fields read as one line: the ones that hold, then the ones that do not.
+  const flag = (k: string) => typeof data[k] === "boolean" || obj(props[k]).type === "boolean";
+  const plain = short.filter((k) => !flag(k));
+  const yes = short.filter((k) => flag(k) && data[k] === true);
+  const no = short.filter((k) => flag(k) && data[k] === false);
   return (
     <div className="space-y-4">
-      {short.length > 0 && (
-        <section aria-label={t("records.summary")} className="rounded-xl border bg-card p-4">
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-            {short.map((k) => (
-              <div key={k} className="min-w-0">
-                <dt className="truncate text-xs text-muted-foreground">{titleOf(obj(props[k]), k)}</dt>
-                <dd className="mt-0.5 text-sm"><Value schema={obj(props[k])} value={data[k]} /></dd>
-              </div>
-            ))}
-          </dl>
+      {(plain.length > 0 || yes.length > 0 || no.length > 0) && (
+        <section aria-label={t("records.summary")} className="@container rounded-xl border bg-card p-4">
+          {plain.length > 0 && (
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 @lg:grid-cols-3">
+              {plain.map((k) => (
+                <div key={k} className="min-w-0">
+                  <dt className="truncate text-xs text-muted-foreground" title={titleOf(obj(props[k]), k)}>{titleOf(obj(props[k]), k)}</dt>
+                  <dd className="mt-0.5 text-sm"><Value schema={obj(props[k])} value={data[k]} /></dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {(yes.length > 0 || no.length > 0) && (
+            <div className={cn("space-y-1.5 text-sm", plain.length > 0 && "mt-3 border-t pt-3")}>
+              {yes.length > 0 && (
+                <ul className="flex flex-wrap gap-1.5" aria-label={t("common.yes")}>
+                  {yes.map((k) => <li key={k}><Chip strong><Check className="mr-1 size-3" aria-hidden />{titleOf(obj(props[k]), k)}</Chip></li>)}
+                </ul>
+              )}
+              {no.length > 0 && <p className="text-xs text-muted-foreground">{t("common.no")}: {no.map((k) => titleOf(obj(props[k]), k)).join(" · ")}</p>}
+            </div>
+          )}
         </section>
       )}
       {blocks.map((k) => {
