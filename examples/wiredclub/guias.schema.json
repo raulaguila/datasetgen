@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "title": "Guia",
+  "required": [
+    "titulo",
+    "secao",
+    "url"
+  ],
+  "properties": {
+    "titulo": {
+      "type": "string",
+      "title": "Título",
+      "minLength": 1
+    },
+    "secao": {
+      "type": "string",
+      "title": "Seção",
+      "enum": [
+        "Vamos começar",
+        "Guias práticos",
+        "Referência",
+        "Sobre nós",
+        "Outros"
+      ]
+    },
+    "descricao": {
+      "type": "string",
+      "title": "Descrição",
+      "maxLength": 2000
+    },
+    "conteudo": {
+      "type": "string",
+      "title": "Conteúdo (Markdown)",
+      "maxLength": 100000
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "title": "Página na documentação",
+      "x-unique": true
+    }
+  }
+}

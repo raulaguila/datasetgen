@@ -1,0 +1,152 @@
+{
+  "type": "object",
+  "title": "Wired",
+  "required": [
+    "nome",
+    "classname",
+    "tipo",
+    "secao",
+    "url"
+  ],
+  "properties": {
+    "nome": {
+      "type": "string",
+      "title": "Nome",
+      "minLength": 1
+    },
+    "classname": {
+      "type": "string",
+      "title": "Classname",
+      "description": "Nome técnico do mobi no Habbo",
+      "x-unique": true
+    },
+    "tipo": {
+      "type": "string",
+      "title": "Tipo",
+      "enum": [
+        "Ativador",
+        "Condição",
+        "Efeito",
+        "Seletor",
+        "Filtro de Seletor",
+        "Variável",
+        "Extra",
+        "Extra de Variável",
+        "Contrato",
+        "Configurador",
+        "Utilitário",
+        "Baú",
+        "Tabela de Classificação"
+      ]
+    },
+    "secao": {
+      "type": "string",
+      "title": "Seção da documentação",
+      "enum": [
+        "Ativadores",
+        "Condições",
+        "Efeitos",
+        "Seletores",
+        "Variáveis",
+        "Extras",
+        "Contratos",
+        "Outros"
+      ]
+    },
+    "descricao": {
+      "type": "string",
+      "title": "Descrição",
+      "maxLength": 2000
+    },
+    "disponibilidade": {
+      "type": "string",
+      "title": "Disponibilidade",
+      "enum": [
+        "No catálogo e CA",
+        "No catálogo",
+        "Apenas staff",
+        "Eventos oficiais"
+      ]
+    },
+    "preco": {
+      "type": "integer",
+      "title": "Preço (créditos)",
+      "minimum": 0
+    },
+    "preco_diamantes": {
+      "type": "integer",
+      "title": "Preço (diamantes)",
+      "minimum": 0
+    },
+    "lancamento": {
+      "type": "string",
+      "format": "date",
+      "title": "Lançamento"
+    },
+    "revisao": {
+      "type": "integer",
+      "title": "Revisão"
+    },
+    "nome_na_loja": {
+      "type": "string",
+      "title": "Nome na loja"
+    },
+    "requer_mobi": {
+      "type": "boolean",
+      "title": "Requer mobi"
+    },
+    "requer_bot": {
+      "type": "boolean",
+      "title": "Requer bot"
+    },
+    "requer_bau": {
+      "type": "boolean",
+      "title": "Requer baú"
+    },
+    "requer_contrato": {
+      "type": "boolean",
+      "title": "Requer contrato"
+    },
+    "requer_antena": {
+      "type": "boolean",
+      "title": "Requer antena"
+    },
+    "versao_negativa": {
+      "type": "object",
+      "title": "Versão negativa",
+      "properties": {
+        "nome": {
+          "type": "string",
+          "title": "Nome"
+        },
+        "classname": {
+          "type": "string",
+          "title": "Classname"
+        },
+        "descricao": {
+          "type": "string",
+          "title": "Descrição",
+          "maxLength": 2000
+        },
+        "revisao": {
+          "type": "integer",
+          "title": "Revisão"
+        }
+      }
+    },
+    "rascunho": {
+      "type": "boolean",
+      "title": "Página em rascunho"
+    },
+    "conteudo": {
+      "type": "string",
+      "title": "Conteúdo (Markdown)",
+      "maxLength": 100000
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "title": "Página na documentação"
+    }
+  }
+}
