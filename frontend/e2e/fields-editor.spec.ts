@@ -18,6 +18,8 @@ test("field order survives a save and a reload", async ({ page }) => {
   await expect(page.getByText("Salvo").first()).toBeVisible();
   const saved = await (await page.request.get(`/api/proxy/v1/collections/${id}`)).json();
   expect(Object.keys(saved.schema.properties)).toEqual(["segundo", "primeiro"]);
+  // Saved means clean at once: leaving asks nothing, without a reload first.
+  await expect(page.getByRole("button", { name: "Descartar" })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("list", { name: "Campos" }).getByRole("listitem").first()).toContainText("Segundo");
   // Nothing left to save: the bar is gone and leaving asks nothing.
@@ -42,6 +44,7 @@ test("subfield order survives a save", async ({ page }) => {
   const saved = await (await page.request.get(`/api/proxy/v1/collections/${id}`)).json();
   expect(Object.keys(saved.schema.properties)).toEqual(["endereco", "title"]);
   expect(Object.keys(saved.schema.properties.endereco.properties)).toEqual(["numero", "rua"]);
+  await expect(page.getByRole("button", { name: "Descartar" })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("button", { name: "Salvar", exact: true })).toHaveCount(0);
 });

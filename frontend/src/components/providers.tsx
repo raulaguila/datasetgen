@@ -17,7 +17,13 @@ function retry(failures: number, error: unknown): boolean {
 
 export function Providers({ children, initialLocale }: { children: React.ReactNode; initialLocale: Locale }) {
   const [client] = useState(
-    () => new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry, refetchOnWindowFocus: false } } }),
+    () => {
+      const client = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry, refetchOnWindowFocus: false } } });
+      // Structural sharing keeps the cached object when only the key order changed, and a
+      // schema's key order is its field order: a saved reorder would read back as the old one.
+      for (const key of [["collections", "detail"], ["schema-versions"]]) client.setQueryDefaults(key, { structuralSharing: false });
+      return client;
+    },
   );
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
