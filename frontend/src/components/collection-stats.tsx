@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { type FieldRow, recordTitle } from "@/components/field-builder";
 import { groupableOf, useNumberFormat } from "@/components/record-groups";
-import { viewWhere, whereText, type Where } from "@/components/record-rules";
+import { andWhere, bothWhere, viewWhere, whereText, type Rule, type Where } from "@/components/record-rules";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { records, tools } from "@/lib/api/endpoints";
 import type { Collection, FieldProfile, StatsBucket, Widget } from "@/lib/api/types";
@@ -45,23 +45,93 @@ function useValueText() {
 }
 
 /** Counts by value, largest first, the tail folded into "others". */
-function Bars({ items, total, label }: { items: { key: unknown; count: number }[]; total: number; label: (v: unknown) => string }) {
+type Slice = { text: string; count: number; href?: string };
+
+/** The top values and the rest folded into "others"; with `href` each value opens its records. */
+function useSlices(items: { key: unknown; count: number }[], total: number, label: (v: unknown) => string, href?: (key: unknown) => string): Slice[] {
   const { t } = useI18n();
-  const num = useNumberFormat();
   const top = items.slice(0, TOP);
   const rest = total - top.reduce((n, g) => n + g.count, 0);
-  const max = Math.max(1, ...top.map((g) => g.count), rest);
-  const rows = [...top.map((g) => ({ text: label(g.key), count: g.count })), ...(rest > 0 ? [{ text: t("analysis.others"), count: rest }] : [])];
+  return [...top.map((g) => ({ text: label(g.key), count: g.count, href: href?.(g.key) })), ...(rest > 0 ? [{ text: t("analysis.others"), count: rest }] : [])];
+}
+
+const pctOf = (n: number, total: number) => (total > 0 ? ` · ${Math.round((n / total) * 100)}%` : "");
+
+/** A slice's name: a link to its records when it has one. */
+function SliceName({ s, className }: { s: Slice; className?: string }) {
+  return s.href ? <Link href={s.href} className={`truncate hover:underline ${className ?? ""}`} title={s.text}>{s.text}</Link> : <span className={`truncate ${className ?? ""}`} title={s.text}>{s.text}</span>;
+}
+
+/** Counts by value, largest first, the tail folded into "others". */
+function Bars({ items, total, label, href }: { items: { key: unknown; count: number }[]; total: number; label: (v: unknown) => string; href?: (key: unknown) => string }) {
+  const num = useNumberFormat();
+  const rows = useSlices(items, total, label, href);
+  const max = Math.max(1, ...rows.map((g) => g.count));
   return (
     <ul className="space-y-1.5">
       {rows.map((g, i) => (
-        <li key={i} className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)_auto] items-center gap-2 text-sm">
-          <span className="truncate" title={g.text}>{g.text}</span>
+        <li key={i} className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)_auto] items-center gap-2 text-sm" title={`${g.text}: ${num(g.count)}${pctOf(g.count, total)}`}>
+          <SliceName s={g} />
           <span className="h-2 rounded-full bg-primary/60" style={{ width: `${Math.max(2, (g.count / max) * 100)}%` }} aria-hidden />
-          <span className="text-xs tabular-nums text-muted-foreground">{num(g.count)}{total > 0 && ` · ${Math.round((g.count / total) * 100)}%`}</span>
+          <span className="text-xs tabular-nums text-muted-foreground">{num(g.count)}{pctOf(g.count, total)}</span>
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Shares of the whole as a ring, each value in its fixed series hue, named in the legend beside it. */
+function Donut({ items, total, label, href }: { items: { key: unknown; count: number }[]; total: number; label: (v: unknown) => string; href?: (key: unknown) => string }) {
+  const num = useNumberFormat();
+  const rows = useSlices(items, total, label, href);
+  const sum = Math.max(1, rows.reduce((n, g) => n + g.count, 0));
+  const r = 40;
+  const c = 2 * Math.PI * r;
+  const gap = rows.length > 1 ? 1.2 : 0; // the surface between slices
+  // "Others" is the folded tail: neutral, never a ninth hue.
+  const named = Math.min(items.length, TOP);
+  const color = (i: number) => (i < named ? `var(--series-${i + 1})` : "var(--muted-foreground)");
+  // Where each slice starts along the ring: the counts before it.
+  const starts = rows.map((_, i) => rows.slice(0, i).reduce((n, g) => n + (g.count / sum) * c, 0));
+  return (
+    <div className="flex flex-wrap items-center gap-4">
+      <svg viewBox="0 0 100 100" className="size-24 shrink-0 -rotate-90" role="img" aria-label={rows.map((g) => `${g.text} ${num(g.count)}`).join(", ")}>
+        {rows.map((g, i) => {
+          const len = (g.count / sum) * c;
+          return (
+            <circle key={i} cx="50" cy="50" r={r} fill="none" stroke={color(i)} strokeWidth="16" strokeDasharray={`${Math.max(0, len - gap)} ${c}`} strokeDashoffset={-starts[i]}>
+              <title>{`${g.text}: ${num(g.count)}${pctOf(g.count, total)}`}</title>
+            </circle>
+          );
+        })}
+      </svg>
+      <ul className="min-w-36 flex-1 space-y-1 text-sm">
+        {rows.map((g, i) => (
+          <li key={i} className="flex items-center gap-2">
+            <span className="size-2.5 shrink-0 rounded-full" style={{ background: color(i) }} aria-hidden />
+            <SliceName s={g} className="min-w-0 flex-1" />
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{num(g.count)}{pctOf(g.count, total)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** The same counts as rows of a table. */
+function CountTable({ items, total, label, href, head }: { items: { key: unknown; count: number }[]; total: number; label: (v: unknown) => string; href?: (key: unknown) => string; head: string }) {
+  const { t } = useI18n();
+  const num = useNumberFormat();
+  const rows = useSlices(items, total, label, href);
+  return (
+    <table className="w-full text-sm">
+      <thead><tr className="text-left text-xs text-muted-foreground"><th className="py-1 font-medium">{head}</th><th className="py-1 text-right font-medium">{t("dashboard.kind.count")}</th><th className="py-1 text-right font-medium">%</th></tr></thead>
+      <tbody className="divide-y">
+        {rows.map((g, i) => (
+          <tr key={i}><td className="max-w-0 py-1.5"><SliceName s={g} className="block" /></td><td className="py-1.5 text-right tabular-nums">{num(g.count)}</td><td className="py-1.5 text-right tabular-nums text-muted-foreground">{total ? Math.round((g.count / total) * 100) : 0}%</td></tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -83,7 +153,7 @@ export function fillSeries(points: { at: string; count: number }[], bucket: Stat
 }
 
 /** Records per bucket as columns, oldest on the left. */
-function Series({ points, bucket }: { points: { at: string; count: number }[]; bucket: StatsBucket }) {
+function Series({ points, bucket, line = false }: { points: { at: string; count: number }[]; bucket: StatsBucket; line?: boolean }) {
   const { t, locale } = useI18n();
   const num = useNumberFormat();
   const all = fillSeries(points, bucket);
@@ -95,11 +165,21 @@ function Series({ points, bucket }: { points: { at: string; count: number }[]; b
   return (
     <figure className="space-y-1">
       <figcaption className="text-xs text-muted-foreground">{title}</figcaption>
-      <div className="flex h-24 items-end gap-px" role="img" aria-label={`${title}: ${all.map((p) => `${fmt(p.at)} ${num(p.count)}`).join(", ")}`}>
-        {all.map((p) => (
-          <div key={p.at} title={`${fmt(p.at)}: ${num(p.count)}`} className="min-w-px flex-1 rounded-t-sm bg-primary/60 hover:bg-primary" style={{ height: p.count ? `${Math.max(3, (p.count / max) * 100)}%` : 0 }} />
-        ))}
-      </div>
+      {line ? (
+        // A 2px line over the buckets; each bucket's column is its hover target.
+        <div className="relative h-24" role="img" aria-label={`${title}: ${all.map((p) => `${fmt(p.at)} ${num(p.count)}`).join(", ")}`}>
+          <svg viewBox={`0 0 ${Math.max(1, all.length - 1)} 100`} preserveAspectRatio="none" className="absolute inset-0 size-full overflow-visible">
+            <polyline fill="none" stroke="var(--primary)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" points={all.map((p, i) => `${i},${100 - (p.count / max) * 96}`).join(" ")} />
+          </svg>
+          <div className="absolute inset-0 flex">{all.map((p) => <div key={p.at} className="flex-1 hover:bg-primary/10" title={`${fmt(p.at)}: ${num(p.count)}`} />)}</div>
+        </div>
+      ) : (
+        <div className="flex h-24 items-end gap-px" role="img" aria-label={`${title}: ${all.map((p) => `${fmt(p.at)} ${num(p.count)}`).join(", ")}`}>
+          {all.map((p) => (
+            <div key={p.at} title={`${fmt(p.at)}: ${num(p.count)}`} className="min-w-px flex-1 rounded-t-sm bg-primary/60 hover:bg-primary" style={{ height: p.count ? `${Math.max(3, (p.count / max) * 100)}%` : 0 }} />
+          ))}
+        </div>
+      )}
       <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
         <span>{fmt(all[0].at)}</span>
         {all.length > 1 && <span>{fmt(all[all.length - 1].at)}</span>}
@@ -125,6 +205,12 @@ function Figures({ items }: { items: [string, string][] }) {
  * One field of the collection, the way a schema browser shows it: how many
  * records fill it, then its numbers, its dates over time or its common values.
  */
+/** A field whose card holds only how filled it is: no figures, dates or bars worth drawing. */
+export const isPlain = (profile?: FieldProfile) => {
+  const top = profile?.top ?? [];
+  return profile?.sum === undefined && !profile?.first && (top.length === 0 || ((profile?.distinct ?? 0) > 1 && top.every((x) => x.count === 1)));
+};
+
 export function FieldStats({ row, profile, total, bucket }: { row: FieldRow; profile?: FieldProfile; total: number; bucket: StatsBucket }) {
   const { t, locale } = useI18n();
   const num = useNumberFormat();
@@ -184,12 +270,35 @@ export function ViewConditions({ collectionId, onPick }: { collectionId: string;
   );
 }
 
-/** One dashboard widget, drawn from the records it selects in one request. */
-export function WidgetView({ collection, widget, rows }: { collection: Collection; widget: Widget; rows: FieldRow[] }) {
-  const { t } = useI18n();
-  const num = useNumberFormat();
+/** A widget's number the way its format reads it. */
+export function formatFigure(v: number, locale: string, format: Widget["format"] = "number", decimals?: number): string {
+  const fixed = decimals === undefined ? {} : { minimumFractionDigits: decimals, maximumFractionDigits: decimals };
+  if (format === "compact") return new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: decimals ?? 1 }).format(v);
+  // shortcut: the money follows the language (BRL / USD), fine while each install bills in one currency.
+  if (format === "currency") return new Intl.NumberFormat(locale, { style: "currency", currency: locale === "pt-BR" ? "BRL" : "USD", ...fixed }).format(v);
+  // The stored number is already the percentage (12.5 → 12,5%).
+  if (format === "percent") return `${new Intl.NumberFormat(locale, { maximumFractionDigits: decimals ?? 1, ...fixed }).format(v)}%`;
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: decimals ?? 2, ...fixed }).format(v);
+}
+
+/** The records list filtered to `where`: where a widget's figure or bar leads. */
+export const recordsHref = (collectionId: string, where: Where) => {
+  const text = whereText(where);
+  return `/collections/${collectionId}${text ? `?where=${encodeURIComponent(text)}` : ""}`;
+};
+
+/** The rule picking one value of a breakdown: empty values have their own. */
+const valueRule = (field: string, key: unknown): Rule => (key === null || key === undefined || key === "" ? { field, op: "empty" } : { field, op: "eq", value: key });
+
+/**
+ * One dashboard widget, drawn from the records it selects in one request. `scope`
+ * is the dashboard's own filter, joined to the widget's conditions.
+ */
+export function WidgetView({ collection, widget, rows, scope }: { collection: Collection; widget: Widget; rows: FieldRow[]; scope?: Where }) {
+  const { t, locale } = useI18n();
   const label = useValueText();
-  const where = asWhere(widget.where);
+  const joined = scope ? bothWhere(asWhere(widget.where), scope) : asWhere(widget.where);
+  const where = joined ?? asWhere(widget.where);
   const field = rows.find((r) => r.key === widget.field);
   const figure = widget.kind === "sum" || widget.kind === "avg" || widget.kind === "min" || widget.kind === "max";
   const needsField = widget.kind !== "count" && widget.kind !== "list";
@@ -199,21 +308,27 @@ export function WidgetView({ collection, widget, rows }: { collection: Collectio
     values: widget.kind === "bars" && field ? [field] : [],
     dates: widget.kind === "timeline" && field ? [field] : [],
     bucket,
-  }, widget.kind !== "list" && (!needsField || !!field));
+  }, !!joined && widget.kind !== "list" && (!needsField || !!field));
   const text = whereText(where) || undefined;
   const list = useQuery({
     queryKey: ["records", collection.id, "widget", widget.id, text],
     queryFn: ({ signal }) => records.list({ collection_id: collection.id, page: 1, limit: 5, sort: "updated_at", order: "desc", where: text }, signal),
-    enabled: widget.kind === "list",
+    enabled: !!joined && widget.kind === "list",
   });
   const p = field ? st.data?.fields[field.key] : undefined;
   const figureValue = figure ? p?.[widget.kind as "sum" | "avg" | "min" | "max"] : undefined;
-  const value = widget.kind === "count" ? (st.data ? num(st.data.total) : "—") : figureValue !== undefined ? num(figureValue) : "—";
+  const shown = (v: number) => formatFigure(v, locale, widget.format, widget.decimals);
+  const value = widget.kind === "count" ? (st.data ? shown(st.data.total) : "—") : figureValue !== undefined ? shown(figureValue) : "—";
+  // Drill-down: the figure opens the records it counts; a bar, the records of its value.
+  const all = recordsHref(collection.id, figure && field ? andWhere(where, [{ field: field.key, op: "not_empty" }]) : where);
+  const byValue = field ? (key: unknown) => recordsHref(collection.id, andWhere(where, [valueRule(field.key, key)])) : undefined;
   const none = <p className="text-sm text-muted-foreground">{st.isPending ? "…" : t("dashboard.no_records")}</p>;
+  const total = st.data?.total ?? 0;
   return (
     <section aria-label={widget.title} className="flex h-full min-w-0 flex-col gap-2 rounded-xl border bg-card p-4">
       <h3 className="text-xs font-medium text-muted-foreground">{widget.title}</h3>
-      {needsField && !field ? <p className="text-sm text-muted-foreground">{t("dashboard.field_gone")}</p>
+      {!joined ? <p className="text-sm text-muted-foreground">{t("dashboard.filter_conflict")}</p>
+        : needsField && !field ? <p className="text-sm text-muted-foreground">{t("dashboard.field_gone")}</p>
         : widget.kind === "list" ? (
           list.data?.items.length ? (
             <ul className="divide-y text-sm">
@@ -223,11 +338,14 @@ export function WidgetView({ collection, widget, rows }: { collection: Collectio
             </ul>
           ) : <p className="text-sm text-muted-foreground">{list.isPending ? "…" : t("dashboard.no_records")}</p>
         ) : widget.kind === "bars" ? (
-          p?.top?.length ? <Bars items={p.top} total={st.data?.total ?? 0} label={label} /> : none
+          !p?.top?.length ? none
+            : widget.visual === "donut" ? <Donut items={p.top} total={total} label={label} href={byValue} />
+            : widget.visual === "table" ? <CountTable items={p.top} total={total} label={label} href={byValue} head={field?.field.name ?? ""} />
+            : <Bars items={p.top} total={total} label={label} href={byValue} />
         ) : widget.kind === "timeline" ? (
-          p?.series?.length ? <Series points={p.series} bucket={bucket} /> : none
+          p?.series?.length ? <Series points={p.series} bucket={bucket} line={widget.visual === "line"} /> : none
         ) : (
-          <p className="font-heading text-3xl font-semibold tabular-nums">{st.isPending ? "…" : value}</p>
+          <Link href={all} className="w-fit font-heading text-3xl font-semibold tabular-nums hover:underline" title={t("dashboard.open_records")}>{st.isPending ? "…" : value}</Link>
         )}
     </section>
   );

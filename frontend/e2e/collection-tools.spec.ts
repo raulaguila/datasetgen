@@ -13,10 +13,11 @@ test("a collection's tools: CSV, bulk edit, views, trash, API key, field history
   const collectionId = records.split("/").pop()!;
 
   // CSV: columns by label or key.
-  await page.getByRole("button", { name: "Importar" }).click();
+  await page.getByRole("button", { name: "Mais" }).click();
+  await page.getByRole("menuitem", { name: "Importar" }).click();
   await page.locator("#import-file").setInputFiles({ name: "dados.csv", mimeType: "text/csv", buffer: Buffer.from("Título;notes\nBeta;b\nAlfa;a\nGama;c\n") });
   const dialog = page.getByRole("dialog", { name: "Importar" });
-  await expect(dialog.getByText("3 registro(s) válido(s), 0 com problema.")).toBeVisible();
+  await expect(dialog.getByText("3 registros válidos, 0 com problema.")).toBeVisible();
   await dialog.getByRole("button", { name: "Importar 3" }).click();
   await expect(dialog).toBeHidden();
 
@@ -47,7 +48,7 @@ test("a collection's tools: CSV, bulk edit, views, trash, API key, field history
   await page.getByRole("option", { name: "Notas" }).click();
   await bulk.locator("#bulk_notes").fill("lote");
   await bulk.getByRole("button", { name: "Aplicar em 2" }).click();
-  await expect(page.getByText("2 registro(s) atualizado(s)")).toBeVisible();
+  await expect(page.getByText("2 registros atualizados")).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: "lote" })).toHaveCount(2);
 
   // Delete goes to the trash; restore brings it back.
@@ -55,11 +56,11 @@ test("a collection's tools: CSV, bulk edit, views, trash, API key, field history
   // The delete waits out the undo window; leaving the page before it would keep the record.
   const deleted = page.waitForResponse((r) => r.url().endsWith("/v1/records/delete") && r.ok(), { timeout: 15_000 });
   await page.getByRole("button", { name: "Excluir selecionados" }).click();
-  await expect(page.getByText("1 registro(s) movido(s) para a lixeira.")).toBeVisible();
+  await expect(page.getByText("1 registro movido para a lixeira.")).toBeVisible();
   await deleted;
   await page.goto(`${records}/trash`);
   await page.getByRole("row").filter({ hasText: "Alfa" }).getByRole("button", { name: "Restaurar" }).click();
-  await expect(page.getByText("1 registro(s) restaurado(s)")).toBeVisible();
+  await expect(page.getByText("1 registro restaurado")).toBeVisible();
   await page.goto(records);
   await expect(page.getByRole("row").filter({ hasText: "Alfa" })).toBeVisible();
 

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type Form from "@rjsf/core";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Columns2, Rows3 } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Columns2, Rows3 } from "lucide-react";
 import { toast } from "sonner";
 import { DangerZone, FormSection, FormSections, PageBody, PageHeader, SaveBar, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -26,12 +26,14 @@ import { useMe } from "@/lib/context/me";
 import { errorMessage } from "@/lib/errors";
 import { useUnsavedGuard } from "@/lib/hooks/use-unsaved-guard";
 import { useI18n } from "@/lib/i18n/provider";
+import { plural } from "@/lib/i18n/plural";
 import { roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
+import { neighbours, useSequenceStore } from "@/lib/store/sequence";
 import { useUIStore } from "@/lib/store/ui";
 
 /** Create when `record` is null, edit otherwise. The server checks the data against the schema. */
-function RecordForm({ collection, record, editable }: { collection: Collection; record: DataRecord | null; editable: boolean }) {
+function RecordForm({ collection, record, editable, next }: { collection: Collection; record: DataRecord | null; editable: boolean; next?: string }) {
   const { t } = useI18n();
   const columns = useUIStore((s) => s.formColumns);
   const setColumns = useUIStore((s) => s.setFormColumns);
@@ -84,9 +86,10 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
   /**
    * The browser checks first, so broken fields light up without a round trip.
    * After saving: "blank" stays on an empty form, "copy" keeps what was typed
-   * so the next record changes only what differs; otherwise back to the list.
+   * so the next record changes only what differs; "next" opens the list's next
+   * record; otherwise back to the list.
    */
-  const submit = (again?: "blank" | "copy") => {
+  const submit = (again?: "blank" | "copy" | "next") => {
     setIssues([]);
     setChecked(true);
     if (!formRef.current?.validateForm()) return setError(t("records.invalid"));
@@ -94,6 +97,7 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
     save.mutate(t(again === "copy" ? "records.copy_kept" : "common.saved"), {
       onSuccess: () => {
         if (!again) return router.push(back);
+        if (again === "next") return router.push(`/records/${next}`);
         // Entering a batch: stay on the form for the next record.
         if (again === "blank") setData({});
         setChecked(false);
@@ -141,7 +145,9 @@ function RecordForm({ collection, record, editable }: { collection: Collection; 
             saveLabel={t(record ? "common.save" : "common.create")}
             discardLabel={t(record ? "common.discard" : "common.cancel")}
             onDiscard={discard}
-            extra={!record && (
+            extra={record ? next && (
+              <Button type="button" variant="outline" disabled={save.isPending} onClick={() => submit("next")}>{t("records.save_and_next")}</Button>
+            ) : (
               // Split button: blank by default, the menu keeps the data for a near-copy.
               <div className="flex">
                 <Button type="button" variant="outline" className="rounded-r-none" disabled={save.isPending} onClick={() => submit("blank")}>{t("records.save_and_new")}</Button>
@@ -192,12 +198,41 @@ export default function RecordPage() {
   const title = creating ? t("records.new") : record ? recordTitle(collection?.schema ?? null, record.data) ?? `${t("records.record")} ${record.id.slice(0, 8)}` : t("records.record");
   useCrumb(title, collection && { label: collection.name, href: `/collections/${collection.id}` });
   const failed = detail.error ?? parent.error;
+  const sequence = useSequenceStore((st) => st.ids);
+  const { prev, next, index } = creating ? { index: -1 } : neighbours(sequence, id);
+  // j / k step through the list's records, as in mail apps; typing in a field is left alone.
+  useEffect(() => {
+    if (index < 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || (e.key !== "j" && e.key !== "k")) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable || el.closest("[role=listbox],[role=dialog]"))) return;
+      // A click, not router.push: the unsaved-changes guard watches link clicks.
+      document.querySelector<HTMLAnchorElement>(`[data-step=${e.key === "j" ? "next" : "prev"}]`)?.click();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [index]);
+  const step = (to: string | undefined, dir: "prev" | "next") => {
+    const label = t(dir === "prev" ? "records.prev" : "records.next");
+    const Icon = dir === "prev" ? ChevronLeft : ChevronRight;
+    return to
+      ? <Button variant="outline" size="icon" nativeButton={false} aria-label={label} title={`${label} (${dir === "prev" ? "k" : "j"})`} render={<Link href={`/records/${to}`} data-step={dir} />}><Icon className="size-4" /></Button>
+      : <Button variant="outline" size="icon" disabled aria-label={label}><Icon className="size-4" /></Button>;
+  };
 
   return (
     <>
       <PageHeader
         title={title}
         description={record && `${t("common.updated_at")} ${format(record.updated_at)}`}
+        action={record && index >= 0 && sequence.length > 1 && (
+          <div className="flex items-center gap-2" role="group" aria-label={t("records.steps")}>
+            {step(prev, "prev")}
+            <span className="text-sm tabular-nums text-muted-foreground">{`${index + 1} / ${sequence.length}`}</span>
+            {step(next, "next")}
+          </div>
+        )}
       />
       <PageBody>
         {loading || (!creating && detail.isPending) || (!!collectionId && parent.isPending) ? (
@@ -209,7 +244,7 @@ export default function RecordPage() {
         ) : (
           <>
             {/* Keyed by version: a restore elsewhere on the page reloads the form. */}
-            <RecordForm key={record ? `${record.id}:${record.version}` : "new"} collection={collection} record={record ?? null} editable={editable} />
+            <RecordForm key={record ? `${record.id}:${record.version}` : "new"} collection={collection} record={record ?? null} editable={editable} next={next} />
             {record && <RecordLinks recordId={record.id} />}
             {record && <RecordComments recordId={record.id} owner={roleAllows(collection.role, "owner")} />}
             {record && <RecordHistory collection={collection} record={record} editable={editable} />}
@@ -223,7 +258,7 @@ export default function RecordPage() {
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title={t("records.delete")}
-        description={linked ? `${t("records.delete_hint")} ${t("links.delete_warn").replace("{n}", String(linked))}` : t("records.delete_hint")}
+        description={linked ? `${t("records.delete_hint")} ${plural(t("links.delete_warn"), linked)}` : t("records.delete_hint")}
         destructive
         confirmLabel={t("common.delete")}
         onConfirm={async () => {

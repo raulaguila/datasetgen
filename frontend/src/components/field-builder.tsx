@@ -2,11 +2,12 @@
 
 import { useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, MoreHorizontal, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { IconAction } from "@/components/bits";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -683,7 +684,7 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
               <li key={key}>
               {/* The drag handlers sit on the row, so a group's subfields drag on their own. */}
               <div
-                className={cn("group/row flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-2 transition-colors", dragging === key && "opacity-50", over === i && dragging !== key && "bg-primary/10")}
+                className={cn("group/row flex items-center gap-x-2 gap-y-1 px-2 py-2 transition-colors", dragging === key && "opacity-50", over === i && dragging !== key && "bg-primary/10")}
                 draggable={editable}
                 onDragStart={(e) => { setDragging(key); e.dataTransfer.effectAllowed = "move"; }}
                 onDragOver={(e) => { if (!dragging) return; e.preventDefault(); setOver(i); }}
@@ -698,7 +699,7 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
                     {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
                   </IconAction>
                 )}
-                <div className="min-w-32 flex-1">
+                <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 truncate text-sm font-medium">
                     <span className="truncate">
                       {field.name}
@@ -715,7 +716,19 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
                   </p>
                 </div>
                 {editable && (
-                  <div className="ml-auto flex shrink-0">
+                  // Phones: one menu instead of four buttons, so the name keeps the row.
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon" className="ml-auto shrink-0 sm:hidden" aria-label={`${t("common.actions")}: ${field.name}`} />}><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem disabled={i === 0} onClick={() => onChange(moveField(schema, key, -1))}><ArrowUp className="size-4" />{t("collections.field_up")}</DropdownMenuItem>
+                      <DropdownMenuItem disabled={i === rows.length - 1} onClick={() => onChange(moveField(schema, key, 1))}><ArrowDown className="size-4" />{t("collections.field_down")}</DropdownMenuItem>
+                      <DropdownMenuItem disabled={advanced} onClick={() => { setAdding(false); setEditing(key); }}><Pencil className="size-4" />{t("collections.field_edit")}</DropdownMenuItem>
+                      <DropdownMenuItem variant="destructive" onClick={() => { if (editing === key) setEditing(null); onChange(removeField(schema, key)); }}><Trash2 className="size-4" />{t("collections.field_remove")}</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                {editable && (
+                  <div className="ml-auto flex shrink-0 max-sm:hidden">
                     {/* With a mouse the arrows wait for hover or focus; touch and keyboard keep them, as drag's stand-in. */}
                     <span className="flex transition-opacity [@media(hover:hover)]:opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100">
                     <IconAction label={t("collections.field_up")} target={field.name} disabled={i === 0} onClick={() => onChange(moveField(schema, key, -1))}><ArrowUp className="size-4" /></IconAction>

@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { collections, records } from "@/lib/api/endpoints";
 import type { Collection } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/provider";
+import { plural } from "@/lib/i18n/plural";
 import { useQuality } from "@/lib/hooks/use-quality";
 import { roleAllows } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -40,7 +41,7 @@ function Stat({ label, value, hint, href, title }: { label: string; value: React
         {label}
         {href && <ChevronRight className="size-3.5 opacity-60 transition-transform group-hover/stat:translate-x-0.5" aria-hidden />}
       </p>
-      <p className="mt-1 truncate font-heading text-2xl font-semibold tabular-nums" title={title}>{value}</p>
+      <p className="mt-1 truncate font-heading text-xl font-semibold tabular-nums first-letter:uppercase sm:text-2xl" title={title}>{value}</p>
       {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
     </>
   );
@@ -134,7 +135,7 @@ function Overview({ collection }: { collection: Collection }) {
           <p className="text-sm text-muted-foreground">{t("overview.per_day_empty")}</p>
         ) : active.length < 3 ? (
           <p className="text-sm text-muted-foreground">
-            {t("overview.per_day_few").replace("{n}", number.format(created)).replace("{day}", dayLabel(active[active.length - 1].day))}
+            {plural(t("overview.per_day_few"), created, number.format(created)).replace("{day}", dayLabel(active[active.length - 1].day))}
           </p>
         ) : (
           <>

@@ -104,9 +104,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {crumb && parent ? (
                 <nav aria-label="breadcrumb" className="flex min-w-0 items-center gap-1.5">
                   <Link href={parent.href} className="min-w-0 truncate font-medium hover:underline">{parent.label}</Link>
-                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span aria-current="page" className="truncate text-muted-foreground">{crumb}</span>
+                  {/* On a phone the h1 names the page; the trail keeps only its parent. */}
+                  <ChevronRight className="hidden size-3.5 shrink-0 text-muted-foreground sm:block" />
+                  <span aria-current="page" className="hidden truncate text-muted-foreground sm:inline">{crumb}</span>
                 </nav>
+              ) : !crumb && section && ADMIN_NAV.includes(section) ? (
+                <span className="truncate text-muted-foreground">{t("nav.admin_area")}</span>
               ) : crumb && section && (
                 <nav aria-label="breadcrumb" className="flex min-w-0 items-center gap-1.5">
                   <Link href={section.href} className="shrink-0 text-muted-foreground hover:text-foreground">{t(section.key)}</Link>

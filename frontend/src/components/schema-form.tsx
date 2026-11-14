@@ -1,7 +1,7 @@
 "use client";
 
 import Form, { getDefaultRegistry } from "@rjsf/core";
-import { englishStringTranslator, TranslatableString, type ArrayFieldItemTemplateProps, type ErrorSchema, type FieldProps, type IconButtonProps, type RJSFSchema, type UiSchema, type ValidatorType } from "@rjsf/utils";
+import { englishStringTranslator, enumOptionsIndexForValue, enumOptionsValueForIndex, TranslatableString, type WidgetProps, type ArrayFieldItemTemplateProps, type ErrorSchema, type FieldProps, type IconButtonProps, type RJSFSchema, type UiSchema, type ValidatorType } from "@rjsf/utils";
 import Link from "next/link";
 import { useMemo, useRef, useState, type Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -9,6 +9,7 @@ import { ArrowDown, ArrowUp, Copy, FileUp, Loader2, Paperclip, Plus, Search, X }
 import { AUTO, FILE, FORMULA, REF, fileRefs, isImage, recordTitle } from "@/components/field-builder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { collections, records, tools } from "@/lib/api/endpoints";
 import type { FileRef, SchemaIssue } from "@/lib/api/types";
@@ -328,6 +329,33 @@ function FileField({ formData, onChange, fieldPathId, schema, name, required, di
 
 const fields = { json: JsonField, reference: ReferenceField, references: ReferencesField, file: FileField };
 
+const NONE = "\u0000none";
+const DefaultSelect = getDefaultRegistry().widgets.SelectWidget;
+
+/** One choice of a list, drawn with the app's select (the browser's own looked foreign); several choices keep the stock widget. */
+function SelectWidget(props: WidgetProps) {
+  const { id, options, value, required, disabled, readonly, onChange, onBlur, rawErrors, multiple } = props;
+  const { t } = useI18n();
+  if (multiple) return <DefaultSelect {...props} />;
+  const choices = options.enumOptions ?? [];
+  const index = enumOptionsIndexForValue(value, choices);
+  const current = index === undefined || Array.isArray(index) ? NONE : String(index);
+  const items = { [NONE]: "—", ...Object.fromEntries(choices.map((c, i) => [String(i), c.label])) };
+  return (
+    <Select value={current === NONE ? null : current} items={items} disabled={disabled || readonly}
+      onValueChange={(v) => onChange(v === NONE || v == null ? options.emptyValue : enumOptionsValueForIndex(String(v), choices, options.emptyValue))}
+      onOpenChange={(open) => { if (!open) onBlur(id, value); }}>
+      <SelectTrigger id={id} className="w-full" aria-invalid={!!rawErrors?.length} aria-required={required}><SelectValue placeholder={t("schema.pick")} /></SelectTrigger>
+      <SelectContent>
+        {!required && <SelectItem value={NONE}>—</SelectItem>}
+        {choices.map((c, i) => <SelectItem key={i} value={String(i)}>{c.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
+const widgets = { SelectWidget };
+
 /**
  * Text areas for strings allowed to run long (the field builder's "long text"),
  * the first example as the placeholder, and a JSON box for free objects below
@@ -397,6 +425,7 @@ export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec",
       templates={templates}
       translateString={translateString}
       fields={fields}
+      widgets={widgets}
       formContext={formContext}
       disabled={disabled}
       noHtml5Validate

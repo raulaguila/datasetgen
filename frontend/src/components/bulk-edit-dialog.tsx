@@ -16,6 +16,7 @@ import { records } from "@/lib/api/endpoints";
 import type { Collection } from "@/lib/api/types";
 import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
+import { plural } from "@/lib/i18n/plural";
 
 const SchemaForm = dynamic(() => import("@/components/schema-form").then((m) => m.SchemaForm), { ssr: false, loading: () => <ListSkeleton rows={1} /> });
 
@@ -50,7 +51,7 @@ export function BulkEditDialog({ collection, ids, open, onOpenChange, onDone }: 
     setError(null);
     try {
       const res = await records.bulkUpdate(ids, { [key]: clear ? null : value[key] });
-      toast.success(t("bulk.done").replace("{n}", String(res.count)));
+      toast.success(plural(t("bulk.done"), res.count));
       void client.invalidateQueries({ queryKey: ["records", collection.id] });
       reset();
       onOpenChange(false);

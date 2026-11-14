@@ -21,6 +21,7 @@ import type { Collection, QualityReport, RecordFix } from "@/lib/api/types";
 import { errorMessage } from "@/lib/errors";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
+import { plural } from "@/lib/i18n/plural";
 import { useQuality } from "@/lib/hooks/use-quality";
 import { roleAllows } from "@/lib/permissions";
 import { CollectionPage } from "../_parts";
@@ -110,7 +111,7 @@ function BulkFix({ collection, report, onDone, fieldLabel, issueText }: { collec
   const [manual, setManual] = useState(false);
 
   const after = (n: number, key: MessageKey) => {
-    toast.success(t(key).replace("{n}", String(n)));
+    toast.success(plural(t(key), n));
     void client.invalidateQueries({ queryKey: ["records", collection.id] });
     void client.invalidateQueries({ queryKey: ["collections"] });
     onDone();
@@ -277,7 +278,7 @@ function Quality({ collection }: { collection: Collection }) {
               </span>
             </>
             : <>
-              {t("quality.checked").replace("{n}", String(r.checked))}
+              {plural(t("quality.checked"), r.checked)}
               {r.finished_at && ` · ${format(r.finished_at)}`}
               {r.truncated && ` ${t("quality.truncated")}`}
             </>}
@@ -290,13 +291,13 @@ function Quality({ collection }: { collection: Collection }) {
       {r.status === "done" && !stale && r.invalid_count > 0 && (
         <Card className="gap-0 overflow-hidden p-0">
           <div className="border-b px-4 py-3">
-            <h2 className="font-heading text-base font-semibold">{t("quality.invalid").replace("{n}", String(r.invalid_count))}</h2>
+            <h2 className="font-heading text-base font-semibold">{plural(t("quality.invalid"), r.invalid_count)}</h2>
             <p className="text-sm text-muted-foreground">
               {t("quality.invalid_desc")}
               {r.invalid_count > r.invalid.length && ` ${t("quality.first").replace("{n}", String(r.invalid.length))}`}
             </p>
           </div>
-          <ul aria-label={t("quality.invalid").replace("{n}", String(r.invalid_count))} className="divide-y">
+          <ul aria-label={plural(t("quality.invalid"), r.invalid_count)} className="divide-y">
             {r.invalid.map((rec) => (
               <li key={rec.id} className="flex flex-wrap items-start gap-x-4 gap-y-1 px-4 py-3">
                 <div className="min-w-0 flex-1">

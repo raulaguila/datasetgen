@@ -24,6 +24,7 @@ import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useMe } from "@/lib/context/me";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
+import { plural } from "@/lib/i18n/plural";
 import { can, roleAllows } from "@/lib/permissions";
 import { useUIStore } from "@/lib/store/ui";
 
@@ -129,7 +130,7 @@ export default function CollectionsPage() {
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
         title={t(removing?.kind === "delete" ? "collections.delete" : "collections.leave")}
-        description={removing?.kind === "delete" ? t("collections.delete_trash_hint").replace("{n}", String(removing.c.record_count ?? 0)) : t("collections.leave_confirm").replace("{name}", removing?.c.name ?? "")}
+        description={removing?.kind === "delete" ? plural(t("collections.delete_trash_hint"), removing.c.record_count ?? 0) : t("collections.leave_confirm").replace("{name}", removing?.c.name ?? "")}
         destructive
         confirmLabel={t(removing?.kind === "delete" ? "collections.delete" : "collections.leave")}
         onConfirm={async () => {

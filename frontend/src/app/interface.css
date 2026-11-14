@@ -508,6 +508,13 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
   table[data-compact] td[data-cell=meta] { grid-row: 3; grid-column: -2 / -1; font-size: 12px; color: var(--muted-foreground); }
   table[data-compact] td[data-cell=detail] { grid-row: 4; grid-column: -3 / -1; font-size: 12px; }
   table[data-compact] td[data-cell=action] { display: none; }
+  /* Record cards: each shown field keeps its name ("Custo 6"), the date closes the card. */
+  table[data-records] td:first-child:has([role=checkbox]) { grid-row: 1; align-self: start; }
+  table[data-records] td[data-cell=field] { grid-column: -3 / -1; display: flex; gap: 6px; font-size: 13px; }
+  table[data-records] td[data-cell=field]::before { display: inline; content: attr(data-label); margin: 0; flex-shrink: 0; font-size: 12px; line-height: 20px; }
+  table[data-records] td[data-cell=date] { grid-row: auto; grid-column: -3 / -1; order: 1; margin-top: 2px; }
+  /* The inline editor opens on double-click, a desktop gesture: on a card the value is just text, the card itself the tap target. */
+  table[data-records] td[data-cell=field] > [role=button] { min-height: 0; height: auto; }
 }
 
 /* The first group sits under the brand, which already draws a divider. */
@@ -541,6 +548,9 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
 .rail-workspace-copy > strong { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:13px; line-height:16px; font-weight:500; color:var(--foreground); }
 .rail-workspace-copy > span { font-size:11px; line-height:14px; color:var(--muted-foreground); }
 .rail-workspace > .rail-avatar { background:transparent !important; }
+/* Compact rail: initials alone repeat, so each collection keeps its tint (the tooltip names it). */
+:is([data-ui-workspace-rail][data-collapsed], html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile])) .rail-workspace > .rail-avatar { background:var(--avatar-bg) !important; width:32px; height:32px; }
+@media (min-width:768px) and (max-width:1023px) { [data-ui-workspace-rail]:not([data-mobile]) .rail-workspace > .rail-avatar { background:var(--avatar-bg) !important; width:32px; height:32px; } }
 .rail-workspace-group { min-width:0; }
 .rail-workspaces .rail-workspace[aria-current=true] { background:var(--rail-parent-bg); }
 .rail-workspace-group[data-selected]:has(> .rail-workspace-navigation) { position:relative; isolation:isolate; border-radius:calc(var(--rail-admin-row-h)/2) calc(var(--rail-admin-row-h)/2) min(12px,calc(var(--radius)*1.6)) min(12px,calc(var(--radius)*1.6)); }
@@ -630,3 +640,8 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
 
 /* A pinned collection in the sidebar: a small star after its name. */
 .rail-pin { flex-shrink:0; width:12px; height:12px; margin-inline-start:auto; color:var(--primary); }
+
+/* Phones: a toolbar's tools shrink to icons in one row; the text stays in the DOM as their names. */
+@media (max-width:639px) {
+  .toolbar-tools button { font-size:0; gap:0; padding-inline:0; min-width:2.75rem; height:2.75rem; justify-content:center; }
+}

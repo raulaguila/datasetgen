@@ -17,6 +17,7 @@ import { batches, parseImport, type ParsedRecord } from "@/lib/import-file";
 import { guessColumns, parseCsv, tableRecords } from "@/lib/infer-schema";
 import { parseXlsx } from "@/lib/xlsx";
 import { useI18n } from "@/lib/i18n/provider";
+import { plural } from "@/lib/i18n/plural";
 
 const SHOWN_ERRORS = 20;
 /** Select value for "no field" (a skipped column, or plain create without upsert). */
@@ -128,13 +129,13 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange }:
         created += res.created;
         updated += res.updated ?? 0;
       }
-      toast.success(upsertKey ? t("import.done_upsert").replace("{n}", String(created)).replace("{u}", String(updated)) : t("import.done").replace("{n}", String(created)));
+      toast.success(upsertKey ? t("import.done_upsert").replace("{n}", String(created)).replace("{u}", String(updated)) : plural(t("import.done"), created));
       void client.invalidateQueries({ queryKey: ["records", collectionId] });
       void client.invalidateQueries({ queryKey: ["collections"] });
       setBusy(null);
       close(false);
     } catch (err) {
-      setError(`${errorMessage(err, "common.save_failed", t)} ${t("import.partial").replace("{n}", String(created))}`);
+      setError(`${errorMessage(err, "common.save_failed", t)} ${plural(t("import.partial"), created)}`);
       void client.invalidateQueries({ queryKey: ["records", collectionId] });
       setBusy(null);
     }
@@ -206,7 +207,7 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange }:
             <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setChecked(null)} hidden={!table}>{t("import.remap")}</Button>
             <div role="status" className="space-y-2 text-sm">
               <p>
-                {t("import.summary").replace("{valid}", String(checked.valid)).replace("{invalid}", String(invalid))}
+                {plural(t("import.summary"), checked.valid).replace("{invalid}", String(invalid))}
               </p>
               {invalid > 0 && (
                 <>

@@ -57,7 +57,8 @@ test("a collection's records follow its fields", async ({ page }) => {
   await save.click();
   await expect(page.getByText("Campo obrigatório.")).toBeVisible();
 
-  await page.locator("#rec_categoria").selectOption("gatilho");
+  await page.locator("#rec_categoria").click();
+  await page.getByRole("option", { name: "gatilho" }).click();
   await expect(page.getByText("Campo obrigatório.")).toHaveCount(0);
   await save.click();
   await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
@@ -93,7 +94,7 @@ test("a collection's records follow its fields", async ({ page }) => {
   await edit.getByRole("checkbox", { name: "Obrigatório" }).click();
   await edit.getByRole("button", { name: "Salvar campo" }).click();
   await expect(fieldsList(page).getByRole("listitem").filter({ hasText: "Nota" })).toContainText("Alterado");
-  const summary = page.getByRole("status").filter({ hasText: "Esta coleção tem 1 registro(s)" });
+  const summary = page.getByRole("status").filter({ hasText: "Esta coleção tem 1 registro." });
   await expect(summary).toContainText("Passa a ser obrigatório: Nota");
   // Saving a risky change asks first.
   await page.getByRole("button", { name: "Salvar", exact: true }).click();

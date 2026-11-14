@@ -47,6 +47,8 @@
 .rjsf .rjsf-item-card fieldset { border: 0; padding: 0; background: none; }
 .rjsf .rjsf-item-card > div > .form-group > fieldset > legend,
 .rjsf .rjsf-item-card > .form-group > fieldset > legend { display: none; }
-.rjsf .rjsf-item-row { display: flex; gap: 0.5rem; align-items: flex-start; }
+.rjsf .rjsf-item-row { display: flex; gap: 0.5rem; align-items: center; }
+/* A plain list value: the list's title already names it, so "Tags-1*" stays for screen readers only. */
+.rjsf .rjsf-item-row > div > .form-group > .control-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* A yes/no box lines up with the inputs beside it, not with their labels. */
 .rjsf .field-boolean { align-self: end; padding-bottom: 0.5rem; }

@@ -24,6 +24,7 @@ import type { Automation, AutomationAction, AutomationInput, AutomationTrigger, 
 import { errorMessage } from "@/lib/errors";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
+import { plural } from "@/lib/i18n/plural";
 import { roleAllows } from "@/lib/permissions";
 import { CollectionPage } from "../_parts";
 
@@ -166,7 +167,7 @@ function Automations({ collection }: { collection: Collection }) {
     const when = a.trigger === "daily" ? t("automations.daily_at").replace("{hour}", `${String(a.hour ?? 0).padStart(2, "0")}:00`) : t(`automations.trigger.${a.trigger}` as MessageKey);
     const then = a.action === "notify" ? t("automations.action.notify") : t("automations.sets").replace("{field}", names.get(a.config.field ?? "") ?? a.config.field ?? "").replace("{value}", a.config.value === null || a.config.value === undefined ? "—" : String(a.config.value));
     const n = a.conditions.rules.length + ((a.conditions as Where).groups ?? []).reduce((k, g) => k + g.rules.length, 0);
-    const rules = n ? ` · ${t("automations.n_conditions").replace("{n}", String(n))}` : "";
+    const rules = n ? ` · ${plural(t("automations.n_conditions"), n)}` : "";
     return `${when}${rules} → ${then}`;
   };
   const items = list.data?.items ?? [];

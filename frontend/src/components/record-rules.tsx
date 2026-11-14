@@ -65,6 +65,17 @@ export function ruleValue(type: FieldType, op: RuleOp, raw: string): unknown {
 }
 
 /** The rules kept in the URL as JSON; anything else reads as none. */
+/**
+ * Both filters at once. One side must be a plain AND list (or empty): groups go
+ * one level deep, so two OR filters cannot nest; null then.
+ */
+export function bothWhere(a: Where, b: Where): Where | null {
+  const plain = (w: Where) => whereEmpty(w) || (!w.any && !(w.groups ?? []).some((g) => g.rules.length));
+  if (plain(b)) return andWhere(a, whereEmpty(b) ? [] : b.rules);
+  if (plain(a)) return andWhere(b, whereEmpty(a) ? [] : a.rules);
+  return null;
+}
+
 export function parseWhere(raw: string): Where {
   try {
     const v = JSON.parse(raw) as Where;

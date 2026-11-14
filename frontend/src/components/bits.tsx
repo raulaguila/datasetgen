@@ -221,5 +221,6 @@ export function avatarStyle(seed: string): React.CSSProperties {
   let n = 0;
   for (let i = 0; i < seed.length; i++) n = (n * 31 + seed.charCodeAt(i)) >>> 0;
   const mix = 14 + (n % 12); // 14–25% primary
-  return { background: `color-mix(in oklch, var(--primary) ${mix}%, transparent)`, color: "var(--primary)" };
+  const background = `color-mix(in oklch, var(--primary) ${mix}%, transparent)`;
+  return { background, "--avatar-bg": background, color: "var(--primary)" } as React.CSSProperties;
 }

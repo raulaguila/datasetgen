@@ -254,7 +254,8 @@ test("auto fields, comments and an upsert import", async ({ page }) => {
 
   // "Code" matches no field: it is mapped by hand. A1 exists, B2 is new.
   await page.goto(`/collections/${id}`);
-  await page.getByRole("button", { name: "Importar" }).click();
+  await page.getByRole("button", { name: "Mais" }).click();
+  await page.getByRole("menuitem", { name: "Importar" }).click();
   const dialog = page.getByRole("dialog", { name: "Importar" });
   await dialog.getByLabel("Registros que já existem").click();
   await page.getByRole("option", { name: "Código" }).click();
@@ -263,7 +264,7 @@ test("auto fields, comments and an upsert import", async ({ page }) => {
   await page.getByRole("option", { name: "Código" }).click();
   await expect(dialog.getByRole("combobox", { name: "Campo da coluna Code" })).toContainText("Código");
   await dialog.getByRole("button", { name: "Verificar registros" }).click();
-  await expect(dialog.getByRole("status")).toContainText("2 registro(s) válido(s), 0 com problema.");
+  await expect(dialog.getByRole("status")).toContainText("2 registros válidos, 0 com problema.");
   await dialog.getByRole("button", { name: "Importar 2" }).click();
   await expect(page.getByText("1 criados, 1 atualizados")).toBeVisible();
   const after = await (await page.request.get(`/api/proxy/v1/records?collection_id=${id}&sort=created_at&order=asc`)).json();

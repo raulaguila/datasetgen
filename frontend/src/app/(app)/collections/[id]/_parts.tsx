@@ -27,6 +27,7 @@ import { errorMessage } from "@/lib/errors";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useUnsavedGuard } from "@/lib/hooks/use-unsaved-guard";
 import { useI18n } from "@/lib/i18n/provider";
+import { plural } from "@/lib/i18n/plural";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { can, roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
@@ -331,7 +332,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                     <ul className="list-inside list-disc space-y-0.5">
                       {changes.map((c, i) => <li key={i}>{changeText(c)}</li>)}
                     </ul>
-                    {risky && <p>{t("collections.schema_change_hint").replace("{n}", String(recordCount))}</p>}
+                    {risky && <p>{plural(t("collections.schema_change_hint"), recordCount)}</p>}
                   </div>
                 )}
                 {collection && editable && (
@@ -397,7 +398,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
         open={confirming}
         onOpenChange={setConfirming}
         title={t("collections.save_fields_title")}
-        description={`${changes.filter((c) => c.risky).map(changeText).join(" · ")}. ${t("collections.save_fields_desc").replace("{n}", String(recordCount ?? 0))}`}
+        description={`${changes.filter((c) => c.risky).map(changeText).join(" · ")}. ${plural(t("collections.save_fields_desc"), recordCount ?? 0)}`}
         confirmLabel={t("common.save")}
         onConfirm={async () => { await save.mutateAsync(true).catch(() => undefined); }}
       />

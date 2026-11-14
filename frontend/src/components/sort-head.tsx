@@ -42,7 +42,7 @@ export function SortSelect({ fields, sort, order, onSort, className }: {
   );
   return (
     <Select value={`${sort}:${order}`} items={items} onValueChange={(v) => { const [s, o] = String(v).split(":"); onSort(s, o as SortOrder); }}>
-      <SelectTrigger className={cn("w-full sm:hidden", className)} aria-label={t("common.sort_by")}><SelectValue /></SelectTrigger>
+      <SelectTrigger className={cn("w-full lg:hidden", className)} aria-label={t("common.sort_by")}><SelectValue /></SelectTrigger>
       <SelectContent>
         {Object.entries(items).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
       </SelectContent>

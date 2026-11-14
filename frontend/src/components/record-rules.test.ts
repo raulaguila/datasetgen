@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { andWhere, parseWhere, whereEmpty, type Rule } from "@/components/record-rules";
+import { andWhere, bothWhere, parseWhere, whereEmpty, type Rule } from "@/components/record-rules";
 
 const r = (field: string): Rule => ({ field, op: "eq", value: 1 });
 
@@ -29,5 +29,16 @@ describe("parseWhere", () => {
   it("reads groups and treats junk as none", () => {
     expect(parseWhere('{"any":true,"rules":[],"groups":[{"rules":[{"field":"a","op":"empty"}]}]}')).toEqual({ any: true, rules: [], groups: [{ any: false, rules: [{ field: "a", op: "empty" }] }] });
     expect(whereEmpty(parseWhere("nope"))).toBe(true);
+  });
+});
+
+describe("bothWhere", () => {
+  it("joins a plain filter onto any other", () => {
+    expect(bothWhere({ any: true, rules: [r("a"), r("b")] }, { any: false, rules: [r("x")] })).toEqual({ any: false, rules: [r("x")], groups: [{ any: true, rules: [r("a"), r("b")] }] });
+    expect(bothWhere({ any: false, rules: [r("x")] }, { any: true, rules: [r("a"), r("b")] })).toEqual({ any: false, rules: [r("x")], groups: [{ any: true, rules: [r("a"), r("b")] }] });
+    expect(bothWhere({ any: false, rules: [] }, { any: false, rules: [] })).toEqual({ any: false, rules: [] });
+  });
+  it("refuses two OR filters", () => {
+    expect(bothWhere({ any: true, rules: [r("a"), r("b")] }, { any: true, rules: [r("c"), r("d")] })).toBeNull();
   });
 });

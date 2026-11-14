@@ -26,6 +26,7 @@ import { useGoToPage, useListParams } from "@/lib/hooks/use-list-params";
 import { errorMessage } from "@/lib/errors";
 import { deleteWithUndo } from "@/lib/undo-delete";
 import { useI18n } from "@/lib/i18n/provider";
+import { plural } from "@/lib/i18n/plural";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { can, resourceText } from "@/lib/permissions";
 
@@ -76,7 +77,7 @@ export default function RolesPage() {
     selection.clear();
     setHidden((h) => [...h, ...ids]);
     deleteWithUndo({
-      message: t("common.deleted_n").replace("{n}", String(ids.length)),
+      message: plural(t("common.deleted_n"), ids.length),
       undoLabel: t("common.undo"),
       run: () => roles.remove(ids),
       onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),

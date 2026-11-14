@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { keepPreviousData, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Download, FileJson, FileUp, Paperclip, PencilLine, Plus, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Download, FileJson, FileUp, Eye, MoreHorizontal, Paperclip, PencilLine, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageBody, PageHeader, useFormatDate } from "@/components/bits";
 import { EmptyState } from "@/components/empty-state";
@@ -12,7 +12,7 @@ import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { fieldsOf, fileRefs, recordTitle, REF, type FieldRow } from "@/components/field-builder";
 import { SavedViews } from "@/components/saved-views";
 import { ColumnPicker, EditableCell, editsInline, pickColumns, useSaveField } from "@/components/record-grid";
-import { RecordGroups, groupableOf } from "@/components/record-groups";
+import { RecordGroups, groupableOf, useNumberFormat } from "@/components/record-groups";
 import { RecordRules, andWhere, legacyRules, parseWhere, whereText as toWhereText, type Where } from "@/components/record-rules";
 import { BoardView, CalendarView, GalleryView, layoutFields, type Layout } from "@/components/record-views";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,7 +24,8 @@ import { SortHead, SortSelect } from "@/components/sort-head";
 import { TablePagination, emptyPageFallback } from "@/components/table-pagination";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { collections, records, tools } from "@/lib/api/endpoints";
@@ -35,8 +36,10 @@ import { useGoToPage, useListParams } from "@/lib/hooks/use-list-params";
 import { useQuality } from "@/lib/hooks/use-quality";
 import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
+import { plural } from "@/lib/i18n/plural";
 import { roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
+import { useSequenceStore } from "@/lib/store/sequence";
 import { searchTerm } from "@/lib/utils";
 import { deleteWithUndo } from "@/lib/undo-delete";
 import { CollectionForm, CollectionPage } from "./_parts";
@@ -110,8 +113,14 @@ function RecordList({ collection }: { collection: Collection }) {
   useGoToPage(fallback, set); // the last rows of the last page went away
   const items = list.data?.items.filter((r) => !hidden.includes(r.id)) ?? [];
   const refLabels = useRefLabels(columns, items, collection.schema);
+  // The record page steps through this page's rows, in this order.
+  const setSequence = useSequenceStore((st) => st.set);
+  const idsKey = items.map((r) => r.id).join(",");
+  useEffect(() => { if (idsKey) setSequence(idsKey.split(",")); }, [idsKey, setSequence]);
+  const num = useNumberFormat();
   const show = (v: unknown, c?: FieldRow) => {
     if (v === undefined || v === null || v === "") return "—";
+    if (typeof v === "number") return num(v);
     if (typeof v === "boolean") return t(v ? "common.yes" : "common.no");
     if (c?.field.type === "reference" && typeof v === "string") return refLabels.get(v) ?? v.slice(0, 8);
     if (c?.field.type === "file" || c?.field.type === "files") {
@@ -152,7 +161,7 @@ function RecordList({ collection }: { collection: Collection }) {
     selection.clear();
     setHidden((h) => [...h, ...ids]);
     deleteWithUndo({
-      message: t("records.trashed_n").replace("{n}", String(ids.length)),
+      message: plural(t("records.trashed_n"), ids.length),
       undoLabel: t("common.undo"),
       run: () => records.remove(ids),
       onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
@@ -166,55 +175,82 @@ function RecordList({ collection }: { collection: Collection }) {
     });
   };
 
+  const sortFields = [{ field: "updated_at", label: t("common.updated_at") }, { field: "created_at", label: t("common.created_at") }, ...sortable.map((c) => ({ field: `data.${c.key}`, label: c.field.name }))];
+  // Grouping and layout: inline on wide screens, in the "View" sheet below that.
+  const viewControls = (
+    <>
+      {groupableOf(rows).length > 0 && (
+        <Select value={groupRow?.key ?? NO_GROUP} items={{ [NO_GROUP]: t("groups.none"), ...Object.fromEntries(groupableOf(rows).map((r) => [r.key, `${t("groups.by")}: ${r.field.name}`])) }} onValueChange={(v) => set({ group: v === NO_GROUP ? "" : String(v) })}>
+          <SelectTrigger className="w-40" aria-label={t("groups.by")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_GROUP}>{t("groups.none")}</SelectItem>
+            {groupableOf(rows).map((r) => <SelectItem key={r.key} value={r.key}>{`${t("groups.by")}: ${r.field.name}`}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
+      {layoutOptions.length > 0 && (
+        <Select value={layout} items={{ table: t("layout.table"), ...Object.fromEntries(layoutOptions.map((l) => [l, t(`layout.${l}`)])) }} onValueChange={(v) => set({ layout: v === "table" ? "" : String(v), by: "" })}>
+          <SelectTrigger className="w-32" aria-label={t("layout.title")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="table">{t("layout.table")}</SelectItem>
+            {layoutOptions.map((l) => <SelectItem key={l} value={l}>{t(`layout.${l}`)}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
+      {byOptions.length > 1 && by && (
+        <Select value={by.key} items={Object.fromEntries(byOptions.map((r) => [r.key, r.field.name]))} onValueChange={(v) => set({ by: String(v) })}>
+          <SelectTrigger className="w-44" aria-label={t("layout.by")}><SelectValue /></SelectTrigger>
+          <SelectContent>{byOptions.map((r) => <SelectItem key={r.key} value={r.key}>{r.field.name}</SelectItem>)}</SelectContent>
+        </Select>
+      )}
+    </>
+  );
+
   return (
     <>
-      <div className="flex flex-wrap gap-2 max-sm:grid max-sm:grid-cols-2">
-        <div className="relative min-w-56 flex-1 sm:max-w-sm max-sm:col-span-2 max-sm:min-w-0">
+      {/* Search, then the tools; phones keep the tools as one row of icons (their names stay for screen readers). */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 basis-full sm:min-w-56 sm:max-w-xs sm:flex-1 sm:basis-auto">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input type="search" aria-label={t("common.search")} placeholder={t("records.search")} className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); set({ q: e.target.value.trim(), page: 1 }); }} />
         </div>
-        <RecordRules fields={rows} value={where} onChange={setWhere} />
-        {layout === "table" && <ColumnPicker fields={rows} value={columns} onChange={(keys) => set({ cols: keys.join(",") })} />}
-        {groupableOf(rows).length > 0 && (
-          <Select value={groupRow?.key ?? NO_GROUP} items={{ [NO_GROUP]: t("groups.none"), ...Object.fromEntries(groupableOf(rows).map((r) => [r.key, `${t("groups.by")}: ${r.field.name}`])) }} onValueChange={(v) => set({ group: v === NO_GROUP ? "" : String(v) })}>
-            <SelectTrigger className="w-44 max-sm:w-full" aria-label={t("groups.by")}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NO_GROUP}>{t("groups.none")}</SelectItem>
-              {groupableOf(rows).map((r) => <SelectItem key={r.key} value={r.key}>{`${t("groups.by")}: ${r.field.name}`}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
-        {layoutOptions.length > 0 && (
-          <Select value={layout} items={{ table: t("layout.table"), ...Object.fromEntries(layoutOptions.map((l) => [l, t(`layout.${l}`)])) }} onValueChange={(v) => set({ layout: v === "table" ? "" : String(v), by: "" })}>
-            <SelectTrigger className="w-40 max-sm:w-full" aria-label={t("layout.title")}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="table">{t("layout.table")}</SelectItem>
-              {layoutOptions.map((l) => <SelectItem key={l} value={l}>{t(`layout.${l}`)}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
-        {byOptions.length > 1 && by && (
-          <Select value={by.key} items={Object.fromEntries(byOptions.map((r) => [r.key, r.field.name]))} onValueChange={(v) => set({ by: String(v) })}>
-            <SelectTrigger className="w-44 max-sm:w-full" aria-label={t("layout.by")}><SelectValue /></SelectTrigger>
-            <SelectContent>{byOptions.map((r) => <SelectItem key={r.key} value={r.key}>{r.field.name}</SelectItem>)}</SelectContent>
-          </Select>
-        )}
-        <SortSelect fields={[{ field: "updated_at", label: t("common.updated_at") }, { field: "created_at", label: t("common.created_at") }, ...sortable.map((c) => ({ field: `data.${c.key}`, label: c.field.name }))]} {...sortProps} className="max-sm:col-span-2" />
-        <div className="ml-auto flex flex-wrap gap-2 max-sm:contents">
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="outline" />}><Download className="size-4" />{t("export.title")}</DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-56">
-              <DropdownMenuItem onClick={() => download("jsonl", false)}>{t("export.jsonl")}</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => download("csv", false)}>{t("export.csv")}</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => download("jsonl", true)}>{t("export.jsonl_valid")}</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => download("csv", true)}>{t("export.csv_valid")}</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <SavedViews collectionId={collection.id} canShare={canEdit} onApply={applyView} />
-          {canEdit && <Button variant="outline" onClick={() => setImporting(true)}><FileUp className="size-4" />{t("import.title")}</Button>}
+        <div className="toolbar-tools flex flex-wrap items-center gap-2 max-sm:w-full max-sm:justify-between sm:contents">
+          <RecordRules fields={rows} value={where} onChange={setWhere} />
+          {layout === "table" && <ColumnPicker fields={rows} value={columns} onChange={(keys) => set({ cols: keys.join(",") })} />}
+          <div className="hidden items-center gap-2 lg:flex">{viewControls}</div>
+          <Sheet>
+            <SheetTrigger render={<Button variant="outline" className="lg:hidden" />}><Eye className="size-4" />{t("layout.title")}</SheetTrigger>
+            <SheetContent side="bottom" className="gap-3 p-4 pb-6">
+              <SheetHeader className="p-0"><SheetTitle>{t("layout.title")}</SheetTitle></SheetHeader>
+              <div className="grid gap-2 [&_[data-slot=select-trigger]]:w-full">
+                {viewControls}
+                <SortSelect fields={sortFields} {...sortProps} />
+              </div>
+            </SheetContent>
+          </Sheet>
+          <div className="flex items-center gap-2 sm:ml-auto">
+            <SavedViews collectionId={collection.id} canShare={canEdit} onApply={applyView} />
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" aria-label={t("common.more")} />}><MoreHorizontal className="size-4" /><span className="max-2xl:sr-only">{t("common.more")}</span></DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-56">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">{t("export.title")}</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => download("jsonl", false)}><Download className="size-4" />{t("export.jsonl")}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => download("csv", false)}><Download className="size-4" />{t("export.csv")}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => download("jsonl", true)}><Download className="size-4" />{t("export.jsonl_valid")}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => download("csv", true)}><Download className="size-4" />{t("export.csv_valid")}</DropdownMenuItem>
+                </DropdownMenuGroup>
+                {canEdit && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setImporting(true)}><FileUp className="size-4" />{t("import.title")}</DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-        {search.trim() !== "" && !searchTerm(search) && <p className="basis-full text-xs text-muted-foreground max-sm:col-span-2" role="status">{t("common.search_min")}</p>}
+        {search.trim() !== "" && !searchTerm(search) && <p className="basis-full text-xs text-muted-foreground" role="status">{t("common.search_min")}</p>}
       </div>
       {canEdit && <RecordImportDialog collectionId={collection.id} schema={collection.schema} open={importing} onOpenChange={setImporting} />}
       {groupRow && <RecordGroups selection={scope} group={groupRow} fields={rows} label={(k) => show(k, groupRow)} onPick={pickGroup} />}
@@ -234,7 +270,7 @@ function RecordList({ collection }: { collection: Collection }) {
         />
       ) : (
         <Card className="gap-0 overflow-hidden p-0">
-          <Table data-responsive data-compact>
+          <Table data-responsive data-compact data-records>
             <TableHeader>
               <TableRow>
                 {canEdit && <SelectAllHead selection={selection} />}
@@ -253,7 +289,7 @@ function RecordList({ collection }: { collection: Collection }) {
                   <TableRow key={r.id} className="cursor-pointer hover:bg-muted/60" onClick={() => router.push(`/records/${r.id}`)}>
                     {canEdit && <SelectCell selection={selection} id={r.id} label={cells[0].text} />}
                     {cells.map((c, i) => (
-                      <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : undefined} className={i === 0 ? "max-w-0 min-w-40" : "max-w-0 text-muted-foreground"}>
+                      <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : "field"} className={i === 0 ? "max-w-0 min-w-40" : "max-w-0 text-muted-foreground"}>
                         {i === 0 ? (
                           <span className="flex min-w-0 items-center gap-1.5">
                             {isInvalid(r.id, r.updated_at) && (

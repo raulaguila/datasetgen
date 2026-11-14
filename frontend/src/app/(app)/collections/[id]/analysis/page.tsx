@@ -1,6 +1,6 @@
 "use client";
 
-import { BUCKETS, FieldStats, ViewConditions, barFields, isDate, isNumeric, useStats } from "@/components/collection-stats";
+import { BUCKETS, FieldStats, ViewConditions, barFields, isDate, isNumeric, useStats, isPlain } from "@/components/collection-stats";
 import { fieldsOf } from "@/components/field-builder";
 import { useNumberFormat } from "@/components/record-groups";
 import { RecordRules, parseWhere, whereText, type Where } from "@/components/record-rules";
@@ -46,9 +46,15 @@ function Analysis({ collection }: { collection: Collection }) {
         </p>
       </div>
       {st.isError ? <QueryErrorState error={st.error} onRetry={() => void st.refetch()} /> : st.isPending ? <ListSkeleton rows={4} /> : (
-        <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-          {rows.map((r) => <FieldStats key={r.key} row={r} profile={st.data.fields[r.key]} total={n} bucket={bucket} />)}
-        </div>
+        <>
+          {/* Fields with figures or bars first; those with only a fill rate share smaller cards after them. */}
+          <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+            {rows.filter((r) => !isPlain(st.data.fields[r.key])).map((r) => <FieldStats key={r.key} row={r} profile={st.data.fields[r.key]} total={n} bucket={bucket} />)}
+          </div>
+          <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            {rows.filter((r) => isPlain(st.data.fields[r.key])).map((r) => <FieldStats key={r.key} row={r} profile={st.data.fields[r.key]} total={n} bucket={bucket} />)}
+          </div>
+        </>
       )}
     </div>
   );

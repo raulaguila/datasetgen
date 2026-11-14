@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Maximize2, Minimize2, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Maximize2, Minimize2, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { IconAction } from "@/components/bits";
 import { BUCKETS, ViewConditions, WIDGET_KINDS, WidgetView, fieldsFor } from "@/components/collection-stats";
 import { fieldsOf } from "@/components/field-builder";
-import { RecordRules, type Where } from "@/components/record-rules";
+import { RecordRules, whereEmpty, type Where } from "@/components/record-rules";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,10 @@ import { roleAllows } from "@/lib/permissions";
 import { newId } from "@/lib/utils";
 
 const MAX = 24;
+const AUTO = "auto";
+const FORMATS: NonNullable<Widget["format"]>[] = ["number", "compact", "currency", "percent"];
+/** The drawings a kind offers, its default first. */
+const VISUALS: Partial<Record<Widget["kind"], NonNullable<Widget["visual"]>[]>> = { bars: ["bars", "donut", "table"], timeline: ["columns", "line"] };
 
 /** The form of one widget: what it shows, over which field and records. */
 function WidgetDialog({ collection, initial, onClose, onSave }: { collection: Collection; initial: Widget | null; onClose: () => void; onSave: (w: Widget) => void }) {
@@ -32,6 +36,9 @@ function WidgetDialog({ collection, initial, onClose, onSave }: { collection: Co
   const [field, setField] = useState(initial?.field ?? "");
   const [where, setWhere] = useState<Where>((initial?.where as Where | undefined) ?? { any: false, rules: [] });
   const [bucket, setBucket] = useState<StatsBucket>(initial?.bucket ?? "month");
+  const [format, setFormat] = useState<NonNullable<Widget["format"]>>(initial?.format ?? "number");
+  const [decimals, setDecimals] = useState<string>(initial?.decimals === undefined ? AUTO : String(initial.decimals));
+  const [visual, setVisual] = useState<Widget["visual"]>(initial?.visual);
   const fit = fieldsFor(kind, rows);
   const picked = fit?.find((r) => r.key === field);
   const buckets = Object.fromEntries(BUCKETS.map((b) => [b, t(`analysis.bucket.${b}` as MessageKey)]));
@@ -39,6 +46,11 @@ function WidgetDialog({ collection, initial, onClose, onSave }: { collection: Co
   // A blank title names the widget after what it shows.
   const auto = `${kinds[kind]}${picked ? `: ${picked.field.name}` : ""}`;
   const ready = !fit || !!picked;
+  const numeric = kind === "count" || kind === "sum" || kind === "avg" || kind === "min" || kind === "max";
+  const visuals = VISUALS[kind] ?? [];
+  const formats = Object.fromEntries(FORMATS.map((f) => [f, t(`dashboard.format.${f}` as MessageKey)]));
+  const visualItems = Object.fromEntries(visuals.map((v) => [v, t(`dashboard.visual.${v}` as MessageKey)]));
+  const decimalItems = { [AUTO]: t("dashboard.decimals_auto"), ...Object.fromEntries(["0", "1", "2", "3"].map((d) => [d, d])) };
   return (
     // The conditions popover sits outside the dialog: a click in it must not close the dialog.
     <Dialog open disablePointerDismissal onOpenChange={(o) => !o && onClose()}>
@@ -47,12 +59,17 @@ function WidgetDialog({ collection, initial, onClose, onSave }: { collection: Co
         <form className="space-y-4" onSubmit={(e) => {
           e.preventDefault();
           if (!ready) return;
-          onSave({ id: initial?.id ?? newId(), kind, title: title.trim() || auto, ...(fit ? { field } : {}), ...(where.rules.length || where.groups?.length ? { where } : {}), ...(kind === "timeline" ? { bucket } : {}), size: initial?.size ?? (kind === "bars" || kind === "list" || kind === "timeline" ? 2 : 1) });
+          onSave({
+            id: initial?.id ?? newId(), kind, title: title.trim() || auto, ...(fit ? { field } : {}), ...(where.rules.length || where.groups?.length ? { where } : {}), ...(kind === "timeline" ? { bucket } : {}),
+            ...(numeric && format !== "number" ? { format } : {}), ...(numeric && decimals !== AUTO ? { decimals: Number(decimals) } : {}),
+            ...(visual && visuals.includes(visual) && visual !== visuals[0] ? { visual } : {}),
+            size: initial?.size ?? ((kind === "bars" && visual !== "donut") || kind === "list" || kind === "timeline" ? 2 : 1),
+          });
         }}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="w-kind">{t("dashboard.kind")}</Label>
-              <Select value={kind} items={kinds} onValueChange={(v) => { setKind(v as Widget["kind"]); setField(""); }}>
+              <Select value={kind} items={kinds} onValueChange={(v) => { setKind(v as Widget["kind"]); setField(""); setVisual(undefined); }}>
                 <SelectTrigger id="w-kind" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>{WIDGET_KINDS.map((k) => <SelectItem key={k} value={k}>{kinds[k]}</SelectItem>)}</SelectContent>
               </Select>
@@ -74,6 +91,33 @@ function WidgetDialog({ collection, initial, onClose, onSave }: { collection: Co
                   <SelectContent>{BUCKETS.map((b) => <SelectItem key={b} value={b}>{buckets[b]}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+            )}
+            {visuals.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="w-visual">{t("dashboard.visual")}</Label>
+                <Select value={visual && visuals.includes(visual) ? visual : visuals[0]} items={visualItems} onValueChange={(v) => setVisual(v as Widget["visual"])}>
+                  <SelectTrigger id="w-visual" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{visuals.map((v) => <SelectItem key={v} value={v}>{visualItems[v]}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            {numeric && (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="w-format">{t("dashboard.format")}</Label>
+                  <Select value={format} items={formats} onValueChange={(v) => setFormat(v as NonNullable<Widget["format"]>)}>
+                    <SelectTrigger id="w-format" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>{FORMATS.map((f) => <SelectItem key={f} value={f}>{formats[f]}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="w-decimals">{t("dashboard.decimals")}</Label>
+                  <Select value={decimals} items={decimalItems} onValueChange={(v) => setDecimals(String(v))}>
+                    <SelectTrigger id="w-decimals" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>{Object.entries(decimalItems).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
           </div>
           <div className="flex flex-col gap-1.5">
@@ -110,6 +154,8 @@ export function CollectionDashboard({ collection }: { collection: Collection }) 
   const q = useQuery({ queryKey: key, queryFn: ({ signal }) => tools.dashboard(collection.id, signal) });
   const [draft, setDraft] = useState<Widget[] | null>(null);
   const [editing, setEditing] = useState<Widget | "new" | null>(null);
+  // The dashboard's own filter: for looking, not saved; each widget joins it to its conditions.
+  const [scope, setScope] = useState<Where>({ any: false, rules: [] });
   const save = useMutation({
     mutationFn: (widgets: Widget[]) => tools.saveDashboard(collection.id, widgets),
     onSuccess: (_, widgets) => { client.setQueryData(key, { widgets }); setDraft(null); toast.success(t("common.saved")); },
@@ -139,6 +185,13 @@ export function CollectionDashboard({ collection }: { collection: Collection }) 
           <Button variant="outline" size="sm" onClick={() => setDraft(widgets)}><Pencil className="size-4" />{t("dashboard.edit")}</Button>
         ))}
       </div>
+      {widgets.length > 0 && !draft && (
+        <div className="flex flex-wrap items-center gap-2">
+          <RecordRules fields={rows} value={scope} onChange={setScope} />
+          <ViewConditions collectionId={collection.id} onPick={setScope} />
+          <span className="text-xs text-muted-foreground">{whereEmpty(scope) ? t("dashboard.filter_hint") : t("dashboard.filter")}</span>
+        </div>
+      )}
       {widgets.length === 0 ? (
         <button type="button" className="w-full rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground hover:bg-muted/40" onClick={() => { setDraft([]); setEditing("new"); }}>
           <Plus className="mx-auto mb-1 size-5" />{t("dashboard.empty")}
@@ -147,13 +200,14 @@ export function CollectionDashboard({ collection }: { collection: Collection }) 
         <ul className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {widgets.map((w, i) => (
             <li key={w.id} className={w.size === 2 ? "relative sm:col-span-2" : "relative"}>
-              <WidgetView collection={collection} widget={w} rows={rows} />
+              <WidgetView collection={collection} widget={w} rows={rows} scope={draft || whereEmpty(scope) ? undefined : scope} />
               {draft && (
                 <div className="absolute right-2 top-2 flex gap-0.5 rounded-md border bg-popover p-0.5 shadow-sm">
                   <IconAction label={t("dashboard.move_up")} target={w.title} disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="size-4" /></IconAction>
                   <IconAction label={t("dashboard.move_down")} target={w.title} disabled={i === widgets.length - 1} onClick={() => move(i, 1)}><ArrowDown className="size-4" /></IconAction>
                   <IconAction label={t(w.size === 2 ? "dashboard.narrow" : "dashboard.wide")} target={w.title} onClick={() => put({ ...w, size: w.size === 2 ? 1 : 2 })}>{w.size === 2 ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}</IconAction>
                   <IconAction label={t("dashboard.edit_widget")} target={w.title} onClick={() => setEditing(w)}><Pencil className="size-4" /></IconAction>
+                  <IconAction label={t("dashboard.duplicate")} target={w.title} disabled={widgets.length >= MAX} onClick={() => setDraft((list) => { const cur = list ?? []; const at = cur.findIndex((x) => x.id === w.id); return [...cur.slice(0, at + 1), { ...w, id: newId() }, ...cur.slice(at + 1)]; })}><Copy className="size-4" /></IconAction>
                   <IconAction label={t("dashboard.remove")} target={w.title} className="text-destructive" onClick={() => setDraft((list) => (list ?? []).filter((x) => x.id !== w.id))}><Trash2 className="size-4" /></IconAction>
                 </div>
               )}

@@ -442,4 +442,10 @@ export interface Widget {
   size?: 1 | 2;
   /** A timeline's span per bar. */
   bucket?: StatsBucket;
+  /** How a number reads: plain, short (1,2 mil), money or a percentage. */
+  format?: "number" | "compact" | "currency" | "percent";
+  /** Digits after the decimal point; the locale's default when absent. */
+  decimals?: number;
+  /** How bars and timelines draw: bars, a donut or a table; columns or a line. */
+  visual?: "bars" | "donut" | "table" | "columns" | "line";
 }

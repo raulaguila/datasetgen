@@ -13,14 +13,15 @@ test("records come in, go out and keep their history", async ({ page }) => {
   const records = page.url();
 
   // Import: one valid line, one missing the required title, one not JSON.
-  await page.getByRole("button", { name: "Importar" }).click();
+  await page.getByRole("button", { name: "Mais" }).click();
+  await page.getByRole("menuitem", { name: "Importar" }).click();
   await page.locator("#import-file").setInputFiles({
     name: "dados.jsonl",
     mimeType: "application/x-ndjson",
     buffer: Buffer.from('{"title":"Primeiro","notes":"a"}\n{"notes":"sem título"}\nnão é json\n{"title":"Segundo","notes":"b"}\n'),
   });
   const dialog = page.getByRole("dialog", { name: "Importar" });
-  await expect(dialog.getByText("2 registro(s) válido(s), 2 com problema.")).toBeVisible();
+  await expect(dialog.getByText("2 registros válidos, 2 com problema.")).toBeVisible();
   await expect(dialog.getByRole("list", { name: "Problemas encontrados" }).getByRole("listitem")).toHaveCount(2);
   await expect(dialog.getByRole("button", { name: "Importar 2" })).toBeDisabled();
   await dialog.getByRole("checkbox").click();
@@ -44,7 +45,7 @@ test("records come in, go out and keep their history", async ({ page }) => {
   // Export as JSON Lines.
   const [download] = await Promise.all([
     page.waitForEvent("download"),
-    page.getByRole("button", { name: "Exportar" }).click().then(() => page.getByRole("menuitem", { name: "JSON Lines (.jsonl)" }).click()),
+    page.getByRole("button", { name: "Mais" }).click().then(() => page.getByRole("menuitem", { name: "JSON Lines (.jsonl)" }).click()),
   ]);
   expect(download.suggestedFilename()).toMatch(/\.jsonl$/);
   const lines = (await readFile(await download.path(), "utf8")).trim().split("\n");
@@ -75,7 +76,7 @@ test("records come in, go out and keep their history", async ({ page }) => {
   await page.getByRole("dialog").getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("Alterações salvas.")).toBeVisible();
   await page.goto(records.replace(/$/, "/quality"));
-  await expect(page.getByRole("heading", { name: "2 registro(s) fora do formato" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: "2 registros fora do formato" })).toBeVisible({ timeout: 15_000 });
   const problems = page.getByRole("list", { name: "O que corrigir" });
   await expect(problems.getByRole("listitem")).toHaveCount(1);
   await expect(problems).toContainText("notes · Campo removido, valor ainda guardado");
@@ -84,7 +85,7 @@ test("records come in, go out and keep their history", async ({ page }) => {
   const apply = page.getByRole("dialog", { name: "Aplicar a todos os registros?" });
   await expect(apply).toContainText("Vai alterar 2 registros.");
   await apply.getByRole("button", { name: "Aplicar" }).click();
-  await expect(page.getByText("2 registro(s) alterado(s)")).toBeVisible();
+  await expect(page.getByText("2 registros alterados")).toBeVisible();
   await expect(page.getByText("Todos os 2 registros seguem os campos atuais")).toBeVisible({ timeout: 15_000 });
 
   // Duplicating copies fields and, when asked, records.

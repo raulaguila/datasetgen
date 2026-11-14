@@ -15,6 +15,7 @@ import { collections } from "@/lib/api/endpoints";
 import type { Collection } from "@/lib/api/types";
 import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
+import { plural } from "@/lib/i18n/plural";
 import { collectionName } from "@/lib/validation";
 
 /** Copies fields, description and icon (and the records when asked) into a new collection the caller owns. */
@@ -58,7 +59,7 @@ export function DuplicateCollectionDialog({ source, onClose }: { source: Collect
           </div>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={withRecords} onCheckedChange={(v) => setWithRecords(v === true)} />
-            {t("duplicate.records").replace("{n}", String(source.record_count ?? 0))}
+            {plural(t("duplicate.records"), source.record_count ?? 0)}
           </label>
           <FormError message={error} />
         </form>

@@ -26,6 +26,7 @@ import { useDebounced } from "@/lib/hooks/use-debounced";
 import { searchTerm } from "@/lib/utils";
 import { useGoToPage, useListParams } from "@/lib/hooks/use-list-params";
 import type { MessageKey } from "@/lib/i18n/messages";
+import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/provider";
 import { can } from "@/lib/permissions";
 
@@ -86,14 +87,14 @@ export default function UsersPage() {
             />
           </div>
           <Select value={status || "all"} items={statusItems} onValueChange={(v) => set({ status: v === "all" ? "" : (v as string), page: 1 })}>
-            <SelectTrigger className="w-44 max-sm:col-span-2 max-sm:w-full" aria-label={t("users.status")}><SelectValue /></SelectTrigger>
+            <SelectTrigger className={cn("w-44 max-sm:w-full", !canRoles && "max-sm:col-span-2")} aria-label={t("users.status")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {Object.entries(statusItems).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
             </SelectContent>
           </Select>
           {canRoles && (
             <Select value={role || "all"} items={roleItems} onValueChange={(v) => set({ role: v === "all" ? "" : (v as string), page: 1 })}>
-              <SelectTrigger className="w-48 max-sm:col-span-2 max-sm:w-full" aria-label={t("users.role")}><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-48 max-sm:w-full" aria-label={t("users.role")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Object.entries(roleItems).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
               </SelectContent>

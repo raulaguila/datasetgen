@@ -18,6 +18,7 @@ import { tools } from "@/lib/api/endpoints";
 import type { Collection } from "@/lib/api/types";
 import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
+import { plural } from "@/lib/i18n/plural";
 import { roleAllows } from "@/lib/permissions";
 import { CollectionPage } from "../_parts";
 
@@ -40,13 +41,13 @@ function Trash({ collection }: { collection: Collection }) {
   };
   const restore = useMutation({
     mutationFn: (ids: string[]) => tools.restoreRecords(collection.id, ids),
-    onSuccess: (res) => { toast.success(t("trash.restored").replace("{n}", String(res.count))); settle(); },
+    onSuccess: (res) => { toast.success(plural(t("trash.restored"), res.count)); settle(); },
     onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
   });
   const purge = async (ids: string[]) => {
     try {
       const res = await tools.purgeRecords(collection.id, ids);
-      toast.success(t("trash.purged").replace("{n}", String(res.count)));
+      toast.success(plural(t("trash.purged"), res.count));
       settle();
     } catch (err) {
       toast.error(errorMessage(err, "common.save_failed", t));
@@ -95,7 +96,7 @@ function Trash({ collection }: { collection: Collection }) {
       <ConfirmDialog
         open={!!purging}
         onOpenChange={(o) => !o && setPurging(null)}
-        title={t("trash.purge_title").replace("{n}", String(purging?.length ?? 0))}
+        title={plural(t("trash.purge_title"), purging?.length ?? 0)}
         description={t("trash.purge_desc")}
         confirmLabel={t("trash.purge")}
         destructive
