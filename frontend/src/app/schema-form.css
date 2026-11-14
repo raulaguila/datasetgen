@@ -5,10 +5,14 @@
 .rjsf fieldset fieldset { border: 1px solid var(--border); border-radius: 0.75rem; padding: 1rem; background: color-mix(in oklab, var(--muted) 35%, transparent); }
 .rjsf fieldset fieldset > legend { float: left; width: 100%; margin-bottom: 0; }
 .rjsf legend { font-weight: 600; font-size: 0.9375rem; margin-bottom: 0.25rem; }
-.rjsf .form-group { display: grid; gap: 0.375rem; min-width: 0; }
+.rjsf .form-group { display: grid; gap: 0.375rem; min-width: 0; align-content: start; }
 .rjsf .control-label { font-size: 0.875rem; font-weight: 500; }
 .rjsf .required { color: var(--destructive); margin-left: 0.125rem; }
 .rjsf .field-description, .rjsf .help-block { font-size: 0.8125rem; color: var(--muted-foreground); margin: 0; }
+/* A field's hint goes under its input, as everywhere else in the app: fields side by side line up by their
+   inputs whether or not one has a hint. Errors follow the hint. Group descriptions (direct in a fieldset) stay on top. */
+.rjsf .form-group > .field-description { order: 1; }
+.rjsf .form-group > :is(.help-block, div:has(> .error-detail)) { order: 2; }
 .rjsf .form-control {
   height: var(--control-h); width: 100%; min-width: 0; border-radius: 0.5rem;
   border: 1px solid var(--input); background: var(--card); padding: 0.25rem 0.625rem;
