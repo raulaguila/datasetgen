@@ -373,6 +373,8 @@ export function uiFor(schema: unknown, nested = false): UiSchema {
   if (s.type === "string" && typeof s.maxLength === "number" && s.maxLength >= 500) out["ui:widget"] = "textarea";
   if (s.type === "string") return out;
   if (nested && s.type === "object" && s.properties === undefined) return { ...out, "ui:field": "json" };
+  // Several picks from a fixed list: a checkbox each, not the browser's cramped multi-select box.
+  if (s.type === "array" && (s as { uniqueItems?: unknown }).uniqueItems === true && Array.isArray((s.items as { enum?: unknown } | undefined)?.enum)) return { ...out, "ui:widget": "checkboxes" };
   for (const [key, sub] of Object.entries(s.properties ?? {})) {
     const ui = uiFor(sub, true);
     if (Object.keys(ui).length) out[key] = ui;

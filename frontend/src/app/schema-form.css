@@ -18,6 +18,9 @@
 .rjsf .form-control:focus-visible { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent); }
 .rjsf .form-control:disabled { opacity: 0.6; cursor: not-allowed; }
 .rjsf .checkbox label { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
+/* A list of picks: each box apart from its text, the rows a touch apart. */
+.rjsf .checkboxes { display: grid; gap: 0.375rem; }
+.rjsf .checkboxes .checkbox label > span { display: inline-flex; align-items: center; gap: 0.5rem; }
 .rjsf .array-item-list { display: grid; gap: 0.5rem; }
 /* The list also carries .row, kept out of the .row rule below. */
 .rjsf .row:not(.array-item-list) { display: flex; justify-content: flex-end; }

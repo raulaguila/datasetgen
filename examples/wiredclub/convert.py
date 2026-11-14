@@ -202,6 +202,48 @@ def wired_settings(classname, kind, groups, mapping):
     return [s for g in names for s in groups.get(g, [])]
 
 
+# The docs' wording of each source option -> its wiredfurni.params.sources key.
+SOURCE_OPTIONS = [
+    ("item de ativação", "furni.0"), ("mobis escolhidos", "furni.100"), ("mobis do seletor", "furni.200"),
+    ("mobis do sinal", "furni.201"), ("bot especificado", "users.100"), ("habbo especificado", "users.101"),
+    ("do seletor", "users.200"), ("do sinal", "users.201"), ("acionador", "users.0"),
+]
+
+
+def wired_sources(body, texts):
+    """The "Configurações avançadas" lists of a wired's page as source blocks, in the client's words:
+    each bold line opens a block, each bullet is an option."""
+    m = re.search(r"^## Configurações avançadas:?\s*\n(.*?)(?=^## |\Z)", body, re.S | re.M)
+    if not m:
+        return []
+    src = "wiredfurni.params.sources."
+    blocks, current = [], None
+    for line in m.group(1).splitlines():
+        line = line.strip()
+        head = re.fullmatch(r"\*\*(.+?)\*\*", line)
+        if head or (line.startswith(("-", "*")) and current is None):
+            current = {"titulo_docs": head.group(1) if head else "", "keys": []}
+            blocks.append(current)
+        if line.startswith(("-", "*")) and not head:
+            text = line.lstrip("-* ").lower()
+            key = next((k for w, k in SOURCE_OPTIONS if w in text), None)
+            if key and key not in current["keys"]:
+                current["keys"].append(key)
+    out = []
+    for b in blocks:
+        if not b["keys"]:
+            continue
+        users = all(k.startswith("users.") for k in b["keys"])
+        bots = "users.100" in b["keys"] or "bot" in b["titulo_docs"].lower()
+        title = src + ("users.title.bots" if bots else "users.title" if users else "furni.title")
+        out.append({
+            "bloco": "Usuário" if users else "Mobi",
+            "titulo": texts.get(title, b["titulo_docs"]),
+            "opcoes": [texts.get(src + k, k) for k in sorted(b["keys"], key=lambda k: int(k.split(".")[1]))],
+        })
+    return out
+
+
 def drop_empty(d):
     return {k: v for k, v in d.items() if v not in (None, "", [], {})}
 
@@ -251,7 +293,8 @@ def guide(fm, body, rel, repo):
 
 def main(repo, out, furnidata=None, texts=None):
     names = furni_names(furnidata) if furnidata else {}
-    groups = setting_groups(client_texts(texts)) if texts else {}
+    texts = client_texts(texts) if texts else {}
+    groups = setting_groups(texts)
     mapping = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "parametros.json"), encoding="utf-8"))
     docs = os.path.join(repo, DOCS)
     wireds, guides = [], []
@@ -270,6 +313,7 @@ def main(repo, out, furnidata=None, texts=None):
                 w = wired(fm, body, rel, repo, names)
                 if groups:
                     w["parametros"] = wired_settings(w["classname"], w["tipo"], groups, mapping) or None
+                    w["fontes"] = wired_sources(body, texts) or None
                 wireds.append(drop_empty(w))
             else:
                 guides.append(guide(fm, body, rel, repo))

@@ -173,6 +173,103 @@
         }
       }
     },
+    "fontes": {
+      "type": "array",
+      "title": "Fontes (configurações avançadas)",
+      "description": "De onde o wired tira os mobis ou usuários; opções do cliente Habbo",
+      "items": {
+        "type": "object",
+        "title": "Bloco de fonte",
+        "required": [
+          "bloco",
+          "opcoes"
+        ],
+        "properties": {
+          "bloco": {
+            "type": "string",
+            "title": "Bloco",
+            "enum": [
+              "Mobi",
+              "Usuário"
+            ]
+          },
+          "titulo": {
+            "type": "string",
+            "title": "Título",
+            "examples": [
+              "Antenas:",
+              "Baús:",
+              "Bloqueado por mobis:",
+              "Contratos:",
+              "Destino personalizado:",
+              "Estado a verificar:",
+              "Estado/posição a definir:",
+              "Estado/posição a verificar:",
+              "Fonte dos mobis (pagamento)",
+              "Fonte dos mobis (recompensas)",
+              "Fonte variável (distância de animação):",
+              "Fonte variável (tempo por bloco):",
+              "Habbos para enviar:",
+              "Local de destino:",
+              "Mobi a ser colocado:",
+              "Mobis para comparar com:",
+              "Mobis para enviar:",
+              "Mover através dos mobis:",
+              "Mover através dos usuários:",
+              "O atirador:",
+              "O projétil:",
+              "O usuário alvo:",
+              "O usuário em movimento:",
+              "Origem da variável:",
+              "Os mobis alvo:",
+              "Os mobis para combinar:",
+              "Os móveis em movimento:",
+              "Os usuários a coincidir:",
+              "Permitir transporte para:",
+              "Perto de:",
+              "Referência variável (pagamento)",
+              "Referência variável (recompensas)",
+              "Selecionar alvo:",
+              "Selecionar usuários fonte:",
+              "Selecione Bot fonte:",
+              "Selecione a fonte do Mobi:",
+              "Selecione a fonte:",
+              "Tipos de Mobis para checar:",
+              "Usuários para comparar com:",
+              "Usuários para premiar:",
+              "Variável de destino:",
+              "Variável referência:"
+            ]
+          },
+          "opcoes": {
+            "type": "array",
+            "title": "Opções",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "Use o item de ativação",
+                "Use mobis escolhidos",
+                "Escolha de mobis secundários",
+                "Use the snapshot",
+                "Usar mobis do seletor",
+                "Usar mobis do sinal",
+                "Todos os mobis do quarto",
+                "Todo o mobi movido pela pilha de WIRED",
+                "Use o usuário acionador",
+                "O usuário alcançado",
+                "O usuário clicado",
+                "Use o bot especificado pelo nome",
+                "Use o Habbo especificado pelo nome",
+                "Usar usuários do seletor",
+                "Usar usuários do Sinal",
+                "Todos os usuários no quarto"
+              ]
+            }
+          }
+        }
+      }
+    },
     "conteudo": {
       "type": "string",
       "title": "Conteúdo (Markdown)",

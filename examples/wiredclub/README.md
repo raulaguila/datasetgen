@@ -9,6 +9,8 @@ Each wired keeps the infobox fields: type, section, availability, prices, releas
 
 `parametros` lists the settings of the wired's window, from the Habbo client texts (`wiredfurni.params.*`): for each one its key, label, options and, when the client has one, a usage note. For example `wf_act_move_rotate` gets the delay, "Mover Mobi:" (Nenhum movimento, Mover aleatoriamente) and "Girar Mobi:" with its four rotations. The client groups these texts by setting, not by wired, so [parametros.json](parametros.json) says which groups each wired shows; every Efeito also gets the delay and every Seletor the "filter existing selection" choice. 139 of the 221 wireds have settings. Wireds whose settings live in the shared variable and source groups, and the configurators, leaderboards and chests, have none yet.
 
+`fontes` holds the advanced settings: where the wired takes its furni or users from (the triggering item, picked furni, the selector, the signal…). Each block has a kind (Mobi or Usuário), the client's title ("Selecione a fonte do Mobi:", "Selecione Bot fonte:") and the options the wired offers, in the client's words. The client does not say which options each wired offers; only the 17 docs pages with a "Configurações avançadas" list do, so only those wireds come filled in. The schema lists every option the client has, so the others can be completed on the record page.
+
 The recent-changes pages are left out, since they repeat the others with older dates.
 
 ## Generate

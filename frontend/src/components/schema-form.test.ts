@@ -22,6 +22,12 @@ describe("uiFor", () => {
     expect(uiFor({ type: "object" })).toEqual({});
     expect(uiFor({ type: "object", properties: { meta: { type: "object" }, end: { type: "object", properties: { rua: { type: "string" } } } } })).toEqual({ meta: { "ui:field": "json" } });
   });
+
+  it("draws several picks from a fixed list as checkboxes", () => {
+    const pick = { type: "array", uniqueItems: true, items: { type: "string", enum: ["a", "b"] } };
+    expect(uiFor({ properties: { fontes: { type: "array", items: { type: "object", properties: { opcoes: pick } } }, tags: { ...pick, uniqueItems: false } } }))
+      .toEqual({ fontes: { items: { opcoes: { "ui:widget": "checkboxes" } } } });
+  });
 });
 
 describe("issueErrors", () => {
