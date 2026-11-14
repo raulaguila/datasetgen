@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Maximize2, Minimize2, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { IconAction } from "@/components/bits";
-import { WIDGET_KINDS, WidgetView, fieldsFor } from "@/components/collection-stats";
+import { BUCKETS, ViewConditions, WIDGET_KINDS, WidgetView, fieldsFor } from "@/components/collection-stats";
 import { fieldsOf } from "@/components/field-builder";
 import { RecordRules, type Where } from "@/components/record-rules";
 import { Button } from "@/components/ui/button";
@@ -14,11 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { tools } from "@/lib/api/endpoints";
-import type { Collection, Widget } from "@/lib/api/types";
+import type { Collection, StatsBucket, Widget } from "@/lib/api/types";
 import { errorMessage } from "@/lib/errors";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
+import { newId } from "@/lib/utils";
 
 const MAX = 24;
 
@@ -30,8 +31,10 @@ function WidgetDialog({ collection, initial, onClose, onSave }: { collection: Co
   const [title, setTitle] = useState(initial?.title ?? "");
   const [field, setField] = useState(initial?.field ?? "");
   const [where, setWhere] = useState<Where>((initial?.where as Where | undefined) ?? { any: false, rules: [] });
+  const [bucket, setBucket] = useState<StatsBucket>(initial?.bucket ?? "month");
   const fit = fieldsFor(kind, rows);
   const picked = fit?.find((r) => r.key === field);
+  const buckets = Object.fromEntries(BUCKETS.map((b) => [b, t(`analysis.bucket.${b}` as MessageKey)]));
   const kinds = Object.fromEntries(WIDGET_KINDS.map((k) => [k, t(`dashboard.kind.${k}` as MessageKey)]));
   // A blank title names the widget after what it shows.
   const auto = `${kinds[kind]}${picked ? `: ${picked.field.name}` : ""}`;
@@ -44,7 +47,7 @@ function WidgetDialog({ collection, initial, onClose, onSave }: { collection: Co
         <form className="space-y-4" onSubmit={(e) => {
           e.preventDefault();
           if (!ready) return;
-          onSave({ id: initial?.id ?? crypto.randomUUID(), kind, title: title.trim() || auto, ...(fit ? { field } : {}), ...(where.rules.length || where.groups?.length ? { where } : {}), size: initial?.size ?? (kind === "bars" || kind === "list" ? 2 : 1) });
+          onSave({ id: initial?.id ?? newId(), kind, title: title.trim() || auto, ...(fit ? { field } : {}), ...(where.rules.length || where.groups?.length ? { where } : {}), ...(kind === "timeline" ? { bucket } : {}), size: initial?.size ?? (kind === "bars" || kind === "list" || kind === "timeline" ? 2 : 1) });
         }}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
@@ -63,6 +66,15 @@ function WidgetDialog({ collection, initial, onClose, onSave }: { collection: Co
                 </Select>
               </div>
             )}
+            {kind === "timeline" && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="w-bucket">{t("analysis.bucket")}</Label>
+                <Select value={bucket} items={buckets} onValueChange={(v) => setBucket(v as StatsBucket)}>
+                  <SelectTrigger id="w-bucket" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{BUCKETS.map((b) => <SelectItem key={b} value={b}>{buckets[b]}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="w-title">{t("dashboard.title_label")}</Label>
@@ -72,6 +84,7 @@ function WidgetDialog({ collection, initial, onClose, onSave }: { collection: Co
             <p className="text-sm font-medium">{t("dashboard.records")}</p>
             <div className="flex flex-wrap items-center gap-2">
               <RecordRules fields={rows} value={where} onChange={setWhere} />
+              <ViewConditions collectionId={collection.id} onPick={setWhere} />
               {!where.rules.length && !where.groups?.length && <span className="text-xs text-muted-foreground">{t("dashboard.all_records")}</span>}
             </div>
           </div>

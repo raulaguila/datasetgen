@@ -285,9 +285,9 @@ func auditDetails(collectionID string, raw, data []byte) map[string]any {
 
 // checkData validates data against the collection's schema, then its unique
 // fields against the other records (all but recordID, "" when creating), and
-// returns the schema it checked.
-// shortcut: compiles the schema on every write; cache by collection id and version
-// when bulk imports make it show up in profiles.
+// returns the schema it checked. A share form leaves required reference and
+// file fields optional: whoever fills it cannot pick or upload them, and
+// Quality lists the records still missing them.
 func checkData(ctx context.Context, uow output.UnitOfWork, collectionID, recordID string, data []byte) (raw, filled []byte, err error) {
 	raw, err = uow.Collections().SchemaForWrite(ctx, collectionID)
 	if err != nil {
@@ -298,7 +298,11 @@ func checkData(ctx context.Context, uow output.UnitOfWork, collectionID, recordI
 		return nil, nil, err
 	}
 	data = docs[0]
-	compiled, err := schema.Compile(raw)
+	check := raw
+	if k, ok := reqctx.Key(ctx); ok && k.Form {
+		check = schema.Optional(raw, append(slices.Collect(maps.Keys(schema.RefKeys(raw))), schema.FileKeys(raw)...))
+	}
+	compiled, err := schema.Compile(check)
 	if err != nil {
 		return nil, nil, err
 	}

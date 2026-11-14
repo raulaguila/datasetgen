@@ -412,9 +412,8 @@ func TestRecordImportFiltersAndVersions(t *testing.T) {
 	}
 	wantCode(t, ignore(records.Restore(helper, input.RestoreRecordCommand{ID: id, Version: 1, CurrentVersion: &two})), apperror.CodeConflict)
 
-	exp, err := records.Export(helper, c.ID, false)
-	if err != nil || len(exp.Records) != 2 {
-		t.Fatalf("export: %+v, %v", exp, err)
+	if n, err := exported(records, helper, c.ID, false); err != nil || n != 2 {
+		t.Fatalf("export: %d, %v", n, err)
 	}
 
 }
@@ -441,8 +440,8 @@ func TestRecordFixesAndDuplicate(t *testing.T) {
 		t.Fatalf("remove: %d, %v", n, err)
 	}
 	wantCode(t, ignore(collections.Fix(helper, c.ID, domain.RecordFix{Op: "drop", Field: "x"})), apperror.CodeInvalidInput)
-	if exp, err := records.Export(helper, c.ID, true); err != nil || len(exp.Records) != 0 {
-		t.Fatalf("valid export: %+v, %v", exp, err)
+	if n, err := exported(records, helper, c.ID, true); err != nil || n != 0 {
+		t.Fatalf("valid export: %d, %v", n, err)
 	}
 
 	wantCode(t, ignore(collections.DeleteInvalid(helper, c.ID)), apperror.CodeConflict) // no check yet
@@ -516,4 +515,78 @@ func TestUniqueFieldsHold(t *testing.T) {
 	}
 	unique := json.RawMessage(`{"type":"object","properties":{"codigo":{"type":"string","x-unique":true},"nome":{"type":"string","x-unique":true}}}`)
 	wantCode(t, ignore(collections.Update(ctx, input.UpdateCollectionCommand{ID: c.ID, Schema: unique, Version: pointer.Of(got.Version)})), apperror.CodeInvalidInput)
+}
+
+// exported counts the records an export streams.
+func exported(records input.RecordService, ctx context.Context, collectionID string, valid bool) (int, error) {
+	exp, err := records.Export(ctx, collectionID, valid)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	err = exp.Each(func(json.RawMessage) error { n++; return nil })
+	return n, err
+}
+
+// A record keeps its latest 100 earlier versions; older ones are dropped.
+func TestRecordVersionsArePruned(t *testing.T) {
+	_, records, c, _, helper := toolsEnv(t)
+	rec, err := records.Create(helper, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{"nome":"v1","cat":"a"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 2; i <= 103; i++ {
+		if _, err := records.Update(helper, input.UpdateRecordCommand{ID: rec.ID, Data: json.RawMessage(fmt.Sprintf(`{"nome":"v%d","cat":"a"}`, i))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Version 103 is current; 3 to 102 stay.
+	wantCode(t, ignore(records.Restore(helper, input.RestoreRecordCommand{ID: rec.ID, Version: 2})), apperror.CodeNotFound)
+	if _, err := records.Restore(helper, input.RestoreRecordCommand{ID: rec.ID, Version: 3}); err != nil {
+		t.Fatalf("version 3: %v", err)
+	}
+}
+
+// A fix made while a check runs starts a new one; the older run's result,
+// read before the fix, is dropped instead of overwriting the newer.
+func TestFixRestartsTheQualityCheck(t *testing.T) {
+	collections, records, c, _, helper := toolsEnv(t)
+	if _, err := records.Create(helper, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{"nome":"x","cat":"a"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	token := func() string {
+		t.Helper()
+		var s string
+		if err := testDB.Raw(`SELECT started_at::text FROM app.collection_quality WHERE collection_id = ?`, c.ID).Scan(&s).Error; err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	run := func(tok string) {
+		t.Helper()
+		payload, _ := json.Marshal(map[string]string{"id": c.ID, "token": tok})
+		if err := collection.Jobs(collections.Repo, collections.Records)[collection.JobQuality](context.Background(), payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := collections.StartQuality(helper, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	old := token()
+	// The required field goes: the record breaks the schema.
+	if n, err := collections.Fix(helper, c.ID, domain.RecordFix{Op: domain.FixRemove, Field: "nome"}); err != nil || n != 1 {
+		t.Fatalf("fix: %d, %v", n, err)
+	}
+	fresh := token()
+	if fresh == old {
+		t.Fatal("the fix did not start a new check")
+	}
+	run(old)
+	if st, err := collections.Quality(helper, c.ID); err != nil || st.Run.Status != domain.QualityRunning {
+		t.Fatalf("the older run was stored: %+v, %v", st.Run, err)
+	}
+	run(fresh)
+	if st, err := collections.Quality(helper, c.ID); err != nil || st.Run.Status != domain.QualityDone || st.Run.InvalidCount != 1 {
+		t.Fatalf("after the new run: %+v, %v", st.Run, err)
+	}
 }

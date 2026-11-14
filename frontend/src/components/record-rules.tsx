@@ -76,6 +76,26 @@ export function parseWhere(raw: string): Where {
   }
 }
 
+/**
+ * Field filters of older links and saved views ({"field": value}), read as
+ * "equals" conditions: the Conditions button now does what the Filters panel did.
+ */
+export function legacyRules(raw: string): Rule[] {
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (!v || typeof v !== "object" || Array.isArray(v)) return [];
+    return Object.entries(v).filter(([, x]) => ["string", "number", "boolean"].includes(typeof x)).map(([field, value]) => ({ field, op: "eq" as const, value }));
+  } catch {
+    return [];
+  }
+}
+
+/** The conditions of a saved view's query, old filters included. */
+export function viewWhere(query: string): Where {
+  const p = new URLSearchParams(query);
+  return andWhere(parseWhere(p.get("where") ?? ""), legacyRules(p.get("filter") ?? ""));
+}
+
 const filterable = (rows: FieldRow[]) => rows.filter((r) => !r.advanced && r.field.type !== "group" && r.field.type !== "json");
 
 type DraftRule = { field: string; op: RuleOp; raw: string };

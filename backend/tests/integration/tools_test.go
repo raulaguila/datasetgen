@@ -358,6 +358,28 @@ func TestWhereRulesAndGroups(t *testing.T) {
 	if err != nil || len(total) != 1 || total[0].Count != 2 || total[0].Avgs["v"] != 7.5 || total[0].Mins["v"] != 5 || total[0].Maxs["v"] != 10 {
 		t.Fatalf("totals: %+v, %v", total, err)
 	}
+
+	for _, d := range []string{`{"cat":"c","quando":"2026-01-05"}`, `{"cat":"c","quando":"2026-01-20T10:00:00Z"}`, `{"cat":"c","quando":"2026-03-01"}`, `{"cat":"c","quando":"2026-02-30"}`} {
+		if _, err := records.Create(owner, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(d)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, err := records.Stats(owner, domain.RecordFilter{CollectionID: c.ID}, domain.StatsQuery{Filled: []string{"v", "nome"}, Numbers: []string{"v"}, Dates: []string{"quando"}, Values: []string{"cat"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, nome, cat, quando := st.Fields["v"], st.Fields["nome"], st.Fields["cat"], st.Fields["quando"]
+	if st.Total != 8 || v.Filled != 3 || nome.Filled != 3 || *v.Min != 5 || *v.Max != 10 || *v.Sum != 22 {
+		t.Errorf("stats: total %d, v %+v, nome %+v", st.Total, v, nome)
+	}
+	if cat.Distinct != 3 || len(cat.Top) != 3 || string(cat.Top[0].Key) != `"c"` || cat.Top[0].Count != 4 {
+		t.Errorf("cat values: %+v", cat)
+	}
+	// The invalid 2026-02-30 is skipped; the datetime counts by its date.
+	if *quando.First != "2026-01-05" || *quando.Last != "2026-03-01" || len(quando.Series) != 2 || quando.Series[0] != (domain.DateCount{At: "2026-01-01", Count: 2}) {
+		t.Errorf("dates: %+v first %v last %v", quando.Series, *quando.First, *quando.Last)
+	}
+	wantCode(t, ignore(records.Stats(owner, domain.RecordFilter{CollectionID: c.ID}, domain.StatsQuery{Bucket: "hour"})), apperror.CodeInvalidInput)
 }
 
 // A share link opens one collection to anyone holding it: a form adds records,
@@ -367,7 +389,7 @@ func TestShareLinks(t *testing.T) {
 	collections, records := collectionServices(e)
 	keys, _ := toolServices(e, t)
 	owner := reqctx.WithActor(context.Background(), e.userID(t, e.activeUser(t)))
-	c, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Links", Schema: json.RawMessage(`{"type":"object","required":["n"],"properties":{"n":{"type":"string"}}}`)})
+	c, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Links", Schema: json.RawMessage(`{"type":"object","required":["n","doc"],"properties":{"n":{"type":"string"},"doc":{"type":"object","x-file":true}}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,9 +417,11 @@ func TestShareLinks(t *testing.T) {
 			t.Fatalf("authenticate: %v", err)
 		}
 		ctx := reqctx.WithActor(context.Background(), g.UserID)
-		return reqctx.WithAPIKey(ctx, reqctx.APIKey{ID: g.KeyID, Name: g.Name, CollectionID: g.CollectionID, CanWrite: g.CanWrite})
+		return reqctx.WithAPIKey(ctx, reqctx.APIKey{ID: g.KeyID, Name: g.Name, CollectionID: g.CollectionID, CanWrite: g.CanWrite, Form: g.Share == domain.ShareForm})
 	}
-	// The form's record follows the fields; the list cannot write.
+	// The form's record follows the fields, but a file it cannot upload is not
+	// required there; the owner still must fill it. The list cannot write.
+	wantCode(t, ignore(records.Create(owner, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{"n":"x"}`)})), apperror.CodeValidationFailed)
 	wantCode(t, ignore(records.Create(as(form.Token), input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{}`)})), apperror.CodeValidationFailed)
 	if _, err := records.Create(as(form.Token), input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{"n":"x"}`)}); err != nil {
 		t.Fatal(err)

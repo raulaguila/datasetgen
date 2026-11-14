@@ -177,6 +177,121 @@ func (r *Repository) Aggregate(ctx context.Context, filter domain.RecordFilter, 
 	return out, shared.WrapError(rows.Err(), "record")
 }
 
+// filledSQL is true when a field holds a value: not missing, null, "" or [].
+const filledSQL = `coalesce(data -> ?::text, 'null') NOT IN ('null'::jsonb, '""'::jsonb, '[]'::jsonb)`
+
+// statsTop is how many common values a field's profile lists.
+const statsTop = 8
+
+// Stats reads the profile in up to three queries: one row of counts and
+// ranges, the commonest values of every value field, and the date series.
+// shortcut: each scans the filter's rows, fine to ~100 000 records per collection, like Aggregate.
+func (r *Repository) Stats(ctx context.Context, filter domain.RecordFilter, q domain.StatsQuery) (*domain.RecordStats, error) {
+	out := &domain.RecordStats{Fields: map[string]*domain.FieldStats{}}
+	field := func(f string) *domain.FieldStats {
+		if out.Fields[f] == nil {
+			out.Fields[f] = &domain.FieldStats{}
+		}
+		return out.Fields[f]
+	}
+	cols := []string{"count(*)"}
+	var vars []any
+	for _, f := range q.Filled {
+		cols, vars = append(cols, "count(*) FILTER (WHERE "+filledSQL+")"), append(vars, f)
+	}
+	for _, f := range q.Numbers {
+		num := "(data ->> ?::text)::numeric) FILTER (WHERE jsonb_typeof(data -> ?::text) = 'number')"
+		cols = append(cols, "min("+num, "max("+num, "avg("+num, "sum("+num)
+		vars = append(vars, f, f, f, f, f, f, f, f)
+	}
+	for _, f := range q.Dates {
+		// Text order is date order for ISO dates; the check skips anything else.
+		d := "(data ->> ?::text) FILTER (WHERE jsonb_typeof(data -> ?::text) = 'string' AND pg_input_is_valid(left(data ->> ?::text, 10), 'date'))"
+		cols = append(cols, "left(min"+d+", 10)", "left(max"+d+", 10)")
+		vars = append(vars, f, f, f, f, f, f)
+	}
+	nums := make([]*float64, 4*len(q.Numbers))
+	dates := make([]*string, 2*len(q.Dates))
+	filled := make([]int64, len(q.Filled))
+	dest := []any{&out.Total}
+	for i := range filled {
+		dest = append(dest, &filled[i])
+	}
+	for i := range nums {
+		dest = append(dest, &nums[i])
+	}
+	for i := range dates {
+		dest = append(dest, &dates[i])
+	}
+	if err := r.matching(ctx, filter).Select(strings.Join(cols, ", "), vars...).Row().Scan(dest...); err != nil {
+		return nil, shared.WrapError(err, "record")
+	}
+	for i, f := range q.Filled {
+		field(f).Filled = filled[i]
+	}
+	for i, f := range q.Numbers {
+		s := field(f)
+		s.Min, s.Max, s.Avg, s.Sum = nums[4*i], nums[4*i+1], nums[4*i+2], nums[4*i+3]
+	}
+	for i, f := range q.Dates {
+		field(f).First, field(f).Last = dates[2*i], dates[2*i+1]
+	}
+
+	if len(q.Values) > 0 {
+		inner := r.matching(ctx, filter).
+			Joins("CROSS JOIN jsonb_array_elements_text(?::jsonb) AS k(f)", jsonList(q.Values)).
+			Select("f, (data -> f)::text AS k, count(*) AS n, row_number() OVER (PARTITION BY f ORDER BY count(*) DESC, (data -> f)::text) AS rn, count(*) OVER (PARTITION BY f) AS d").
+			Group("f, k")
+		rows, err := r.db.WithContext(ctx).Table("(?) AS t", inner).Select("f, k, n, d").Where("rn <= ?", statsTop).Order("f, rn").Rows()
+		if err != nil {
+			return nil, shared.WrapError(err, "record")
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var f string
+			var k *string
+			var n, d int64
+			if err := rows.Scan(&f, &k, &n, &d); err != nil {
+				return nil, shared.WrapError(err, "record")
+			}
+			g := domain.RecordGroup{Count: n}
+			if k != nil {
+				g.Key = json.RawMessage(*k)
+			}
+			s := field(f)
+			s.Distinct, s.Top = d, append(s.Top, g)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, shared.WrapError(err, "record")
+		}
+	}
+
+	if len(q.Dates) > 0 {
+		// shortcut: at most 2 000 buckets across the date fields; a daily series of years is cut, pick a wider bucket.
+		rows, err := r.matching(ctx, filter).
+			Joins("CROSS JOIN jsonb_array_elements_text(?::jsonb) AS k(f)", jsonList(q.Dates)).
+			Where("jsonb_typeof(data -> f) = 'string' AND pg_input_is_valid(left(data ->> f, 10), 'date')").
+			Select("f, to_char(date_trunc(?::text, left(data ->> f, 10)::date::timestamp), 'YYYY-MM-DD') AS b, count(*)", q.Bucket).
+			Group("f, b").Order("f, b").Limit(2000).Rows()
+		if err != nil {
+			return nil, shared.WrapError(err, "record")
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var f string
+			var c domain.DateCount
+			if err := rows.Scan(&f, &c.At, &c.Count); err != nil {
+				return nil, shared.WrapError(err, "record")
+			}
+			field(f).Series = append(field(f).Series, c)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, shared.WrapError(err, "record")
+		}
+	}
+	return out, nil
+}
+
 func (r *Repository) List(ctx context.Context, filter domain.RecordFilter) ([]domain.Record, int64, error) {
 	matching := func() *gorm.DB { return r.matching(ctx, filter) }
 	var total int64
@@ -260,7 +375,23 @@ func (r *Repository) Update(ctx context.Context, id string, data json.RawMessage
 		return nil, apperror.New(apperror.CodeConflict, "the record was changed by someone else").WithField("version")
 	}
 	rec := rows[0].toDomain()
+	if err := r.prune(ctx, `SELECT ?::uuid`, id); err != nil {
+		return nil, err
+	}
 	return &rec, nil
+}
+
+// keepVersions is how many earlier versions a record keeps; older ones go.
+const keepVersions = 100
+
+// prune drops the versions past the latest keepVersions of the records the
+// ids query selects; the primary key (record_id, version) serves it.
+func (r *Repository) prune(ctx context.Context, ids string, args ...any) error {
+	err := r.db.WithContext(ctx).Exec(`
+		DELETE FROM app.record_version v USING app.record r
+		WHERE r.id IN (`+ids+`) AND v.record_id = r.id AND v.version <= r.version - ?`,
+		append(args, keepVersions+1)...).Error
+	return shared.WrapError(err, "record")
 }
 
 func (r *Repository) CollectionsOf(ctx context.Context, ids []string) (map[string]string, error) {
@@ -292,6 +423,14 @@ func (r *Repository) Scan(ctx context.Context, collectionID, afterID string, lim
 		out = append(out, domain.Record{ID: m.ID.String(), Data: json.RawMessage(m.Data), UpdatedAt: m.UpdatedAt})
 	}
 	return out, nil
+}
+
+func (r *Repository) Keys(ctx context.Context, collectionID string, limit int) ([]string, error) {
+	var keys []string
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT DISTINCT k FROM app.record, jsonb_object_keys(CASE WHEN jsonb_typeof(data) = 'object' THEN data ELSE '{}' END) AS k
+		WHERE collection_id = ? ORDER BY k LIMIT ?`, collectionID, limit).Scan(&keys).Error
+	return keys, shared.WrapError(err, "record")
 }
 
 func (r *Repository) CreateMany(ctx context.Context, collectionID string, data []string) (int64, error) {
@@ -397,6 +536,9 @@ func (r *Repository) Fix(ctx context.Context, collectionID string, fix domain.Re
 		WHERE id IN (SELECT jsonb_array_elements_text(?::jsonb)::uuid)`, append(setArgs, jsonList(ids))...)
 	if res.Error != nil {
 		return 0, shared.WrapError(res.Error, "record")
+	}
+	if err := r.prune(ctx, `SELECT jsonb_array_elements_text(?::jsonb)::uuid`, jsonList(ids)); err != nil {
+		return 0, err
 	}
 	return res.RowsAffected, nil
 }

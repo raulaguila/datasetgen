@@ -81,6 +81,40 @@ type RecordGroup struct {
 	Maxs  map[string]float64
 }
 
+// StatsQuery names the fields a profile reads, by what it shows of each.
+type StatsQuery struct {
+	Filled  []string // how many records fill each
+	Numbers []string // min, max, average and sum
+	Dates   []string // first, last and a count per Bucket
+	Values  []string // the commonest values and how many differ
+	Bucket  string   // day, week, month or year
+}
+
+// StatsBuckets are the spans a date series counts by.
+var StatsBuckets = []string{"day", "week", "month", "year"}
+
+// DateCount is how many records fall in the bucket starting on At (YYYY-MM-DD).
+type DateCount struct {
+	At    string
+	Count int64
+}
+
+// FieldStats is one field's profile; only the parts its query asked for are set.
+type FieldStats struct {
+	Filled             int64
+	Min, Max, Avg, Sum *float64
+	First, Last        *string
+	Distinct           int64
+	Top                []RecordGroup // Key and Count only
+	Series             []DateCount
+}
+
+// RecordStats profiles the selected records field by field.
+type RecordStats struct {
+	Total  int64
+	Fields map[string]*FieldStats
+}
+
 // SortField is the data field a Sort of "data.<field>" orders by, "" otherwise.
 func (f RecordFilter) SortField() string {
 	if len(f.Sort) > 5 && f.Sort[:5] == "data." {

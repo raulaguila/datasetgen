@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, FileJson } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { fileRefs, isImage, recordTitle, type FieldRow } from "@/components/field-builder";
@@ -33,15 +33,31 @@ interface Common {
   extra: FieldRow[];
 }
 
-// shortcut: the board, calendar month and gallery load at most 100 records; page them when a collection holds more per view.
+/** Cards per page; "load more" adds the next page. */
 const CARD_LIMIT = 100;
 
 function useCards(p: { collection: Collection; search?: string; where: Where }, key: string) {
   const where = whereText(p.where) || undefined;
-  return useQuery({
+  const q = useInfiniteQuery({
     queryKey: ["records", p.collection.id, "cards", key, p.search, where],
-    queryFn: ({ signal }) => records.list({ collection_id: p.collection.id, page: 1, limit: CARD_LIMIT, search: p.search, where, sort: "updated_at", order: "desc" }, signal),
+    queryFn: ({ signal, pageParam }) => records.list({ collection_id: p.collection.id, page: pageParam, limit: CARD_LIMIT, search: p.search, where, sort: "updated_at", order: "desc" }, signal),
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.pagination.page < last.pagination.total_pages ? last.pagination.page + 1 : undefined),
   });
+  const items = q.data?.pages.flatMap((pg) => pg.items) ?? [];
+  const total = q.data?.pages[0]?.pagination.total_items ?? 0;
+  return { ...q, items, total };
+}
+
+/** The next page of cards, with how many show of how many. */
+function MoreCards({ q, className }: { q: ReturnType<typeof useCards>; className?: string }) {
+  const { t } = useI18n();
+  if (!q.hasNextPage) return null;
+  return (
+    <Button variant="outline" size="sm" className={className} disabled={q.isFetchingNextPage} onClick={() => void q.fetchNextPage()}>
+      {t("layout.load_more").replace("{n}", String(q.items.length)).replace("{total}", String(q.total))}
+    </Button>
+  );
 }
 
 function Card({ r, collection, extra, show, draggable, onDragStart }: { r: DataRecord; collection: Collection; extra: FieldRow[]; show: Common["show"]; draggable?: boolean; onDragStart?: (e: React.DragEvent) => void }) {
@@ -72,7 +88,7 @@ export function BoardView({ save, canEdit, ...p }: Common & { canEdit: boolean; 
     : p.by.field.options.split(",").map((o) => o.trim()).filter(Boolean).map((o) => [o, o, o]);
   if (!p.by.field.required) lanes.push(["\u0000", null, t("groups.empty")]);
   if (q.isPending) return <ListSkeleton rows={3} />;
-  const items = q.data?.items ?? [];
+  const items = q.items;
   const laneOf = (r: DataRecord) => {
     const v = ((r.data ?? {}) as Record<string, unknown>)[p.by.key];
     return v === undefined || v === null || v === "" ? "\u0000" : String(v);
@@ -95,7 +111,7 @@ export function BoardView({ save, canEdit, ...p }: Common & { canEdit: boolean; 
           </section>
         );
       })}
-      {items.length >= CARD_LIMIT && <p className="self-end text-xs text-muted-foreground">{t("layout.first_n").replace("{n}", String(CARD_LIMIT))}</p>}
+      <MoreCards q={q} className="shrink-0 self-start" />
     </div>
   );
 }
@@ -115,7 +131,7 @@ export function CalendarView(p: Common) {
   const where = andWhere(p.where, monthRules);
   const q = useCards({ ...p, where }, `cal:${p.by.key}:${dayKey(month)}`);
   const byDay = new Map<string, DataRecord[]>();
-  for (const r of q.data?.items ?? []) {
+  for (const r of q.items) {
     const v = ((r.data ?? {}) as Record<string, unknown>)[p.by.key];
     if (typeof v !== "string") continue;
     const key = datetime ? dayKey(new Date(v)) : v.slice(0, 10);
@@ -153,6 +169,7 @@ export function CalendarView(p: Common) {
           );
         })}
       </div>
+      <MoreCards q={q} />
     </div>
   );
 }
@@ -163,9 +180,10 @@ export function GalleryView(p: Common) {
   const { t } = useI18n();
   const q = useCards(p, `gallery:${p.by.key}`);
   if (q.isPending) return <ListSkeleton rows={3} />;
-  const items = q.data?.items ?? [];
+  const items = q.items;
   if (!items.length) return <EmptyState icon={FileJson} title={t("common.no_results")} />;
   return (
+    <>
     <ul className="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-3" aria-label={t("layout.gallery")}>
       {items.map((r) => {
         const files = fileRefs(((r.data ?? {}) as Record<string, unknown>)[p.by.key]);
@@ -183,5 +201,7 @@ export function GalleryView(p: Common) {
         );
       })}
     </ul>
+    <MoreCards q={q} className="mt-3" />
+    </>
   );
 }

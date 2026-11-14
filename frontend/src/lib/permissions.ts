@@ -24,7 +24,7 @@ export function resourceText(t: (key: MessageKey) => string, code: string, descr
 
 const BITS: [Action, number][] = [["create", 1], ["read", 2], ["update", 4], ["delete", 8]];
 
-/** A role's grants as the audit log stores them ({"products": 6}), in words: "Produtos: Ler, Editar". */
+/** A role's grants as the audit log stores them ({"users": 6}), in words: "Usuários: Ler, Editar". */
 export function permissionsText(t: (key: MessageKey) => string, grants: Record<string, number>): string {
   const parts = Object.entries(grants)
     .filter(([, bits]) => bits > 0)

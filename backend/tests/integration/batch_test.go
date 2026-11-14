@@ -5,15 +5,10 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres"
-
 	"github.com/google/uuid"
 
-	productrepo "github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/product"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/rbac"
 	"github.com/raulaguila/dataset/internal/core/domain"
-	"github.com/raulaguila/dataset/internal/core/port/input"
-	"github.com/raulaguila/dataset/internal/core/usecase/product"
 	"github.com/raulaguila/dataset/internal/core/usecase/role"
 	"github.com/raulaguila/dataset/pkg/apperror"
 )
@@ -117,28 +112,6 @@ func TestRoleBatchDeleteIsAllOrNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := svc.Get(ctx, b.ID)
-	wantCode(t, err, apperror.CodeNotFound)
-}
-
-func TestProductBatchDeleteIsAllOrNothing(t *testing.T) {
-	ctx := context.Background()
-	svc := product.New(productrepo.NewRepository(testDB), postgres.NewStore(testDB))
-	var ids []string
-	for _, name := range []string{"Batch A", "Batch B"} {
-		p, err := svc.Create(ctx, input.CreateProductCommand{Name: name, Price: "1"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		ids = append(ids, p.ID)
-	}
-	wantCode(t, svc.DeleteMany(ctx, append([]string{uuid.NewString()}, ids...)), apperror.CodeNotFound)
-	if _, err := svc.Get(ctx, ids[0]); err != nil {
-		t.Fatalf("a refused batch deleted a product: %v", err)
-	}
-	if err := svc.DeleteMany(ctx, append(ids, ids[0])); err != nil {
-		t.Fatal(err)
-	}
-	_, err := svc.Get(ctx, ids[1])
 	wantCode(t, err, apperror.CodeNotFound)
 }
 

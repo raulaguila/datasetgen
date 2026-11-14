@@ -183,7 +183,7 @@ const (
 )
 
 // widgetKinds are the dashboard's widgets; the client draws them from the record API.
-var widgetKinds = []string{"count", "sum", "avg", "min", "max", "bars", "list"}
+var widgetKinds = []string{"count", "sum", "avg", "min", "max", "bars", "timeline", "list"}
 
 func (s *Service) Dashboard(ctx context.Context, collectionID string) (json.RawMessage, error) {
 	if err := role(ctx, s.Store, collectionID, domain.RoleViewer); err != nil {

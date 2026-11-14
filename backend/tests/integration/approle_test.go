@@ -15,7 +15,7 @@ func TestAppRoleReadsAndWritesDataButNotSchema(t *testing.T) {
 			"SELECT count(*) FROM usr.vw_user_effective_permissions",
 			"SELECT count(*) FROM sys.outbox",
 			"DELETE FROM usr.usr_session WHERE false",
-			"UPDATE app.product SET name = name WHERE false",
+			"UPDATE app.record SET data = data WHERE false",
 			"INSERT INTO usr.usr_audit_log (action) VALUES ('test.app_role')",
 			"INSERT INTO sys.rate_limit (key, window_start) VALUES ('test', now())",
 		} {
@@ -33,7 +33,7 @@ func TestAppRoleReadsAndWritesDataButNotSchema(t *testing.T) {
 		if err := tx.Exec("SET LOCAL ROLE dataset_app").Error; err != nil {
 			t.Fatal(err)
 		}
-		return tx.Exec("DROP TABLE app.product").Error
+		return tx.Exec("DROP TABLE app.record").Error
 	})
 	if err == nil {
 		t.Fatal("app role dropped a table")
@@ -57,7 +57,7 @@ func TestMailerRoleIsLimitedToOutboxDelivery(t *testing.T) {
 	for _, sql := range []string{
 		"SELECT password_hash FROM usr.usr_credential",
 		"UPDATE usr.usr_user SET status='disabled' WHERE false",
-		"SELECT * FROM app.product",
+		"SELECT * FROM app.record",
 		"INSERT INTO sys.outbox(purpose,payload) VALUES ('activation','{}')",
 		"DELETE FROM sys.outbox WHERE false",
 		"UPDATE sys.outbox SET purpose='password_reset' WHERE false",

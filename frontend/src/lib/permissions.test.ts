@@ -9,9 +9,9 @@ const user = (over: Partial<Me>): Me => ({
 
 describe("can", () => {
   it("allows only the granted action", () => {
-    const u = user({ permissions: { products: ["read"] } });
-    expect(can(u, "products", "read")).toBe(true);
-    expect(can(u, "products", "delete")).toBe(false);
+    const u = user({ permissions: { roles: ["read"] } });
+    expect(can(u, "roles", "read")).toBe(true);
+    expect(can(u, "roles", "delete")).toBe(false);
     expect(can(u, "users", "read")).toBe(false);
   });
 
@@ -20,13 +20,13 @@ describe("can", () => {
     expect(can(user({ is_superuser: true }), "roles", "update")).toBe(true);
   });
 
-  it("denies when nobody is signed in", () => expect(can(null, "products", "read")).toBe(false));
+  it("denies when nobody is signed in", () => expect(can(null, "users", "read")).toBe(false));
 });
 
 describe("permissionsText", () => {
-  const t = (key: string) => ({ "resource.products": "Produtos", "action.read": "Ler", "action.update": "Editar", "roles.all_permissions": "Todas", "audit.no_permissions": "Nenhuma" })[key] ?? key;
+  const t = (key: string) => ({ "resource.users": "Usuários", "action.read": "Ler", "action.update": "Editar", "roles.all_permissions": "Todas", "audit.no_permissions": "Nenhuma" })[key] ?? key;
   it("names each resource and its actions in bit order", () => {
-    expect(permissionsText(t as never, { products: 6, audit: 0 })).toBe("Produtos: Ler, Editar");
+    expect(permissionsText(t as never, { users: 6, audit: 0 })).toBe("Usuários: Ler, Editar");
   });
   it("keeps unknown codes and says when nothing is granted", () => {
     expect(permissionsText(t as never, { reports: 2 })).toBe("reports: Ler");

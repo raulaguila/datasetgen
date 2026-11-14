@@ -82,11 +82,11 @@ func TestSetPermissionsReadsTheMap(t *testing.T) {
 		status int
 		want   map[string]domain.Action
 	}{
-		{`{"permissions":{"products":["read","update"],"users":[]}}`, fiber.StatusOK, map[string]domain.Action{
-			"products": domain.ActionRead | domain.ActionUpdate, "users": 0,
+		{`{"permissions":{"audit":["read","update"],"users":[]}}`, fiber.StatusOK, map[string]domain.Action{
+			"audit": domain.ActionRead | domain.ActionUpdate, "users": 0,
 		}},
 		{`{"permissions":{}}`, fiber.StatusOK, map[string]domain.Action{}},
-		{`{"permissions":{"products":["fly"]}}`, fiber.StatusBadRequest, nil},
+		{`{"permissions":{"audit":["fly"]}}`, fiber.StatusBadRequest, nil},
 		{`{}`, fiber.StatusBadRequest, nil},
 	} {
 		svc := &stubRoles{}

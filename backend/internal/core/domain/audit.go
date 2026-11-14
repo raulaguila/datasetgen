@@ -34,7 +34,7 @@ type AuditRecord struct {
 	RequestID   string
 	Action      string
 	TargetID    string
-	TargetLabel string // the user's email, the role's or the product's name
+	TargetLabel string // the user's email, or the role's name
 	TargetGone  bool   // the target was deleted since
 	Details     map[string]any
 }

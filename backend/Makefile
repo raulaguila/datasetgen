@@ -116,11 +116,6 @@ all: help
 rename: ## Rename the project: make rename MODULE=github.com/acme/app NAME=app
 	@../scripts/rename.sh "$(MODULE)" "$(NAME)"
 
-module: ## Copy the products example into a new module: make module NAME=invoice [PLURAL=invoices]
-	@go run ./tools/newmodule -name "$(NAME)" -plural "$(PLURAL)"
-	@gofmt -w internal tests
-	@$(MAKE) --no-print-directory swagger
-
 help: ## Display available commands and their descriptions
 	@echo "$(CYAN)Usage:$(RESET)"
 	@echo "  make [COMMAND]"

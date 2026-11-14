@@ -48,7 +48,7 @@ func (h *Handler) link(c fiber.Ctx) error {
 		return mapper.WriteError(c, err)
 	}
 	ctx := reqctx.WithActor(c.Context(), g.UserID)
-	c.SetContext(reqctx.WithAPIKey(ctx, reqctx.APIKey{ID: g.KeyID, Name: g.Name, CollectionID: g.CollectionID, CanWrite: g.CanWrite}))
+	c.SetContext(reqctx.WithAPIKey(ctx, reqctx.APIKey{ID: g.KeyID, Name: g.Name, CollectionID: g.CollectionID, CanWrite: g.CanWrite, Form: g.Share == domain.ShareForm}))
 	c.Locals(localShare, g.Share)
 	c.Locals(localCollection, g.CollectionID)
 	return c.Next()

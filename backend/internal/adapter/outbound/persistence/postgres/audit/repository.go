@@ -95,7 +95,7 @@ func (r *Repository) List(ctx context.Context, filter domain.AuditFilter) ([]dom
 		       )) AS target_label,
 		       -- A later delete of the target; the log keeps its entries, the target is gone.
 		       EXISTS (SELECT 1 FROM usr.usr_audit_log d WHERE d.target_id = a.target_id
-		         AND d.action IN ('record.delete', 'collection.delete', 'product.delete', 'role.delete')) AS target_gone,
+		         AND d.action IN ('record.delete', 'collection.delete', 'role.delete')) AS target_gone,
 		       a.details
 		FROM usr.usr_audit_log a
 		LEFT JOIN usr.usr_user au ON au.id = a.actor_id

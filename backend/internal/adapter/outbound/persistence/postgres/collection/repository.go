@@ -417,21 +417,21 @@ func (r *Repository) Quality(ctx context.Context, id string, withIDs bool) (*dom
 	}, nil
 }
 
-func (r *Repository) StartQuality(ctx context.Context, id string, schemaVersion int, stale time.Duration) (bool, error) {
+func (r *Repository) StartQuality(ctx context.Context, id string, schemaVersion int, stale time.Duration, force bool) (string, error) {
 	var started []string
 	err := r.db.WithContext(ctx).Raw(`
 		INSERT INTO app.collection_quality (collection_id, schema_version, status) VALUES (?, ?, 'running')
 		ON CONFLICT (collection_id) DO UPDATE SET schema_version = EXCLUDED.schema_version, status = 'running',
 			error = '', started_at = now(), finished_at = NULL
-		WHERE app.collection_quality.status <> 'running' OR app.collection_quality.started_at < now() - ?::interval
-		RETURNING collection_id::text`, id, schemaVersion, stale.String()).Find(&started).Error
-	if err != nil {
-		return false, shared.WrapError(err, "collection")
+		WHERE ? OR app.collection_quality.status <> 'running' OR app.collection_quality.started_at < now() - ?::interval
+		RETURNING started_at::text`, id, schemaVersion, force, stale.String()).Find(&started).Error
+	if err != nil || len(started) == 0 {
+		return "", shared.WrapError(err, "collection")
 	}
-	return len(started) > 0, nil
+	return started[0], nil
 }
 
-func (r *Repository) FinishQuality(ctx context.Context, id string, run domain.QualityRun) error {
+func (r *Repository) FinishQuality(ctx context.Context, id, token string, run domain.QualityRun) error {
 	invalid := string(run.Invalid)
 	if invalid == "" {
 		invalid = "[]"
@@ -443,7 +443,7 @@ func (r *Repository) FinishQuality(ctx context.Context, id string, run domain.Qu
 	err = r.db.WithContext(ctx).Exec(`
 		UPDATE app.collection_quality SET status = ?, checked = ?, invalid_count = ?, truncated = ?, invalid = ?::jsonb,
 			invalid_ids = ARRAY(SELECT jsonb_array_elements_text(?::jsonb)::uuid), error = ?, finished_at = now()
-		WHERE collection_id = ?`,
-		run.Status, run.Checked, run.InvalidCount, run.Truncated, invalid, string(ids), run.Error, id).Error
+		WHERE collection_id = ? AND (? = '' OR started_at::text = ?)`,
+		run.Status, run.Checked, run.InvalidCount, run.Truncated, invalid, string(ids), run.Error, id, token, token).Error
 	return shared.WrapError(err, "collection")
 }

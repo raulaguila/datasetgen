@@ -25,8 +25,8 @@ const SchemaForm = dynamic(() => import("@/components/schema-form").then((m) => 
 
 /**
  * The fields a stranger can fill: reference and file fields need a session
- * (picking a record, uploading), so the public form leaves them out.
- * shortcut: a required reference or file field makes the form refuse every send; allow uploads by link when a form needs one.
+ * (picking a record, uploading), so the public form leaves them out, required
+ * or not; the server takes the record without them and Quality lists it.
  */
 function fillable(schema: Record<string, unknown>): Record<string, unknown> {
   const props = { ...((schema.properties ?? {}) as Record<string, unknown>) };
@@ -34,7 +34,8 @@ function fillable(schema: Record<string, unknown>): Record<string, unknown> {
     const type = typeOf(p);
     if (type === "reference" || type === "references" || type === "file" || type === "files") delete props[key];
   }
-  return { ...schema, properties: props };
+  const required = Array.isArray(schema.required) ? (schema.required as string[]).filter((k) => k in props) : undefined;
+  return { ...schema, properties: props, ...(required ? { required } : {}) };
 }
 
 function Shell({ title, description, children }: { title?: string; description?: string; children: React.ReactNode }) {

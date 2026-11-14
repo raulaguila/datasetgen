@@ -2,6 +2,7 @@ package record
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,6 +29,7 @@ func (h *Handler) Routes(r fiber.Router) {
 	r.Get("/", h.List)
 	r.Get("/export", h.Export) // before /:id, which would swallow it
 	r.Get("/aggregate", h.Aggregate)
+	r.Get("/stats", h.Stats)
 	r.Post("/import", h.Import)
 	r.Get("/:id", h.Get)
 	r.Get("/:id/versions", h.Versions)
@@ -374,4 +376,83 @@ func (h *Handler) Aggregate(c fiber.Ctx) error {
 		out = append(out, groupDTO{Key: g.Key, Count: g.Count, Sums: g.Sums, Avgs: g.Avgs, Mins: g.Mins, Maxs: g.Maxs})
 	}
 	return c.JSON(fiber.Map{"items": out})
+}
+
+type dateCountDTO struct {
+	At    string `json:"at"`
+	Count int64  `json:"count"`
+}
+
+type valueCountDTO struct {
+	Key   json.RawMessage `json:"key" swaggertype:"object"`
+	Count int64           `json:"count"`
+}
+
+type fieldStatsDTO struct {
+	Filled   *int64          `json:"filled,omitempty"`
+	Min      *float64        `json:"min,omitempty"`
+	Max      *float64        `json:"max,omitempty"`
+	Avg      *float64        `json:"avg,omitempty"`
+	Sum      *float64        `json:"sum,omitempty"`
+	First    *string         `json:"first,omitempty"`
+	Last     *string         `json:"last,omitempty"`
+	Distinct *int64          `json:"distinct,omitempty"`
+	Top      []valueCountDTO `json:"top,omitempty"`
+	Series   []dateCountDTO  `json:"series,omitempty"`
+}
+
+func splitList(v string) []string {
+	if v == "" {
+		return nil
+	}
+	return strings.Split(v, ",")
+}
+
+// Stats godoc
+// @Summary Profile records field by field
+// @Description How many of the selected records fill each field, the range of numbers and dates, a count per date bucket and the commonest values. Viewer or above.
+// @Tags records
+// @Produce json
+// @Param collection_id query string true "Collection ID"
+// @Param where query string false "Rules as JSON, as in the list"
+// @Param search query string false "Text search, as in the list"
+// @Param filled query string false "Fields to count filled, comma separated"
+// @Param numbers query string false "Numeric fields: min, max, avg, sum"
+// @Param dates query string false "Date fields: first, last and a series"
+// @Param values query string false "Fields to list the commonest values of (8 each)"
+// @Param bucket query string false "Series bucket: day, week, month (default) or year"
+// @Security BearerAuth
+// @Success 200 {object} object{total=int,fields=map[string]fieldStatsDTO}
+// @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Router /v1/records/stats [get]
+func (h *Handler) Stats(c fiber.Ctx) error {
+	filter, err := listFilter(c)
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	q := domain.StatsQuery{Filled: splitList(c.Query("filled")), Numbers: splitList(c.Query("numbers")), Dates: splitList(c.Query("dates")), Values: splitList(c.Query("values")), Bucket: c.Query("bucket")}
+	st, err := h.svc.Stats(c.Context(), filter, q)
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	fields := make(map[string]fieldStatsDTO, len(st.Fields))
+	for k, f := range st.Fields {
+		d := fieldStatsDTO{Min: f.Min, Max: f.Max, Avg: f.Avg, Sum: f.Sum, First: f.First, Last: f.Last}
+		if slices.Contains(q.Filled, k) {
+			d.Filled = &f.Filled
+		}
+		if slices.Contains(q.Values, k) {
+			d.Distinct, d.Top = &f.Distinct, make([]valueCountDTO, 0, len(f.Top))
+			for _, g := range f.Top {
+				d.Top = append(d.Top, valueCountDTO{Key: g.Key, Count: g.Count})
+			}
+		}
+		for _, p := range f.Series {
+			d.Series = append(d.Series, dateCountDTO{At: p.At, Count: p.Count})
+		}
+		fields[k] = d
+	}
+	return c.JSON(fiber.Map{"total": st.Total, "fields": fields})
 }

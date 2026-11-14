@@ -20,7 +20,8 @@ const (
 	maxVersions   = 50
 	maxImport     = 1000 // records in one import request; the body limit caps it sooner
 	maxImportErrs = 100
-	maxExport     = 100_000
+	// maxExportKeys bounds the CSV columns; keys past it stay in the JSON Lines export.
+	maxExportKeys = 1000
 	exportBatch   = 1000
 	maxMatchKeys  = 10
 	maxMatchValue = 500
@@ -261,9 +262,10 @@ func upsertTargets(ctx context.Context, uow output.UnitOfWork, collectionID, key
 	return out, nil
 }
 
-// Export returns the collection's records in id order, with the schema for the
-// column order; ValidOnly leaves out records that break it. Viewers.
-// shortcut: built in memory up to 100 000 records; stream it when exports grow past that.
+// Export checks access and reads the collection's name, schema and keys now;
+// its Each then streams the records in id order, in batches, so an export of
+// any size holds one batch in memory. ValidOnly leaves out records that break
+// the schema. Viewers.
 func (s *Service) Export(ctx context.Context, collectionID string, validOnly bool) (*input.Export, error) {
 	if _, err := policy.CollectionRole(ctx, s.Collections, collectionID, domain.RoleViewer); err != nil {
 		return nil, err
@@ -276,33 +278,38 @@ func (s *Service) Export(ctx context.Context, collectionID string, validOnly boo
 	if err != nil {
 		return nil, err
 	}
-	out := &input.Export{Name: c.Name, Schema: c.Schema}
-	after, scanned := "", 0
-	for {
-		batch, err := s.Repo.Scan(ctx, collectionID, after, exportBatch)
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range batch {
-			if scanned++; scanned > maxExport {
-				return nil, apperror.New(apperror.CodeInvalidInput, "the collection has more than 100 000 records to export")
-			}
-			if validOnly {
-				issues, err := schema.Check(compiled, r.Data)
-				if err != nil {
-					return nil, err
-				}
-				if len(issues) > 0 {
-					continue
-				}
-			}
-			out.Records = append(out.Records, r.Data)
-		}
-		if len(batch) < exportBatch {
-			return out, nil
-		}
-		after = batch[len(batch)-1].ID
+	keys, err := s.Repo.Keys(ctx, collectionID, maxExportKeys)
+	if err != nil {
+		return nil, err
 	}
+	each := func(fn func(json.RawMessage) error) error {
+		after := ""
+		for {
+			batch, err := s.Repo.Scan(ctx, collectionID, after, exportBatch)
+			if err != nil {
+				return err
+			}
+			for _, r := range batch {
+				if validOnly {
+					issues, err := schema.Check(compiled, r.Data)
+					if err != nil {
+						return err
+					}
+					if len(issues) > 0 {
+						continue
+					}
+				}
+				if err := fn(r.Data); err != nil {
+					return err
+				}
+			}
+			if len(batch) < exportBatch {
+				return nil
+			}
+			after = batch[len(batch)-1].ID
+		}
+	}
+	return &input.Export{Name: c.Name, Schema: c.Schema, Keys: keys, Each: each}, nil
 }
 
 // checkMatch accepts a JSON object of up to 10 top-level fields with plain values.
@@ -476,6 +483,7 @@ const (
 	maxWhereRules   = 20 // across the groups too
 	maxWhereGroups  = 10
 	maxAggregateNum = 5
+	maxStatsFields  = 60 // per part of a stats query
 )
 
 // checkWhere refuses unknown operators, odd field names and values too large
@@ -544,4 +552,34 @@ func (s *Service) Aggregate(ctx context.Context, filter domain.RecordFilter, gro
 		return nil, err
 	}
 	return s.Repo.Aggregate(ctx, filter, group, numeric)
+}
+
+// Stats profiles the selected records: how many fill each field, the range of
+// numbers and dates, a date series and the commonest values, for viewers.
+func (s *Service) Stats(ctx context.Context, filter domain.RecordFilter, q domain.StatsQuery) (*domain.RecordStats, error) {
+	filter.Page = domain.NewPage(1, 1)
+	if err := checkFilter(&filter); err != nil {
+		return nil, err
+	}
+	bad := func(msg string) error { return apperror.New(apperror.CodeInvalidInput, msg).WithField("fields") }
+	if q.Bucket == "" {
+		q.Bucket = "month"
+	}
+	if !slices.Contains(domain.StatsBuckets, q.Bucket) {
+		return nil, apperror.New(apperror.CodeInvalidInput, "bucket is day, week, month or year").WithField("bucket")
+	}
+	for _, part := range [][]string{q.Filled, q.Numbers, q.Dates, q.Values} {
+		if len(part) > maxStatsFields {
+			return nil, bad("up to 60 fields per part")
+		}
+		for _, f := range part {
+			if f == "" || len(f) > 200 || strings.ContainsRune(f, 0) {
+				return nil, bad("field names are 1-200 characters")
+			}
+		}
+	}
+	if _, err := policy.CollectionRole(ctx, s.Collections, filter.CollectionID, domain.RoleViewer); err != nil {
+		return nil, err
+	}
+	return s.Repo.Stats(ctx, filter, q)
 }

@@ -64,15 +64,7 @@ func (s *Service) StartQuality(ctx context.Context, id string) (*input.QualitySt
 		return nil, err
 	}
 	err := s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
-		c, err := uow.Collections().FindByID(ctx, id)
-		if err != nil {
-			return err
-		}
-		started, err := uow.Collections().StartQuality(ctx, id, c.Version, qualityStale)
-		if err != nil || !started {
-			return err
-		}
-		return policy.EnqueueJob(ctx, uow, JobQuality, qualityJob{ID: id})
+		return queueQuality(ctx, uow, id, false)
 	})
 	if err != nil {
 		return nil, err
@@ -81,7 +73,24 @@ func (s *Service) StartQuality(ctx context.Context, id string) (*input.QualitySt
 }
 
 type qualityJob struct {
-	ID string `json:"id"`
+	ID    string `json:"id"`
+	Token string `json:"token,omitempty"`
+}
+
+// queueQuality starts a check and queues its job; force starts over even
+// while one runs, so a change made during that run is not missed: the run it
+// replaces may have read the records before the change, and its result is
+// dropped (FinishQuality checks the token).
+func queueQuality(ctx context.Context, uow output.UnitOfWork, id string, force bool) error {
+	c, err := uow.Collections().FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	token, err := uow.Collections().StartQuality(ctx, id, c.Version, qualityStale, force)
+	if err != nil || token == "" {
+		return err
+	}
+	return policy.EnqueueJob(ctx, uow, JobQuality, qualityJob{ID: id, Token: token})
 }
 
 // Jobs returns the collection module's job handlers, registered with the job worker.
@@ -93,7 +102,7 @@ func Jobs(repo output.CollectionRepository, records output.RecordRepository) map
 				return policy.PermanentJobError(err)
 			}
 			run := checkRecords(ctx, repo, records, job.ID)
-			if err := repo.FinishQuality(ctx, job.ID, run); err != nil {
+			if err := repo.FinishQuality(ctx, job.ID, job.Token, run); err != nil {
 				return err // retried: the check runs again
 			}
 			return nil
@@ -187,6 +196,9 @@ func (s *Service) Fix(ctx context.Context, id string, fix domain.RecordFix) (int
 		if changed, err = uow.Records().Fix(ctx, id, fix); err != nil {
 			return err
 		}
+		if err := queueQuality(ctx, uow, id, true); err != nil {
+			return err
+		}
 		return policy.Audit(ctx, uow, "collection.fix", id, map[string]any{"collection_id": id, "op": fix.Op, "field": fix.Field, "to": fix.To, "count": changed})
 	})
 	return changed, err
@@ -244,6 +256,9 @@ func (s *Service) DeleteInvalid(ctx context.Context, id string) (int, error) {
 			return nil
 		}
 		if deleted, err = uow.Records().DeleteListed(ctx, id, run.InvalidIDs, run.StartedAt); err != nil {
+			return err
+		}
+		if err := queueQuality(ctx, uow, id, true); err != nil {
 			return err
 		}
 		return policy.Audit(ctx, uow, "collection.delete_invalid", id, map[string]any{"collection_id": id, "count": len(deleted)})

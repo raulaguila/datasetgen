@@ -9,7 +9,6 @@ type Application struct {
 	Users        UserService
 	Auth         AuthService
 	Account      AccountService
-	Products     ProductService
 	Records      RecordService
 	Collections  CollectionService
 	Audit        AuditService

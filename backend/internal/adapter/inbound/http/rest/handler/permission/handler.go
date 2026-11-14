@@ -23,7 +23,7 @@ func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
 }
 
 type resourceDTO struct {
-	Code        string   `json:"code" example:"products"`
+	Code        string   `json:"code" example:"collections"`
 	Description string   `json:"description"`
 	Actions     []string `json:"actions" example:"create,read,update,delete"`
 }

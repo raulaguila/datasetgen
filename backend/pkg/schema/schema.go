@@ -3,11 +3,14 @@ package schema
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/santhosh-tekuri/jsonschema/v6/kind"
@@ -37,8 +40,40 @@ func (noLoader) Load(url string) (any, error) {
 	return nil, fmt.Errorf("external $ref not allowed: %s", url)
 }
 
+// compiled caches Compile by the schema's text: a collection's schema
+// changes rarely and every record write compiles it.
+var compiled = struct {
+	sync.Mutex
+	m map[[32]byte]*jsonschema.Schema
+}{m: map[[32]byte]*jsonschema.Schema{}}
+
+// maxCompiled bounds the cache; past it the cache starts over.
+const maxCompiled = 512
+
 // Compile parses a JSON Schema (draft 2020-12 unless $schema says otherwise).
+// A compiled schema is read only, so callers share the cached one.
 func Compile(raw []byte) (*jsonschema.Schema, error) {
+	sum := sha256.Sum256(raw)
+	compiled.Lock()
+	hit := compiled.m[sum]
+	compiled.Unlock()
+	if hit != nil {
+		return hit, nil
+	}
+	out, err := compile(raw)
+	if err != nil {
+		return nil, err
+	}
+	compiled.Lock()
+	if len(compiled.m) >= maxCompiled {
+		clear(compiled.m)
+	}
+	compiled.m[sum] = out
+	compiled.Unlock()
+	return out, nil
+}
+
+func compile(raw []byte) (*jsonschema.Schema, error) {
 	invalid := func(msg string) error {
 		return apperror.New(apperror.CodeInvalidInput, "invalid schema: "+msg).WithField("schema")
 	}
@@ -287,6 +322,26 @@ func FileKeys(raw []byte) []string {
 	return keys
 }
 
+// Optional drops keys from the top-level "required" list; raw comes back
+// unchanged when none of them is required.
+func Optional(raw []byte, keys []string) []byte {
+	var doc map[string]json.RawMessage
+	var req []string
+	if len(keys) == 0 || json.Unmarshal(raw, &doc) != nil || json.Unmarshal(doc["required"], &req) != nil {
+		return raw
+	}
+	kept := slices.DeleteFunc(slices.Clone(req), func(k string) bool { return slices.Contains(keys, k) })
+	if len(kept) == len(req) {
+		return raw
+	}
+	doc["required"], _ = json.Marshal(kept)
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
 // MissingIssue names a reference or file the value points at that does not exist.
 func MissingIssue(key string) Issue {
 	return Issue{Path: "/" + pointerEscape.Replace(key), Keyword: "exists", Message: "points at a record or file that does not exist"}
@@ -319,11 +374,11 @@ func UniqueIssue(key string) Issue {
 	return Issue{Path: "/" + pointerEscape.Replace(key), Keyword: "unique", Message: "value already used by another record"}
 }
 
-// Leftovers returns a check for top-level keys a document holds that the
-// schema no longer has, such as the value of a removed field. JSON Schema
-// lets them pass unless the schema says otherwise, so a schema that sets
-// "additionalProperties" itself gets no extra check (nil).
-// shortcut: top level only; a group's removed subfield is not reported, walk nested "properties" if that matters.
+// Leftovers returns a check for keys a document holds that the schema no
+// longer has, such as the value of a removed field, at the top level and
+// inside groups and lists of objects. JSON Schema lets them pass unless the
+// schema says otherwise, so an object that sets "additionalProperties" itself
+// gets no extra check (nil for the whole schema when the top level sets it).
 func Leftovers(raw []byte) func(data []byte) []Issue {
 	var doc map[string]json.RawMessage
 	if json.Unmarshal(raw, &doc) != nil {
@@ -332,23 +387,64 @@ func Leftovers(raw []byte) func(data []byte) []Issue {
 	if _, set := doc["additionalProperties"]; set {
 		return nil
 	}
-	known := topProps(raw)
+	root := shapeOf(raw, true)
 	return func(data []byte) []Issue {
-		var obj map[string]json.RawMessage
-		if json.Unmarshal(data, &obj) != nil {
+		var v any
+		if json.Unmarshal(data, &v) != nil {
 			return nil
 		}
-		var keys []string
-		for k := range obj {
-			if _, ok := known[k]; !ok {
-				keys = append(keys, k)
+		var issues []Issue
+		root.walk("", v, &issues)
+		slices.SortFunc(issues, func(a, b Issue) int { return strings.Compare(a.Path, b.Path) })
+		return issues
+	}
+}
+
+// shape is the part of a schema Leftovers walks: the known keys of an object
+// (closed when other keys are leftovers) and the shape of a list's items.
+type shape struct {
+	props  map[string]*shape
+	closed bool
+	items  *shape
+}
+
+func shapeOf(raw []byte, top bool) *shape {
+	var doc struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+		Items      json.RawMessage            `json:"items"`
+		Additional json.RawMessage            `json:"additionalProperties"`
+	}
+	if json.Unmarshal(raw, &doc) != nil {
+		return nil
+	}
+	// A nested object without properties is free-form JSON, not a group.
+	s := &shape{props: map[string]*shape{}, closed: doc.Additional == nil && (top || doc.Properties != nil)}
+	for k, p := range doc.Properties {
+		s.props[k] = shapeOf(p, false)
+	}
+	if len(doc.Items) > 0 && doc.Items[0] == '{' {
+		s.items = shapeOf(doc.Items, false)
+	}
+	return s
+}
+
+func (s *shape) walk(path string, v any, out *[]Issue) {
+	if s == nil {
+		return
+	}
+	switch v := v.(type) {
+	case map[string]any:
+		for k, child := range v {
+			p := path + "/" + pointerEscape.Replace(k)
+			if sub, ok := s.props[k]; ok {
+				sub.walk(p, child, out)
+			} else if s.closed {
+				*out = append(*out, Issue{Path: p, Keyword: "additionalProperties", Message: "field no longer in the schema"})
 			}
 		}
-		slices.Sort(keys)
-		issues := make([]Issue, 0, len(keys))
-		for _, k := range keys {
-			issues = append(issues, Issue{Path: "/" + pointerEscape.Replace(k), Keyword: "additionalProperties", Message: "field no longer in the schema"})
+	case []any:
+		for i, item := range v {
+			s.items.walk(path+"/"+strconv.Itoa(i), item, out)
 		}
-		return issues
 	}
 }

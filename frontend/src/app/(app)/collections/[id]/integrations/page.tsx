@@ -20,13 +20,14 @@ import { WEBHOOK_EVENTS, type Collection, type ShareLink, type WebhookEvent } fr
 import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
+import { copyText } from "@/lib/utils";
 import { CollectionPage } from "../_parts";
 
 function CopyButton({ text }: { text: string }) {
   const { t } = useI18n();
   const [done, setDone] = useState(false);
   return (
-    <Button type="button" size="sm" variant="outline" onClick={() => void navigator.clipboard.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); })}>
+    <Button type="button" size="sm" variant="outline" onClick={() => void copyText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); })}>
       {done ? <Check className="size-4" /> : <Copy className="size-4" />}{t(done ? "integrations.copied" : "integrations.copy")}
     </Button>
   );

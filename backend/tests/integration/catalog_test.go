@@ -20,7 +20,7 @@ func TestCatalogHoldsEveryResourceTheCodeChecks(t *testing.T) {
 			t.Errorf("%s takes no action", r.Code)
 		}
 	}
-	for _, code := range []string{domain.ResourceProducts, domain.ResourceRoles, domain.ResourceUsers} {
+	for _, code := range []string{domain.ResourceAudit, domain.ResourceRoles, domain.ResourceUsers} {
 		if !found[code] {
 			t.Errorf("%s is missing from usr_resource: %v", code, resources)
 		}
@@ -49,10 +49,10 @@ func TestGrantsOnlyNameCatalogResources(t *testing.T) {
 	if err := grant(domain.ResourceAll); err != nil {
 		t.Fatalf("the sentinel stays allowed: %v", err)
 	}
-	if err := grant(domain.ResourceProducts); err != nil {
+	if err := grant(domain.ResourceAudit); err != nil {
 		t.Fatal(err)
 	}
-	if err := testDB.Exec("DELETE FROM usr.usr_resource WHERE code = ?", domain.ResourceProducts).Error; err == nil {
+	if err := testDB.Exec("DELETE FROM usr.usr_resource WHERE code = ?", domain.ResourceAudit).Error; err == nil {
 		t.Fatal("a resource with grants must stay in the catalog")
 	}
 }

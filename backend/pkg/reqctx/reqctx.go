@@ -19,6 +19,9 @@ type APIKey struct {
 	Name         string
 	CollectionID string
 	CanWrite     bool
+	// Form is a share link's form: a stranger cannot pick records or upload
+	// files, so required reference and file fields become optional.
+	Form bool
 }
 
 func WithAPIKey(ctx context.Context, k APIKey) context.Context {

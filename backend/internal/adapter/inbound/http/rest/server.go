@@ -15,7 +15,6 @@ import (
 	notificationhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/notification"
 	permissionhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/permission"
 	preferencehttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/preference"
-	producthttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/product"
 	publichttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/public"
 	recordhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/record"
 	rolehttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/role"
@@ -104,7 +103,6 @@ func New(cfg *config.Environment, app *input.Application, hits middleware.Hits, 
 	users := v1.Group("/users", token)
 	usershttp.New(app.Users, app.Auth).Routes(users, app.Authorizer)
 	roles.UserRoutes(users, app.Authorizer)
-	producthttp.New(app.Products).Routes(v1.Group("/products", token), app.Authorizer)
 	// Collections and records check the caller's role per collection, so they need the full session check.
 	// Records and files also take a collection's API key, capped to that collection (policy.CollectionRole).
 	tools := toolshttp.New(app.Integrations, app.Tools, app.Records)

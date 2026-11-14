@@ -2,7 +2,7 @@
 
 This repository is meant to be copied: a new project starts from it with
 identity, RBAC, sessions, email, audit log, rate limiting and diagnostics
-already in place, and grows its own modules next to `products`.
+already in place, and grows its own modules next to `collections`.
 
 ## Start a new project
 
@@ -17,20 +17,13 @@ make init
 tracked file: imports, Docker images and containers, the database roles
 `<name>_app` and `<name>_mailer`, the pg_cron jobs and titles. `NAME` must be
 lowercase letters, digits and `_`, since it becomes Postgres role names. Then
-point the `origin` remote at the new repository and drop the `products`
-example once a real module replaces it. Backend paths below are relative to
+point the `origin` remote at the new repository. Backend paths below are relative to
 `backend/`. The frontend follows (`cd ../frontend && make init`): the visible name
 lives in `frontend/src/lib/brand.ts` and the mark in `frontend/src/components/brand-mark.tsx`.
 
 ## Add a module
 
-`products` is the reference. Its screens stay in the code but out of the menu, the home cards and the search (`template: true` in `frontend/src/lib/navigation.ts`); a copied module drops that flag and shows up. `make module NAME=invoice` (in `backend/`, with
-`PLURAL=` when the plural is not the name plus "s") copies it into a new module:
-migration, domain, ports, use case, repository, handler, tests and web screens,
-with the wiring lines added next to the products ones and the Swagger spec
-regenerated. Then replace the copied fields (name, price, enabled) with the
-module's own and review the pt-BR texts. The table below is what it touches,
-for a module written by hand. The architecture test (`tests/architecture`) fails
+The `products` example module was removed (migration 000020) and `make module` with it. To add a module, copy the products files from git history (`git show eab7529:backend/internal/core/usecase/product/service.go` and the paths below) and follow the steps; they still describe the pattern. The table below is what a module touches. The architecture test (`tests/architecture`) fails
 if the core imports an adapter, GORM, Fiber or the config.
 
 | Step | File (products) | What goes there |

@@ -14,7 +14,6 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/notification"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/outbox"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/preference"
-	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/product"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/record"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/role"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/session"
@@ -43,7 +42,6 @@ func (s *Store) Roles() output.RoleRepository             { return role.NewRepos
 func (s *Store) Outbox() output.OutboxRepository          { return outbox.NewRepository(s.db) }
 func (s *Store) Preferences() output.PreferenceRepository { return preference.NewRepository(s.db) }
 func (s *Store) Audit() output.AuditRepository            { return audit.NewRepository(s.db) }
-func (s *Store) Products() output.ProductRepository       { return product.NewRepository(s.db) }
 func (s *Store) Collections() output.CollectionRepository { return collection.NewRepository(s.db) }
 func (s *Store) Records() output.RecordRepository         { return record.NewRepository(s.db) }
 func (s *Store) Jobs() output.JobRepository               { return job.NewRepository(s.db) }

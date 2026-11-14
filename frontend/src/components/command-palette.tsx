@@ -29,7 +29,7 @@ function useHits(key: string, q: string, enabled: boolean, fn: (signal: AbortSig
   return useQuery({ queryKey: ["palette", key, q], queryFn: ({ signal }) => fn(signal), enabled, staleTime: 10_000 });
 }
 
-/** Ctrl/Cmd+K: jump to a screen, or to a user, role or product by name. */
+/** Ctrl/Cmd+K: jump to a screen, or to a user or role by name. */
 export function CommandPalette() {
   const { t } = useI18n();
   const { user } = useMe();
@@ -60,7 +60,7 @@ export function CommandPalette() {
 
   const needle = text.trim().toLowerCase();
   const pages: Hit[] = [...MAIN_NAV, ...ADMIN_NAV, ...EXTRA]
-    .filter((item) => !("template" in item) && (!item.needs || can(user, ...item.needs)))
+    .filter((item) => (!item.needs || can(user, ...item.needs)))
     .map((item) => ({ href: item.href, label: t(item.key), icon: item.icon }))
     .filter((hit) => hit.label.toLowerCase().includes(needle));
   const hits = [...pages, ...(userHits.data ?? []), ...(roleHits.data ?? []), ...(collectionHits.data ?? [])];

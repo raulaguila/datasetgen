@@ -23,6 +23,7 @@ import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
 import { email as emailRule, personName } from "@/lib/validation";
+import { copyText } from "@/lib/utils";
 import { CollectionPage } from "../_parts";
 
 const ROLES: MemberRole[] = ["owner", "editor", "viewer"];
@@ -116,7 +117,7 @@ function AddMember({ collection }: { collection: Collection }) {
               <p>{t("users.activation_link")}</p>
               <div className="flex gap-2">
                 <Input readOnly aria-label={t("users.link_title")} value={link} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
-                <Button type="button" variant="outline" onClick={() => void navigator.clipboard.writeText(link).then(() => toast.success(t("common.copied")))}>{t("common.copy")}</Button>
+                <Button type="button" variant="outline" onClick={() => void copyText(link).then(() => toast.success(t("common.copied")))}>{t("common.copy")}</Button>
               </div>
             </div>
           )}

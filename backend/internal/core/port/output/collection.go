@@ -42,9 +42,12 @@ type CollectionRepository interface {
 	Quality(ctx context.Context, id string, withIDs bool) (*domain.QualityRun, error)
 	// StartQuality marks a check as running and reports whether it did: false
 	// while another check started less than stale ago is still running.
-	StartQuality(ctx context.Context, id string, schemaVersion int, stale time.Duration) (bool, error)
-	// FinishQuality stores the result of the running check.
-	FinishQuality(ctx context.Context, id string, run domain.QualityRun) error
+	// With force it starts over even while one runs. The token names this start
+	// ("" when it did not start) for FinishQuality.
+	StartQuality(ctx context.Context, id string, schemaVersion int, stale time.Duration, force bool) (token string, err error)
+	// FinishQuality stores the result of the running check, unless a later start
+	// replaced it (token no longer current; "" always stores).
+	FinishQuality(ctx context.Context, id, token string, run domain.QualityRun) error
 	// HasMembership reports whether userID belongs to any collection.
 	HasMembership(ctx context.Context, userID string) (bool, error)
 	// Owners counts the collection's owner members.

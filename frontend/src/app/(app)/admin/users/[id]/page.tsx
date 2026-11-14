@@ -28,6 +28,7 @@ import { useCrumb } from "@/lib/store/crumb";
 import { useI18n } from "@/lib/i18n/provider";
 import { email as emailRule, personName, ready } from "@/lib/validation";
 import { can } from "@/lib/permissions";
+import { copyText } from "@/lib/utils";
 
 /** Check boxes for every role the API lists; Save replaces the user's roles in one call. */
 function RolesCard({ user }: { user: UserDetails }) {
@@ -136,7 +137,7 @@ function InviteForm() {
           <div className="space-y-4 text-sm">
             <Input readOnly aria-label={t("users.link_title")} value={link} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => void navigator.clipboard.writeText(link).then(() => toast.success(t("common.copied")))}>{t("common.copy")}</Button>
+              <Button variant="outline" onClick={() => void copyText(link).then(() => toast.success(t("common.copied")))}>{t("common.copy")}</Button>
               <Button onClick={() => router.push("/admin/users")}>{t("common.done")}</Button>
             </div>
           </div>
@@ -219,7 +220,7 @@ function UserDetail({ id }: { id: string }) {
       // Only a development backend hands the token back (manual delivery).
       void client.invalidateQueries({ queryKey: ["users", "detail", id] }); // the link's expiry moved
       if (!res.activation_token) return void toast.success(t("users.reinvited"));
-      await navigator.clipboard.writeText(`${window.location.origin}/activate#token=${encodeURIComponent(res.activation_token)}`);
+      await copyText(`${window.location.origin}/activate#token=${encodeURIComponent(res.activation_token)}`);
       toast.success(t("users.reinvited_link"));
     },
     onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
@@ -394,7 +395,7 @@ function ActivationLinkDialog({ userId, open, onOpenChange }: { userId: string; 
         <DialogFooter>
           <Button variant="ghost" onClick={() => change(false)}>{t("common.close")}</Button>
           {link ? (
-            <Button onClick={() => void navigator.clipboard.writeText(link).then(() => toast.success(t("common.copied")))}>{t("common.copy")}</Button>
+            <Button onClick={() => void copyText(link).then(() => toast.success(t("common.copied")))}>{t("common.copy")}</Button>
           ) : (
             <Button disabled={make.isPending} onClick={() => make.mutate()}>
               {make.isPending && <Loader2 className="size-4 animate-spin" />}

@@ -31,10 +31,10 @@ func withUser(c fiber.Ctx) error {
 
 func TestRequireAllowsAndDenies(t *testing.T) {
 	app := fiber.New()
-	app.Get("/ok", withUser, middleware.Require(stubAuthz{deny: false}, "products", domain.ActionRead), func(c fiber.Ctx) error {
+	app.Get("/ok", withUser, middleware.Require(stubAuthz{deny: false}, "audit", domain.ActionRead), func(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusOK)
 	})
-	app.Get("/deny", withUser, middleware.Require(stubAuthz{deny: true}, "products", domain.ActionRead), func(c fiber.Ctx) error {
+	app.Get("/deny", withUser, middleware.Require(stubAuthz{deny: true}, "audit", domain.ActionRead), func(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusOK)
 	})
 

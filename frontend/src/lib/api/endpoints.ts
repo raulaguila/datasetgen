@@ -16,7 +16,6 @@ import type {
   Notification,
   Paged,
   Preferences,
-  Product,
   Collection,
   CollectionMember,
   CollectionStats,
@@ -43,6 +42,8 @@ import type {
   SavedView,
   FileRef,
   RecordGroup,
+  RecordStats,
+  StatsBucket,
 } from "@/lib/api/types";
 
 function query(params: Record<string, string | number | boolean | undefined>): string {
@@ -109,27 +110,12 @@ export const roles = {
   resources: () => apiFetch<{ items: Resource[] }>("/v1/permissions/resources"),
 };
 
-export interface ProductInput {
-  name: string;
-  price: string;
-  enabled: boolean;
-}
-
 export interface CollectionInput {
   name: string;
   description: string;
   icon?: string;
   schema: unknown;
 }
-
-export const products = {
-  list: (p: { page: number; limit: number; search?: string; sort?: string; order?: SortOrder; enabled?: boolean }, signal?: AbortSignal) =>
-    apiFetch<Paged<Product>>(`/v1/products${query(p)}`, { signal }),
-  get: (productId: string) => apiFetch<Product>(`/v1/products/${id(productId)}`),
-  create: (input: ProductInput) => apiFetch<Product>("/v1/products", { method: "POST", json: input }),
-  update: (productId: string, input: Partial<ProductInput> & { version?: number }) => apiFetch<Product>(`/v1/products/${id(productId)}`, { method: "PATCH", json: input }),
-  remove: (ids: string[]) => apiFetch<void>("/v1/products/delete", { method: "POST", json: { ids } }),
-};
 
 export const collections = {
   /** details adds member_count, field_count and last_activity, which cost a pass over members and records. */
@@ -178,6 +164,9 @@ export const records = {
   /** Counts the selected records by a field (or all together) with sums and averages of numeric fields. */
   aggregate: (p: { collection_id: string; search?: string; filter?: string; where?: string; group?: string; sum?: string }, signal?: AbortSignal) =>
     apiFetch<{ items: RecordGroup[] }>(`/v1/records/aggregate${query(p)}`, { signal }),
+  /** Field lists are comma separated: filled counts, number ranges, date ranges with a series, common values. */
+  stats: (p: { collection_id: string; where?: string; filled?: string; numbers?: string; dates?: string; values?: string; bucket?: StatsBucket }, signal?: AbortSignal) =>
+    apiFetch<RecordStats>(`/v1/records/stats${query(p)}`, { signal }),
   get: (recordId: string) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`),
   create: (collection_id: string, data: unknown) => apiFetch<DataRecord>("/v1/records", { method: "POST", json: { collection_id, data } }),
   update: (recordId: string, data: unknown, version?: number) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`, { method: "PATCH", json: { data, version } }),

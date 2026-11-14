@@ -1,12 +1,14 @@
 package record
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/url"
-	"sort"
 	"strings"
 	"time"
 
@@ -149,7 +151,7 @@ func (h *Handler) Import(c fiber.Ctx) error {
 }
 
 // @Summary Download every record of a collection as JSON Lines or CSV
-// @Description JSON Lines holds one record's data per line. CSV has one column per field, in the form's order, then any other keys; lists and objects are written as JSON. Up to 100 000 records.
+// @Description JSON Lines holds one record's data per line. CSV has one column per field, in the form's order, then any other keys; lists and objects are written as JSON. Streamed, any number of records; CSV columns past the form come from up to 1 000 keys.
 // @Tags Records
 // @Produce plain
 // @Param collection_id query string true "Collection ID"
@@ -168,80 +170,86 @@ func (h *Handler) Export(c fiber.Ctx) error {
 	if format != "jsonl" && format != "csv" {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "format must be jsonl or csv").WithField("format"))
 	}
-	exp, err := h.svc.Export(c.Context(), c.Query("collection_id"), fiber.Query[bool](c, "valid"))
+	// The body streams after this handler returns, when the request's context is
+	// cancelled and c is reused: the export gets its own context and copies.
+	id := c.Query("collection_id")
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Context()), exportTimeout)
+	exp, err := h.svc.Export(ctx, id, fiber.Query[bool](c, "valid"))
 	if err != nil {
-		return mapper.WriteError(c, err)
-	}
-	var body []byte
-	if format == "csv" {
-		c.Set(fiber.HeaderContentType, "text/csv; charset=utf-8")
-		body, err = recordsCSV(exp)
-	} else {
-		c.Set(fiber.HeaderContentType, "application/x-ndjson; charset=utf-8")
-		body = recordsJSONL(exp)
-	}
-	if err != nil {
+		cancel()
 		return mapper.WriteError(c, err)
 	}
 	name := fmt.Sprintf("%s-%s.%s", exp.Name, time.Now().UTC().Format("20060102"), format)
 	c.Set(fiber.HeaderContentDisposition, `attachment; filename="`+asciiName(name)+`"; filename*=UTF-8''`+url.PathEscape(name))
-	return c.Send(body)
+	write := writeJSONL
+	c.Set(fiber.HeaderContentType, "application/x-ndjson; charset=utf-8")
+	if format == "csv" {
+		write = writeCSV
+		c.Set(fiber.HeaderContentType, "text/csv; charset=utf-8")
+	}
+	// The status is sent before the first record: a failure past it cuts the file short.
+	return c.SendStreamWriter(func(w *bufio.Writer) {
+		defer cancel()
+		if err := write(w, exp); err != nil {
+			slog.Warn("record export cut short", "collection_id", id, "error", err)
+		}
+	})
 }
 
-func recordsJSONL(exp *input.Export) []byte {
-	var buf bytes.Buffer
-	for _, r := range exp.Records {
+// exportTimeout bounds one export stream, a slow reader included.
+const exportTimeout = 10 * time.Minute
+
+func writeJSONL(w *bufio.Writer, exp *input.Export) error {
+	return exp.Each(func(r json.RawMessage) error {
 		var compact bytes.Buffer
 		if json.Compact(&compact, r) != nil { // stored as jsonb: always valid
 			compact.Write(r)
 		}
-		buf.Write(compact.Bytes())
-		buf.WriteByte('\n')
-	}
-	return buf.Bytes()
+		compact.WriteByte('\n')
+		_, err := w.Write(compact.Bytes())
+		return err
+	})
 }
 
-func recordsCSV(exp *input.Export) ([]byte, error) {
+func writeCSV(w *bufio.Writer, exp *input.Export) error {
 	columns := schema.PropertyOrder(exp.Schema)
 	known := map[string]bool{}
 	for _, k := range columns {
 		known[k] = true
 	}
-	rows := make([]map[string]json.RawMessage, 0, len(exp.Records))
-	var extra []string
-	for _, r := range exp.Records {
-		var fields map[string]json.RawMessage
-		if json.Unmarshal(r, &fields) != nil {
-			fields = map[string]json.RawMessage{"": r} // not an object: the whole value in one column
+	for _, k := range exp.Keys { // sorted
+		if !known[k] {
+			known[k] = true
+			columns = append(columns, k)
 		}
-		for k := range fields {
-			if !known[k] {
-				known[k] = true
-				extra = append(extra, k)
-			}
-		}
-		rows = append(rows, fields)
 	}
-	sort.Strings(extra)
-	columns = append(columns, extra...)
-
-	var buf bytes.Buffer
-	buf.WriteString("\uFEFF") // BOM: spreadsheets then read the accents as UTF-8
-	w := csv.NewWriter(&buf)
+	if _, err := w.WriteString("\uFEFF"); err != nil { // BOM: spreadsheets then read the accents as UTF-8
+		return err
+	}
+	cw := csv.NewWriter(w)
 	header := make([]string, len(columns))
 	for i, k := range columns {
 		header[i] = mapper.CSVCell(k)
 	}
-	_ = w.Write(header)
-	for _, fields := range rows {
+	if err := cw.Write(header); err != nil {
+		return err
+	}
+	err := exp.Each(func(r json.RawMessage) error {
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(r, &fields) != nil {
+			fields = map[string]json.RawMessage{}
+		}
 		line := make([]string, len(columns))
 		for i, k := range columns {
 			line[i] = mapper.CSVCell(csvValue(fields[k]))
 		}
-		_ = w.Write(line)
+		return cw.Write(line)
+	})
+	cw.Flush()
+	if err != nil {
+		return err
 	}
-	w.Flush()
-	return buf.Bytes(), w.Error()
+	return cw.Error()
 }
 
 // csvValue writes a string as its text and anything else as JSON; missing and null are empty.

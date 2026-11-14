@@ -50,7 +50,6 @@ func ParseActions(names []string) (Action, bool) {
 const (
 	ResourceAll         = "*"
 	ResourceAudit       = "audit"
-	ResourceProducts    = "products"
 	ResourceCollections = "collections"
 	ResourceRecords     = "records"
 	ResourceRoles       = "roles"

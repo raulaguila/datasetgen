@@ -40,7 +40,7 @@ func TestEveryTokenRouteChecksTheSession(t *testing.T) {
 	param := regexp.MustCompile(`:[a-z_]+`)
 	checked := 0
 	for _, r := range app.GetRoutes(true) {
-		if r.Method == fiber.MethodHead || !regexp.MustCompile(`^/v1/(permissions|roles|users|products|audit)(/|$)`).MatchString(r.Path) {
+		if r.Method == fiber.MethodHead || !regexp.MustCompile(`^/v1/(permissions|roles|users|audit)(/|$)`).MatchString(r.Path) {
 			continue
 		}
 		req := httptest.NewRequest(r.Method, param.ReplaceAllString(r.Path, "x"), strings.NewReader("{}"))

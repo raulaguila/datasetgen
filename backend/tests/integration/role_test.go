@@ -41,7 +41,7 @@ func TestAdminRoleCannotBeChangedThroughTheAPI(t *testing.T) {
 	}
 	userID := e.userID(t, addr)
 
-	_, err := svc.SetPermissions(ctx, before.ID, map[string]domain.Action{domain.ResourceProducts: domain.ActionRead})
+	_, err := svc.SetPermissions(ctx, before.ID, map[string]domain.Action{domain.ResourceRecords: domain.ActionRead})
 	wantCode(t, err, apperror.CodeForbidden)
 	_, err = svc.SetPermissions(ctx, before.ID, map[string]domain.Action{})
 	wantCode(t, err, apperror.CodeForbidden)
@@ -132,25 +132,25 @@ func TestRolePermissionsApplyAtOnce(t *testing.T) {
 	_, err = svc.Create(ctx, "Not Valid")
 	wantCode(t, err, apperror.CodeInvalidInput)
 
-	wantCode(t, authz.Authorize(ctx, *p, domain.ResourceProducts, domain.ActionRead), apperror.CodeForbidden)
+	wantCode(t, authz.Authorize(ctx, *p, domain.ResourceUsers, domain.ActionRead), apperror.CodeForbidden)
 
 	updated, err := svc.SetPermissions(ctx, created.ID, map[string]domain.Action{
-		domain.ResourceProducts: domain.ActionRead | domain.ActionUpdate,
-		domain.ResourceRoles:    0,
+		domain.ResourceUsers: domain.ActionRead | domain.ActionUpdate,
+		domain.ResourceRoles: 0,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(updated.Permissions) != 1 || updated.Permissions[domain.ResourceProducts] != domain.ActionRead|domain.ActionUpdate {
+	if len(updated.Permissions) != 1 || updated.Permissions[domain.ResourceUsers] != domain.ActionRead|domain.ActionUpdate {
 		t.Fatalf("permissions %v", updated.Permissions)
 	}
 	if err := svc.AddMember(ctx, created.ID, userID); err != nil {
 		t.Fatal(err)
 	}
-	if err := authz.Authorize(ctx, *p, domain.ResourceProducts, domain.ActionUpdate); err != nil {
+	if err := authz.Authorize(ctx, *p, domain.ResourceUsers, domain.ActionUpdate); err != nil {
 		t.Fatal(err)
 	}
-	wantCode(t, authz.Authorize(ctx, *p, domain.ResourceProducts, domain.ActionDelete), apperror.CodeForbidden)
+	wantCode(t, authz.Authorize(ctx, *p, domain.ResourceUsers, domain.ActionDelete), apperror.CodeForbidden)
 
 	members, total, err := svc.Members(ctx, created.ID, domain.UserFilter{Page: domain.NewPage(1, 20)})
 	if err != nil || total != 1 || len(members) != 1 || members[0].ID != userID {
@@ -167,7 +167,7 @@ func TestRolePermissionsApplyAtOnce(t *testing.T) {
 	if err != nil || len(updated.Permissions) != 0 {
 		t.Fatalf("permissions %+v %v", updated, err)
 	}
-	wantCode(t, authz.Authorize(ctx, *p, domain.ResourceProducts, domain.ActionRead), apperror.CodeForbidden)
+	wantCode(t, authz.Authorize(ctx, *p, domain.ResourceUsers, domain.ActionRead), apperror.CodeForbidden)
 
 	_, err = svc.SetPermissions(ctx, created.ID, map[string]domain.Action{"unknown": domain.ActionRead})
 	wantCode(t, err, apperror.CodeInvalidInput)
@@ -192,7 +192,7 @@ func TestDefaultRoleCanChangeButNotLeave(t *testing.T) {
 	off := false
 	_, err := svc.Update(ctx, def.ID, domain.RolePatch{Enabled: &off})
 	wantCode(t, err, apperror.CodeConflict)
-	if _, err := svc.SetPermissions(ctx, def.ID, map[string]domain.Action{domain.ResourceProducts: domain.ActionRead}); err != nil {
+	if _, err := svc.SetPermissions(ctx, def.ID, map[string]domain.Action{domain.ResourceRecords: domain.ActionRead}); err != nil {
 		t.Fatal(err)
 	}
 	// Back to the seeded grant: every account may create collections.
@@ -227,8 +227,8 @@ func TestFailedSaveKeepsThePreviousPermissions(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = testDB.Exec("ALTER TABLE usr.usr_role_permission DROP CONSTRAINT chk_test_fail").Error })
 	_, err := svc.SetPermissions(ctx, created.ID, map[string]domain.Action{
-		domain.ResourceProducts: domain.ActionRead,
-		domain.ResourceRoles:    domain.ActionRead,
+		domain.ResourceRecords: domain.ActionRead,
+		domain.ResourceRoles:   domain.ActionRead,
 	})
 	if err == nil {
 		t.Fatal("the failing grant must fail the save")
@@ -247,7 +247,7 @@ func TestGrantsStayWithinTheResourceActions(t *testing.T) {
 	for _, bad := range []map[string]domain.Action{
 		{domain.ResourceAudit: domain.ActionCreate},
 		{domain.ResourceUsers: domain.ActionRead | domain.ActionDelete},
-		{domain.ResourceProducts: domain.Action(-1)},
+		{domain.ResourceAudit: domain.Action(-1)},
 	} {
 		_, err := svc.SetPermissions(ctx, created.ID, bad)
 		wantCode(t, err, apperror.CodeInvalidInput)
@@ -268,8 +268,8 @@ func TestConcurrentSavesEndWithOneOfThem(t *testing.T) {
 	for i := range errs {
 		wg.Go(func() {
 			_, errs[i] = svc.SetPermissions(ctx, created.ID, map[string]domain.Action{
-				domain.ResourceProducts: domain.ActionRead,
-				domain.ResourceRoles:    domain.ActionRead,
+				domain.ResourceAudit: domain.ActionRead,
+				domain.ResourceRoles: domain.ActionRead,
 			})
 		})
 	}
@@ -334,25 +334,25 @@ func TestAccessFollowsRolesGrantsAndSuperuser(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	want("products", 0)
+	want("records", 0)
 
 	a, b := newRole(t, svc), newRole(t, svc)
 	t.Cleanup(func() { _ = testDB.Exec("DELETE FROM usr.usr_user_role WHERE user_id = ?", userID).Error })
-	exec(`INSERT INTO usr.usr_role_permission (role_id, resource, actions) VALUES (?, 'products', 6), (?, 'products', 1), (?, 'users', 2)`, a.ID, b.ID, b.ID)
+	exec(`INSERT INTO usr.usr_role_permission (role_id, resource, actions) VALUES (?, 'records', 6), (?, 'records', 1), (?, 'users', 2)`, a.ID, b.ID, b.ID)
 	exec(`INSERT INTO usr.usr_user_role (user_id, role_id) VALUES (?, ?), (?, ?)`, userID, a.ID, userID, b.ID)
-	want("products", 7)
+	want("records", 7)
 	want("users", 2)
 	want("roles", 0)
 
 	exec(`UPDATE usr.usr_role SET enabled = false WHERE id = ?`, b.ID)
-	want("products", 6)
+	want("records", 6)
 
 	exec(`INSERT INTO usr.usr_role_permission (role_id, resource, actions) VALUES (?, '*', 1)`, a.ID)
 	want("roles", 2147483647)
 
 	exec(`DELETE FROM usr.usr_role_permission WHERE role_id = ? AND resource = '*'`, a.ID)
 	exec(`INSERT INTO usr.usr_user_role (user_id, role_id) SELECT ?, id FROM usr.usr_role WHERE name = 'admin'`, userID)
-	want("audit", 2147483647)
+	want("records", 2147483647)
 
 	if err := e.svc.Logout(ctx, p.SessionID); err != nil {
 		t.Fatal(err)

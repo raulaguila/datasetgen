@@ -13,7 +13,7 @@ import { fieldsOf, fileRefs, recordTitle, REF, type FieldRow } from "@/component
 import { SavedViews } from "@/components/saved-views";
 import { ColumnPicker, EditableCell, editsInline, pickColumns, useSaveField } from "@/components/record-grid";
 import { RecordGroups, groupableOf } from "@/components/record-groups";
-import { RecordRules, andWhere, parseWhere, whereText as toWhereText, type Rule, type Where } from "@/components/record-rules";
+import { RecordRules, andWhere, legacyRules, parseWhere, whereText as toWhereText, type Where } from "@/components/record-rules";
 import { BoardView, CalendarView, GalleryView, layoutFields, type Layout } from "@/components/record-views";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -70,20 +70,6 @@ function useRefLabels(columns: FieldRow[], items: DataRecord[], schema: Record<s
 
 /** The "no grouping" choice; a field key is never this. */
 const NO_GROUP = "\u0000none";
-
-/**
- * Field filters of older links and saved views ({"field": value}), read as
- * "equals" conditions: the Conditions button now does what the Filters panel did.
- */
-function legacyRules(raw: string): Rule[] {
-  try {
-    const v: unknown = JSON.parse(raw);
-    if (!v || typeof v !== "object" || Array.isArray(v)) return [];
-    return Object.entries(v).filter(([, x]) => ["string", "number", "boolean"].includes(typeof x)).map(([field, value]) => ({ field, op: "eq" as const, value }));
-  } catch {
-    return [];
-  }
-}
 
 function RecordList({ collection }: { collection: Collection }) {
   const { t } = useI18n();

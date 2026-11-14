@@ -1,4 +1,4 @@
-import { ChartColumn, Database, FileJson, KeyRound, LayoutDashboard, ListChecks, ListTree, Package, Plug, ScrollText, Settings2, Trash2, UserCog, Users, Zap, type LucideIcon } from "lucide-react";
+import { ChartColumn, Database, FileJson, KeyRound, LayoutDashboard, ListChecks, ListTree, Plug, ScrollText, Settings2, Trash2, UserCog, Users, Zap, type LucideIcon } from "lucide-react";
 import type { Action, MemberRole } from "@/lib/api/types";
 import type { MessageKey } from "@/lib/i18n/messages";
 
@@ -8,12 +8,9 @@ export interface NavItem {
   icon: LucideIcon;
   /** Shown only when the user may do this; absent means every signed in user. */
   needs?: [resource: string, action: Action];
-  /** The example module `make module` copies; never shown. Copies drop the flag. */
-  template?: true;
 }
 
 export const MAIN_NAV: NavItem[] = [
-  { href: "/products", key: "nav.products", icon: Package, needs: ["products", "read"], template: true },
   { href: "/collections", key: "nav.collections", icon: Database },
 ];
 

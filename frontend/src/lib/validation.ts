@@ -10,7 +10,6 @@ const filled = (v: string) => v.trim() !== "";
 
 export const personName: Rule = (v) => (filled(v) && (chars(v) < 2 || chars(v) > 80) ? "error.msg.person_name" : null);
 export const email: Rule = (v) => (filled(v) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) ? "error.msg.email" : null);
-export const productName: Rule = (v) => (chars(v) > 120 ? "error.msg.product_name" : null);
 export const collectionName: Rule = (v) => (chars(v) > 120 ? "error.msg.collection_name" : null);
 export const description: Rule = (v) => (chars(v) > 2000 ? "error.msg.description" : null);
 // Dot or comma: the form shows the language's decimal mark.

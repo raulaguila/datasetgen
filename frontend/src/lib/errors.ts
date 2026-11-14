@@ -18,7 +18,6 @@ const BY_CODE: Record<string, MessageKey> = {
 const BY_MESSAGE: [string, MessageKey][] = [
   ["name must have 2 to 40 of a-z", "error.msg.role_name"],
   ["name must be 2-80 characters", "error.msg.person_name"],
-  ["name must be 1-120 characters", "error.msg.product_name"],
   ["invalid email", "error.msg.email"],
   ["password too short", "error.msg.password_short"],
   ["password too long", "error.msg.password_long"],

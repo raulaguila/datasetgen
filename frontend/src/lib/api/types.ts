@@ -132,16 +132,6 @@ export interface Member {
   status: UserStatus;
 }
 
-export interface Product {
-  id: string;
-  name: string;
-  price: string;
-  enabled: boolean;
-  version: number;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface Collection {
   id: string;
   name: string;
@@ -416,10 +406,33 @@ export interface RecordGroup {
   maxs: Record<string, number>;
 }
 
+export type StatsBucket = "day" | "week" | "month" | "year";
+
+/** One field over the selected records; only the parts asked for are present. */
+export interface FieldProfile {
+  filled?: number;
+  min?: number;
+  max?: number;
+  avg?: number;
+  sum?: number;
+  /** First and last date, YYYY-MM-DD. */
+  first?: string;
+  last?: string;
+  distinct?: number;
+  top?: { key: unknown; count: number }[];
+  /** Records per bucket, by the bucket's first day; empty buckets are absent. */
+  series?: { at: string; count: number }[];
+}
+
+export interface RecordStats {
+  total: number;
+  fields: Record<string, FieldProfile>;
+}
+
 /** One dashboard widget; the page draws it from the record API. */
 export interface Widget {
   id: string;
-  kind: "count" | "sum" | "avg" | "min" | "max" | "bars" | "list";
+  kind: "count" | "sum" | "avg" | "min" | "max" | "bars" | "list" | "timeline";
   title: string;
   /** The number summed, averaged… or the field bars count by. */
   field?: string;
@@ -427,4 +440,6 @@ export interface Widget {
   where?: { any: boolean; rules: { field: string; op: string; value?: unknown }[]; groups?: { any: boolean; rules: { field: string; op: string; value?: unknown }[] }[] };
   /** Two takes a double-width slot. */
   size?: 1 | 2;
+  /** A timeline's span per bar. */
+  bucket?: StatsBucket;
 }

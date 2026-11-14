@@ -28,7 +28,7 @@ Operational success (not measured SLOs): password login requires an active accou
 
 ## Positioning
 
-**Is:** a dataset-building platform with hexagonal layout: collections and records in `app.collection` / `app.record`, identity schema `usr`, system outbox `sys`, and the example module `app.product` kept as the `make module` template.
+**Is:** a dataset-building platform with hexagonal layout: collections and records in `app.collection` / `app.record`, identity schema `usr`, system outbox `sys`.
 
 **Is not (v1):** multi-tenant SMTP catalog, product commerce platform, ABAC or instance-level authz beyond collection membership, or a general dashboard — explicitly out of scope vs copying “hexago” extras without a decision.
 
@@ -83,7 +83,7 @@ Known expensive-by-design paths (qualitative): Argon2id verify on login; authz P
 2. **Session is the logout unit** — access carries `sid`; refresh rotates and detects reuse.
 3. **Authz is live and typed** — load effective permissions at request time; authorize resource types with CRUD bits (or superuser/`*`).
 4. **Side effects are durable first** — email goes through outbox, then the mailer.
-5. **Specs and SQL constrain the product** — CHECKs and ADRs beat ad-hoc feature creep; example `products` exists only to prove RBAC.
+5. **Specs and SQL constrain the product** — CHECKs and ADRs beat ad-hoc feature creep.
 6. **Enforce account state** — pending and disabled accounts cannot log in; active locks block password login while preserving existing sessions. HTTP responses stay coarse for credential failures.
 
 Operational safeguards include atomic login/reset coordination, serialized per-account email limits, absolute session expiry from initial login, and stale-worker rejection for outbox acknowledgements. Product prices sort numerically. Cursor pagination is available for chronological traversal without totals. JSON logs and private process diagnostics support operational measurements without introducing a cache for live authorization.

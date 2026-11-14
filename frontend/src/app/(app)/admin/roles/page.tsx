@@ -29,7 +29,7 @@ import { useI18n } from "@/lib/i18n/provider";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { can, resourceText } from "@/lib/permissions";
 
-/** "Produtos: ler, editar" chips, three at most. */
+/** "Usuários: ler, editar" chips, three at most. */
 function PermissionChips({ role }: { role: Role }) {
   const { t } = useI18n();
   if ("*" in role.permissions) return <Badge variant="secondary">{t("roles.all_permissions")}</Badge>;

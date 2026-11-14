@@ -30,7 +30,7 @@ import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
-const KINDS = ["user.", "role.", "product.", "collection.", "record.", "admin."];
+const KINDS = ["user.", "role.", "collection.", "record.", "admin."];
 const COLLECTION_KINDS = ["collection.", "record."];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 

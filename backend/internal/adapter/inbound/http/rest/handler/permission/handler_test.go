@@ -27,7 +27,7 @@ func (s stubAuthz) Authorize(_ context.Context, _ domain.Principal, resource str
 type stubCatalog struct{}
 
 func (stubCatalog) ListResources(context.Context) ([]domain.Resource, error) {
-	return []domain.Resource{{Code: "products", Description: "Example", Actions: domain.ActionRead | domain.ActionUpdate}}, nil
+	return []domain.Resource{{Code: "audit", Description: "Example", Actions: domain.ActionRead | domain.ActionUpdate}}, nil
 }
 
 func TestResourcesNeedRolesRead(t *testing.T) {
@@ -36,7 +36,7 @@ func TestResourcesNeedRolesRead(t *testing.T) {
 		status int
 	}{
 		{domain.ResourceRoles, fiber.StatusOK},
-		{domain.ResourceProducts, fiber.StatusForbidden},
+		{domain.ResourceAudit, fiber.StatusForbidden},
 	} {
 		app := fiber.New()
 		group := app.Group("/permissions", func(c fiber.Ctx) error {
@@ -53,7 +53,7 @@ func TestResourcesNeedRolesRead(t *testing.T) {
 		if resp.StatusCode != tc.status {
 			t.Fatalf("allow %s: %d %s", tc.allow, resp.StatusCode, body)
 		}
-		if tc.status == fiber.StatusOK && (!strings.Contains(string(body), `"code":"products"`) || !strings.Contains(string(body), `"actions":["read","update"]`)) {
+		if tc.status == fiber.StatusOK && (!strings.Contains(string(body), `"code":"audit"`) || !strings.Contains(string(body), `"actions":["read","update"]`)) {
 			t.Fatalf("body %s", body)
 		}
 	}

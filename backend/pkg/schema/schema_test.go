@@ -140,4 +140,13 @@ func TestLeftovers(t *testing.T) {
 	if Leftovers([]byte(`{"type":"object","additionalProperties":true}`)) != nil {
 		t.Fatal("a schema that sets additionalProperties must get no extra check")
 	}
+
+	nested := Leftovers([]byte(`{"type":"object","properties":{
+		"g":{"type":"object","properties":{"x":{"type":"string"}}},
+		"l":{"type":"array","items":{"type":"object","properties":{"y":{"type":"number"}}}},
+		"free":{"type":"object"}}}`))
+	issues = nested([]byte(`{"g":{"x":"a","old":1},"l":[{"y":1},{"y":2,"z":3}],"free":{"any":1}}`))
+	if len(issues) != 2 || issues[0].Path != "/g/old" || issues[1].Path != "/l/1/z" {
+		t.Fatalf("nested issues = %+v", issues)
+	}
 }

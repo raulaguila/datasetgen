@@ -80,7 +80,9 @@ function BulkFix({ collection, report, onDone, fieldLabel, issueText }: { collec
   const problems = new Map<string, { keyword: string; key: string; message: string; count: number }>();
   for (const rec of report.invalid) {
     for (const i of rec.issues) {
-      const key = (i.path.split("/")[1] ?? "").replace(/~1/g, "/").replace(/~0/g, "~");
+      const segs = i.path.split("/").slice(1).map((x) => x.replace(/~1/g, "/").replace(/~0/g, "~"));
+      // A leftover inside a group or list reads as its path, without the item numbers.
+      const key = i.keyword === "additionalProperties" ? segs.filter((x) => !/^\d+$/.test(x)).join(" › ") : (segs[0] ?? "");
       const id = `${i.keyword}|${key}`;
       const p = problems.get(id) ?? { keyword: i.keyword, key, message: i.message, count: 0 };
       p.count++;
@@ -99,7 +101,7 @@ function BulkFix({ collection, report, onDone, fieldLabel, issueText }: { collec
         },
       };
     }
-    if (keyword === "additionalProperties" && k && !known.has(k)) return {
+    if (keyword === "additionalProperties" && k && !k.includes(" › ") && !known.has(k)) return {
       label: t("fix.suggest_remove").replace("{field}", k),
       run: () => { setOp("remove"); setField(k); void review({ op: "remove", field: k }); },
     };

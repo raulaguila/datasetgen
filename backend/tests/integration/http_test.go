@@ -27,7 +27,7 @@ func (e *env) httpApp() *fiber.App {
 	return rest.New(cfg, app, composition.NewRateLimit(&infra.Resources{PostgresDB: testDB}), log)
 }
 
-func TestHTTPAccountOwnershipAndProductValidation(t *testing.T) {
+func TestHTTPAccountOwnershipAndPermissions(t *testing.T) {
 	e := newEnv(t)
 	addr := e.activeUser(t)
 	other := e.activeUser(t)
@@ -86,26 +86,13 @@ func TestHTTPAccountOwnershipAndProductValidation(t *testing.T) {
 	request("GET", "/v1/me/notifications/count", "", pair.AccessToken, 200)
 	request("PUT", "/v1/me/notifications/read", `{"ids":["`+note.ID+`"]}`, pair.AccessToken, 404)
 	request("PUT", "/v1/me/notifications/read", "", pair.AccessToken, 204)
-	request("POST", "/v1/products", `{"name":"HTTP test","price":"10.00"}`, pair.AccessToken, 403)
+	request("GET", "/v1/audit/export?action=user.", "", pair.AccessToken, 403)
 	if err := admin.New(e.store, e.clock).Promote(ctx, addr); err != nil {
 		t.Fatal(err)
 	}
 	// Permission changes are effective with the existing access token.
-	request("POST", "/v1/products", `{"name":"HTTP test","price":"NaN"}`, pair.AccessToken, 400)
-	created := request("POST", "/v1/products", `{"name":"HTTP test","price":"10.00"}`, pair.AccessToken, 201)
-	id, ok := created["id"].(string)
-	if !ok {
-		t.Fatalf("missing id: %v", created)
-	}
-	request("GET", "/v1/products/"+id, "", pair.AccessToken, 200)
 	request("GET", "/v1/audit/export?action=bad%25", "", pair.AccessToken, 400)
 	request("GET", "/v1/audit/export?action=user.", "", pair.AccessToken, 200)
-	request("PATCH", "/v1/products/"+id, `{"price":2}`, pair.AccessToken, 200)
-	request("GET", "/v1/products?cursor=start&limit=2", "", pair.AccessToken, 200)
-	request("GET", "/v1/products?cursor=bad", "", pair.AccessToken, 400)
-	request("GET", "/v1/products?cursor=start&sort=price", "", pair.AccessToken, 400)
-	request("POST", "/v1/products/delete", `{"ids":["`+id+`"]}`, pair.AccessToken, 204)
-	request("GET", "/v1/products/"+id, "", pair.AccessToken, 404)
 	if _, err := e.svc.Authenticate(ctx, foreign.AccessToken); err != nil {
 		t.Fatalf("other user's session was revoked: %v", err)
 	}

@@ -54,7 +54,7 @@ func TestAuthorizeChecksTheSessionThenEveryNeededBit(t *testing.T) {
 		{"expired", &domain.Session{UserID: "u1", ExpiresAt: now}, domain.ActionRead, apperror.CodeTokenExpired},
 		{"other user", &domain.Session{UserID: "u2", ExpiresAt: now.Add(time.Hour)}, domain.ActionRead, apperror.CodeUnauthorized},
 	} {
-		err := New(stubReader{sess: tc.sess, have: domain.ActionRead}, clock{}).Authorize(ctx, p, "products", tc.need)
+		err := New(stubReader{sess: tc.sess, have: domain.ActionRead}, clock{}).Authorize(ctx, p, "audit", tc.need)
 		if tc.want == "" && err != nil || tc.want != "" && !apperror.IsCode(err, tc.want) {
 			t.Errorf("%s: want %q, got %v", tc.name, tc.want, err)
 		}

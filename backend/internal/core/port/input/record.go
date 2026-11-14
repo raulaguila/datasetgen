@@ -23,6 +23,8 @@ type UpdateRecordCommand struct {
 type RecordService interface {
 	List(ctx context.Context, filter domain.RecordFilter) ([]domain.Record, int64, error)
 	Aggregate(ctx context.Context, filter domain.RecordFilter, group string, numeric []string) ([]domain.RecordGroup, error)
+	// Stats profiles the selected records over the query's fields, in one pass per part.
+	Stats(ctx context.Context, filter domain.RecordFilter, q domain.StatsQuery) (*domain.RecordStats, error)
 	Get(ctx context.Context, id string) (*domain.Record, error)
 	// Comments lists a record's comments (viewers); members comment, the author or an owner deletes.
 	Comments(ctx context.Context, recordID string) ([]domain.RecordComment, error)
@@ -75,7 +77,11 @@ type ImportError struct {
 }
 
 type Export struct {
-	Name    string
-	Schema  json.RawMessage
-	Records []json.RawMessage
+	Name   string
+	Schema json.RawMessage
+	// Keys are the top-level keys the records hold, sorted: the CSV columns
+	// past the form's fields.
+	Keys []string
+	// Each streams the records in id order and stops at fn's first error.
+	Each func(fn func(json.RawMessage) error) error
 }

@@ -31,7 +31,6 @@ import (
 	"github.com/raulaguila/dataset/internal/core/usecase/integration"
 	"github.com/raulaguila/dataset/internal/core/usecase/jobs"
 	"github.com/raulaguila/dataset/internal/core/usecase/mailer"
-	"github.com/raulaguila/dataset/internal/core/usecase/product"
 	"github.com/raulaguila/dataset/internal/core/usecase/record"
 	rolesvc "github.com/raulaguila/dataset/internal/core/usecase/role"
 	"github.com/raulaguila/dataset/internal/core/usecase/tools"
@@ -76,7 +75,6 @@ func NewJobs(cfg *config.Environment, res *infra.Resources, log *logger.Logger) 
 	handlers := map[string]policy.JobHandler{}
 	integrations := NewIntegrations(cfg, res)
 	maps.Copy(handlers, integrations.Jobs())
-	maps.Copy(handlers, product.Jobs(log))
 	store := postgres.NewStore(res.PostgresDB)
 	maps.Copy(handlers, collection.Jobs(store.Collections(), store.Records()))
 	files := &tools.Service{Store: store, Tx: store, Files: NewFiles(cfg.Storage)}
@@ -168,7 +166,6 @@ func NewApplication(cfg *config.Environment, res *infra.Resources, log *logger.L
 		Users:        usersvc.New(store, store, output.RealClock{}, cfg.Auth.LoginAttemptEmailWindow),
 		Auth:         authSvc,
 		Account:      account.New(store, permReader, output.RealClock{}, NewFiles(cfg.Storage)),
-		Products:     product.New(store.Products(), store),
 		Records:      record.New(store.Records(), store.Collections(), store),
 		Collections:  collection.New(store.Collections(), store.Records(), store, authSvc, audit),
 		Audit:        audit,

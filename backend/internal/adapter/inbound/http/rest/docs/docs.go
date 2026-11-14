@@ -3894,434 +3894,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/products": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Products"
-                ],
-                "summary": "List products",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Use start for the first cursor page, then next_cursor; requires created_at desc and omits totals",
-                        "name": "cursor",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "Items per page, up to 100",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Part of the name",
-                        "name": "search",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Only enabled (true) or disabled (false) products",
-                        "name": "enabled",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "name",
-                            "price",
-                            "created_at",
-                            "updated_at"
-                        ],
-                        "type": "string",
-                        "default": "created_at",
-                        "description": "Sort field",
-                        "name": "sort",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "default": "desc",
-                        "description": "Sort direction",
-                        "name": "order",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "items": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/definitions/product.productDTO"
-                                    }
-                                },
-                                "pagination": {
-                                    "$ref": "#/definitions/product.productPaginationDTO"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Products"
-                ],
-                "summary": "Create a product",
-                "parameters": [
-                    {
-                        "description": "Request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/product.createDTO"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/product.productDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/products/delete": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Products"
-                ],
-                "summary": "Delete products; all or none",
-                "parameters": [
-                    {
-                        "description": "Product IDs, 1 to 100",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/product.idsDTO"
-                        }
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/products/list": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Products"
-                ],
-                "summary": "List enabled products as id and name, for pickers",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "items": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/definitions/product.optionDTO"
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/products/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Products"
-                ],
-                "summary": "Get a product",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Product ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/product.productDTO"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            },
-            "patch": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Products"
-                ],
-                "summary": "Update a product",
-                "parameters": [
-                    {
-                        "description": "Request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/product.updateDTO"
-                        }
-                    },
-                    {
-                        "type": "string",
-                        "description": "Product ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/product.productDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            }
-        },
         "/v1/public/{token}": {
             "get": {
                 "produces": [
@@ -4862,7 +4434,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "JSON Lines holds one record's data per line. CSV has one column per field, in the form's order, then any other keys; lists and objects are written as JSON. Up to 100 000 records.",
+                "description": "JSON Lines holds one record's data per line. CSV has one column per field, in the form's order, then any other keys; lists and objects are written as JSON. Streamed, any number of records; CSV columns past the form come from up to 1 000 keys.",
                 "produces": [
                     "text/plain"
                 ],
@@ -5004,6 +4576,111 @@ const docTemplate = `{
                     },
                     "429": {
                         "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/records/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "How many of the selected records fill each field, the range of numbers and dates, a count per date bucket and the commonest values. Viewer or above.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "records"
+                ],
+                "summary": "Profile records field by field",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "collection_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Rules as JSON, as in the list",
+                        "name": "where",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Text search, as in the list",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Fields to count filled, comma separated",
+                        "name": "filled",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Numeric fields: min, max, avg, sum",
+                        "name": "numbers",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Date fields: first, last and a series",
+                        "name": "dates",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Fields to list the commonest values of (8 each)",
+                        "name": "values",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Series bucket: day, week, month (default) or year",
+                        "name": "bucket",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "fields": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "$ref": "#/definitions/record.fieldStatsDTO"
+                                    }
+                                },
+                                "total": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/mapper.errorBody"
                         }
@@ -7736,113 +7413,10 @@ const docTemplate = `{
                 },
                 "code": {
                     "type": "string",
-                    "example": "products"
+                    "example": "collections"
                 },
                 "description": {
                     "type": "string"
-                }
-            }
-        },
-        "product.createDTO": {
-            "type": "object",
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "price": {
-                    "type": "string",
-                    "example": "19.90"
-                }
-            }
-        },
-        "product.idsDTO": {
-            "type": "object",
-            "properties": {
-                "ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "product.optionDTO": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "product.productDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "price": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "version": {
-                    "type": "integer"
-                }
-            }
-        },
-        "product.productPaginationDTO": {
-            "type": "object",
-            "properties": {
-                "limit": {
-                    "type": "integer"
-                },
-                "next_cursor": {
-                    "type": "string"
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "total_items": {
-                    "type": "integer"
-                },
-                "total_pages": {
-                    "type": "integer"
-                }
-            }
-        },
-        "product.updateDTO": {
-            "type": "object",
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "price": {
-                    "type": "string",
-                    "example": "19.90"
-                },
-                "version": {
-                    "description": "Version is the version the client read; when sent, a newer row is a 409 conflict.",
-                    "type": "integer",
-                    "example": 3
                 }
             }
         },
@@ -7921,6 +7495,58 @@ const docTemplate = `{
                 },
                 "data": {
                     "type": "object"
+                }
+            }
+        },
+        "record.dateCountDTO": {
+            "type": "object",
+            "properties": {
+                "at": {
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "record.fieldStatsDTO": {
+            "type": "object",
+            "properties": {
+                "avg": {
+                    "type": "number"
+                },
+                "distinct": {
+                    "type": "integer"
+                },
+                "filled": {
+                    "type": "integer"
+                },
+                "first": {
+                    "type": "string"
+                },
+                "last": {
+                    "type": "string"
+                },
+                "max": {
+                    "type": "number"
+                },
+                "min": {
+                    "type": "number"
+                },
+                "series": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/record.dateCountDTO"
+                    }
+                },
+                "sum": {
+                    "type": "number"
+                },
+                "top": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/record.valueCountDTO"
+                    }
                 }
             }
         },
@@ -8125,6 +7751,17 @@ const docTemplate = `{
                     "description": "Version is the version the client read; when sent, a newer row is a 409 conflict.",
                     "type": "integer",
                     "example": 3
+                }
+            }
+        },
+        "record.valueCountDTO": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "key": {
+                    "type": "object"
                 }
             }
         },
@@ -8891,10 +8528,6 @@ const docTemplate = `{
             "name": "Audit"
         },
         {
-            "description": "Product catalog",
-            "name": "Products"
-        },
-        {
             "description": "Collections and the JSON Schema their records follow",
             "name": "Collections"
         },
@@ -8937,12 +8570,6 @@ const docTemplate = `{
                 "Users",
                 "Roles",
                 "Audit"
-            ]
-        },
-        {
-            "name": "Catalog",
-            "tags": [
-                "Products"
             ]
         },
         {

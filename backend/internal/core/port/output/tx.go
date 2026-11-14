@@ -24,7 +24,6 @@ type UnitOfWork interface {
 	Preferences() PreferenceRepository
 	Notifications() NotificationRepository
 	Audit() AuditRepository
-	Products() ProductRepository
 	Records() RecordRepository
 	Collections() CollectionRepository
 	Jobs() JobRepository

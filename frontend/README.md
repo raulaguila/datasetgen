@@ -31,12 +31,12 @@ The container joins `dataset_network` at `WEB_IP` (default `172.30.97.10`). The 
 - Menus and buttons follow `permissions` and `is_superuser`, for display only: the API still checks every call.
 - Theme and language follow the saved `preferences` and are written back when changed.
 
-Screens: login, register, activation, password reset, profile (name, password, sessions, preferences), notifications, users, roles with the permission matrix and members, and products.
+Screens: login, register, activation, password reset, profile (name, password, sessions, preferences), notifications, users, roles with the permission matrix and members, audit, collections and their records.
 
 ## Add a screen
 
 1. Types and one function per route in `src/lib/api/types.ts` and `src/lib/api/endpoints.ts`.
-2. The page under `src/app/(app)/`, following `products/page.tsx`.
+2. The page under `src/app/(app)/`, following `admin/roles/page.tsx`.
 3. A menu entry in `src/lib/navigation.ts`, gated by `needs: [resource, action]`.
 4. The texts in `src/lib/i18n/messages.ts`; a key missing in one language fails the typecheck.
 

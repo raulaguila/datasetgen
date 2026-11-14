@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { fieldsOf, type FieldRow } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
+import { ViewConditions } from "@/components/collection-stats";
 import { RecordRules, whereEmpty, type Where } from "@/components/record-rules";
 import { ListSkeleton } from "@/components/skeletons";
 import { Badge } from "@/components/ui/badge";
@@ -99,6 +100,7 @@ function AutomationForm({ collection, initial, onDone }: { collection: Collectio
         <p className="text-sm font-medium">{t("automations.if")}</p>
         <div className="flex flex-wrap items-center gap-2">
           <RecordRules fields={rows} value={draft.conditions as Where} onChange={(w) => set({ conditions: w })} />
+          <ViewConditions collectionId={collection.id} onPick={(w) => set({ conditions: w })} />
           {whereEmpty(draft.conditions as Where) && <span className="text-xs text-muted-foreground">{t("automations.every_record")}</span>}
         </div>
       </div>

@@ -65,7 +65,7 @@ export function StatusBadge({ status }: { status: UserStatus }) {
   );
 }
 
-/** Green when on, grey when off; products and roles share it. */
+/** Green when on, grey when off; roles and keys share it. */
 export function ActiveBadge({ enabled }: { enabled: boolean }) {
   const { t } = useI18n();
   return (

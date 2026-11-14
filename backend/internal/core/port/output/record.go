@@ -15,6 +15,8 @@ type RecordRepository interface {
 	// Aggregate counts the records the filter selects, by group field (or all
 	// together when group is ""), with sums and averages of numeric fields.
 	Aggregate(ctx context.Context, filter domain.RecordFilter, group string, numeric []string) ([]domain.RecordGroup, error)
+	// Stats profiles the selected records over the query's fields, in one pass per part.
+	Stats(ctx context.Context, filter domain.RecordFilter, q domain.StatsQuery) (*domain.RecordStats, error)
 	FindByID(ctx context.Context, id string) (*domain.Record, error)
 	Create(ctx context.Context, r *domain.Record) error
 	// Update replaces data; with version set, a row changed since that version is a conflict.
@@ -24,6 +26,8 @@ type RecordRepository interface {
 	// Scan returns up to limit records of the collection after afterID (by id),
 	// with id, full data and updated_at only.
 	Scan(ctx context.Context, collectionID, afterID string, limit int) ([]domain.Record, error)
+	// Keys lists the top-level keys the collection's records hold, sorted, up to limit.
+	Keys(ctx context.Context, collectionID string, limit int) ([]string, error)
 	// CreateMany inserts one record per JSON text; the caller has validated them.
 	CreateMany(ctx context.Context, collectionID string, data []string) (int64, error)
 	// CopyAll copies every record of one collection into another, as new records.
