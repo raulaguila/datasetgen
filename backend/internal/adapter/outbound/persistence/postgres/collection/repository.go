@@ -120,7 +120,9 @@ func listDetails(on bool) string {
 func (r *Repository) ListOptions(ctx context.Context, userID string, limit int) ([]domain.Collection, error) {
 	var rows []row
 	err := visible(r.db.WithContext(ctx).Table("app.collection c"), userID).
-		Select("c.id, c.name").Order("c.name, c.id").Limit(limit).Find(&rows).Error
+		Select(`c.id, c.name, m.user_id IS NOT NULL AS member,
+			CASE WHEN `+platformAdmin+` THEN 'owner' ELSE m.role END AS role`, userID).
+		Order("c.name, c.id").Limit(limit).Find(&rows).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "collection")
 	}

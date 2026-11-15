@@ -41,8 +41,7 @@ export function ApiKeysCard() {
   const client = useQueryClient();
   const format = useFormatDate();
   const list = useQuery({ queryKey: KEYS, queryFn: account.keys });
-  // shortcut: the first 100 collections; a member of more picks among those.
-  const cols = useQuery({ queryKey: ["collections", "picker"], queryFn: ({ signal }) => collections.list({ page: 1, limit: 100 }, signal), staleTime: 30_000 });
+  const cols = useQuery({ queryKey: ["collections", "options"], queryFn: ({ signal }) => collections.options(signal), staleTime: 30_000 });
   const mine = (cols.data?.items ?? []).filter((c) => c.member !== false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [secret, setSecret] = useState<string | null>(null);

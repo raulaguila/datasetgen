@@ -56,7 +56,7 @@ test("records come in, go out and keep their history", async ({ page }) => {
   await page.getByRole("link", { name: "Primeiro" }).click();
   await page.getByRole("button", { name: "Editar", exact: true }).click();
   await page.locator("#rec_title").fill("Primeiro editado");
-  await page.getByRole("button", { name: "Salvar" }).click();
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(page).toHaveURL(/\/records\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Primeiro editado");
   const history = page.getByRole("list", { name: "Histórico" });
@@ -80,7 +80,7 @@ test("records come in, go out and keep their history", async ({ page }) => {
   await page.goto(`${records}/fields`);
   await page.getByRole("button", { name: "Remover campo: Notas" }).click();
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Salvar" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(page.getByText("Alterações salvas.")).toBeVisible();
   await page.goto(records.replace(/$/, "/quality"));
   await expect(page.getByRole("heading", { name: "2 registros fora do formato" })).toBeVisible({ timeout: 15_000 });

@@ -12,7 +12,7 @@ import (
 type CollectionRepository interface {
 	// List returns one page, with record counts, and the count of all matches.
 	List(ctx context.Context, filter domain.CollectionFilter) ([]domain.Collection, int64, error)
-	// ListOptions returns the collections userID can see, with only id and name.
+	// ListOptions returns the collections userID can see: id, name, role and membership.
 	ListOptions(ctx context.Context, userID string, limit int) ([]domain.Collection, error)
 	// Access is userID's role in the collection: owner for a platform admin
 	// (superuser or '*'), else the member role. NotFound when the collection is

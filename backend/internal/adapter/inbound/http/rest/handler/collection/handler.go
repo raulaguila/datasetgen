@@ -39,8 +39,8 @@ func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
 	r.Get("/:id/audit", h.AuditLog)
 	r.Get("/:id/quality", h.Quality)
 	r.Post("/:id/quality", h.StartQuality)
-	r.Post("/:id/fix", h.Fix)
-	r.Post("/:id/delete-invalid", h.DeleteInvalid)
+	r.Post("/:id/quality/fix", h.Fix)
+	r.Post("/:id/quality/delete-invalid", h.DeleteInvalid)
 	r.Post("/:id/duplicate", middleware.Require(authz, domain.ResourceCollections, domain.ActionCreate), h.Duplicate)
 	r.Get("/:id/stats", h.Stats)
 	r.Post("/:id/leave", h.Leave)
@@ -67,8 +67,10 @@ type collectionDTO struct {
 }
 
 type optionDTO struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Role   string `json:"role" enums:"owner,editor,viewer"` // the caller's role
+	Member bool   `json:"member"`                          // false for a platform admin outside the collection
 }
 
 type createDTO struct {
@@ -135,7 +137,7 @@ func (h *Handler) List(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{"items": out, "pagination": mapper.Pagination(filter.Page, total)})
 }
 
-// @Summary List collections as id and name, for pickers
+// @Summary List collections as id, name and the caller's role, for pickers (up to 1000, by name)
 // @Tags Collections
 // @Produce json
 // @Security BearerAuth
@@ -151,7 +153,7 @@ func (h *Handler) Options(c fiber.Ctx) error {
 	}
 	out := make([]optionDTO, 0, len(items))
 	for _, item := range items {
-		out = append(out, optionDTO{ID: item.ID, Name: item.Name})
+		out = append(out, optionDTO{ID: item.ID, Name: item.Name, Role: string(item.Role), Member: item.Member})
 	}
 	return c.JSON(fiber.Map{"items": out})
 }
@@ -551,7 +553,7 @@ type countDTO struct {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/fix [post]
+// @Router /v1/collections/{id}/quality/fix [post]
 func (h *Handler) Fix(c fiber.Ctx) error {
 	var body fixDTO
 	if err := c.Bind().Body(&body); err != nil {
@@ -576,7 +578,7 @@ func (h *Handler) Fix(c fiber.Ctx) error {
 // @Failure 404 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/delete-invalid [post]
+// @Router /v1/collections/{id}/quality/delete-invalid [post]
 func (h *Handler) DeleteInvalid(c fiber.Ctx) error {
 	n, err := h.svc.DeleteInvalid(c.Context(), c.Params("id"))
 	if err != nil {

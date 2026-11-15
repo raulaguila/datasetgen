@@ -39,7 +39,7 @@ func (h *Handler) Routes(r fiber.Router) {
 	r.Delete("/:id/comments/:commentId", h.DeleteComment)
 	r.Post("/:id/restore", h.Restore)
 	r.Post("/", h.Create)
-	r.Patch("/:id", h.Update)
+	r.Put("/:id", h.Update)
 	r.Post("/delete", h.Delete)
 }
 
@@ -295,7 +295,7 @@ func (h *Handler) Create(c fiber.Ctx) error {
 // @Failure 404 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/records/{id} [patch]
+// @Router /v1/records/{id} [put]
 func (h *Handler) Update(c fiber.Ctx) error {
 	var body updateDTO
 	if err := c.Bind().Body(&body); err != nil {

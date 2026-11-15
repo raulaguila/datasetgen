@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -39,6 +40,14 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 			t.Fatal(err)
 		}
 		*row.id = r.ID
+	}
+	// The picker list (and list_collections) carries the caller's role.
+	opts, err := collections.Options(owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i := slices.IndexFunc(opts, func(c domain.Collection) bool { return c.ID == a }); i < 0 || opts[i].Role != domain.RoleOwner || !opts[i].Member {
+		t.Fatalf("options: %+v", opts)
 	}
 	key, err := keys.CreateMyKey(owner, "Assistente", []domain.KeyScope{{CollectionID: a}})
 	if err != nil {

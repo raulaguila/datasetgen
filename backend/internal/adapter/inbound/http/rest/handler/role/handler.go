@@ -32,8 +32,8 @@ func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
 	r.Patch("/:id", update, h.Update)
 	r.Put("/:id/permissions", update, h.SetPermissions)
 	r.Get("/:id/members", read, h.Members)
-	r.Put("/:id/members/:user_id", update, h.AddMember)
-	r.Delete("/:id/members/:user_id", update, h.RemoveMember)
+	r.Put("/:id/members/:userId", update, h.AddMember)
+	r.Delete("/:id/members/:userId", update, h.RemoveMember)
 }
 
 // UserRoutes mounts the role routes that live under /users, behind Bearer.
@@ -287,7 +287,7 @@ func (h *Handler) Members(c fiber.Ctx) error {
 // @Tags Roles
 // @Produce json
 // @Param id path string true "Role ID"
-// @Param user_id path string true "User ID"
+// @Param userId path string true "User ID"
 // @Security BearerAuth
 // @Success 204
 // @Failure 400 {object} mapper.errorBody
@@ -295,9 +295,9 @@ func (h *Handler) Members(c fiber.Ctx) error {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/roles/{id}/members/{user_id} [put]
+// @Router /v1/roles/{id}/members/{userId} [put]
 func (h *Handler) AddMember(c fiber.Ctx) error {
-	if err := h.svc.AddMember(c.Context(), c.Params("id"), c.Params("user_id")); err != nil {
+	if err := h.svc.AddMember(c.Context(), c.Params("id"), c.Params("userId")); err != nil {
 		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -307,7 +307,7 @@ func (h *Handler) AddMember(c fiber.Ctx) error {
 // @Tags Roles
 // @Produce json
 // @Param id path string true "Role ID"
-// @Param user_id path string true "User ID"
+// @Param userId path string true "User ID"
 // @Security BearerAuth
 // @Success 204
 // @Failure 400 {object} mapper.errorBody
@@ -315,9 +315,9 @@ func (h *Handler) AddMember(c fiber.Ctx) error {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/roles/{id}/members/{user_id} [delete]
+// @Router /v1/roles/{id}/members/{userId} [delete]
 func (h *Handler) RemoveMember(c fiber.Ctx) error {
-	if err := h.svc.RemoveMember(c.Context(), c.Params("id"), c.Params("user_id")); err != nil {
+	if err := h.svc.RemoveMember(c.Context(), c.Params("id"), c.Params("userId")); err != nil {
 		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

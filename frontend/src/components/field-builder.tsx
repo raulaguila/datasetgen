@@ -572,8 +572,8 @@ function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, 
 /** Picks the collection a reference points at, among those the user reaches. */
 function RefSelect({ id, value, invalid, onChange }: { id: string; value: string; invalid: boolean; onChange: (v: string) => void }) {
   const { t } = useI18n();
-  // shortcut: the first 100 collections by name; a search box when people reach more.
-  const list = useQuery({ queryKey: ["collections", "options"], queryFn: () => collections.list({ page: 1, limit: 100, sort: "name", order: "asc" }) });
+  // shortcut: up to 1000 collections by name in one select; a search box when people reach more.
+  const list = useQuery({ queryKey: ["collections", "options"], queryFn: ({ signal }) => collections.options(signal), staleTime: 30_000 });
   const items = Object.fromEntries((list.data?.items ?? []).map((c) => [c.id, c.name]));
   if (value && !(value in items)) items[value] = t("collections.field_ref_unknown");
   return (

@@ -31,6 +31,7 @@ import type {
   SortOrder,
   User,
   UserCounts,
+  CollectionOption,
   UserDetails,
   UserStatus,
   ApiKey,
@@ -126,6 +127,8 @@ export const collections = {
   /** details adds member_count, field_count and last_activity, which cost a pass over members and records. */
   list: (p: { page: number; limit: number; search?: string; sort?: string; order?: SortOrder; details?: boolean }, signal?: AbortSignal) =>
     apiFetch<Paged<Collection>>(`/v1/collections${query(p)}`, { signal }),
+  /** Every collection the caller reaches (up to 1000) as id, name and role, without counts: for pickers. */
+  options: (signal?: AbortSignal) => apiFetch<{ items: CollectionOption[] }>("/v1/collections/list", { signal }),
   get: (collectionId: string) => apiFetch<Collection>(`/v1/collections/${id(collectionId)}`),
   create: (input: CollectionInput) => apiFetch<Collection>("/v1/collections", { method: "POST", json: input }),
   update: (collectionId: string, input: Partial<CollectionInput> & { version?: number }) => apiFetch<Collection>(`/v1/collections/${id(collectionId)}`, { method: "PATCH", json: input }),
@@ -143,8 +146,8 @@ export const collections = {
   quality: (collectionId: string, signal?: AbortSignal) => apiFetch<QualityReport>(`/v1/collections/${id(collectionId)}/quality`, { signal }),
   /** Queues a background check unless one is running. */
   startQuality: (collectionId: string) => apiFetch<QualityReport>(`/v1/collections/${id(collectionId)}/quality`, { method: "POST" }),
-  fix: (collectionId: string, fix: RecordFix) => apiFetch<{ count: number }>(`/v1/collections/${id(collectionId)}/fix`, { method: "POST", json: fix }),
-  deleteInvalid: (collectionId: string) => apiFetch<{ count: number }>(`/v1/collections/${id(collectionId)}/delete-invalid`, { method: "POST" }),
+  fix: (collectionId: string, fix: RecordFix) => apiFetch<{ count: number }>(`/v1/collections/${id(collectionId)}/quality/fix`, { method: "POST", json: fix }),
+  deleteInvalid: (collectionId: string) => apiFetch<{ count: number }>(`/v1/collections/${id(collectionId)}/quality/delete-invalid`, { method: "POST" }),
   duplicate: (collectionId: string, name: string, withRecords: boolean) =>
     apiFetch<Collection>(`/v1/collections/${id(collectionId)}/duplicate`, { method: "POST", json: { name, records: withRecords } }),
   stats: (collectionId: string, signal?: AbortSignal) =>
@@ -174,7 +177,7 @@ export const records = {
     apiFetch<RecordStats>(`/v1/records/stats${query(p)}`, { signal }),
   get: (recordId: string) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`),
   create: (collection_id: string, data: unknown) => apiFetch<DataRecord>("/v1/records", { method: "POST", json: { collection_id, data } }),
-  update: (recordId: string, data: unknown, version?: number) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`, { method: "PATCH", json: { data, version } }),
+  update: (recordId: string, data: unknown, version?: number) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`, { method: "PUT", json: { data, version } }),
   remove: (ids: string[]) => apiFetch<void>("/v1/records/delete", { method: "POST", json: { ids } }),
   /** Sets the same fields on records of one collection, all or none; null removes a field. */
   bulkUpdate: (ids: string[], set: Record<string, unknown>) => apiFetch<{ count: number }>("/v1/records/bulk-update", { method: "POST", json: { ids, set } }),
