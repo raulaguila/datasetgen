@@ -171,7 +171,7 @@ type newKeyDTO struct {
 }
 
 // @Summary The signed in member's API keys
-// @Tags Integrations
+// @Tags API keys
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]keyDTO}
@@ -186,7 +186,7 @@ func (h *Handler) MyKeys(c fiber.Ctx) error {
 
 // @Summary Make an API key
 // @Description The key acts as its maker on the collections in scopes: read (viewer) or, with can_write, write (editor; needs the editor role).
-// @Tags Integrations
+// @Tags API keys
 // @Accept json
 // @Produce json
 // @Param body body keyBodyDTO true "Key"
@@ -209,7 +209,7 @@ func (h *Handler) CreateMyKey(c fiber.Ctx) error {
 }
 
 // @Summary Rename an API key and set its collections
-// @Tags Integrations
+// @Tags API keys
 // @Accept json
 // @Produce json
 // @Param keyId path string true "Key ID"
@@ -232,7 +232,7 @@ func (h *Handler) UpdateMyKey(c fiber.Ctx) error {
 }
 
 // @Summary Delete an API key
-// @Tags Integrations
+// @Tags API keys
 // @Param keyId path string true "Key ID"
 // @Security BearerAuth
 // @Success 204

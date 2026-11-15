@@ -6,8 +6,11 @@ import (
 
 	"github.com/gofiber/contrib/v3/swaggo"
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/adaptor"
 
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/docs"
+	mcpserver "github.com/raulaguila/dataset/internal/adapter/inbound/mcp"
+	"github.com/raulaguila/dataset/internal/core/port/input"
 )
 
 //	@title						Dataset API
@@ -36,6 +39,8 @@ import (
 //	@tag.description	Interface choices of the current user
 //	@tag.name			Notifications
 //	@tag.description	Security notices for the current user
+//	@tag.name			API keys
+//	@tag.description	The current user's keys for programs and AI assistants, each reaching the collections it names, read only or read and write
 //	@tag.name			Users
 //	@tag.description	Accounts of other people, their roles and sessions. Users with a protected role stay out of reach
 //	@tag.name			Roles
@@ -46,9 +51,15 @@ import (
 //	@tag.description	Collections and the JSON Schema their records follow
 //	@tag.name			Records
 //	@tag.description	Records of a collection, validated against its schema
+//	@tag.name			Trash
+//	@tag.description	Deleted records and collections, to restore or delete for good
+//	@tag.name			Integrations
+//	@tag.description	A collection's share links, webhooks and the API keys that reach it; owners
 //	@tag.name			Public
 //	@tag.description	Share links: a collection's form or read-only list, opened without a session
-//	@x-tagGroups		[{"name":"System","tags":["Health"]},{"name":"Authentication","tags":["Auth","Registration","Password reset"]},{"name":"Account","tags":["Profile","Sessions","Preferences","Notifications"]},{"name":"Administration","tags":["Users","Roles","Audit"]},{"name":"Data","tags":["Collections","Records","Public"]}]
+//	@tag.name			MCP
+//	@tag.description	Model Context Protocol for AI assistants, with an API key
+//	@x-tagGroups		[{"name":"System","tags":["Health"]},{"name":"Authentication","tags":["Auth","Registration","Password reset"]},{"name":"Account","tags":["Profile","Sessions","Preferences","Notifications","API keys"]},{"name":"Administration","tags":["Users","Roles","Audit"]},{"name":"Data","tags":["Collections","Records","Trash"]},{"name":"Integrations","tags":["Integrations","Public","MCP"]}]
 
 var (
 	//go:embed docs/swagger.css
@@ -72,4 +83,20 @@ func mountSwagger(app *fiber.App, version string) {
 		ResponseInterceptor:    "saveToken",
 		Plugins:                []template.JS{"SwaggerUIBundle.plugins.DownloadUrl", "TagGroups"},
 	}))
+}
+
+// mountMCP serves the MCP tools; the route lives here so its annotations sit with the docs.
+//
+//	@Summary		MCP endpoint for AI assistants (JSON-RPC 2.0, streamable HTTP, stateless)
+//	@Description	Takes an API key only ("Authorization: Bearer dsk_..." or "X-API-Key"). Read tools, each limited to the key's collections: list_collections, get_collection, search_records, get_record, related_records, collection_stats. Send tools/list to see their inputs.
+//	@Tags			MCP
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body	object	true	"JSON-RPC request, e.g. {\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}"
+//	@Security		BearerAuth
+//	@Success		200	{object}	object
+//	@Failure		401	{string}	string
+//	@Router			/v1/mcp [post]
+func mountMCP(app *fiber.App, a *input.Application, version string) {
+	app.Post("/v1/mcp", adaptor.HTTPHandler(mcpserver.Handler(a, version)))
 }

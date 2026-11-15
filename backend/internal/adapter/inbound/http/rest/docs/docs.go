@@ -3144,6 +3144,51 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/mcp": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Takes an API key only (\"Authorization: Bearer dsk_...\" or \"X-API-Key\"). Read tools, each limited to the key's collections: list_collections, get_collection, search_records, get_record, related_records, collection_stats. Send tools/list to see their inputs.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MCP"
+                ],
+                "summary": "MCP endpoint for AI assistants (JSON-RPC 2.0, streamable HTTP, stateless)",
+                "parameters": [
+                    {
+                        "description": "JSON-RPC request, e.g. {\\",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/me": {
             "get": {
                 "security": [
@@ -3368,7 +3413,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "API keys"
                 ],
                 "summary": "The signed in member's API keys",
                 "responses": {
@@ -3402,7 +3447,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "API keys"
                 ],
                 "summary": "Make an API key",
                 "parameters": [
@@ -3458,7 +3503,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "API keys"
                 ],
                 "summary": "Rename an API key and set its collections",
                 "parameters": [
@@ -3507,7 +3552,7 @@ const docTemplate = `{
                     }
                 ],
                 "tags": [
-                    "Integrations"
+                    "API keys"
                 ],
                 "summary": "Delete an API key",
                 "parameters": [
@@ -4716,7 +4761,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "records"
+                    "Records"
                 ],
                 "summary": "Profile records field by field",
                 "parameters": [
@@ -8666,6 +8711,10 @@ const docTemplate = `{
             "name": "Notifications"
         },
         {
+            "description": "The current user's keys for programs and AI assistants, each reaching the collections it names, read only or read and write",
+            "name": "API keys"
+        },
+        {
             "description": "Accounts of other people, their roles and sessions. Users with a protected role stay out of reach",
             "name": "Users"
         },
@@ -8686,8 +8735,20 @@ const docTemplate = `{
             "name": "Records"
         },
         {
+            "description": "Deleted records and collections, to restore or delete for good",
+            "name": "Trash"
+        },
+        {
+            "description": "A collection's share links, webhooks and the API keys that reach it; owners",
+            "name": "Integrations"
+        },
+        {
             "description": "Share links: a collection's form or read-only list, opened without a session",
             "name": "Public"
+        },
+        {
+            "description": "Model Context Protocol for AI assistants, with an API key",
+            "name": "MCP"
         }
     ],
     "x-tagGroups": [
@@ -8711,7 +8772,8 @@ const docTemplate = `{
                 "Profile",
                 "Sessions",
                 "Preferences",
-                "Notifications"
+                "Notifications",
+                "API keys"
             ]
         },
         {
@@ -8727,7 +8789,15 @@ const docTemplate = `{
             "tags": [
                 "Collections",
                 "Records",
-                "Public"
+                "Trash"
+            ]
+        },
+        {
+            "name": "Integrations",
+            "tags": [
+                "Integrations",
+                "Public",
+                "MCP"
             ]
         }
     ]

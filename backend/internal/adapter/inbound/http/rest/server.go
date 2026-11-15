@@ -118,6 +118,8 @@ func New(cfg *config.Environment, app *input.Application, hits middleware.Hits, 
 	audithttp.New(app.Audit).Routes(v1.Group("/audit", token), app.Authorizer)
 	// Share links: no session; the token is the access. Form posts share the sign-in limit.
 	publichttp.New(app.Integrations, app.Collections, app.Records).Routes(v1.Group("/public"), middleware.RateLimit("public", cfg.API.AuthRateLimit, hits))
+	// AI assistants: MCP tools over the collections an API key reaches.
+	mountMCP(fiberApp, app, cfg.Version)
 
 	return fiberApp
 }

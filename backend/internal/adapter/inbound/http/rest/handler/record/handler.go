@@ -411,7 +411,7 @@ func splitList(v string) []string {
 // Stats godoc
 // @Summary Profile records field by field
 // @Description How many of the selected records fill each field, the range of numbers and dates, a count per date bucket and the commonest values. Viewer or above.
-// @Tags records
+// @Tags Records
 // @Produce json
 // @Param collection_id query string true "Collection ID"
 // @Param where query string false "Rules as JSON, as in the list"

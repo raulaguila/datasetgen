@@ -26,6 +26,11 @@ export function forwardHeaders(req: NextRequest): Record<string, string> {
   // The session list names the device by the browser, not by this server.
   const agent = req.headers.get("user-agent");
   if (agent) headers["user-agent"] = agent;
+  // MCP clients (/v1/mcp) must say they read JSON and which protocol version they speak.
+  for (const name of ["accept", "mcp-protocol-version"]) {
+    const value = req.headers.get(name);
+    if (value) headers[name] = value;
+  }
   return headers;
 }
 
