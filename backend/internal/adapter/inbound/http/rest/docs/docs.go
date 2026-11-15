@@ -1780,13 +1780,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "can_write is each key's access to this collection.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Integrations"
                 ],
-                "summary": "A collection's API keys; owners",
+                "summary": "The API keys that reach a collection; owners",
                 "parameters": [
                     {
                         "type": "string",
@@ -1824,62 +1825,6 @@ const docTemplate = `{
                         }
                     }
                 }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "The key acts as its maker, as a viewer (read) or an editor (can_write), on this collection's records only.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Integrations"
-                ],
-                "summary": "Make an API key for the collection's records; owners",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Key",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/tools.createKeyDTO"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/tools.newKeyDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
             }
         },
         "/v1/collections/{id}/keys/{keyId}": {
@@ -1889,10 +1834,11 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "The key keeps its other collections.",
                 "tags": [
                     "Integrations"
                 ],
-                "summary": "Delete an API key; owners",
+                "summary": "Take the collection out of an API key; owners",
                 "parameters": [
                     {
                         "type": "string",
@@ -3404,6 +3350,181 @@ const docTemplate = `{
                     },
                     "429": {
                         "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/me/keys": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "The signed in member's API keys",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "items": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/tools.keyDTO"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The key acts as its maker on the collections in scopes: read (viewer) or, with can_write, write (editor; needs the editor role).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "Make an API key",
+                "parameters": [
+                    {
+                        "description": "Key",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tools.keyBodyDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/tools.newKeyDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/me/keys/{keyId}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "Rename an API key and set its collections",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Key ID",
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Key",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tools.keyBodyDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/tools.keyDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "Delete an API key",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Key ID",
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/mapper.errorBody"
                         }
@@ -8039,18 +8160,6 @@ const docTemplate = `{
                 }
             }
         },
-        "tools.createKeyDTO": {
-            "type": "object",
-            "properties": {
-                "can_write": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Relatórios"
-                }
-            }
-        },
         "tools.createViewDTO": {
             "type": "object",
             "properties": {
@@ -8125,6 +8234,21 @@ const docTemplate = `{
                 }
             }
         },
+        "tools.keyBodyDTO": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "Assistente"
+                },
+                "scopes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/tools.scopeDTO"
+                    }
+                }
+            }
+        },
         "tools.keyDTO": {
             "type": "object",
             "properties": {
@@ -8148,6 +8272,12 @@ const docTemplate = `{
                 },
                 "prefix": {
                     "type": "string"
+                },
+                "scopes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/tools.scopeDTO"
+                    }
                 }
             }
         },
@@ -8208,6 +8338,12 @@ const docTemplate = `{
                 "prefix": {
                     "type": "string"
                 },
+                "scopes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/tools.scopeDTO"
+                    }
+                },
                 "secret": {
                     "description": "Secret is shown once: send it as \"Authorization: Bearer \u003csecret\u003e\" or \"X-API-Key: \u003csecret\u003e\".",
                     "type": "string"
@@ -8228,6 +8364,20 @@ const docTemplate = `{
                 },
                 "version": {
                     "type": "integer"
+                }
+            }
+        },
+        "tools.scopeDTO": {
+            "type": "object",
+            "properties": {
+                "can_write": {
+                    "type": "boolean"
+                },
+                "collection_id": {
+                    "type": "string"
+                },
+                "collection_name": {
+                    "type": "string"
                 }
             }
         },

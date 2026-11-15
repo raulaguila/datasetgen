@@ -307,10 +307,19 @@ export interface ApiKey {
   name: string;
   /** The first characters of the key, to tell keys apart. */
   prefix: string;
+  /** Listed for a collection: the key's access to it. */
   can_write: boolean;
+  /** Listed on the profile: the collections the key reaches. */
+  scopes?: KeyScope[];
   creator_name?: string;
   created_at: string;
   last_used_at?: string;
+}
+
+export interface KeyScope {
+  collection_id: string;
+  collection_name?: string;
+  can_write: boolean;
 }
 
 export type WebhookEvent = "record.created" | "record.updated" | "record.deleted" | "records.imported";

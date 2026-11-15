@@ -34,6 +34,7 @@ import type {
   UserDetails,
   UserStatus,
   ApiKey,
+  KeyScope,
   Webhook,
   WebhookEvent,
   TrashedRecord,
@@ -62,6 +63,10 @@ export const account = {
     apiFetch<void>("/v1/me/password", { method: "POST", json: { current_password, new_password } }),
   sessions: () => apiFetch<{ items: Session[] }>("/v1/me/sessions"),
   revokeSession: (sessionId: string) => apiFetch<void>(`/v1/me/sessions/${id(sessionId)}`, { method: "DELETE" }),
+  keys: () => apiFetch<{ items: ApiKey[] }>("/v1/me/keys"),
+  createKey: (name: string, scopes: KeyScope[]) => apiFetch<ApiKey & { secret: string }>("/v1/me/keys", { method: "POST", json: { name, scopes } }),
+  updateKey: (keyId: string, name: string, scopes: KeyScope[]) => apiFetch<ApiKey>(`/v1/me/keys/${id(keyId)}`, { method: "PUT", json: { name, scopes } }),
+  deleteKey: (keyId: string) => apiFetch<void>(`/v1/me/keys/${id(keyId)}`, { method: "DELETE" }),
   revokeOtherSessions: () => apiFetch<void>("/v1/me/sessions/others", { method: "DELETE" }),
   setAvatar: (image: Blob) => apiFetch<void>("/v1/me/avatar", { method: "PUT", blob: image }),
   removeAvatar: () => apiFetch<void>("/v1/me/avatar", { method: "DELETE" }),
@@ -184,7 +189,7 @@ const col = (collectionId: string) => `/v1/collections/${id(collectionId)}`;
 /** API keys, webhooks, trash, field history, saved views and files of a collection. */
 export const tools = {
   keys: (collectionId: string) => apiFetch<{ items: ApiKey[] }>(`${col(collectionId)}/keys`),
-  createKey: (collectionId: string, name: string, can_write: boolean) => apiFetch<ApiKey & { secret: string }>(`${col(collectionId)}/keys`, { method: "POST", json: { name, can_write } }),
+  /** Takes the collection out of the key; the key keeps its other collections. */
   deleteKey: (collectionId: string, keyId: string) => apiFetch<void>(`${col(collectionId)}/keys/${id(keyId)}`, { method: "DELETE" }),
   shares: (collectionId: string) => apiFetch<{ items: ShareLink[] }>(`${col(collectionId)}/shares`),
   createShare: (collectionId: string, kind: ShareLink["kind"]) => apiFetch<ShareLink>(`${col(collectionId)}/shares`, { method: "POST", json: { kind } }),

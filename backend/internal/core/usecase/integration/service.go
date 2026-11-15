@@ -29,7 +29,9 @@ const (
 	maxName  = 80
 	maxURL   = 2000
 	maxHooks = 10
-	maxKeys  = 20
+	maxKeys  = 20 // per member
+	// maxScopes caps the collections one key reaches.
+	maxScopes = 50
 )
 
 // Service keeps keys and hooks behind the owner role; the key secret is stored
@@ -57,42 +59,8 @@ func (s *Service) Keys(ctx context.Context, collectionID string) ([]domain.APIKe
 	return s.Store.Integrations().Keys(ctx, collectionID)
 }
 
-func (s *Service) CreateKey(ctx context.Context, collectionID, name string, canWrite bool) (*input.NewKey, error) {
-	name = strings.TrimSpace(name)
-	if n := utf8.RuneCountInString(name); n < 1 || n > maxName {
-		return nil, apperror.New(apperror.CodeInvalidInput, "name must be 1-80 characters").WithField("name")
-	}
-	random, err := tokenhash.RandomURLSafe()
-	if err != nil {
-		return nil, err
-	}
-	secret := domain.APIKeyPrefix + random
-	out := &input.NewKey{Secret: secret, Key: domain.APIKey{CollectionID: collectionID, Name: name, Prefix: secret[:12], CanWrite: canWrite, CreatedBy: reqctx.Actor(ctx)}}
-	err = s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
-		if err := s.owner(ctx, uow, collectionID); err != nil {
-			return err
-		}
-		if _, byKey := reqctx.Key(ctx); byKey {
-			return apperror.New(apperror.CodeForbidden, "an API key cannot make keys")
-		}
-		existing, err := uow.Integrations().Keys(ctx, collectionID)
-		if err != nil {
-			return err
-		}
-		if len(existing) >= maxKeys {
-			return apperror.New(apperror.CodeInvalidInput, "a collection holds up to 20 keys; delete one first")
-		}
-		if err := uow.Integrations().CreateKey(ctx, &out.Key, tokenhash.SHA256Bytes(secret)); err != nil {
-			return err
-		}
-		return policy.Audit(ctx, uow, "collection.key_create", collectionID, map[string]any{"collection_id": collectionID, "key": name, "write": canWrite})
-	})
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
+// DeleteKey takes the collection out of a key: its owner decides who reads it,
+// not what else the key reaches.
 func (s *Service) DeleteKey(ctx context.Context, collectionID, id string) error {
 	if err := validate.ID(id); err != nil {
 		return err
@@ -101,14 +69,183 @@ func (s *Service) DeleteKey(ctx context.Context, collectionID, id string) error 
 		if err := s.owner(ctx, uow, collectionID); err != nil {
 			return err
 		}
-		k, err := uow.Integrations().DeleteKey(ctx, collectionID, id)
+		k, err := uow.Integrations().DropScope(ctx, collectionID, id)
 		if err != nil {
 			return err
 		}
-		if k.Share != "" {
-			return policy.Audit(ctx, uow, "collection.share_delete", collectionID, map[string]any{"collection_id": collectionID, "kind": k.Share})
-		}
 		return policy.Audit(ctx, uow, "collection.key_delete", collectionID, map[string]any{"collection_id": collectionID, "key": k.Name, "prefix": k.Prefix})
+	})
+}
+
+func (s *Service) MyKeys(ctx context.Context) ([]domain.APIKey, error) {
+	return s.Store.Integrations().UserKeys(ctx, reqctx.Actor(ctx))
+}
+
+// keyInput checks a key's name and collections; the roles are checked in the transaction.
+func keyInput(ctx context.Context, name string, scopes []domain.KeyScope) (string, []domain.KeyScope, error) {
+	if _, byKey := reqctx.Key(ctx); byKey {
+		return "", nil, apperror.New(apperror.CodeForbidden, "an API key cannot manage keys")
+	}
+	name = strings.TrimSpace(name)
+	if n := utf8.RuneCountInString(name); n < 1 || n > maxName {
+		return "", nil, apperror.New(apperror.CodeInvalidInput, "name must be 1-80 characters").WithField("name")
+	}
+	if len(scopes) < 1 || len(scopes) > maxScopes {
+		return "", nil, apperror.New(apperror.CodeInvalidInput, "pick 1 to 50 collections").WithField("scopes")
+	}
+	out := make([]domain.KeyScope, 0, len(scopes))
+	seen := map[string]bool{}
+	for _, sc := range scopes {
+		if err := validate.ID(sc.CollectionID); err != nil {
+			return "", nil, apperror.New(apperror.CodeInvalidInput, "invalid collection").WithField("scopes")
+		}
+		if seen[sc.CollectionID] {
+			return "", nil, apperror.New(apperror.CodeInvalidInput, "a collection appears twice").WithField("scopes")
+		}
+		seen[sc.CollectionID] = true
+		out = append(out, domain.KeyScope{CollectionID: sc.CollectionID, CanWrite: sc.CanWrite})
+	}
+	return name, out, nil
+}
+
+// allowed checks the caller may hand each collection to a key: viewer to read, editor to write.
+func allowed(ctx context.Context, uow output.UnitOfWork, scopes []domain.KeyScope) error {
+	for _, sc := range scopes {
+		need := domain.RoleViewer
+		if sc.CanWrite {
+			need = domain.RoleEditor
+		}
+		if _, err := policy.CollectionRole(ctx, uow.Collections(), sc.CollectionID, need); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func keyAudit(ctx context.Context, uow output.UnitOfWork, action, name, prefix string, sc domain.KeyScope) error {
+	return policy.Audit(ctx, uow, action, sc.CollectionID, map[string]any{"collection_id": sc.CollectionID, "key": name, "prefix": prefix, "write": sc.CanWrite})
+}
+
+func (s *Service) CreateMyKey(ctx context.Context, name string, scopes []domain.KeyScope) (*input.NewKey, error) {
+	name, scopes, err := keyInput(ctx, name, scopes)
+	if err != nil {
+		return nil, err
+	}
+	random, err := tokenhash.RandomURLSafe()
+	if err != nil {
+		return nil, err
+	}
+	secret := domain.APIKeyPrefix + random
+	actor := reqctx.Actor(ctx)
+	out := &input.NewKey{Secret: secret, Key: domain.APIKey{Name: name, Prefix: secret[:12], Scopes: scopes, CreatedBy: actor}}
+	err = s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		if err := allowed(ctx, uow, scopes); err != nil {
+			return err
+		}
+		existing, err := uow.Integrations().UserKeys(ctx, actor)
+		if err != nil {
+			return err
+		}
+		if len(existing) >= maxKeys {
+			return apperror.New(apperror.CodeInvalidInput, "you hold up to 20 keys; delete one first")
+		}
+		if err := uow.Integrations().CreateKey(ctx, &out.Key, tokenhash.SHA256Bytes(secret)); err != nil {
+			return err
+		}
+		for _, sc := range scopes {
+			if err := keyAudit(ctx, uow, "collection.key_create", name, out.Key.Prefix, sc); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// UpdateMyKey renames a key and sets its collections; each collection it gains,
+// loses or changes access to logs the change.
+func (s *Service) UpdateMyKey(ctx context.Context, id, name string, scopes []domain.KeyScope) (*domain.APIKey, error) {
+	if err := validate.ID(id); err != nil {
+		return nil, err
+	}
+	name, scopes, err := keyInput(ctx, name, scopes)
+	if err != nil {
+		return nil, err
+	}
+	actor := reqctx.Actor(ctx)
+	var out *domain.APIKey
+	err = s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		old, err := uow.Integrations().UserKey(ctx, id, actor)
+		if err != nil {
+			return err
+		}
+		before := map[string]bool{}
+		for _, sc := range old.Scopes {
+			before[sc.CollectionID] = sc.CanWrite
+		}
+		// Only what changes needs the role: keeping a collection the member can no longer reach is harmless.
+		var changed []domain.KeyScope
+		for _, sc := range scopes {
+			if w, ok := before[sc.CollectionID]; !ok || w != sc.CanWrite {
+				changed = append(changed, sc)
+			}
+		}
+		if err := allowed(ctx, uow, changed); err != nil {
+			return err
+		}
+		if err := uow.Integrations().UpdateKey(ctx, id, name, scopes); err != nil {
+			return err
+		}
+		after := map[string]bool{}
+		for _, sc := range changed {
+			action := "collection.key_create"
+			if _, ok := before[sc.CollectionID]; ok {
+				action = "collection.key_update"
+			}
+			if err := keyAudit(ctx, uow, action, name, old.Prefix, sc); err != nil {
+				return err
+			}
+		}
+		for _, sc := range scopes {
+			after[sc.CollectionID] = true
+		}
+		for _, sc := range old.Scopes {
+			if !after[sc.CollectionID] {
+				if err := keyAudit(ctx, uow, "collection.key_delete", old.Name, old.Prefix, sc); err != nil {
+					return err
+				}
+			}
+		}
+		out, err = uow.Integrations().UserKey(ctx, id, actor)
+		return err
+	})
+	return out, err
+}
+
+func (s *Service) DeleteMyKey(ctx context.Context, id string) error {
+	if err := validate.ID(id); err != nil {
+		return err
+	}
+	if _, byKey := reqctx.Key(ctx); byKey {
+		return apperror.New(apperror.CodeForbidden, "an API key cannot manage keys")
+	}
+	return s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		k, err := uow.Integrations().UserKey(ctx, id, reqctx.Actor(ctx))
+		if err != nil {
+			return err
+		}
+		if err := uow.Integrations().DeleteKey(ctx, id); err != nil {
+			return err
+		}
+		for _, sc := range k.Scopes {
+			if err := keyAudit(ctx, uow, "collection.key_delete", k.Name, k.Prefix, sc); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
@@ -188,9 +325,20 @@ func (s *Service) CreateShare(ctx context.Context, collectionID, kind string) (*
 	return out, nil
 }
 
-// DeleteShare removes a link; it is a key row, so DeleteKey does it (and logs share_delete).
 func (s *Service) DeleteShare(ctx context.Context, collectionID, id string) error {
-	return s.DeleteKey(ctx, collectionID, id)
+	if err := validate.ID(id); err != nil {
+		return err
+	}
+	return s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		if err := s.owner(ctx, uow, collectionID); err != nil {
+			return err
+		}
+		kind, err := uow.Integrations().DeleteShare(ctx, collectionID, id)
+		if err != nil {
+			return err
+		}
+		return policy.Audit(ctx, uow, "collection.share_delete", collectionID, map[string]any{"collection_id": collectionID, "kind": kind})
+	})
 }
 
 func (s *Service) AuthenticateShare(ctx context.Context, token string) (*domain.KeyGrant, error) {

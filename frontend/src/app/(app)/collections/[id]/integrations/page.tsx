@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, ExternalLink, KeyRound, Link2, Plug, Send, Trash2, Webhook as WebhookIcon } from "lucide-react";
+import { ExternalLink, Link2, Plug, Send, Trash2, Webhook as WebhookIcon } from "lucide-react";
 import { toast } from "sonner";
 import { FormError, FormSection, FormSections, IconAction, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { CopyButton, Secret } from "@/components/secret";
 import { EmptyState } from "@/components/empty-state";
 import { fieldsOf } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -20,53 +22,20 @@ import { WEBHOOK_EVENTS, type Collection, type ShareLink, type WebhookEvent } fr
 import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
-import { copyText } from "@/lib/utils";
 import { CollectionPage } from "../_parts";
 
-function CopyButton({ text }: { text: string }) {
-  const { t } = useI18n();
-  const [done, setDone] = useState(false);
-  return (
-    <Button type="button" size="sm" variant="outline" onClick={() => void copyText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); })}>
-      {done ? <Check className="size-4" /> : <Copy className="size-4" />}{t(done ? "integrations.copied" : "integrations.copy")}
-    </Button>
-  );
-}
-
-/** A secret shown once, right after it was made: the server keeps only its hash (keys) or sealed (webhooks). */
-function Secret({ value, onClose }: { value: string; onClose: () => void }) {
-  const { t } = useI18n();
-  return (
-    <div role="status" className="space-y-2 rounded-md border border-warn/40 bg-warn/10 p-3 text-sm">
-      <p className="font-medium">{t("integrations.secret_once")}</p>
-      <code className="block break-all rounded bg-background px-2 py-1.5 font-mono text-xs">{value}</code>
-      <div className="flex gap-2">
-        <CopyButton text={value} />
-        <Button type="button" size="sm" variant="ghost" onClick={onClose}>{t("integrations.secret_saved")}</Button>
-      </div>
-    </div>
-  );
-}
-
+/** The keys that reach this collection: members make them on their profile; an owner can take the collection out of one. */
 function Keys({ collection }: { collection: Collection }) {
   const { t } = useI18n();
   const client = useQueryClient();
   const format = useFormatDate();
   const key = ["keys", collection.id];
   const list = useQuery({ queryKey: key, queryFn: () => tools.keys(collection.id) });
-  const [name, setName] = useState("");
-  const [canWrite, setCanWrite] = useState(false);
-  const [secret, setSecret] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<{ id: string; name: string } | null>(null);
-  const create = useMutation({
-    mutationFn: () => tools.createKey(collection.id, name.trim(), canWrite),
-    onSuccess: (k) => { setSecret(k.secret); setName(""); setCanWrite(false); void client.invalidateQueries({ queryKey: key }); },
-  });
   const items = list.data?.items ?? [];
   return (
     <FormSection title={t("integrations.keys")} description={t("integrations.keys_desc")}>
       <div className="space-y-3">
-        {secret && <Secret value={secret} onClose={() => setSecret(null)} />}
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
           <p className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">{t("integrations.keys_empty")}</p>
         ) : (
@@ -81,30 +50,22 @@ function Keys({ collection }: { collection: Collection }) {
                     {` · ${k.last_used_at ? t("integrations.used_at").replace("{at}", format(k.last_used_at)) : t("integrations.never_used")}`}
                   </p>
                 </div>
-                <IconAction label={t("integrations.revoke")} target={k.name} className="text-destructive" onClick={() => setRevoking(k)}><Trash2 className="size-4" /></IconAction>
+                <IconAction label={t("integrations.key_drop")} target={k.name} className="text-destructive" onClick={() => setRevoking(k)}><Trash2 className="size-4" /></IconAction>
               </li>
             ))}
           </ul>
         )}
-        <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); if (name.trim()) create.mutate(); }}>
-          <div className="flex min-w-48 flex-1 flex-col gap-1.5">
-            <Label htmlFor="key-name">{t("integrations.key_name")}</Label>
-            <Input id="key-name" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <label className="flex h-[var(--control-h)] items-center gap-2 text-sm">
-            <Checkbox checked={canWrite} onCheckedChange={(on) => setCanWrite(on === true)} />
-            {t("integrations.can_write")}
-          </label>
-          <Button type="submit" disabled={!name.trim() || create.isPending}><KeyRound className="size-4" />{t("integrations.create_key")}</Button>
-        </form>
-        <FormError message={create.isError ? errorMessage(create.error, "common.save_failed", t) : null} />
+        <p className="text-sm text-muted-foreground">
+          {t("integrations.keys_profile")}{" "}
+          <Link href="/profile#keys" className="text-primary underline-offset-2 hover:underline">{t("integrations.keys_profile_link")}</Link>
+        </p>
       </div>
       <ConfirmDialog
         open={!!revoking}
         onOpenChange={(o) => !o && setRevoking(null)}
-        title={t("integrations.revoke_title").replace("{name}", revoking?.name ?? "")}
-        description={t("integrations.revoke_desc")}
-        confirmLabel={t("integrations.revoke")}
+        title={t("integrations.key_drop_title").replace("{name}", revoking?.name ?? "")}
+        description={t("integrations.key_drop_desc")}
+        confirmLabel={t("integrations.key_drop")}
         destructive
         onConfirm={async () => {
           if (!revoking) return;

@@ -12,13 +12,12 @@ const (
 	apiKeyKey
 )
 
-// APIKey is the key a request came with: it reaches one collection, read only
-// unless CanWrite, and acts as the member who made it (the actor).
+// APIKey is the key a request came with: it reaches the collections in Scopes,
+// each read only unless its value is true, and acts as the member who made it (the actor).
 type APIKey struct {
-	ID           string
-	Name         string
-	CollectionID string
-	CanWrite     bool
+	ID     string
+	Name   string
+	Scopes map[string]bool
 	// Form is a share link's form: a stranger cannot pick records or upload
 	// files, so required reference and file fields become optional.
 	Form bool

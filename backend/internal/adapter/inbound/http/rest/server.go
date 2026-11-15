@@ -96,6 +96,8 @@ func New(cfg *config.Environment, app *input.Application, hits middleware.Hits, 
 	sessionhttp.New(app.Account).Routes(me.Group("/sessions"))
 	preferencehttp.New(app.Account).Routes(me.Group("/preferences"))
 	notificationhttp.New(app.Account).Routes(me.Group("/notifications"))
+	tools := toolshttp.New(app.Integrations, app.Tools, app.Records)
+	tools.MeRoutes(me.Group("/keys"))
 
 	permissionhttp.New(app.Resources).Routes(v1.Group("/permissions", token), app.Authorizer)
 	roles := rolehttp.New(app.Roles)
@@ -104,8 +106,7 @@ func New(cfg *config.Environment, app *input.Application, hits middleware.Hits, 
 	usershttp.New(app.Users, app.Auth).Routes(users, app.Authorizer)
 	roles.UserRoutes(users, app.Authorizer)
 	// Collections and records check the caller's role per collection, so they need the full session check.
-	// Records and files also take a collection's API key, capped to that collection (policy.CollectionRole).
-	tools := toolshttp.New(app.Integrations, app.Tools, app.Records)
+	// Records and files also take an API key, capped to its collections (policy.CollectionRole).
 	collections := v1.Group("/collections", bearer)
 	tools.CollectionRoutes(collections) // before /:id, which would swallow /trash
 	collectionhttp.New(app.Collections).Routes(collections, app.Authorizer)

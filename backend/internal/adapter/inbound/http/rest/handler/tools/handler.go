@@ -33,7 +33,6 @@ func (h *Handler) CollectionRoutes(r fiber.Router) {
 	r.Post("/trash/:id/restore", h.RestoreCollection)
 	r.Delete("/trash/:id", h.PurgeCollection)
 	r.Get("/:id/keys", h.Keys)
-	r.Post("/:id/keys", h.CreateKey)
 	r.Delete("/:id/keys/:keyId", h.DeleteKey)
 	r.Get("/:id/shares", h.Shares)
 	r.Post("/:id/shares", h.CreateShare)
@@ -61,6 +60,14 @@ func (h *Handler) CollectionRoutes(r fiber.Router) {
 	r.Post("/:id/files", h.Upload)
 }
 
+// MeRoutes mounts the caller's own API keys on /v1/me/keys.
+func (h *Handler) MeRoutes(r fiber.Router) {
+	r.Get("/", h.MyKeys)
+	r.Post("/", h.CreateMyKey)
+	r.Put("/:keyId", h.UpdateMyKey)
+	r.Delete("/:keyId", h.DeleteMyKey)
+}
+
 // RecordRoutes mounts on /v1/records before its /:id routes.
 func (h *Handler) RecordRoutes(r fiber.Router) {
 	r.Post("/bulk-update", h.BulkUpdate)
@@ -77,21 +84,41 @@ func badBody(c fiber.Ctx) error {
 	return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 }
 
+type scopeDTO struct {
+	CollectionID   string `json:"collection_id"`
+	CollectionName string `json:"collection_name,omitempty"`
+	CanWrite       bool   `json:"can_write"`
+}
+
 type keyDTO struct {
 	ID          string     `json:"id"`
 	Name        string     `json:"name"`
 	Prefix      string     `json:"prefix"`
 	CanWrite    bool       `json:"can_write"`
+	Scopes      []scopeDTO `json:"scopes,omitempty"`
 	CreatorName string     `json:"creator_name,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
 }
 
 func toKeyDTO(k domain.APIKey) keyDTO {
-	return keyDTO{ID: k.ID, Name: k.Name, Prefix: k.Prefix, CanWrite: k.CanWrite, CreatorName: k.CreatorName, CreatedAt: k.CreatedAt, LastUsedAt: k.LastUsedAt}
+	var scopes []scopeDTO
+	for _, sc := range k.Scopes {
+		scopes = append(scopes, scopeDTO(sc))
+	}
+	return keyDTO{ID: k.ID, Name: k.Name, Prefix: k.Prefix, CanWrite: k.CanWrite, Scopes: scopes, CreatorName: k.CreatorName, CreatedAt: k.CreatedAt, LastUsedAt: k.LastUsedAt}
 }
 
-// @Summary A collection's API keys; owners
+func keyList(keys []domain.APIKey) fiber.Map {
+	out := make([]keyDTO, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, toKeyDTO(k))
+	}
+	return fiber.Map{"items": out}
+}
+
+// @Summary The API keys that reach a collection; owners
+// @Description can_write is each key's access to this collection.
 // @Tags Integrations
 // @Produce json
 // @Param id path string true "Collection ID"
@@ -105,49 +132,11 @@ func (h *Handler) Keys(c fiber.Ctx) error {
 	if err != nil {
 		return fail(c, err)
 	}
-	out := make([]keyDTO, 0, len(keys))
-	for _, k := range keys {
-		out = append(out, toKeyDTO(k))
-	}
-	return c.JSON(fiber.Map{"items": out})
+	return c.JSON(keyList(keys))
 }
 
-type createKeyDTO struct {
-	Name     string `json:"name" example:"Relatórios"`
-	CanWrite bool   `json:"can_write"`
-}
-
-type newKeyDTO struct {
-	keyDTO
-	// Secret is shown once: send it as "Authorization: Bearer <secret>" or "X-API-Key: <secret>".
-	Secret string `json:"secret"`
-}
-
-// @Summary Make an API key for the collection's records; owners
-// @Description The key acts as its maker, as a viewer (read) or an editor (can_write), on this collection's records only.
-// @Tags Integrations
-// @Accept json
-// @Produce json
-// @Param id path string true "Collection ID"
-// @Param body body createKeyDTO true "Key"
-// @Security BearerAuth
-// @Success 201 {object} newKeyDTO
-// @Failure 400 {object} mapper.errorBody
-// @Failure 403 {object} mapper.errorBody
-// @Router /v1/collections/{id}/keys [post]
-func (h *Handler) CreateKey(c fiber.Ctx) error {
-	var body createKeyDTO
-	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
-	}
-	k, err := h.integrations.CreateKey(c.Context(), c.Params("id"), body.Name, body.CanWrite)
-	if err != nil {
-		return fail(c, err)
-	}
-	return c.Status(fiber.StatusCreated).JSON(newKeyDTO{keyDTO: toKeyDTO(k.Key), Secret: k.Secret})
-}
-
-// @Summary Delete an API key; owners
+// @Summary Take the collection out of an API key; owners
+// @Description The key keeps its other collections.
 // @Tags Integrations
 // @Param id path string true "Collection ID"
 // @Param keyId path string true "Key ID"
@@ -157,6 +146,100 @@ func (h *Handler) CreateKey(c fiber.Ctx) error {
 // @Router /v1/collections/{id}/keys/{keyId} [delete]
 func (h *Handler) DeleteKey(c fiber.Ctx) error {
 	if err := h.integrations.DeleteKey(c.Context(), c.Params("id"), c.Params("keyId")); err != nil {
+		return fail(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+type keyBodyDTO struct {
+	Name   string     `json:"name" example:"Assistente"`
+	Scopes []scopeDTO `json:"scopes"`
+}
+
+func (b keyBodyDTO) scopes() []domain.KeyScope {
+	out := make([]domain.KeyScope, 0, len(b.Scopes))
+	for _, sc := range b.Scopes {
+		out = append(out, domain.KeyScope{CollectionID: sc.CollectionID, CanWrite: sc.CanWrite})
+	}
+	return out
+}
+
+type newKeyDTO struct {
+	keyDTO
+	// Secret is shown once: send it as "Authorization: Bearer <secret>" or "X-API-Key: <secret>".
+	Secret string `json:"secret"`
+}
+
+// @Summary The signed in member's API keys
+// @Tags Integrations
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} object{items=[]keyDTO}
+// @Router /v1/me/keys [get]
+func (h *Handler) MyKeys(c fiber.Ctx) error {
+	keys, err := h.integrations.MyKeys(c.Context())
+	if err != nil {
+		return fail(c, err)
+	}
+	return c.JSON(keyList(keys))
+}
+
+// @Summary Make an API key
+// @Description The key acts as its maker on the collections in scopes: read (viewer) or, with can_write, write (editor; needs the editor role).
+// @Tags Integrations
+// @Accept json
+// @Produce json
+// @Param body body keyBodyDTO true "Key"
+// @Security BearerAuth
+// @Success 201 {object} newKeyDTO
+// @Failure 400 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Router /v1/me/keys [post]
+func (h *Handler) CreateMyKey(c fiber.Ctx) error {
+	var body keyBodyDTO
+	if err := c.Bind().Body(&body); err != nil {
+		return badBody(c)
+	}
+	k, err := h.integrations.CreateMyKey(c.Context(), body.Name, body.scopes())
+	if err != nil {
+		return fail(c, err)
+	}
+	return c.Status(fiber.StatusCreated).JSON(newKeyDTO{keyDTO: toKeyDTO(k.Key), Secret: k.Secret})
+}
+
+// @Summary Rename an API key and set its collections
+// @Tags Integrations
+// @Accept json
+// @Produce json
+// @Param keyId path string true "Key ID"
+// @Param body body keyBodyDTO true "Key"
+// @Security BearerAuth
+// @Success 200 {object} keyDTO
+// @Failure 400 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Router /v1/me/keys/{keyId} [put]
+func (h *Handler) UpdateMyKey(c fiber.Ctx) error {
+	var body keyBodyDTO
+	if err := c.Bind().Body(&body); err != nil {
+		return badBody(c)
+	}
+	k, err := h.integrations.UpdateMyKey(c.Context(), c.Params("keyId"), body.Name, body.scopes())
+	if err != nil {
+		return fail(c, err)
+	}
+	return c.JSON(toKeyDTO(*k))
+}
+
+// @Summary Delete an API key
+// @Tags Integrations
+// @Param keyId path string true "Key ID"
+// @Security BearerAuth
+// @Success 204
+// @Failure 404 {object} mapper.errorBody
+// @Router /v1/me/keys/{keyId} [delete]
+func (h *Handler) DeleteMyKey(c fiber.Ctx) error {
+	if err := h.integrations.DeleteMyKey(c.Context(), c.Params("keyId")); err != nil {
 		return fail(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

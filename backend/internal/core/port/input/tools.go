@@ -19,11 +19,17 @@ type NewWebhook struct {
 	Secret  string
 }
 
-// IntegrationService manages a collection's API keys and webhooks (owners) and
-// authenticates requests that carry a key.
+// IntegrationService manages the caller's own API keys, a collection's keys,
+// links and webhooks (owners), and authenticates requests that carry a key.
 type IntegrationService interface {
+	// MyKeys lists the caller's keys; CreateMyKey and UpdateMyKey give a key the
+	// collections in scopes, each needing the caller's viewer (read) or editor (write) role.
+	MyKeys(ctx context.Context) ([]domain.APIKey, error)
+	CreateMyKey(ctx context.Context, name string, scopes []domain.KeyScope) (*NewKey, error)
+	UpdateMyKey(ctx context.Context, id, name string, scopes []domain.KeyScope) (*domain.APIKey, error)
+	DeleteMyKey(ctx context.Context, id string) error
+	// Keys lists the keys that reach a collection; DeleteKey takes the collection out of one (owners).
 	Keys(ctx context.Context, collectionID string) ([]domain.APIKey, error)
-	CreateKey(ctx context.Context, collectionID, name string, canWrite bool) (*NewKey, error)
 	DeleteKey(ctx context.Context, collectionID, id string) error
 	// AuthenticateKey answers what a dsk_ key allows; any failure is Unauthorized.
 	AuthenticateKey(ctx context.Context, secret string) (*domain.KeyGrant, error)

@@ -10,10 +10,21 @@ import (
 
 // IntegrationRepository keeps a collection's API keys and webhooks.
 type IntegrationRepository interface {
+	// Keys lists the keys that reach a collection, CanWrite set to their access to it.
 	Keys(ctx context.Context, collectionID string) ([]domain.APIKey, error)
+	// UserKeys lists the keys a member made, with the live collections each reaches.
+	UserKeys(ctx context.Context, userID string) ([]domain.APIKey, error)
+	// UserKey is one key the member made (NotFound otherwise).
+	UserKey(ctx context.Context, id, userID string) (*domain.APIKey, error)
+	// CreateKey stores the key and the collections in k.Scopes.
 	CreateKey(ctx context.Context, k *domain.APIKey, hash []byte) error
-	// DeleteKey removes a key or share link and says what it was, for the audit log.
-	DeleteKey(ctx context.Context, collectionID, id string) (domain.DeletedKey, error)
+	// UpdateKey renames a key and sets its collections to exactly scopes.
+	UpdateKey(ctx context.Context, id, name string, scopes []domain.KeyScope) error
+	DeleteKey(ctx context.Context, id string) error
+	// DropScope takes a collection out of a key and says which key it was, for the audit log.
+	DropScope(ctx context.Context, collectionID, keyID string) (domain.DeletedKey, error)
+	// DeleteShare removes a share link and returns its kind.
+	DeleteShare(ctx context.Context, collectionID, id string) (string, error)
 	// Shares lists the collection's share links, tokens sealed.
 	Shares(ctx context.Context, collectionID string) ([]domain.Share, error)
 	CreateShare(ctx context.Context, collectionID, kind, sealed string, hash []byte, by string) (*domain.Share, error)

@@ -26,15 +26,16 @@ func CollectionRole(ctx context.Context, repo CollectionAccessor, id string, nee
 		return "", apperror.New(apperror.CodeUnauthorized, "unauthenticated")
 	}
 	key, byKey := reqctx.Key(ctx)
-	if byKey && key.CollectionID != id {
-		return "", apperror.New(apperror.CodeNotFound, "collection not found") // a key sees one collection
+	canWrite, reached := key.Scopes[id]
+	if byKey && !reached {
+		return "", apperror.New(apperror.CodeNotFound, "collection not found") // a key sees only its collections
 	}
 	role, err := repo.Access(ctx, id, actor)
 	if err != nil {
 		return "", err
 	}
 	if byKey {
-		role = capRole(role, key.CanWrite)
+		role = capRole(role, canWrite)
 	}
 	if !role.Allows(need) {
 		return "", apperror.New(apperror.CodeForbidden, "your role in this collection does not allow this")

@@ -8,24 +8,31 @@ import (
 // APIKeyPrefix starts every API key, so a key reads as one in logs and headers.
 const APIKeyPrefix = "dsk_"
 
-// APIKey lets a program use one collection's records as the member who made it.
-// DeletedKey says which key or share link a delete removed; Share is "" for a key.
+// DeletedKey says which key a delete removed.
 type DeletedKey struct {
 	Name   string `gorm:"column:name"`
 	Prefix string `gorm:"column:prefix"`
-	Share  string `gorm:"column:share"`
 }
 
+// APIKey lets a program use the records of the collections it reaches as the
+// member who made it. Listed for one collection, CanWrite is that collection's.
 type APIKey struct {
-	ID           string
-	CollectionID string
-	Name         string
-	Prefix       string // the first characters of the key, to tell keys apart
-	CanWrite     bool   // false: read only (viewer), true: editor
-	CreatedBy    string
-	CreatorName  string
-	CreatedAt    time.Time
-	LastUsedAt   *time.Time
+	ID          string
+	Name        string
+	Prefix      string // the first characters of the key, to tell keys apart
+	CanWrite    bool   // false: read only (viewer), true: editor
+	Scopes      []KeyScope
+	CreatedBy   string
+	CreatorName string
+	CreatedAt   time.Time
+	LastUsedAt  *time.Time
+}
+
+// KeyScope is one collection a key reaches, read only or read and write.
+type KeyScope struct {
+	CollectionID   string `json:"collection_id"`
+	CollectionName string `json:"collection_name,omitempty"`
+	CanWrite       bool   `json:"can_write"`
 }
 
 // SharePrefix starts every share link token.
@@ -46,12 +53,13 @@ type Share struct {
 	LastUsedAt *time.Time
 }
 
-// KeyGrant is what an API key allows: the collection, the role cap and the member it acts as.
+// KeyGrant is what an API key allows: the collections it reaches (id -> can
+// write) and the member it acts as. A share link reaches its one CollectionID.
 type KeyGrant struct {
 	KeyID        string
 	Name         string
-	CollectionID string
-	CanWrite     bool
+	CollectionID string // a share link's collection; empty for an API key
+	Scopes       map[string]bool
 	UserID       string
 	Share        string // empty for an API key
 }

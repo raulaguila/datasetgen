@@ -64,11 +64,17 @@ test("a collection's tools: CSV, bulk edit, views, trash, API key, field history
   await page.goto(records);
   await expect(page.getByRole("row").filter({ hasText: "Alfa" })).toBeVisible();
 
-  // An API key reads the records through the web address; it never sees another collection.
-  await page.goto(`${records}/integrations`);
-  await page.getByLabel("Nome da chave").fill("leitura");
+  // An API key made on the profile for this collection reads its records through
+  // the web address; it never writes with read access.
+  await page.goto("/profile#keys");
+  await page.getByRole("button", { name: "Nova chave" }).click();
+  await page.getByLabel("Nome da chave").fill(`leitura-${name}`);
+  await page.getByRole("combobox", { name, exact: true }).click();
+  await page.getByRole("option", { name: "Só leitura" }).click();
   await page.getByRole("button", { name: "Criar chave" }).click();
   const secret = await page.locator("code").filter({ hasText: /^dsk_/ }).innerText();
+  await page.goto(`${records}/integrations`);
+  await expect(page.getByText(`leitura-${name}`)).toBeVisible(); // the owner sees the key that reaches it
   const res = await page.request.get(`/api/proxy/v1/records?collection_id=${collectionId}&page=1&limit=10`, { headers: { Authorization: `Bearer ${secret}`, Cookie: "" } });
   expect(res.status()).toBe(200);
   expect((await res.json()).pagination.total_items).toBe(3);

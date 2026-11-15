@@ -23,67 +23,115 @@ func toolServices(e *env, t *testing.T) (*integration.Service, *tools.Service) {
 		&tools.Service{Store: e.store, Tx: e.store, Files: &files.Local{Dir: t.TempDir()}}
 }
 
-// A key reaches one collection's records with at most its role, and stops with its maker.
-func TestAPIKeysReachOneCollection(t *testing.T) {
+// A key reaches the collections its maker picked, each with at most the access
+// picked and the maker's role, and stops with its maker.
+func TestAPIKeysReachTheirCollections(t *testing.T) {
 	e := newEnv(t)
 	collections, records := collectionServices(e)
 	keys, _ := toolServices(e, t)
 	ownerAddr := e.activeUser(t)
 	owner := reqctx.WithActor(context.Background(), e.userID(t, ownerAddr))
-	c, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Chaves", Schema: json.RawMessage(`{"type":"object"}`)})
+	mk := func(name string) string {
+		c, err := collections.Create(owner, input.CreateCollectionCommand{Name: name, Schema: json.RawMessage(`{"type":"object"}`)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.ID
+	}
+	a, b, other := mk("Chaves"), mk("Outra"), mk("Fora")
+	read, err := keys.CreateMyKey(owner, "Leitura", []domain.KeyScope{{CollectionID: a}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Outra", Schema: json.RawMessage(`{"type":"object"}`)})
+	write, err := keys.CreateMyKey(owner, "Escrita", []domain.KeyScope{{CollectionID: a, CanWrite: true}, {CollectionID: b}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	read, err := keys.CreateKey(owner, c.ID, "Leitura", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	write, err := keys.CreateKey(owner, c.ID, "Escrita", true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	wantCode(t, ignore(keys.CreateMyKey(owner, "Vazia", nil)), apperror.CodeInvalidInput)
+	wantCode(t, ignore(keys.CreateMyKey(owner, "Dupla", []domain.KeyScope{{CollectionID: a}, {CollectionID: a}})), apperror.CodeInvalidInput)
 	as := func(secret string) context.Context {
 		g, err := keys.AuthenticateKey(context.Background(), secret)
 		if err != nil {
 			t.Fatalf("authenticate: %v", err)
 		}
 		ctx := reqctx.WithActor(context.Background(), g.UserID)
-		return reqctx.WithAPIKey(ctx, reqctx.APIKey{ID: g.KeyID, Name: g.Name, CollectionID: g.CollectionID, CanWrite: g.CanWrite})
+		return reqctx.WithAPIKey(ctx, reqctx.APIKey{ID: g.KeyID, Name: g.Name, Scopes: g.Scopes})
 	}
 	wantCode(t, ignore(keys.AuthenticateKey(context.Background(), "dsk_nope")), apperror.CodeUnauthorized)
 
-	// Read: lists, cannot write; write: creates; neither sees the other collection nor changes fields.
-	if _, _, err := records.List(as(read.Secret), domain.RecordFilter{CollectionID: c.ID}); err != nil {
+	// Read: lists, cannot write; write: creates in a, only reads b; neither sees the
+	// collection left out nor changes fields; a key cannot make keys.
+	if _, _, err := records.List(as(read.Secret), domain.RecordFilter{CollectionID: a}); err != nil {
 		t.Fatal(err)
 	}
-	wantCode(t, ignore(records.Create(as(read.Secret), input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{}`)})), apperror.CodeForbidden)
-	r, err := records.Create(as(write.Secret), input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{"a":1}`)})
+	wantCode(t, ignore(records.Create(as(read.Secret), input.CreateRecordCommand{CollectionID: a, Data: json.RawMessage(`{}`)})), apperror.CodeForbidden)
+	r, err := records.Create(as(write.Secret), input.CreateRecordCommand{CollectionID: a, Data: json.RawMessage(`{"a":1}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantCode(t, ignore2(records.List(as(write.Secret), domain.RecordFilter{CollectionID: other.ID})), apperror.CodeNotFound)
-	wantCode(t, ignore(collections.Update(as(write.Secret), input.UpdateCollectionCommand{ID: c.ID, Schema: json.RawMessage(`{}`)})), apperror.CodeForbidden)
+	if _, _, err := records.List(as(write.Secret), domain.RecordFilter{CollectionID: b}); err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore(records.Create(as(write.Secret), input.CreateRecordCommand{CollectionID: b, Data: json.RawMessage(`{}`)})), apperror.CodeForbidden)
+	wantCode(t, ignore2(records.List(as(write.Secret), domain.RecordFilter{CollectionID: other})), apperror.CodeNotFound)
+	wantCode(t, ignore(collections.Update(as(write.Secret), input.UpdateCollectionCommand{ID: a, Schema: json.RawMessage(`{}`)})), apperror.CodeForbidden)
+	wantCode(t, ignore(keys.CreateMyKey(as(write.Secret), "Filha", []domain.KeyScope{{CollectionID: a}})), apperror.CodeForbidden)
 
 	// The log names the key.
-	log, _, err := collections.AuditLog(owner, c.ID, domain.AuditFilter{Action: "record.create", Page: domain.NewPage(1, 5)})
+	log, _, err := collections.AuditLog(owner, a, domain.AuditFilter{Action: "record.create", Page: domain.NewPage(1, 5)})
 	if err != nil || len(log) != 1 || log[0].Details["api_key"] != "Escrita" || log[0].TargetID != r.ID {
 		t.Fatalf("audit: %+v, %v", log, err)
 	}
 
-	// Deleting the key ends it.
-	if err := keys.DeleteKey(owner, c.ID, write.Key.ID); err != nil {
+	// A viewer may make a read key, not a write one, and only for their collections.
+	viewerAddr := e.activeUser(t)
+	if _, err := collections.AddMember(owner, input.AddMemberCommand{CollectionID: a, Email: viewerAddr, Role: domain.RoleViewer}); err != nil {
 		t.Fatal(err)
 	}
-	wantCode(t, ignore(keys.AuthenticateKey(context.Background(), write.Secret)), apperror.CodeUnauthorized)
-	// The log says which key went.
-	log, _, err = collections.AuditLog(owner, c.ID, domain.AuditFilter{Action: "collection.key_delete", Page: domain.NewPage(1, 5)})
+	viewer := reqctx.WithActor(context.Background(), e.userID(t, viewerAddr))
+	wantCode(t, ignore(keys.CreateMyKey(viewer, "V", []domain.KeyScope{{CollectionID: a, CanWrite: true}})), apperror.CodeForbidden)
+	wantCode(t, ignore(keys.CreateMyKey(viewer, "V", []domain.KeyScope{{CollectionID: b}})), apperror.CodeNotFound)
+	if _, err := keys.CreateMyKey(viewer, "V", []domain.KeyScope{{CollectionID: a}}); err != nil {
+		t.Fatal(err)
+	}
+	// The owner sees every key that reaches the collection, each member's own list only theirs.
+	if list, err := keys.Keys(owner, a); err != nil || len(list) != 3 {
+		t.Fatalf("collection keys: %+v, %v", list, err)
+	}
+	if mine, err := keys.MyKeys(owner); err != nil || len(mine) != 2 || len(mine[0].Scopes) != 2 {
+		t.Fatalf("my keys: %+v, %v", mine, err)
+	}
+	wantCode(t, ignore(keys.UpdateMyKey(viewer, write.Key.ID, "Minha", []domain.KeyScope{{CollectionID: a}})), apperror.CodeNotFound)
+	wantCode(t, keys.DeleteMyKey(viewer, read.Key.ID), apperror.CodeNotFound)
+
+	// Changing a key's collections takes effect at once.
+	k, err := keys.UpdateMyKey(owner, write.Key.ID, "Escrita B", []domain.KeyScope{{CollectionID: b, CanWrite: true}, {CollectionID: other}})
+	if err != nil || len(k.Scopes) != 2 || k.Name != "Escrita B" {
+		t.Fatalf("update: %+v, %v", k, err)
+	}
+	wantCode(t, ignore2(records.List(as(write.Secret), domain.RecordFilter{CollectionID: a})), apperror.CodeNotFound)
+	if _, err := records.Create(as(write.Secret), input.CreateRecordCommand{CollectionID: b, Data: json.RawMessage(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	log, _, err = collections.AuditLog(owner, a, domain.AuditFilter{Action: "collection.key_delete", Page: domain.NewPage(1, 5)})
 	if err != nil || len(log) != 1 || log[0].Details["key"] != "Escrita" || log[0].Details["prefix"] != write.Key.Prefix {
 		t.Fatalf("key_delete audit: %+v, %v", log, err)
 	}
+
+	// An owner takes their collection out of a key; the key keeps the others.
+	if err := keys.DeleteKey(owner, b, write.Key.ID); err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore2(records.List(as(write.Secret), domain.RecordFilter{CollectionID: b})), apperror.CodeNotFound)
+	if _, _, err := records.List(as(write.Secret), domain.RecordFilter{CollectionID: other}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Deleting the key ends it.
+	if err := keys.DeleteMyKey(owner, write.Key.ID); err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore(keys.AuthenticateKey(context.Background(), write.Secret)), apperror.CodeUnauthorized)
 }
 
 // Record changes queue one delivery per hook that asked for the event.
@@ -417,7 +465,7 @@ func TestShareLinks(t *testing.T) {
 			t.Fatalf("authenticate: %v", err)
 		}
 		ctx := reqctx.WithActor(context.Background(), g.UserID)
-		return reqctx.WithAPIKey(ctx, reqctx.APIKey{ID: g.KeyID, Name: g.Name, CollectionID: g.CollectionID, CanWrite: g.CanWrite, Form: g.Share == domain.ShareForm})
+		return reqctx.WithAPIKey(ctx, reqctx.APIKey{ID: g.KeyID, Name: g.Name, Scopes: g.Scopes, Form: g.Share == domain.ShareForm})
 	}
 	// The form's record follows the fields, but a file it cannot upload is not
 	// required there; the owner still must fill it. The list cannot write.
