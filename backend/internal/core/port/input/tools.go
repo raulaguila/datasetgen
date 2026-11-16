@@ -55,8 +55,30 @@ type IntegrationService interface {
 	DeleteAutomation(ctx context.Context, collectionID, id string) error
 	// RunAutomation runs it now on every matching record (up to 100), as a daily run does.
 	RunAutomation(ctx context.Context, collectionID, id string) (*domain.Automation, error)
+
+	// MCP tools an owner publishes for the keys that reach the collection.
+	MCPTools(ctx context.Context, collectionID string) ([]domain.MCPTool, error)
+	CreateMCPTool(ctx context.Context, collectionID string, in MCPToolInput) (*domain.MCPTool, error)
+	UpdateMCPTool(ctx context.Context, collectionID, id string, in MCPToolInput) (*domain.MCPTool, error)
+	DeleteMCPTool(ctx context.Context, collectionID, id string) error
+	// KeyMCPTools lists the tools the calling API key sees; RunMCPTool runs one
+	// with the assistant's arguments and returns the page of records, the total and the page number.
+	KeyMCPTools(ctx context.Context) ([]domain.MCPTool, error)
+	RunMCPTool(ctx context.Context, t domain.MCPTool, args map[string]json.RawMessage) ([]domain.Record, int64, int, error)
 	// Schedule queues the daily automations that are due; the job worker calls it.
 	Schedule(ctx context.Context) error
+}
+
+// MCPToolInput is an MCP tool's settings as its owner edits them.
+type MCPToolInput struct {
+	Name        string
+	Description string
+	Enabled     bool
+	Conditions  domain.Where
+	Params      []domain.MCPToolParam
+	Fields      []string
+	Sort, Order string
+	Limit       int
 }
 
 // AutomationInput is an automation's settings as its owner edits them.

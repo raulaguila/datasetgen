@@ -327,6 +327,37 @@ export interface KeyScope {
 export type WebhookEvent = "record.created" | "record.updated" | "record.deleted" | "records.imported";
 export const WEBHOOK_EVENTS: WebhookEvent[] = ["record.created", "record.updated", "record.deleted", "records.imported"];
 
+export type McpParamOp = "eq" | "neq" | "contains" | "gt" | "gte" | "lt" | "lte" | "in" | "has";
+
+/** An argument of an MCP tool, compared with a field; type comes from the schema. */
+export interface McpToolParam {
+  name: string;
+  description?: string;
+  field: string;
+  op: McpParamOp;
+  type?: string;
+  required: boolean;
+}
+
+/** A read-only search an owner publishes on the MCP server for the keys of the collection. */
+export interface McpTool {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  conditions: Automation["conditions"];
+  params: McpToolParam[];
+  /** Data fields returned; empty returns all. */
+  fields: string[];
+  sort: string;
+  order: SortOrder;
+  limit: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type McpToolInput = Omit<McpTool, "id" | "created_at" | "updated_at">;
+
 export type AutomationTrigger = "record.created" | "record.updated" | "daily";
 export type AutomationAction = "set_field" | "notify" | "email" | "webhook" | "create_record";
 

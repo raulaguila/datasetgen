@@ -22,6 +22,7 @@ import { WEBHOOK_EVENTS, type Collection, type ShareLink, type WebhookEvent } fr
 import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
+import { McpTools } from "@/components/mcp-tools";
 import { CollectionPage } from "../_parts";
 
 /** The keys that reach this collection: members make them on their profile; an owner can take the collection out of one. */
@@ -328,6 +329,7 @@ export default function CollectionIntegrationsPage() {
         <FormSections>
           <Shares collection={collection} />
           <Keys collection={collection} />
+          <McpTools collection={collection} />
           <Webhooks collection={collection} />
           <Docs collection={collection} />
         </FormSections>

@@ -103,3 +103,24 @@ func checkVirtual(raw []byte) error {
 	}
 	return nil
 }
+
+// ScalarType is the JSON type of a top-level property that holds one string,
+// number, integer or boolean; for a list of them, the items' type and list true.
+// ok is false for anything else (objects, files, missing keys).
+func ScalarType(raw []byte, key string) (typ string, list, ok bool) {
+	p, found := topProps(raw)[key]
+	if !found {
+		return "", false, false
+	}
+	scalar := func(t any) (string, bool) {
+		s, _ := t.(string)
+		return s, s == "string" || s == "number" || s == "integer" || s == "boolean"
+	}
+	if p["type"] == "array" {
+		items, _ := p["items"].(map[string]any)
+		t, ok := scalar(items["type"])
+		return t, true, ok
+	}
+	t, ok := scalar(p["type"])
+	return t, false, ok
+}

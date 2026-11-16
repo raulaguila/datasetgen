@@ -55,6 +55,16 @@ type IntegrationRepository interface {
 	// AutomationsFor lists the enabled automations of a collection with this trigger.
 	AutomationsFor(ctx context.Context, collectionID, trigger string) ([]string, error)
 	AutomationRan(ctx context.Context, id, errText string) error
+	// MCPTools lists a collection's MCP tools; KeyMCPTools the enabled ones of
+	// the given live collections, with the collection name.
+	MCPTools(ctx context.Context, collectionID string) ([]domain.MCPTool, error)
+	MCPTool(ctx context.Context, id string) (*domain.MCPTool, error)
+	KeyMCPTools(ctx context.Context, collectionIDs []string) ([]domain.MCPTool, error)
+	CreateMCPTool(ctx context.Context, t *domain.MCPTool) error
+	// UpdateMCPTool saves t's settings; NotFound when it is not the collection's.
+	UpdateMCPTool(ctx context.Context, t *domain.MCPTool) error
+	// DeleteMCPTool returns the removed tool's name.
+	DeleteMCPTool(ctx context.Context, collectionID, id string) (string, error)
 	// DueDaily claims the enabled daily automations whose hour has come and that
 	// have not run today, stamping them run, and returns their ids.
 	DueDaily(ctx context.Context) ([]string, error)

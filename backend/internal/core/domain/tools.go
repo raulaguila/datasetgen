@@ -188,3 +188,40 @@ type File struct {
 	Size         int
 	CreatedAt    time.Time
 }
+
+// MCPTool is a read-only search an owner publishes on the MCP server: keys that
+// reach the collection see it as a tool of its own.
+type MCPTool struct {
+	ID             string
+	CollectionID   string
+	CollectionName string // filled for the MCP listing
+	Name           string
+	Description    string
+	Enabled        bool
+	Conditions     Where // always applied
+	Params         []MCPToolParam
+	Fields         []string // the data fields returned; empty returns all
+	Sort, Order    string
+	Limit          int
+	CreatedBy      string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+// MCPToolParam is an argument of a tool, compared with Field by Op. Type comes
+// from the field's schema when the tool is saved.
+type MCPToolParam struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Field       string `json:"field"`
+	Op          string `json:"op"`
+	Type        string `json:"type"` // string, number, integer or boolean; a list of it for op in
+	Required    bool   `json:"required"`
+}
+
+// MCPToolOps are the comparisons a parameter may use.
+var MCPToolOps = []string{"eq", "neq", "contains", "gt", "gte", "lt", "lte", "in", "has"}
+
+// MCPBuiltinTools are the server's own tool names, which an owner's tool cannot take.
+var MCPBuiltinTools = []string{"list_collections", "get_collection", "search_records", "get_record", "related_records",
+	"collection_stats", "create_record", "update_record", "delete_records"}

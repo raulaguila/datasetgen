@@ -1888,6 +1888,211 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/collections/{id}/mcp-tools": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "A collection's MCP tools; owners",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "items": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/tools.mcpToolDTO"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "A read-only search that API keys reaching the collection see on /v1/mcp as a tool of its own: fixed conditions, parameters compared with fields (each becomes an AND rule when given), the fields returned (empty: all), sort and page size.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "Publish an MCP tool; owners",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Tool",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tools.mcpToolBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/tools.mcpToolDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/collections/{id}/mcp-tools/{toolId}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "Change an MCP tool; owners",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tool ID",
+                        "name": "toolId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Tool",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tools.mcpToolBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/tools.mcpToolDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "Delete an MCP tool; owners",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tool ID",
+                        "name": "toolId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/collections/{id}/members": {
             "get": {
                 "security": [
@@ -8676,6 +8881,144 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/tools.scopeDTO"
                     }
+                }
+            }
+        },
+        "tools.mcpParamDTO": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "example": "Cidade do cliente"
+                },
+                "field": {
+                    "type": "string",
+                    "example": "cidade"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "cidade"
+                },
+                "op": {
+                    "type": "string",
+                    "enum": [
+                        "eq",
+                        "neq",
+                        "contains",
+                        "gt",
+                        "gte",
+                        "lt",
+                        "lte",
+                        "in",
+                        "has"
+                    ],
+                    "example": "eq"
+                },
+                "required": {
+                    "type": "boolean"
+                },
+                "type": {
+                    "description": "set by the server from the schema",
+                    "type": "string",
+                    "example": "string"
+                }
+            }
+        },
+        "tools.mcpToolBody": {
+            "type": "object",
+            "properties": {
+                "conditions": {
+                    "type": "object"
+                },
+                "description": {
+                    "type": "string",
+                    "example": "Clientes ativos de uma cidade, com nome e telefone."
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "name": {
+                    "type": "string",
+                    "example": "clientes_por_cidade"
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ],
+                    "example": "desc"
+                },
+                "params": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/tools.mcpParamDTO"
+                    }
+                },
+                "sort": {
+                    "type": "string",
+                    "example": "updated_at"
+                }
+            }
+        },
+        "tools.mcpToolDTO": {
+            "type": "object",
+            "properties": {
+                "conditions": {
+                    "type": "object"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "name": {
+                    "type": "string",
+                    "example": "clientes_por_cidade"
+                },
+                "order": {
+                    "type": "string",
+                    "example": "desc"
+                },
+                "params": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/tools.mcpParamDTO"
+                    }
+                },
+                "sort": {
+                    "type": "string",
+                    "example": "updated_at"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },

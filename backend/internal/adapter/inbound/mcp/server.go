@@ -24,11 +24,19 @@ import (
 const maxRecords = 50 // per search_records call: enough to read, small enough for a model's context
 
 // Handler answers MCP over streamable HTTP, stateless: each POST is one
-// request, so nothing is kept between calls. Only API keys get in.
+// request, so nothing is kept between calls. Only API keys get in. Each request
+// gets its own server, since the owners' tools differ by key.
 func Handler(app *input.Application, version string) http.Handler {
+	h := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { return newServer(r.Context(), app, version) },
+		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
+	return keyOnly(app.Integrations, h)
+}
+
+func newServer(ctx context.Context, app *input.Application, version string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "dataset", Version: version}, &mcp.ServerOptions{
 		Instructions: "Read the collections this API key reaches. Start with list_collections, " +
-			"read a collection's fields with get_collection, then find records with search_records.",
+			"read a collection's fields with get_collection, then find records with search_records. " +
+			"Tools other than the built-in ones were made by the collections' owners for common questions: prefer them when they fit.",
 	})
 	t := tools{app}
 	mcp.AddTool(s, &mcp.Tool{Name: "list_collections", Description: "The collections this API key reaches, with the access it has to each (read or write).",
@@ -52,8 +60,8 @@ func Handler(app *input.Application, version string) http.Handler {
 	mcp.AddTool(s, &mcp.Tool{Name: "delete_records", Description: "Move up to 100 records to the trash, all or none; an owner can restore them from the trash.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: pointer.Of(true), IdempotentHint: true}}, t.deleteRecords)
 
-	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
-	return keyOnly(app.Integrations, h)
+	t.addOwnTools(ctx, s)
+	return s
 }
 
 var readOnly = &mcp.ToolAnnotations{ReadOnlyHint: true}
