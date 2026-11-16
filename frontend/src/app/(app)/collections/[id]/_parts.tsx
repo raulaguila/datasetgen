@@ -79,7 +79,7 @@ export function useRecordCount(collectionId: string | undefined, enabled = true)
  */
 export function CollectionPage({ section, description, countRecords = false, action, children }: {
   section: MessageKey;
-  /** What the section is for, or a line built from the collection and its record count; by default "<section> of <collection>". */
+  /** What the section is for, or a line built from the collection and its record count. */
   description?: MessageKey | ((collection: Collection, recordCount?: number) => string | undefined);
   /** Loads the record count for a `description` that shows it. */
   countRecords?: boolean;
@@ -99,8 +99,7 @@ export function CollectionPage({ section, description, countRecords = false, act
   const recordCount = useRecordCount(collection?.id, countRecords);
   const subtitle = !collection ? undefined
     : typeof description === "function" ? description(collection, recordCount)
-    : description ? t(description)
-    : t("collections.section_of").replace("{section}", t(section)).replace("{name}", collection.name);
+    : description && t(description);
 
   return (
     <>

@@ -29,7 +29,7 @@ import { account, notifications } from "@/lib/api/endpoints";
 import { useMe } from "@/lib/context/me";
 import { can } from "@/lib/permissions";
 import { useI18n } from "@/lib/i18n/provider";
-import { ADMIN_NAV, MAIN_NAV, isActive } from "@/lib/navigation";
+import { ACCOUNT_PAGES, ADMIN_NAV, MAIN_NAV, isActive } from "@/lib/navigation";
 import { useCrumbStore } from "@/lib/store/crumb";
 import { useUIStore } from "@/lib/store/ui";
 
@@ -108,15 +108,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <ChevronRight className="hidden size-3.5 shrink-0 text-muted-foreground sm:block" />
                   <span aria-current="page" className="hidden truncate text-muted-foreground sm:inline">{crumb}</span>
                 </nav>
-              ) : !crumb && section && ADMIN_NAV.includes(section) ? (
-                <span className="truncate text-muted-foreground">{t("nav.admin_area")}</span>
-              ) : crumb && section && (
+              ) : crumb && section ? (
                 <nav aria-label="breadcrumb" className="flex min-w-0 items-center gap-1.5">
-                  <Link href={section.href} className="shrink-0 text-muted-foreground hover:text-foreground">{t(section.key)}</Link>
+                  <Link href={section.href} className="min-w-0 shrink-0 truncate font-medium hover:underline">{t(section.key)}</Link>
                   <ChevronRight className="hidden size-3.5 shrink-0 text-muted-foreground sm:block" />
-                  <span aria-current="page" className="hidden truncate font-medium sm:inline">{crumb}</span>
+                  <span aria-current="page" className="hidden truncate text-muted-foreground sm:inline">{crumb}</span>
                 </nav>
-              )}
+              ) : (section && ADMIN_NAV.includes(section)) || ACCOUNT_PAGES.some((href) => isActive(pathname, href)) ? (
+                // A top-level page names itself in the h1; the bar names the area it belongs to.
+                <span className="truncate text-muted-foreground">{t(section && ADMIN_NAV.includes(section) ? "nav.admin_area" : "nav.account_area")}</span>
+              ) : null}
             </div>
             <div className="ml-2 flex shrink-0 items-center gap-0.5 sm:gap-1">
               <CommandPalette />

@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
-import { Tabs } from "@base-ui/react/tabs";
+import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, KeyRound, Link2, Pause, Pencil, Play, Plug, Send, Trash2, Webhook as WebhookIcon } from "lucide-react";
 import { toast } from "sonner";
 import { FormError, FormSection, FormSections, IconAction, useFormatDate } from "@/components/bits";
+import { HashTabs } from "@/components/hash-tabs";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock, CopyButton, Secret } from "@/components/secret";
 import { EmptyState } from "@/components/empty-state";
@@ -36,7 +36,7 @@ function Keys({ collection }: { collection: Collection }) {
   const [revoking, setRevoking] = useState<{ id: string; name: string } | null>(null);
   const items = list.data?.items ?? [];
   return (
-    <FormSection id="keys" title={t("integrations.keys")} description={t("integrations.keys_desc")}>
+    <FormSection id="keys" description={t("integrations.keys_desc")} action={<Link href={`/api-access?collection=${collection.id}`} className={buttonVariants({ variant: "outline" })}><KeyRound className="size-4" />{t("integrations.key_new_here")}</Link>}>
       <div className="space-y-3">
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
           <EmptyState compact title={t("integrations.keys_empty")} />
@@ -59,7 +59,6 @@ function Keys({ collection }: { collection: Collection }) {
             ))}
           </ul>
         )}
-        <Link href={`/api-access?collection=${collection.id}`} className={buttonVariants({ variant: "outline" })}><KeyRound className="size-4" />{t("integrations.key_new_here")}</Link>
       </div>
       <ConfirmDialog
         open={!!revoking}
@@ -98,7 +97,15 @@ function Shares({ collection }: { collection: Collection }) {
   const urlOf = (s: ShareLink) => `${window.location.origin}/${s.kind === "form" ? "f" : "s"}/${s.token}`;
   const kindName = (k: ShareLink["kind"]) => t(k === "form" ? "share.form" : "share.view");
   return (
-    <FormSection id="shares" title={t("share.title")} description={`${t("share.desc")} ${t("share.private_note")}`}>
+    <FormSection id="shares" description={`${t("share.desc")} ${t("share.private_note")}`} action={<>
+        <Label htmlFor="share-days" className="text-sm font-normal text-muted-foreground">{t("share.validity")}</Label>
+        <Select value={days} items={dayNames} onValueChange={(v) => setDays(String(v))}>
+          <SelectTrigger id="share-days" className="w-36"><SelectValue /></SelectTrigger>
+          <SelectContent>{SHARE_DAYS.map((d) => <SelectItem key={d} value={d}>{dayNames[d]}</SelectItem>)}</SelectContent>
+        </Select>
+        <Button variant="outline" disabled={create.isPending} onClick={() => create.mutate("form")}><Link2 className="size-4" />{t("share.create_form")}</Button>
+        <Button variant="outline" disabled={create.isPending} onClick={() => create.mutate("view")}><Link2 className="size-4" />{t("share.create_view")}</Button>
+      </>}>
       <div className="space-y-3">
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
           <EmptyState compact title={t("share.empty")} />
@@ -122,14 +129,6 @@ function Shares({ collection }: { collection: Collection }) {
             ))}
           </ul>
         )}
-        <div className="flex flex-wrap gap-2">
-          <Select value={days} items={dayNames} onValueChange={(v) => setDays(String(v))}>
-            <SelectTrigger className="w-44" aria-label={t("share.validity")}><SelectValue /></SelectTrigger>
-            <SelectContent>{SHARE_DAYS.map((d) => <SelectItem key={d} value={d}>{dayNames[d]}</SelectItem>)}</SelectContent>
-          </Select>
-          <Button variant="outline" disabled={create.isPending} onClick={() => create.mutate("form")}><Link2 className="size-4" />{t("share.create_form")}</Button>
-          <Button variant="outline" disabled={create.isPending} onClick={() => create.mutate("view")}><Link2 className="size-4" />{t("share.create_view")}</Button>
-        </div>
         <FormError message={create.isError ? errorMessage(create.error, "common.save_failed", t) : null} />
       </div>
       <ConfirmDialog
@@ -226,7 +225,7 @@ function Webhooks({ collection }: { collection: Collection }) {
   const items = list.data?.items ?? [];
   const toggle = (e: WebhookEvent, on: boolean) => setEvents((cur) => (on ? [...cur, e] : cur.filter((x) => x !== e)));
   return (
-    <FormSection id="webhooks" title={t("integrations.webhooks")} description={t("integrations.webhooks_desc")}>
+    <FormSection id="webhooks" description={t("integrations.webhooks_desc")} action={!editing && <Button variant="outline" onClick={() => { save.reset(); setEditing("new"); }}><WebhookIcon className="size-4" />{t("integrations.hook_new")}</Button>}>
       <div className="space-y-3">
         {secret && <Secret value={secret} onClose={() => setSecret(null)} />}
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
@@ -288,9 +287,7 @@ function Webhooks({ collection }: { collection: Collection }) {
               <Button type="button" variant="ghost" onClick={() => { save.reset(); close(); }}>{t("common.cancel")}</Button>
             </div>
           </form>
-        ) : (
-          <Button variant="outline" onClick={() => { save.reset(); setEditing("new"); }}><WebhookIcon className="size-4" />{t("integrations.hook_new")}</Button>
-        )}
+        ) : null}
         <details className="text-sm">
           <summary className="cursor-pointer font-medium">{t("integrations.docs_signature")}</summary>
           <div className="mt-2 space-y-1.5">
@@ -319,34 +316,15 @@ const ok = crypto.timingSafeEqual(Buffer.from(v1), Buffer.from(expected)) && Dat
   );
 }
 
-const TABS = [["shares", "share.title"], ["keys", "integrations.tab_keys"], ["mcp", "integrations.tab_mcp"], ["webhooks", "integrations.webhooks"]] as const;
-type Tab = (typeof TABS)[number][0];
-
-const onHash = (cb: () => void) => { window.addEventListener("hashchange", cb); return () => window.removeEventListener("hashchange", cb); };
-
-/** One tab per kind of integration; the address hash (#keys) opens a tab directly. */
 function IntegrationTabs({ collection }: { collection: Collection }) {
   const { t } = useI18n();
-  const hash = useSyncExternalStore(onHash, () => window.location.hash.slice(1), () => "");
-  const tab: Tab = TABS.some(([id]) => id === hash) ? (hash as Tab) : "shares";
-  const pick = (v: Tab) => {
-    history.replaceState(null, "", `#${v}`);
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-  };
   return (
-    <Tabs.Root value={tab} onValueChange={(v) => pick(v as Tab)}>
-      <Tabs.List aria-label={t("integrations.sections")} className="mb-6 flex gap-1 overflow-x-auto border-b">
-        {TABS.map(([id, key]) => (
-          <Tabs.Tab key={id} value={id} className="-mb-px shrink-0 whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[active]:border-primary data-[active]:font-medium data-[active]:text-foreground">
-            {t(key)}
-          </Tabs.Tab>
-        ))}
-      </Tabs.List>
-      <Tabs.Panel value="shares" className="outline-none"><FormSections><Shares collection={collection} /></FormSections></Tabs.Panel>
-      <Tabs.Panel value="keys" className="outline-none"><FormSections><Keys collection={collection} /></FormSections></Tabs.Panel>
-      <Tabs.Panel value="mcp" className="outline-none"><FormSections><McpTools collection={collection} /><McpActivity collection={collection} /></FormSections></Tabs.Panel>
-      <Tabs.Panel value="webhooks" className="outline-none"><FormSections><Webhooks collection={collection} /></FormSections></Tabs.Panel>
-    </Tabs.Root>
+    <HashTabs label={t("integrations.sections")} tabs={[
+      { id: "shares", title: t("share.title"), panel: <FormSections><Shares collection={collection} /></FormSections> },
+      { id: "keys", title: t("integrations.tab_keys"), panel: <FormSections><Keys collection={collection} /></FormSections> },
+      { id: "mcp", title: t("integrations.tab_mcp"), panel: <FormSections><McpTools collection={collection} /><McpActivity collection={collection} /></FormSections> },
+      { id: "webhooks", title: t("integrations.webhooks"), panel: <FormSections><Webhooks collection={collection} /></FormSections> },
+    ]} />
   );
 }
 
@@ -355,9 +333,7 @@ export default function CollectionIntegrationsPage() {
   return (
     <CollectionPage section="collections.tab.integrations" description="integrations.subtitle">
       {(collection) => roleAllows(collection.role, "owner") ? (
-        <>
-          <IntegrationTabs collection={collection} />
-        </>
+        <IntegrationTabs collection={collection} />
       ) : <EmptyState icon={Plug} title={t("error.forbidden")} description={t("integrations.owners_only")} />}
     </CollectionPage>
   );

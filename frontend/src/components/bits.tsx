@@ -130,24 +130,41 @@ export function IconAction({ label, target, className, disabled, expanded, onCli
  * screens, above it on narrow ones. Plain fields stay at a readable width;
  * `wide` lets tables and matrices take the room they need.
  */
-export function FormSection({ id, title, description, wide = false, danger = false, headAbove = false, children }: {
+export function FormSection({ id, title, description, action, wide = false, danger = false, headAbove = false, children }: {
   /** An anchor, so a link can open the page at this section. */
   id?: string;
-  title: string;
+  /** Left out where the page or tab already names the section: the description and action then head the content. */
+  title?: string;
   description?: string;
+  /** The section's main action (add, create), at the top right of the section. */
+  action?: React.ReactNode;
   wide?: boolean;
   /** The title sits above the content up to 2xl screens, leaving the width to a wide form. */
   headAbove?: boolean;
   danger?: boolean;
   children: React.ReactNode;
 }) {
+  const actions = action && <div className="flex flex-wrap items-center gap-2 sm:justify-end">{action}</div>;
+  if (!title) {
+    return (
+      <section id={id} className="scroll-mt-20 space-y-4 border-t pt-8 first:border-t-0 first:pt-0">
+        {(description || action) && (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            {description && <p className="max-w-[72ch] text-sm text-muted-foreground">{description}</p>}
+            {actions}
+          </div>
+        )}
+        <div className="min-w-0">{children}</div>
+      </section>
+    );
+  }
   return (
     <section id={id} className={cn("grid scroll-mt-20 gap-3 border-t pt-8 first:border-t-0 first:pt-0", headAbove ? "2xl:grid-cols-[18rem_minmax(0,1fr)] 2xl:gap-10" : "lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-10")}>
       <div className="space-y-1">
         <h2 className={cn("font-heading text-base font-semibold", danger && "text-destructive")}>{title}</h2>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </div>
-      <div className={cn("min-w-0", !wide && "max-w-3xl")}>{children}</div>
+      <div className={cn("min-w-0", !wide && "max-w-3xl", action && "space-y-3")}>{actions}{children}</div>
     </section>
   );
 }

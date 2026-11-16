@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Pencil, Trash2 } from "lucide-react";
+import { Activity, KeyRound, MoreHorizontal, Pencil, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { FormError, FormSection, IconAction, useFormatDate } from "@/components/bits";
+import { FormError, FormSection, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -12,6 +12,7 @@ import { Secret } from "@/components/secret";
 import { ListSkeleton } from "@/components/skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -77,61 +78,27 @@ export function ApiKeysCard({ onCreated, prefill }: { onCreated?: (secret: strin
       void client.invalidateQueries({ queryKey: KEYS });
     },
   });
-  const items = list.data?.items ?? [];
+  const all = list.data?.items ?? [];
+  // A long list gets a search: by the key's name or a collection it reaches.
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const items = q ? all.filter((k) => k.name.toLowerCase().includes(q) || k.scopes?.some((s) => s.collection_name?.toLowerCase().includes(q))) : all;
   const picked = draft ? scopesFor(draft).length : 0;
-  const full = items.length >= MAX_KEYS;
+  const full = all.length >= MAX_KEYS;
   const daysName: Record<string, string> = {
     keep: t("keys.renew_keep"),
     ...Object.fromEntries(DAYS.map((d) => [d, d === "0" ? t("keys.expires_never") : t("keys.expires_days").replace("{n}", d)])),
   };
 
   return (
-    <FormSection id="keys" title={t("keys.title")} description={t("keys.desc")}>
+    <FormSection id="keys" title={t("keys.title")} description={t("keys.desc")} action={!draft && <>
+      {full && <span className="text-xs text-muted-foreground">{t("keys.full").replace("{n}", String(MAX_KEYS))}</span>}
+      <Button variant="outline" disabled={full} onClick={() => { save.reset(); setDraft(draftOf()); }}><KeyRound className="size-4" />{t("keys.new")}</Button>
+    </>}>
       <div className="space-y-3">
         {secret && <Secret value={secret} onClose={() => setSecret(null)} />}
         {secret && onCreated && <a href="#mcp" className="inline-block text-sm font-medium text-primary underline-offset-2 hover:underline">{t("keys.next_step")} ↓</a>}
-        {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
-          <EmptyState compact title={t("integrations.keys_empty")} />
-        ) : (
-          <ul className="divide-y rounded-md border">
-            {items.map((k) => {
-              const left = k.expires_at ? Math.ceil((new Date(k.expires_at).getTime() - now) / DAY_MS) : null;
-              return (
-              <li key={k.id} className="flex flex-wrap items-start gap-3 px-3 py-2">
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <p className="text-sm font-medium">{k.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    <span className="font-mono">{k.prefix}…</span>
-                    {` · ${k.last_used_at ? t("integrations.used_at").replace("{at}", format(k.last_used_at)) : t("integrations.never_used")}`}
-                    {k.expires_at && new Date(k.expires_at) > new Date() && ` · ${t("keys.expires_at").replace("{at}", format(k.expires_at))}`}
-                  </p>
-                  {left !== null && left <= WARN_DAYS && (
-                    <p className="flex flex-wrap items-center gap-2">
-                      {left <= 0 ? <Badge variant="destructive">{t("keys.expired")}</Badge> : <Badge variant="outline">{t("keys.ends_in").replace("{n}", String(left))}</Badge>}
-                      <Button type="button" size="sm" variant="link" className="h-auto p-0" onClick={() => { save.reset(); setDraft({ ...draftOf(k), days: "90" }); }}>{t("keys.renew")}</Button>
-                    </p>
-                  )}
-                  {k.scopes?.length ? (
-                    <ul className="flex flex-wrap gap-1.5" aria-label={t("keys.collections")}>
-                      {k.scopes.map((s) => (
-                        <li key={s.collection_id} className="max-w-full"><Badge variant="outline" className="h-auto max-w-full justify-start whitespace-normal break-words text-left">{s.collection_name} · {t(s.can_write ? "integrations.read_write" : "integrations.read_only")}</Badge></li>
-                      ))}
-                    </ul>
-                  ) : <p className="text-xs text-muted-foreground">{t("keys.no_collections")}</p>}
-                </div>
-                <div className="flex shrink-0 items-center">
-                  <Button type="button" size="sm" variant="ghost" aria-expanded={usage === k.id} onClick={() => setUsage(usage === k.id ? null : k.id)}>{t("keys.usage")}</Button>
-                  <IconAction label={t("common.edit")} target={k.name} onClick={() => { save.reset(); setDraft(draftOf(k)); }}><Pencil className="size-4" /></IconAction>
-                  <IconAction label={t("integrations.revoke")} target={k.name} className="text-destructive" onClick={() => setRevoking(k)}><Trash2 className="size-4" /></IconAction>
-                </div>
-                {usage === k.id && <div className="basis-full"><KeyUsage keyId={k.id} /></div>}
-              </li>
-              );
-            })}
-          </ul>
-        )}
-
-        {draft ? (
+        {draft && (
           <form className="space-y-3 rounded-md border p-3" onSubmit={(e) => { e.preventDefault(); if (draft.name.trim() && picked > 0) save.mutate(draft); }}>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="key-name">{t("integrations.key_name")}</Label>
@@ -156,12 +123,58 @@ export function ApiKeysCard({ onCreated, prefill }: { onCreated?: (secret: strin
               <span className="text-xs text-muted-foreground">{t("keys.picked").replace("{n}", String(picked))}</span>
             </div>
           </form>
-        ) : (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" disabled={full} onClick={() => { save.reset(); setDraft(draftOf()); }}><KeyRound className="size-4" />{t("keys.new")}</Button>
-            {full && <span className="text-xs text-muted-foreground">{t("keys.full").replace("{n}", String(MAX_KEYS))}</span>}
+        )}
+        {all.length > 10 && (
+          <div className="relative max-w-sm">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input type="search" className="pl-8" placeholder={t("keys.find")} aria-label={t("keys.find")} value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
         )}
+        {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
+          <EmptyState compact title={t(q ? "keys.search_empty" : "integrations.keys_empty")} />
+        ) : (
+          <ul className="divide-y rounded-md border">
+            {items.map((k) => {
+              const left = k.expires_at ? Math.ceil((new Date(k.expires_at).getTime() - now) / DAY_MS) : null;
+              return (
+              <li key={k.id} className="flex flex-wrap items-start gap-2 px-3 py-2">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <p className="break-words text-sm font-medium">{k.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-mono">{k.prefix}…</span>
+                    {` · ${k.last_used_at ? t("integrations.used_at").replace("{at}", format(k.last_used_at)) : t("integrations.never_used")}`}
+                    {k.expires_at && new Date(k.expires_at) > new Date() && ` · ${t("keys.expires_at").replace("{at}", format(k.expires_at))}`}
+                  </p>
+                  {left !== null && left <= WARN_DAYS && (
+                    <p className="flex flex-wrap items-center gap-2">
+                      {left <= 0 ? <Badge variant="destructive">{t("keys.expired")}</Badge> : <Badge variant="outline">{t("keys.ends_in").replace("{n}", String(left))}</Badge>}
+                      <Button type="button" size="sm" variant="link" className="h-auto p-0" onClick={() => { save.reset(); setDraft({ ...draftOf(k), days: "90" }); }}>{t("keys.renew")}</Button>
+                    </p>
+                  )}
+                  {k.scopes?.length ? (
+                    <ul className="flex flex-wrap gap-1.5" aria-label={t("keys.collections")}>
+                      {k.scopes.map((s) => (
+                        <li key={s.collection_id} className="max-w-full"><Badge variant="outline" className="h-auto max-w-full justify-start whitespace-normal break-words text-left">{s.collection_name} · {t(s.can_write ? "integrations.read_write" : "integrations.read_only")}</Badge></li>
+                      ))}
+                    </ul>
+                  ) : <p className="text-xs text-muted-foreground">{t("keys.no_collections")}</p>}
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" className="-mr-1 shrink-0" aria-label={`${t("common.actions")}: ${k.name}`} />}><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setUsage(usage === k.id ? null : k.id)}><Activity className="size-4" />{t(usage === k.id ? "keys.usage_hide" : "keys.usage")}</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { save.reset(); setDraft(draftOf(k)); }}><Pencil className="size-4" />{t("common.edit")}</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onClick={() => setRevoking(k)}><Trash2 className="size-4" />{t("integrations.revoke")}</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {usage === k.id && <div className="basis-full"><KeyUsage keyId={k.id} /></div>}
+              </li>
+              );
+            })}
+          </ul>
+        )}
+
       </div>
       <ConfirmDialog
         open={!!revoking}

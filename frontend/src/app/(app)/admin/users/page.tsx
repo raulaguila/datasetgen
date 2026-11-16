@@ -4,9 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, Pencil, Search, UserCheck, UserPlus, UserX, Users } from "lucide-react";
+import { Search, UserCheck, UserPlus, UserX, Users } from "lucide-react";
 import { toast } from "sonner";
-import { IconAction, PageBody, PageHeader, StatusBadge, useFormatDate } from "@/components/bits";
+import { PageBody, PageHeader, StatusBadge, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { users } from "@/lib/api/endpoints";
 import type { SortOrder, UserStatus } from "@/lib/api/types";
 import { useMe } from "@/lib/context/me";
@@ -37,7 +37,6 @@ export default function UsersPage() {
   const format = useFormatDate();
   const router = useRouter();
   const { user } = useMe();
-  const canEdit = can(user, "users", "update");
   const canBulk = can(user, "users", "update");
   const client = useQueryClient();
   const [bulk, setBulk] = useState<"disable" | "enable" | null>(null);
@@ -110,7 +109,6 @@ export default function UsersPage() {
                   <SortHead field="email" label={t("auth.email")} {...sortProps} />
                   <SortHead field="status" label={t("users.status")} className="w-32" {...sortProps} />
                   <SortHead field="created_at" label={t("common.created_at")} className="w-44" {...sortProps} />
-                  <TableHead className="w-14"><span className="sr-only">{t("common.actions")}</span></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -118,17 +116,12 @@ export default function UsersPage() {
                   <TableRow key={u.id} className="cursor-pointer" onClick={() => router.push(`/admin/users/${u.id}`)}>
                     {canBulk && <SelectCell selection={selection} id={u.id} label={u.name} disabled={u.id === user?.id} />}
                     <TableCell data-label={t("auth.name")} data-cell="name" className="w-1/2 max-w-0">
-                      {/* the keyboard way into the record on phones, where the action button is hidden */}
+                      {/* the keyboard way into the account; a click anywhere on the row opens it too */}
                       <Link href={`/admin/users/${u.id}`} className="block truncate font-medium hover:underline" title={u.name} onClick={(e) => e.stopPropagation()}>{u.name}</Link>
                     </TableCell>
                     <TableCell data-label={t("auth.email")} data-cell="sub" className="w-1/2 max-w-0 text-muted-foreground lg:text-foreground"><span className="block truncate" title={u.email}>{u.email}</span></TableCell>
                     <TableCell data-label={t("users.status")} data-cell="status"><StatusBadge status={u.status} /></TableCell>
                     <TableCell data-label={t("common.created_at")} data-cell="date" className="text-muted-foreground">{format(u.created_at)}</TableCell>
-                    <TableCell data-cell="action" className="text-right">
-                      <IconAction label={t(canEdit ? "common.edit" : "common.view")} target={u.name} onClick={() => router.push(`/admin/users/${u.id}`)}>
-                        {canEdit ? <Pencil className="size-4" /> : <Eye className="size-4" />}
-                      </IconAction>
-                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

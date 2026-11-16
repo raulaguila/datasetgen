@@ -202,7 +202,7 @@ function UserDetail({ id }: { id: string }) {
           )}
           <FormSections>
           <FormSection title={t("users.details")} description={t("users.details_desc")}>
-              <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-[10rem_1fr]">
+              <dl className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-4 gap-y-3 text-sm sm:grid-cols-[10rem_1fr] sm:gap-x-6 sm:gap-y-4">
                 <dt className="text-muted-foreground">{t("users.status")}</dt>
                 <dd><StatusBadge status={detail.data.status} /></dd>
                 <dt className="text-muted-foreground">{t("common.created_at")}</dt>
@@ -213,7 +213,7 @@ function UserDetail({ id }: { id: string }) {
               {a && (
                 <>
                   <h3 className="mt-6 mb-3 text-sm font-semibold">{t("users.access")}</h3>
-                  <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-[10rem_1fr]">
+                  <dl className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-4 gap-y-3 text-sm sm:grid-cols-[10rem_1fr] sm:gap-x-6 sm:gap-y-4">
                     <dt className="text-muted-foreground">{t("users.last_login")}</dt>
                     <dd>{a.last_login_at ? format(a.last_login_at) : t("users.never")}</dd>
                     <dt className="text-muted-foreground">{t("users.active_sessions")}</dt>

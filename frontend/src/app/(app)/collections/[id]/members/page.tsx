@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, UserPlus, Users, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { FieldNote, FormSection, FormSections, IconAction, initials, avatarStyle, FormError } from "@/components/bits";
+import { FieldNote, IconAction, initials, avatarStyle, FormError } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -87,47 +87,43 @@ function AddMember({ collection }: { collection: Collection }) {
   const nameRule = needName || name.trim() ? personName(name) : undefined;
   const canAdd = !emailRule(email) && email.trim() !== "" && !nameRule && (!needName || name.trim() !== "");
 
+  // One row at the top of the member list: email, role, add.
   return (
-    <FormSections>
-      <FormSection title={t("members.add")} description={t("members.add_desc")}>
-        <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (canAdd) add.mutate(); }}>
-          <div className="space-y-2">
-            <Label htmlFor="m-email">{t("auth.email")}</Label>
-            <Input id="m-email" type="email" required maxLength={254} aria-invalid={!!(email && emailRule(email))} aria-describedby="m-email-note" value={email}
-              onChange={(e) => { setEmail(e.target.value); setNeedName(false); setError(null); }} />
-            <FieldNote id="m-email-note" error={email && emailRule(email) ? t(emailRule(email)!) : undefined} />
+    <form aria-label={t("members.add")} className="space-y-2 border-b bg-muted/30 px-4 py-3" onSubmit={(e) => { e.preventDefault(); if (canAdd) add.mutate(); }}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+        <div className="min-w-0 flex-1 space-y-1">
+          <Label htmlFor="m-email" className="sr-only">{t("auth.email")}</Label>
+          <Input id="m-email" type="email" required maxLength={254} placeholder={t("members.email_placeholder")} aria-invalid={!!(email && emailRule(email))} aria-describedby="m-email-note" value={email}
+            onChange={(e) => { setEmail(e.target.value); setNeedName(false); setError(null); }} />
+          <FieldNote id="m-email-note" error={email && emailRule(email) ? t(emailRule(email)!) : undefined} hint={t("members.add_desc")} />
+        </div>
+        <div className="flex gap-2">
+          <RoleSelect value={role} label={t("members.role")} onChange={setRole} />
+          <Button type="submit" className="flex-1 sm:flex-none" disabled={!canAdd || add.isPending}>{add.isPending ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}{t(needName ? "members.invite" : "members.add")}</Button>
+        </div>
+      </div>
+      {needName && (
+        <div className="max-w-md space-y-2">
+          <Label htmlFor="m-name">{t("auth.name")}</Label>
+          <Input id="m-name" autoFocus maxLength={80} aria-invalid={!!nameRule} aria-describedby="m-name-note" value={name} onChange={(e) => setName(e.target.value)} />
+          <FieldNote id="m-name-note" error={nameRule && t(nameRule)} hint={t("members.name_hint")} />
+        </div>
+      )}
+      <FormError message={error} />
+      {link && (
+        <div className="space-y-2 rounded-lg border bg-background p-3 text-sm">
+          <p>{t("users.activation_link")}</p>
+          <div className="flex gap-2">
+            <Input readOnly aria-label={t("users.link_title")} value={link} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
+            <Button type="button" variant="outline" onClick={() => void copyText(link).then(() => toast.success(t("common.copied")))}>{t("common.copy")}</Button>
           </div>
-          {needName && (
-            <div className="space-y-2">
-              <Label htmlFor="m-name">{t("auth.name")}</Label>
-              <Input id="m-name" autoFocus maxLength={80} aria-invalid={!!nameRule} aria-describedby="m-name-note" value={name} onChange={(e) => setName(e.target.value)} />
-              <FieldNote id="m-name-note" error={nameRule && t(nameRule)} hint={t("members.name_hint")} />
-            </div>
-          )}
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="m-role">{t("members.role")}</Label>
-              <RoleSelect id="m-role" value={role} label={t("members.role")} onChange={setRole} />
-            </div>
-            <Button type="submit" disabled={!canAdd || add.isPending}>{add.isPending ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}{t(needName ? "members.invite" : "members.add")}</Button>
-          </div>
-          <FormError message={error} />
-          {link && (
-            <div className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
-              <p>{t("users.activation_link")}</p>
-              <div className="flex gap-2">
-                <Input readOnly aria-label={t("users.link_title")} value={link} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
-                <Button type="button" variant="outline" onClick={() => void copyText(link).then(() => toast.success(t("common.copied")))}>{t("common.copy")}</Button>
-              </div>
-            </div>
-          )}
-        </form>
-      </FormSection>
-    </FormSections>
+        </div>
+      )}
+    </form>
   );
 }
 
-function MemberList({ collection }: { collection: Collection }) {
+function MemberList({ collection, children }: { collection: Collection; children: React.ReactNode }) {
   const { t } = useI18n();
   const { user } = useMe();
   const client = useQueryClient();
@@ -150,18 +146,18 @@ function MemberList({ collection }: { collection: Collection }) {
   const items = list.data.items;
   // The server keeps one owner at least; the controls say so up front instead of failing.
   const lastOwner = (m: CollectionMember) => m.role === "owner" && items.filter((x) => x.role === "owner").length === 1;
-  if (items.length === 0) return <EmptyState icon={Users} title={t("members.empty")} />;
   return (
     <Card className="gap-0 overflow-hidden p-0">
       <div className="border-b px-4 py-3">
         <h2 className="font-heading text-base font-semibold">{t("members.list_title")} <span className="font-normal tabular-nums text-muted-foreground">({items.length})</span></h2>
         <p className="text-sm text-muted-foreground">{t("members.list_desc")}</p>
       </div>
+      {children}
       <ul aria-label={t("collections.tab.members")} className="divide-y">
         {items.map((m) => (
-          <li key={m.user_id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+          <li key={m.user_id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold" style={avatarStyle(m.user_id)} aria-hidden>{initials(m.name)}</span>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-[calc(100%-3rem)] sm:basis-auto">
               <p className="truncate text-sm font-medium">
                 {m.name}
                 {m.user_id === user?.id && <span className="text-muted-foreground"> ({t("members.you")})</span>}
@@ -169,8 +165,10 @@ function MemberList({ collection }: { collection: Collection }) {
               </p>
               <p className="truncate text-xs text-muted-foreground">{m.email}{lastOwner(m) && ` · ${t("members.last_owner")}`}</p>
             </div>
+            <div className="ml-12 flex items-center gap-1 sm:ml-0">
             <RoleSelect value={m.role} label={`${t("members.role")}: ${m.name}`} disabled={setRole.isPending || lastOwner(m)} onChange={(role) => role !== m.role && setRole.mutate({ m, role })} />
             <IconAction label={t("members.remove")} target={m.name} className="text-destructive" disabled={lastOwner(m)} onClick={() => setRemoving(m)}><Trash2 className="size-4" /></IconAction>
+            </div>
           </li>
         ))}
       </ul>
@@ -195,12 +193,9 @@ function MemberList({ collection }: { collection: Collection }) {
 export default function CollectionMembersPage() {
   const { t } = useI18n();
   return (
-    <CollectionPage section="collections.tab.members">
+    <CollectionPage section="collections.tab.members" description="members.subtitle">
       {(collection) => roleAllows(collection.role, "owner") ? (
-        <div className="space-y-6">
-          <AddMember collection={collection} />
-          <MemberList collection={collection} />
-        </div>
+        <MemberList collection={collection}><AddMember collection={collection} /></MemberList>
       ) : (
         <EmptyState icon={Users} title={t("error.forbidden")} description={t("members.owners_only")} />
       )}

@@ -7,6 +7,7 @@ import { Loader2, Monitor, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import QRCode from "qrcode";
 import { FieldNote, FormError, FormSection, FormSections, PageBody, SaveBar, PageHeader, initials, useFormatDate } from "@/components/bits";
+import { HashTabs } from "@/components/hash-tabs";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PasswordInput } from "@/components/password-input";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -70,12 +71,12 @@ function ProfileHeader() {
         <div className="truncate text-lg font-semibold">{user.name}</div>
         <div className="text-sm break-all text-muted-foreground">{user.email}</div>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          {/* The two roles the platform ships with read in the app language; others keep the name an admin gave them. */}
-          {user.roles.map((r) => <Badge key={r} variant="secondary">{r === "admin" ? t("roles.builtin.admin") : r === "user" ? t("roles.builtin.user") : r}</Badge>)}
+          {/* The highest role only: an admin is a user too. The two built-in roles read in the app language. */}
+          {(user.roles.includes("admin") ? ["admin"] : user.roles.length > 1 ? user.roles.filter((r) => r !== "user") : user.roles).map((r) => <Badge key={r} variant="secondary">{r === "admin" ? t("roles.builtin.admin") : r === "user" ? t("roles.builtin.user") : r}</Badge>)}
           <span>{t("profile.member_since")} {new Date(user.created_at).toLocaleDateString(locale, { dateStyle: "medium" })}</span>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex basis-full flex-wrap gap-2 pl-[4.5rem] sm:basis-auto sm:pl-0">
         <input
           ref={picker}
           type="file"
@@ -139,8 +140,8 @@ function NameCard() {
   });
   const dirty = name.trim() !== user?.name;
   return (
-    <FormSection title={t("profile.account")} description={t("profile.account_desc")}>
-    <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="space-y-6">
+    <FormSection description={t("profile.account_desc")}>
+    <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="max-w-xl space-y-6">
           <div className="space-y-2">
             <Label htmlFor="name">{t("auth.name")}</Label>
             <Input id="name" required maxLength={80} aria-invalid={!!personName(name)} aria-describedby="name-note" value={name} onChange={(e) => setName(e.target.value)} />
@@ -345,8 +346,8 @@ function PreferencesCard() {
   const languages = Object.fromEntries(LOCALES.map((l) => [l.value, l.label])) as Record<Language, string>;
   if (!user) return null;
   return (
-    <FormSection title={t("profile.preferences")} description={t("profile.preferences_desc")}>
-      <div className="grid gap-4 sm:grid-cols-2">
+    <FormSection description={t("profile.preferences_desc")}>
+      <div className="grid max-w-xl gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label id="pref-theme">{t("common.theme")}</Label>
           <Select
@@ -385,6 +386,7 @@ function PreferencesCard() {
 }
 
 const SESSIONS_KEY = ["sessions"] as const;
+const SESSIONS_SHOWN = 5;
 
 function SessionsCard() {
   const { t } = useI18n();
@@ -399,19 +401,22 @@ function SessionsCard() {
     onError: (err) => toast.error(errorMessage(err, "profile.save_failed", t)),
   });
   const others = sessions.data?.items.filter((s) => !s.current).length ?? 0;
+  // This device first; a long list shows its newest few until asked.
+  const [all, setAll] = useState(false);
+  const sorted = (sessions.data?.items ?? []).toSorted((a, b) => Number(b.current) - Number(a.current) || b.last_seen_at.localeCompare(a.last_seen_at));
+  const shown = all ? sorted : sorted.slice(0, SESSIONS_SHOWN);
 
   return (
-    <FormSection title={t("profile.sessions")} description={t("profile.sessions_hint")}>
+    <FormSection title={t("profile.sessions")} description={t("profile.sessions_hint")} action={others > 0 && <Button variant="outline" size="sm" onClick={() => setConfirmOthers(true)}>{t("profile.revoke_others")}</Button>}>
     <div>
       <div className="space-y-3">
-        {others > 0 && <div className="flex justify-end"><Button variant="outline" size="sm" onClick={() => setConfirmOthers(true)}>{t("profile.revoke_others")}</Button></div>}
         {sessions.isPending ? (
           <ListSkeleton rows={2} />
         ) : sessions.isError ? (
           <QueryErrorState onRetry={() => void sessions.refetch()} />
         ) : (
           <ul className="divide-y rounded-lg border">
-            {sessions.data.items.toSorted((a, b) => Number(b.current) - Number(a.current)).map((s) => (
+            {shown.map((s) => (
               <li key={s.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                 {(() => {
                   const device = describeDevice(s.user_agent);
@@ -435,6 +440,13 @@ function SessionsCard() {
                 )}
               </li>
             ))}
+            {sorted.length > SESSIONS_SHOWN && (
+              <li className="px-4 py-2">
+                <Button variant="link" size="sm" className="h-auto p-0" aria-expanded={all} onClick={() => setAll(!all)}>
+                  {all ? t("profile.sessions_fewer") : t("profile.sessions_all").replace("{n}", String(sorted.length))}
+                </Button>
+              </li>
+            )}
           </ul>
         )}
       </div>
@@ -464,13 +476,11 @@ export default function ProfilePage() {
         {user ? (
           <>
             <ProfileHeader />
-            <FormSections>
-              <NameCard />
-              <PasswordCard />
-              <TwoStepCard />
-              <PreferencesCard />
-              <SessionsCard />
-            </FormSections>
+            <HashTabs label={t("profile.sections")} tabs={[
+              { id: "account", title: t("profile.account"), panel: <FormSections><NameCard /></FormSections> },
+              { id: "security", title: t("profile.security"), panel: <FormSections><PasswordCard /><TwoStepCard /><SessionsCard /></FormSections> },
+              { id: "preferences", title: t("profile.preferences"), panel: <FormSections><PreferencesCard /></FormSections> },
+            ]} />
           </>
         ) : (
           <ListSkeleton rows={4} />

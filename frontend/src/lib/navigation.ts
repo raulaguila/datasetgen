@@ -19,6 +19,9 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/audit", key: "nav.audit", icon: ScrollText, needs: ["audit", "read"] },
 ];
 
+/** The pages of the person's own account, reached from the avatar menu. */
+export const ACCOUNT_PAGES = ["/profile", "/api-access", "/notifications"];
+
 export function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 }

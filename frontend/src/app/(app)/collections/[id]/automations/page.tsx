@@ -291,7 +291,7 @@ function Automations({ collection }: { collection: Collection }) {
   };
   const items = list.data?.items ?? [];
   return (
-    <FormSection title={t("automations.title")} description={t("automations.desc")}>
+    <FormSection description={t("automations.desc")} action={editing !== "new" && <Button variant="outline" disabled={items.length >= 20} onClick={() => setEditing("new")}><Plus className="size-4" />{t("automations.new")}</Button>}>
       <div className="space-y-3">
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 && editing !== "new" ? (
           <EmptyState compact title={t("automations.empty")} />
@@ -316,9 +316,7 @@ function Automations({ collection }: { collection: Collection }) {
             ))}
           </ul>
         )}
-        {editing === "new" ? <AutomationForm collection={collection} onDone={() => setEditing(null)} /> : (
-          <Button variant="outline" disabled={items.length >= 20} onClick={() => setEditing("new")}><Plus className="size-4" />{t("automations.new")}</Button>
-        )}
+        {editing === "new" && <AutomationForm collection={collection} onDone={() => setEditing(null)} />}
       </div>
       <ConfirmDialog
         open={!!removing}

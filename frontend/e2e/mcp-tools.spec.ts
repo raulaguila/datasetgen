@@ -73,7 +73,8 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
 
   // The key's own usage lists the same calls, by collection.
   await page.goto("/api-access");
-  await page.getByRole("listitem").filter({ hasText: `assistente-${name}` }).getByRole("button", { name: "Ver uso" }).click();
+  await page.getByRole("button", { name: `Ações: assistente-${name}` }).click();
+  await page.getByRole("menuitem", { name: "Ver uso" }).click();
   const usage = page.getByRole("list", { name: "Ver uso" });
   await expect(usage.getByText("nota_por_titulo").first()).toBeVisible();
   await expect(usage.getByText(name, { exact: false }).first()).toBeVisible();
