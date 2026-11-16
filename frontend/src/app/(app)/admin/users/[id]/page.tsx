@@ -6,21 +6,18 @@ import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Loader2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
-import { ActiveBadge, DangerZone, FieldNote, FormError, FormSection, FormSections, SaveBar, PageBody, PageHeader, StatusBadge, useFormatDate } from "@/components/bits";
+import { DangerZone, FieldNote, FormError, FormSection, FormSections, SaveBar, PageBody, PageHeader, StatusBadge, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ListSkeleton } from "@/components/skeletons";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ApiError } from "@/lib/api/client";
-import { roles, users } from "@/lib/api/endpoints";
-import type { UserDetails } from "@/lib/api/types";
+import { users } from "@/lib/api/endpoints";
 import { errorMessage } from "@/lib/errors";
 import { useMe } from "@/lib/context/me";
 import { useUnsavedGuard } from "@/lib/hooks/use-unsaved-guard";
@@ -29,84 +26,6 @@ import { useI18n } from "@/lib/i18n/provider";
 import { email as emailRule, personName, ready } from "@/lib/validation";
 import { can } from "@/lib/permissions";
 import { copyText } from "@/lib/utils";
-
-/** Check boxes for every role the API lists; Save replaces the user's roles in one call. */
-function RolesCard({ user }: { user: UserDetails }) {
-  const { t } = useI18n();
-  const { user: me } = useMe();
-  const client = useQueryClient();
-  const router = useRouter();
-  const manage = can(me, "roles", "read") && can(me, "roles", "update");
-  // shortcut: shows the first 100 roles (the API page cap); add search here if a deployment grows past that.
-  const all = useQuery({ queryKey: ["roles", "list", "all"], queryFn: () => roles.list({ page: 1, limit: 100 }), enabled: manage });
-  const saved = user.roles.map((r) => r.id).sort();
-  const [draft, setDraft] = useState(saved);
-  const dirty = JSON.stringify([...draft].sort()) !== JSON.stringify(saved);
-  useUnsavedGuard(dirty, t("roles.leave_unsaved"));
-  const save = useMutation({
-    mutationFn: () => users.setRoles(user.id, draft),
-    onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: ["users", "detail", user.id] });
-      void client.invalidateQueries({ queryKey: ["roles"] });
-      if (user.id === me?.id) void client.invalidateQueries({ queryKey: ["me"] });
-      toast.success(t("common.saved"));
-      router.push("/admin/users");
-    },
-    onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
-  });
-  const toggle = (id: string, on: boolean) => setDraft((d) => (on ? [...d, id] : d.filter((x) => x !== id)));
-
-  return (
-    <>
-    <FormSection title={t("nav.roles")} description={t(manage ? "users.roles_hint" : "users.roles_desc")}>
-      <div className="space-y-4">
-        {!manage ? (
-          <div className="flex flex-wrap gap-1.5">
-            {user.roles.length === 0 ? <span className="text-sm text-muted-foreground">-</span> : user.roles.map((r) => (
-              <Badge key={r.id} variant="secondary" render={<Link href={`/admin/roles/${r.id}`} />}>{r.name}</Badge>
-            ))}
-          </div>
-        ) : all.isPending ? (
-          <ListSkeleton rows={3} />
-        ) : all.isError ? (
-          <QueryErrorState error={all.error} onRetry={() => void all.refetch()} />
-        ) : (
-          <>
-            <ul className="divide-y overflow-hidden rounded-lg border">
-              {all.data.items.map((r) => (
-                <li key={r.id}>
-                  <label className="flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm hover:bg-accent">
-                    <Checkbox checked={draft.includes(r.id)} disabled={save.isPending} onCheckedChange={(on) => toggle(r.id, on === true)} />
-                    <span className="min-w-0 flex-1 truncate font-medium">{r.name}</span>
-                    {r.is_default && <Badge variant="outline" title={t("roles.default_hint")}>{t("roles.default")}</Badge>}
-                    {!r.enabled && <ActiveBadge enabled={false} />}
-                  </label>
-                </li>
-              ))}
-            </ul>
-            {user.status === "pending" && all.data.items.some((r) => r.is_default) && (
-              <p className="text-xs text-muted-foreground">{t("users.default_on_activation")}</p>
-            )}
-          </>
-        )}
-      </div>
-    </FormSection>
-    {/* Last child of the page's FormSections, so it docks as the card footer like every other form. */}
-    {dirty && (
-      <SaveBar
-        footer
-        label={t("roles.unsaved")}
-        saving={save.isPending}
-        canSave
-        saveLabel={t("common.save")}
-        discardLabel={t("common.discard")}
-        onSave={() => save.mutate()}
-        onDiscard={() => setDraft(saved)}
-      />
-    )}
-    </>
-  );
-}
 
 /** Creates a pending account; the person gets the activation email. */
 function InviteForm() {
@@ -253,7 +172,7 @@ function UserDetail({ id }: { id: string }) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-auto min-w-48">
                   <DropdownMenuItem onClick={() => reinvite.mutate()}>{t("users.resend_email")}</DropdownMenuItem>
-                  {can(me, "roles", "update") && <DropdownMenuItem onClick={() => setLinking(true)}>{t("users.copy_link")}</DropdownMenuItem>}
+                  {can(me, "users", "update") && <DropdownMenuItem onClick={() => setLinking(true)}>{t("users.copy_link")}</DropdownMenuItem>}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -317,7 +236,6 @@ function UserDetail({ id }: { id: string }) {
                 </>
               )}
           </FormSection>
-          <RolesCard user={detail.data} />
           </FormSections>
           {canToggle && !disabled && (
             <DangerZone description={t("users.disable_desc")} label={t("users.disable")} onClick={() => setConfirm(true)} />

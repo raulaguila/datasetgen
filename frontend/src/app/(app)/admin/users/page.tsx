@@ -19,14 +19,13 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { roles, users } from "@/lib/api/endpoints";
+import { users } from "@/lib/api/endpoints";
 import type { SortOrder, UserStatus } from "@/lib/api/types";
 import { useMe } from "@/lib/context/me";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { searchTerm } from "@/lib/utils";
 import { useGoToPage, useListParams } from "@/lib/hooks/use-list-params";
 import type { MessageKey } from "@/lib/i18n/messages";
-import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/provider";
 import { can } from "@/lib/permissions";
 
@@ -38,32 +37,27 @@ export default function UsersPage() {
   const format = useFormatDate();
   const router = useRouter();
   const { user } = useMe();
-  // Editing a user means changing state or roles.
-  const canEdit = can(user, "users", "update") || can(user, "roles", "update");
+  const canEdit = can(user, "users", "update");
   const canBulk = can(user, "users", "update");
   const client = useQueryClient();
   const [bulk, setBulk] = useState<"disable" | "enable" | null>(null);
-  const [params, set] = useListParams({ page: 1, limit: 25, q: "", status: "", role: "", sort: "name", order: "asc" });
-  const { page, limit, role } = params;
+  const [params, set] = useListParams({ page: 1, limit: 25, q: "", status: "", sort: "name", order: "asc" });
+  const { page, limit } = params;
   const status = STATUSES.includes(params.status as UserStatus) ? (params.status as UserStatus) : "";
   const sort = SORTS.includes(params.sort) ? params.sort : "name";
   const order: SortOrder = params.order === "desc" ? "desc" : "asc";
   const [search, setSearch] = useState(params.q);
   const q = searchTerm(useDebounced(params.q));
   const list = useQuery({
-    queryKey: ["users", page, limit, q, status, role, sort, order],
-    queryFn: ({ signal }) => users.list({ page, limit, search: q, status, role_id: role, sort, order }, signal),
+    queryKey: ["users", page, limit, q, status, sort, order],
+    queryFn: ({ signal }) => users.list({ page, limit, search: q, status, sort, order }, signal),
     placeholderData: keepPreviousData,
   });
-  // shortcut: the first 100 roles (the API page cap) fill the filter; add search here if a deployment grows past that.
-  const canRoles = can(user, "roles", "read");
-  const roleList = useQuery({ queryKey: ["roles", "list", "all"], queryFn: () => roles.list({ page: 1, limit: 100 }), enabled: canRoles });
   const fallback = list.isPlaceholderData ? null : emptyPageFallback(page, limit, list.data);
   useGoToPage(fallback, set); // the last rows of the last page went away
   const sortProps = { sort, order, onSort: (s: string, o: SortOrder) => set({ sort: s, order: o, page: 1 }) };
   // Your own account cannot be disabled, so it is never ticked.
   const selection = useSelection(list.data?.items.filter((u) => u.id !== user?.id).map((u) => u.id) ?? []);
-  const roleItems: Record<string, string> = { all: t("users.all_roles"), ...Object.fromEntries((roleList.data?.items ?? []).map((r) => [r.id, r.name])) };
   const statusItems: Record<string, string> = { all: t("users.all_statuses"), ...Object.fromEntries(STATUSES.map((s) => [s, t(`status.${s}` as MessageKey)])) };
 
   return (
@@ -87,19 +81,11 @@ export default function UsersPage() {
             />
           </div>
           <Select value={status || "all"} items={statusItems} onValueChange={(v) => set({ status: v === "all" ? "" : (v as string), page: 1 })}>
-            <SelectTrigger className={cn("w-44 max-sm:w-full", !canRoles && "max-sm:col-span-2")} aria-label={t("users.status")}><SelectValue /></SelectTrigger>
+            <SelectTrigger className={"w-44 max-sm:w-full max-sm:col-span-2"} aria-label={t("users.status")}><SelectValue /></SelectTrigger>
             <SelectContent>
               {Object.entries(statusItems).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
             </SelectContent>
           </Select>
-          {canRoles && (
-            <Select value={role || "all"} items={roleItems} onValueChange={(v) => set({ role: v === "all" ? "" : (v as string), page: 1 })}>
-              <SelectTrigger className="w-48 max-sm:w-full" aria-label={t("users.role")}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(roleItems).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
           <SortSelect fields={[{ field: "name", label: t("auth.name") }, { field: "email", label: t("auth.email") }, { field: "status", label: t("users.status") }, { field: "created_at", label: t("common.created_at") }]} className="max-sm:col-span-2" {...sortProps} />
           {search.trim() !== "" && !searchTerm(search) && <p className="basis-full text-xs text-muted-foreground max-sm:col-span-2" role="status">{t("common.search_min")}</p>}
         </div>
@@ -111,8 +97,8 @@ export default function UsersPage() {
         ) : list.data.items.length === 0 ? (
           <EmptyState
             icon={Users}
-            title={t(q || status || role ? "common.no_results" : "users.empty")}
-            action={(q || status || role) && <Button variant="outline" onClick={() => { setSearch(""); set({ q: "", status: "", role: "", page: 1 }); }}>{t("common.clear_filters")}</Button>}
+            title={t(q || status ? "common.no_results" : "users.empty")}
+            action={(q || status) && <Button variant="outline" onClick={() => { setSearch(""); set({ q: "", status: "", page: 1 }); }}>{t("common.clear_filters")}</Button>}
           />
         ) : (
           <Card className="gap-0 overflow-hidden p-0">

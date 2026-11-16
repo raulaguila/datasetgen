@@ -1,4 +1,4 @@
-import { ChartColumn, Database, FileJson, KeyRound, LayoutDashboard, ListChecks, ListTree, Plug, ScrollText, Settings2, Trash2, UserCog, Users, Zap, type LucideIcon } from "lucide-react";
+import { ChartColumn, Database, FileJson, LayoutDashboard, ListChecks, ListTree, Plug, ScrollText, Settings2, Trash2, UserCog, Users, Zap, type LucideIcon } from "lucide-react";
 import type { Action, MemberRole } from "@/lib/api/types";
 import type { MessageKey } from "@/lib/i18n/messages";
 
@@ -16,7 +16,6 @@ export const MAIN_NAV: NavItem[] = [
 
 export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/users", key: "nav.users", icon: Users, needs: ["users", "read"] },
-  { href: "/admin/roles", key: "nav.roles", icon: KeyRound, needs: ["roles", "read"] },
   { href: "/admin/audit", key: "nav.audit", icon: ScrollText, needs: ["audit", "read"] },
 ];
 

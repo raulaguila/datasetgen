@@ -110,30 +110,6 @@ export interface UserDetails extends User {
   };
 }
 
-export interface Role {
-  id: string;
-  name: string;
-  enabled: boolean;
-  is_default: boolean;
-  permissions: Record<string, Action[]>;
-  member_count: number;
-  created_at: string;
-}
-
-export interface Resource {
-  code: string;
-  description: string;
-  /** The actions a role may be granted on it, in create, read, update, delete order. */
-  actions: Action[];
-}
-
-export interface Member {
-  id: string;
-  name: string;
-  email: string;
-  status: UserStatus;
-}
-
 export interface Collection {
   id: string;
   name: string;

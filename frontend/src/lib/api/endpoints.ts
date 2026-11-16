@@ -10,11 +10,9 @@ import type {
   WebhookDelivery,
   RecordComment, RecordLinks,
   ShareLink,
-  Action,
   AuditRecord,
   InviteResult,
   MeResponse,
-  Member,
   Notification,
   Paged,
   Preferences,
@@ -27,8 +25,6 @@ import type {
   ImportResult,
   RecordFix,
   RecordVersion,
-  Resource,
-  Role,
   Session,
   SortOrder,
   User,
@@ -102,23 +98,8 @@ export const users = {
   disable: (ids: string[]) => apiFetch<void>("/v1/users/disable", { method: "POST", json: { ids } }),
   enable: (ids: string[]) => apiFetch<void>("/v1/users/enable", { method: "POST", json: { ids } }),
   unlock: (ids: string[]) => apiFetch<void>("/v1/users/unlock", { method: "POST", json: { ids } }),
-  setRoles: (userId: string, roleIds: string[]) => apiFetch<void>(`/v1/users/${id(userId)}/roles`, { method: "PUT", json: { role_ids: roleIds } }),
 };
 
-export const roles = {
-  list: (p: { page: number; limit: number; search?: string; sort?: string; order?: SortOrder }, signal?: AbortSignal) => apiFetch<Paged<Role>>(`/v1/roles${query(p)}`, { signal }),
-  get: (roleId: string) => apiFetch<Role>(`/v1/roles/${id(roleId)}`),
-  create: (name: string) => apiFetch<Role>("/v1/roles", { method: "POST", json: { name } }),
-  update: (roleId: string, patch: { name?: string; enabled?: boolean; is_default?: boolean }) => apiFetch<Role>(`/v1/roles/${id(roleId)}`, { method: "PATCH", json: patch }),
-  remove: (ids: string[]) => apiFetch<void>("/v1/roles/delete", { method: "POST", json: { ids } }),
-  setPermissions: (roleId: string, permissions: Record<string, Action[]>) =>
-    apiFetch<Role>(`/v1/roles/${id(roleId)}/permissions`, { method: "PUT", json: { permissions } }),
-  members: (roleId: string, page: number, limit: number, search?: string, signal?: AbortSignal) =>
-    apiFetch<Paged<Member>>(`/v1/roles/${id(roleId)}/members${query({ page, limit, search })}`, { signal }),
-  addMember: (roleId: string, userId: string) => apiFetch<void>(`/v1/roles/${id(roleId)}/members/${id(userId)}`, { method: "PUT" }),
-  removeMember: (roleId: string, userId: string) => apiFetch<void>(`/v1/roles/${id(roleId)}/members/${id(userId)}`, { method: "DELETE" }),
-  resources: () => apiFetch<{ items: Resource[] }>("/v1/permissions/resources"),
-};
 
 export interface CollectionInput {
   name: string;

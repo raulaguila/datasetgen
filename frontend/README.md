@@ -36,7 +36,7 @@ Screens: login, register, activation, password reset, profile (name, password, s
 ## Add a screen
 
 1. Types and one function per route in `src/lib/api/types.ts` and `src/lib/api/endpoints.ts`.
-2. The page under `src/app/(app)/`, following `admin/roles/page.tsx`.
+2. The page under `src/app/(app)/`, following `admin/users/page.tsx`.
 3. A menu entry in `src/lib/navigation.ts`, gated by `needs: [resource, action]`.
 4. The texts in `src/lib/i18n/messages.ts`; a key missing in one language fails the typecheck.
 

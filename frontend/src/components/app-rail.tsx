@@ -4,7 +4,7 @@ import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, ChevronDown, ChevronRight, Plus, Settings, Shield, Star } from "lucide-react";
+import { Activity, ChevronDown, ChevronRight, Plus, Settings, Star } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { CollectionAvatar } from "@/components/collection-avatar";
 import { BrandWordmark } from "@/components/brand-wordmark";
@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { collections } from "@/lib/api/endpoints";
 import { useMe } from "@/lib/context/me";
 import { useI18n } from "@/lib/i18n/provider";
-import { ADMIN_NAV, COLLECTION_MONITORING_NAV, COLLECTION_NAV, COLLECTION_SECTIONS, COLLECTION_SETTINGS_NAV, isActive, type CollectionSection } from "@/lib/navigation";
+import { COLLECTION_MONITORING_NAV, COLLECTION_NAV, COLLECTION_SECTIONS, COLLECTION_SETTINGS_NAV, type CollectionSection } from "@/lib/navigation";
 import { can, roleAllows } from "@/lib/permissions";
 import { useUIStore } from "@/lib/store/ui";
 
@@ -39,7 +39,7 @@ function collectionInPath(pathname: string): string | undefined {
  * fields) below it; its monitoring and settings form groups of their own under
  * "New collection", each shown when the caller's role reaches one of its items.
  * One group is open at a time, the one the page is in.
- * Platform administration closes the rail, for those who reach it (also in the account menu).
+ * Platform administration lives in the account menu, not here.
  */
 export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { collapsed: boolean; onToggle: () => void; mobile?: boolean; onNavigate?: () => void }) {
   const { t } = useI18n();
@@ -85,7 +85,6 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
     onNavigate?.();
   };
   const groupId = useId();
-  const admin = ADMIN_NAV.filter((item) => !item.needs || can(user, ...item.needs));
 
   // "g" then a section's key opens it in the selected collection, as in the reference app.
   const router = useRouter();
@@ -187,25 +186,6 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
                     <nav id={`${groupId}-${group}`} aria-label={label} hidden={!open.includes(group)}>{entries.map((s) => link(s, group))}</nav>
                   </div>
                 ))}
-              </section>
-            )}
-            {admin.length > 0 && (
-              <section className="rail-admin" aria-label={t("nav.admin_area")}>
-                <div className="rail-admin-group" data-open="">
-                  {!compact && <div className="rail-group-heading"><span className="rail-label"><Shield className="mr-1 inline size-3.5" aria-hidden />{t("nav.admin_area")}</span></div>}
-                  <nav aria-label={t("nav.admin_area")}>
-                    {admin.map((item) => (
-                      <span key={item.href} className="contents">
-                        {tooltip(t(item.key), (
-                          <Link href={item.href} aria-label={t(item.key)} aria-current={isActive(pathname, item.href) ? "page" : undefined} className="rail-item" onClick={onNavigate}>
-                            <item.icon className="size-4" aria-hidden />
-                            {!compact && <span>{t(item.key)}</span>}
-                          </Link>
-                        ))}
-                      </span>
-                    ))}
-                  </nav>
-                </div>
               </section>
             )}
           </>
