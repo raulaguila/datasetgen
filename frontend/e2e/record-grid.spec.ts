@@ -62,6 +62,7 @@ test("conditions, groups, inline edit and the board", async ({ page }) => {
   await expect(page.locator("tbody tr")).toHaveCount(2);
   await expect(page.getByRole("row").filter({ hasText: "Alfa" })).toHaveCount(0);
   await page.getByRole("button", { name: /^Remover grupo/ }).click();
+  await expect(page.getByRole("button", { name: /^Remover condição/ })).toHaveCount(1);
   await page.getByRole("button", { name: /^Remover condição/ }).click();
   await expect(page.locator("tbody tr")).toHaveCount(3);
 

@@ -76,6 +76,35 @@ test("richer conditions and the cell filter", async ({ page }) => {
   await page.getByRole("button", { name: /^Remover condição/ }).click();
   await expect(page.locator("tbody tr")).toHaveCount(3);
 
+  // Written as text: a record by name, an option and a relative date, read into the rows.
+  await page.getByRole("button", { name: "Condições" }).click();
+  await rules.getByRole("radio", { name: "Texto" }).click();
+  const box = rules.getByRole("textbox", { name: "Condições em texto" });
+  await box.fill("status = fechado");
+  await expect(rules.getByRole("alert")).toContainText("fechado não é opção de Status");
+  await box.fill("status = pago");
+  await expect(rules.getByRole("button", { name: "Aplicar · 1 registro" })).toBeVisible();
+  await box.fill('cliente = "Ana Prado" e (status = atrasado ou vencimento nos próximos 7 dias)');
+  await rules.getByRole("radio", { name: "Visual" }).click();
+  await expect(rules.getByRole("combobox", { name: "Campo da condição 1" })).toHaveText("Cliente");
+  await expect(rules.getByRole("region", { name: "Grupo 2" })).toBeVisible();
+  await rules.getByRole("button", { name: /^Aplicar/ }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(2);
+  await expect(page.getByRole("status").filter({ hasText: "2 de 3 registros" })).toBeVisible();
+  // Back as text, the record by its name.
+  await page.getByRole("button", { name: "Condições" }).click();
+  await rules.getByRole("radio", { name: "Texto" }).click();
+  await expect(box).toHaveValue('Cliente = "Ana Prado" e (Status = "atrasado" ou Vencimento nos próximos 7 dias)');
+  // Leaving with edits asks first.
+  await box.fill("status = pago");
+  await page.keyboard.press("Escape");
+  await rules.getByRole("button", { name: "Descartar" }).click();
+  await expect(rules).toBeHidden();
+  await page.getByRole("button", { name: /^Remover grupo/ }).click();
+  await expect(page.getByRole("button", { name: /^Remover condição/ })).toHaveCount(1);
+  await page.getByRole("button", { name: /^Remover condição/ }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(3);
+
   // Right-click a cell: hide its value.
   await page.getByRole("row").filter({ hasText: "Gás" }).locator("td[data-label=Status]").click({ button: "right" });
   await page.getByRole("menuitem", { name: "Ocultar este valor" }).click();

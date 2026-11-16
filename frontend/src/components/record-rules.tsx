@@ -1,204 +1,37 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { Popover } from "@base-ui/react/popover";
-import { useQuery } from "@tanstack/react-query";
-import { Filter, FilterX, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { Bookmark, Check, ChevronDown, Code, Copy, Filter, FilterX, Group, Loader2, MoreHorizontal, MousePointerClick, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 import { IconAction } from "@/components/bits";
-import { VIRTUAL_TYPES, type Field, type FieldRow } from "@/components/field-builder";
+import { recordTitle, type FieldRow } from "@/components/field-builder";
+import { optionColor } from "@/components/option-chip";
+import { LIST_OPS, entriesOf, fromDraft, kindOf, needsValue, opsFor, toDraft, whereText, type DraftRule, type EditOp, type Entry, type Kind, type Rule, type Where } from "@/components/rule-model";
+import { parseRuleText, refNameOf, ruleText, suggestAt, type Lang, type RefName, type TextError } from "@/components/rule-text";
 import { RecordPicker, RefChip, useRecordLabel } from "@/components/schema-form";
+import { TYPE_ICONS } from "@/components/type-icons";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import type { MessageKey } from "@/lib/i18n/messages";
-import { records } from "@/lib/api/endpoints";
+import { collections, records, tools } from "@/lib/api/endpoints";
+import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
+import { useDebounced } from "@/lib/hooks/use-debounced";
+import { cn } from "@/lib/utils";
 
-export type RuleOp = "eq" | "neq" | "contains" | "not_contains" | "starts_with" | "gt" | "gte" | "lt" | "lte" | "between" | "empty" | "not_empty" | "in" | "not_in" | "has" | "has_any";
-export interface Rule { field: string; op: RuleOp; value?: unknown }
-/** Rules joined by AND (any: false) or OR; groups bracket rules of their own, one level deep. */
-export interface Where { any: boolean; rules: Rule[]; groups?: { any: boolean; rules: Rule[] }[] }
+export * from "@/components/rule-model";
 
 type Translate = ReturnType<typeof useI18n>["t"];
 
 const MAX_RULES = 20;
 const MAX_GROUPS = 10;
-
-/** True when the filter keeps every record. */
-export const whereEmpty = (w: Where) => w.rules.length === 0 && !(w.groups ?? []).some((g) => g.rules.length > 0);
-
-/** The URL text of a filter, or "" when it filters nothing. */
-export const whereText = (w: Where) => (whereEmpty(w) ? "" : JSON.stringify(w));
-
-/**
- * w AND every rule of extra, still one level deep. An OR at the top spreads
- * over its parts: (a OR (b AND c)) AND x = (a AND x) OR (b AND c AND x).
- */
-export function andWhere(w: Where, extra: Rule[]): Where {
-  if (!extra.length) return w;
-  if (whereEmpty(w)) return { any: false, rules: extra };
-  const groups = (w.groups ?? []).filter((g) => g.rules.length);
-  if (!w.any) return { any: false, rules: [...w.rules, ...extra], ...(groups.length ? { groups } : {}) };
-  if (!groups.length) return { any: false, rules: extra, groups: [{ any: true, rules: w.rules }] };
-  // Every part as an AND list: a lone rule, an AND group, or each rule of an OR group (OR inside OR is flat).
-  const parts = [...w.rules.map((r) => [r]), ...groups.flatMap((g) => (g.any ? g.rules.map((r) => [r]) : [g.rules]))];
-  return { any: true, rules: [], groups: parts.map((rules) => ({ any: false, rules: [...rules, ...extra] })) };
-}
-
-/** The rules kept in the URL as JSON; anything else reads as none. */
-/**
- * Both filters at once. One side must be a plain AND list (or empty): groups go
- * one level deep, so two OR filters cannot nest; null then.
- */
-export function bothWhere(a: Where, b: Where): Where | null {
-  const plain = (w: Where) => whereEmpty(w) || (!w.any && !(w.groups ?? []).some((g) => g.rules.length));
-  if (plain(b)) return andWhere(a, whereEmpty(b) ? [] : b.rules);
-  if (plain(a)) return andWhere(b, whereEmpty(a) ? [] : a.rules);
-  return null;
-}
-
-export function parseWhere(raw: string): Where {
-  try {
-    const v = JSON.parse(raw) as Where;
-    if (!v || !Array.isArray(v.rules)) return { any: false, rules: [] };
-    const groups = Array.isArray(v.groups) ? v.groups.filter((g) => g && Array.isArray(g.rules)).map((g) => ({ any: !!g.any, rules: g.rules })) : [];
-    return { any: !!v.any, rules: v.rules, ...(groups.length ? { groups } : {}) };
-  } catch {
-    return { any: false, rules: [] };
-  }
-}
-
-/**
- * Field filters of older links and saved views ({"field": value}), read as
- * "equals" conditions: the Conditions button now does what the Filters panel did.
- */
-export function legacyRules(raw: string): Rule[] {
-  try {
-    const v: unknown = JSON.parse(raw);
-    if (!v || typeof v !== "object" || Array.isArray(v)) return [];
-    return Object.entries(v).filter(([, x]) => ["string", "number", "boolean"].includes(typeof x)).map(([field, value]) => ({ field, op: "eq" as const, value }));
-  } catch {
-    return [];
-  }
-}
-
-/** The conditions of a saved view's query, old filters included. */
-export function viewWhere(query: string): Where {
-  const p = new URLSearchParams(query);
-  return andWhere(parseWhere(p.get("where") ?? ""), legacyRules(p.get("filter") ?? ""));
-}
-
-/** How a field compares, from its type (a formula: from what it gives). */
-export type Kind = "text" | "lookup" | "number" | "date" | "enum" | "strings" | "boolean" | "ref" | "refs" | "other";
-
-export function kindOf(f: Pick<Field, "type" | "result">): Kind {
-  switch (f.type) {
-    case "string": case "text": case "email": case "url": case "created_by": case "updated_by": return "text";
-    case "number": case "integer": case "autonumber": case "rollup": return "number";
-    case "date": case "datetime": return "date";
-    case "enum": return "enum";
-    case "strings": return "strings";
-    case "boolean": return "boolean";
-    case "reference": return "ref";
-    case "references": return "refs";
-    case "lookup": return "lookup";
-    case "formula": return f.result === "text" ? "text" : f.result === "boolean" ? "boolean" : f.result === "date" ? "date" : "number";
-    default: return "other";
-  }
-}
-
-/** Rule operators the editor offers; the last two are date shortcuts saved as "between". */
-export type EditOp = RuleOp | "last_days" | "next_days";
-
-/** The operators that make sense for a kind of field. */
-export function opsFor(kind: Kind): EditOp[] {
-  switch (kind) {
-    case "text": case "lookup": return ["contains", "not_contains", "starts_with", "eq", "neq", "empty", "not_empty"];
-    case "number": return ["eq", "neq", "gt", "gte", "lt", "lte", "between", "empty", "not_empty"];
-    case "date": return ["eq", "lt", "gt", "lte", "gte", "between", "last_days", "next_days", "neq", "empty", "not_empty"];
-    case "enum": case "ref": return ["eq", "neq", "in", "not_in", "empty", "not_empty"];
-    case "strings": case "refs": return ["has", "has_any", "empty", "not_empty"];
-    case "boolean": return ["eq", "neq", "empty"];
-    default: return ["empty", "not_empty"];
-  }
-}
-
-const needsValue = (op: EditOp) => op !== "empty" && op !== "not_empty";
-const LIST_OPS: EditOp[] = ["in", "not_in", "has_any"];
-
-/** A rule as the editor holds it: text while typed, "@n" for today plus n days, picked items in list. */
-export type DraftRule = { field: string; op: EditOp; raw: string; raw2: string; list: string[] };
-
-const todayOf = (v: unknown): number | undefined => {
-  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
-  const n = (v as { today?: unknown }).today;
-  return typeof n === "number" && Number.isInteger(n) ? n : undefined;
-};
-
-/** A saved rule back in the editor. */
-export function toDraft(r: Rule, kind: Kind): DraftRule {
-  const enc = (v: unknown): string => {
-    const n = todayOf(v);
-    if (n !== undefined) return `@${n}`;
-    if (kind === "date" && typeof v === "string") return v.slice(0, 10);
-    return v === undefined || v === null ? "" : String(v);
-  };
-  const d: DraftRule = { field: r.field, op: r.op, raw: "", raw2: "", list: [] };
-  if (r.op === "between" && Array.isArray(r.value) && r.value.length === 2) {
-    const [a, b] = r.value.map(todayOf);
-    if (a !== undefined && b === 0 && a < 0) return { ...d, op: "last_days", raw: String(-a) };
-    if (a === 0 && b !== undefined && b > 0) return { ...d, op: "next_days", raw: String(b) };
-    return { ...d, raw: enc(r.value[0]), raw2: enc(r.value[1]) };
-  }
-  if (Array.isArray(r.value)) return kind === "strings" ? { ...d, raw: r.value.join(", ") } : { ...d, list: r.value.map(String) };
-  return { ...d, raw: enc(r.value) };
-}
-
-/** The rule a draft gives, or null while its value is missing. */
-export function fromDraft(d: DraftRule, kind: Kind): Rule | null {
-  const days = Number.parseInt(d.raw, 10);
-  if (d.op === "last_days" || d.op === "next_days") {
-    if (!Number.isFinite(days) || days < 0) return null;
-    return { field: d.field, op: "between", value: d.op === "last_days" ? [{ today: -days }, { today: 0 }] : [{ today: 0 }, { today: days }] };
-  }
-  const op = d.op as RuleOp;
-  if (!needsValue(op)) return { field: d.field, op };
-  const one = (raw: string): unknown => {
-    const v = raw.trim();
-    if (v === "") return undefined;
-    if (kind === "number") return Number.isFinite(Number(v)) ? Number(v) : undefined;
-    if (kind === "boolean") return v === "true";
-    if (kind === "date" && /^@-?\d+$/.test(v)) return { today: Number(v.slice(1)) };
-    return kind === "date" ? v : raw;
-  };
-  if (LIST_OPS.includes(op)) {
-    const list = kind === "strings" ? d.raw.split(",").map((x) => x.trim()).filter(Boolean) : d.list;
-    return list.length ? { field: d.field, op, value: list } : null;
-  }
-  if (op === "between") {
-    const a = one(d.raw), b = one(d.raw2);
-    return a === undefined || b === undefined ? null : { field: d.field, op, value: [a, b] };
-  }
-  const v = one(d.raw);
-  return v === undefined ? null : { field: d.field, op, value: v };
-}
-
-/** A field the editor can compare: a stored one, a lookup or rollup, or the record's own date. */
-type Entry = { key: string; name: string; kind: Kind; options: string[]; target: string; stored: boolean };
-
-// Groups and free JSON have no single value to compare.
-function entriesOf(rows: FieldRow[], t: Translate): Entry[] {
-  const fields = rows.filter((r) => !r.advanced && r.field.type !== "group" && r.field.type !== "json").map((r): Entry => ({
-    key: r.key, name: r.field.name, kind: kindOf(r.field),
-    options: r.field.type === "enum" ? r.field.options.split(",").map((o) => o.trim()).filter(Boolean) : [],
-    target: r.field.type === "reference" || r.field.type === "references" ? r.field.ref : "",
-    stored: !VIRTUAL_TYPES.includes(r.field.type),
-  }));
-  return [...fields,
-    { key: "$created_at", name: t("rules.created_at"), kind: "date", options: [], target: "", stored: false },
-    { key: "$updated_at", name: t("rules.updated_at"), kind: "date", options: [], target: "", stored: false }];
-}
 
 /** "Today", "3 days ago", or the date in the reader's format. */
 function dateText(raw: string, t: Translate): string {
@@ -297,58 +130,268 @@ function RecordsValue({ entry, ids, many, label, onChange }: { entry: Entry; ids
 }
 
 /** Options picked by toggling them: "is one of" and "is none of". */
-function OptionsValue({ options, picked, label, onChange }: { options: string[]; picked: string[]; label: string; onChange: (list: string[]) => void }) {
+function OptionsValue({ options, colors, picked, label, onChange }: { options: string[]; colors: Record<string, string>; picked: string[]; label: string; onChange: (list: string[]) => void }) {
   return (
     <div role="group" aria-label={label} className="flex flex-wrap gap-1">
       {options.map((o) => {
         const on = picked.includes(o);
         return (
-          <Button key={o} type="button" size="sm" variant={on ? "secondary" : "outline"} aria-pressed={on} className="h-7 px-2 text-xs"
-            onClick={() => onChange(on ? picked.filter((x) => x !== o) : [...picked, o])}>{o}</Button>
+          <Button key={o} type="button" size="sm" variant="outline" aria-pressed={on}
+            className={cn("h-7 gap-1.5 px-2 text-xs", on && "border-primary bg-primary/10 text-primary hover:bg-primary/15")}
+            onClick={() => onChange(on ? picked.filter((x) => x !== o) : [...picked, o])}>
+            {on ? <Check className="size-3.5" aria-hidden /> : <span className={cn("size-2 rounded-full", optionColor(colors[o]).dot)} aria-hidden />}{o}
+          </Button>
         );
       })}
     </div>
   );
 }
 
+const low = (s: string) => s.toLocaleLowerCase();
+
+/** A field picked from a searchable list, each with its type's icon. */
+function FieldPicker({ entries, value, label, onPick }: { entries: Entry[]; value: string; label: string; onPick: (key: string) => void }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [at, setAt] = useState(0);
+  const listId = useId();
+  const shown = entries.filter((e) => low(e.name).includes(low(q.trim())));
+  const current = entries.find((e) => e.key === value);
+  const Icon = current ? TYPE_ICONS[current.type] : null;
+  const pick = (key: string) => { onPick(key); setOpen(false); };
+  return (
+    <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); setQ(""); setAt(0); }}>
+      <Popover.Trigger render={
+        <button type="button" role="combobox" aria-expanded={open} aria-controls={listId} aria-haspopup="listbox" aria-label={label}
+          className="flex h-[var(--control-h)] w-full min-w-0 items-center gap-1.5 rounded-lg border border-input bg-card py-1 pr-2 pl-2.5 text-left text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-[color-mix(in_oklab,var(--input-fill)_30%,transparent)]" />
+      }>
+        {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+        <span className="min-w-0 flex-1 truncate">{current?.name ?? value}</span>
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner sideOffset={4} align="start" collisionPadding={16} className="z-50">
+          <Popover.Popup className="w-64 max-w-[calc(100vw-32px)] rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10">
+            <Input autoFocus type="search" aria-label={t("rules.field_search")} placeholder={t("rules.field_search")} value={q} aria-controls={listId}
+              aria-activedescendant={shown[at] ? `${listId}-${at}` : undefined}
+              onChange={(e) => { setQ(e.target.value); setAt(0); }}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown") { e.preventDefault(); setAt((i) => Math.min(i + 1, shown.length - 1)); }
+                if (e.key === "ArrowUp") { e.preventDefault(); setAt((i) => Math.max(i - 1, 0)); }
+                if (e.key === "Enter") { e.preventDefault(); if (shown[at]) pick(shown[at].key); }
+              }} />
+            <ul id={listId} role="listbox" aria-label={label} className="mt-1 max-h-64 overflow-y-auto">
+              {shown.map((e, i) => {
+                const I = TYPE_ICONS[e.type];
+                return (
+                  <li key={e.key} id={`${listId}-${i}`} role="option" aria-selected={e.key === value} data-active={i === at || undefined}
+                    className="flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm data-active:bg-accent data-active:text-accent-foreground"
+                    onMouseMove={() => setAt(i)} onClick={() => pick(e.key)}>
+                    <I className="size-4 shrink-0 text-muted-foreground" aria-hidden /><span className="min-w-0 flex-1 truncate">{e.name}</span>
+                    {e.key === value && <Check className="size-4 shrink-0" aria-hidden />}
+                  </li>
+                );
+              })}
+              {shown.length === 0 && <li className="px-2 py-1.5 text-sm text-muted-foreground">{t("rules.no_fields")}</li>}
+            </ul>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+/** Date operators in sections: the day itself, a range, relative to today, filled in. */
+const DATE_SECTIONS: ["day" | "range" | "relative" | "fill", EditOp[]][] = [
+  ["day", ["eq", "neq"]], ["range", ["lt", "gt", "lte", "gte", "between"]], ["relative", ["last_days", "next_days"]], ["fill", ["empty", "not_empty"]],
+];
+
+const PHONE = "(max-width: 639px)";
+const subscribePhone = (cb: () => void) => { const m = window.matchMedia(PHONE); m.addEventListener("change", cb); return () => m.removeEventListener("change", cb); };
+const usePhone = () => useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE).matches, () => false);
+
 type DraftGroup = { any: boolean; rules: DraftRule[] };
+type Draft = { any: boolean; groups: DraftGroup[] };
+
+/** The names of the records a filter points at, for writing it as text. */
+async function idNames(client: QueryClient, w: Where, entries: Entry[]): Promise<Record<string, string>> {
+  const byTarget = new Map<string, Set<string>>();
+  for (const r of [...w.rules, ...(w.groups ?? []).flatMap((g) => g.rules)]) {
+    const e = entries.find((x) => x.key === r.field);
+    if (!e || (e.kind !== "ref" && e.kind !== "refs")) continue;
+    const ids = (Array.isArray(r.value) ? r.value : [r.value]).filter((v): v is string => typeof v === "string");
+    if (ids.length) byTarget.set(e.target, new Set([...(byTarget.get(e.target) ?? []), ...ids]));
+  }
+  const out: Record<string, string> = {};
+  await Promise.all([...byTarget].map(async ([target, ids]) => {
+    const [meta, found] = await Promise.all([
+      client.fetchQuery({ queryKey: ["collections", "detail", target], queryFn: () => collections.get(target) }),
+      records.list({ collection_id: target, page: 1, limit: 100, ids: [...ids].join(",") }),
+    ]);
+    for (const r of found.items) { const name = recordTitle(meta.schema ?? null, r.data); if (name) out[r.id] = name; }
+  }));
+  return out;
+}
+
+/** Records named in the text, looked up by exact title: one match each, or an error. */
+async function resolveNames(client: QueryClient, w: Where, refs: RefName[], entries: Entry[], src: string): Promise<{ where: Where } | { error: TextError }> {
+  const ids = new Map<string, string>();
+  for (const r of refs) {
+    const k = `${r.target}\n${low(r.name)}`;
+    if (ids.has(k)) continue;
+    const [meta, found] = await Promise.all([
+      client.fetchQuery({ queryKey: ["collections", "detail", r.target], queryFn: () => collections.get(r.target) }),
+      records.list({ collection_id: r.target, page: 1, limit: 20, search: r.name }),
+    ]);
+    const hits = found.items.filter((x) => low(recordTitle(meta.schema ?? null, x.data) ?? "") === low(r.name));
+    if (hits.length !== 1) {
+      const field = entries.find((e) => e.key === r.field)?.name ?? r.field;
+      return { error: { key: hits.length ? "ref_many" : "ref_none", params: { field, x: r.name }, at: Math.max(0, src.indexOf(r.name) - 1) } };
+    }
+    ids.set(k, hits[0].id);
+  }
+  const target = (field: string) => entries.find((e) => e.key === field)?.target ?? "";
+  const swap = (field: string, v: unknown) => { const n = refNameOf(v); return n === undefined ? v : ids.get(`${target(field)}\n${low(n)}`); };
+  const fix = (r: Rule): Rule => (r.value === undefined ? r : { ...r, value: Array.isArray(r.value) ? r.value.map((v) => swap(r.field, v)) : swap(r.field, r.value) });
+  return { where: { ...w, rules: w.rules.map(fix), ...(w.groups ? { groups: w.groups.map((g) => ({ ...g, rules: g.rules.map(fix) })) } : {}) } };
+}
 
 /**
  * A "Conditions" button: rules that compare fields (greater than, contains,
  * empty…), joined by AND or OR, and groups of rules for mixes such as
- * (A and B) or (C and D). Applied rules show as removable chips. With the
- * collection's id, text values offer the field's commonest values.
+ * (A and B) or (C and D), edited row by row or written as text. Applied rules
+ * show as chips that open the editor on themselves. With the collection's id,
+ * text values offer the field's commonest values; with `count` the apply
+ * button tells how many records the edited rules keep, and `saveView` lets
+ * them be kept as a saved view.
  */
-export function RecordRules({ fields: all, value, onChange, collectionId }: { fields: FieldRow[]; value: Where; onChange: (w: Where) => void; collectionId?: string }) {
-  const { t } = useI18n();
+export function RecordRules({ fields: all, value, onChange, collectionId, count, saveView }: {
+  fields: FieldRow[]; value: Where; onChange: (w: Where) => void; collectionId?: string;
+  /** The list's search, for counting what the edited rules keep. */
+  count?: { search?: string };
+  saveView?: boolean;
+}) {
+  const { t, locale } = useI18n();
+  const lang: Lang = locale === "en-US" ? "en" : "pt";
+  const client = useQueryClient();
+  const phone = usePhone();
   const entries = entriesOf(all, t);
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<{ any: boolean; groups: DraftGroup[] }>({ any: false, groups: [] });
+  const [draft, setDraft] = useState<Draft>({ any: false, groups: [] });
+  const [mode, setMode] = useState<"visual" | "text">("visual");
+  const [text, setText] = useState("");
+  const [textBase, setTextBase] = useState("");
+  const [cursor, setCursor] = useState(0);
+  const [refError, setRefError] = useState<TextError | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [focus, setFocus] = useState(0);
+  const [viewName, setViewName] = useState<string | null>(null);
+  const popup = useRef<HTMLDivElement>(null);
+  const textBox = useRef<HTMLTextAreaElement>(null);
   const entryOf = (key: string) => entries.find((f) => f.key === key);
   const kindOfKey = (key: string): Kind => entryOf(key)?.kind ?? "text";
   const joinWord = (any: boolean) => t(any ? "rules.or" : "rules.and");
   const groups = (value.groups ?? []).filter((g) => g.rules.length);
-  const count = value.rules.length + groups.reduce((n, g) => n + g.rules.length, 0);
+  const applied = value.rules.length + groups.reduce((n, g) => n + g.rules.length, 0);
   const blank = (): DraftRule => ({ field: entries[0].key, op: opsFor(entries[0].kind)[0], raw: "", raw2: "", list: [] });
   const draftOf = (r: Rule) => toDraft(r, kindOfKey(r.field));
 
-  const openWith = (o: boolean) => {
-    if (o) {
-      // Without groups the rules are one group; with them, a loose rule is a group of one.
-      const next = groups.length
-        ? { any: value.any, groups: [...value.rules.map((r) => ({ any: false, rules: [draftOf(r)] })), ...groups.map((g) => ({ any: g.any, rules: g.rules.map(draftOf) }))] }
-        : { any: false, groups: [{ any: value.any, rules: value.rules.map(draftOf) }] };
-      if (next.groups.length === 1 && next.groups[0].rules.length === 0) next.groups[0].rules.push(blank());
-      setDraft(next);
+  // Without groups the rules are one group; with them, a loose rule is a group of one.
+  const draftFrom = (w: Where): Draft => {
+    const gs = (w.groups ?? []).filter((g) => g.rules.length);
+    const next = gs.length
+      ? { any: w.any, groups: [...w.rules.map((r) => ({ any: false, rules: [draftOf(r)] })), ...gs.map((g) => ({ any: g.any, rules: g.rules.map(draftOf) }))] }
+      : { any: false, groups: [{ any: w.any, rules: w.rules.map(draftOf) }] };
+    if (next.groups.length === 1 && next.groups[0].rules.length === 0) next.groups[0].rules.push(blank());
+    return next;
+  };
+  const whereOf = (d: Draft): Where => {
+    const done = d.groups.map((g) => ({ any: g.any, rules: g.rules.map((r) => fromDraft(r, kindOfKey(r.field))).filter((r): r is Rule => !!r) })).filter((g) => g.rules.length);
+    if (done.length <= 1) return { any: done[0]?.any ?? false, rules: done[0]?.rules ?? [] };
+    const loose = done.filter((g) => g.rules.length === 1).map((g) => g.rules[0]);
+    const many = done.filter((g) => g.rules.length > 1);
+    return many.length ? { any: d.any, rules: loose, groups: many } : { any: d.any, rules: loose };
+  };
+
+  const parsed = open && mode === "text" ? parseRuleText(text, entries) : null;
+  const textError = parsed && "error" in parsed ? parsed.error : refError;
+  // Rules still holding names to look up are not counted until applied.
+  const pending: Where | null = !open ? null : mode === "visual" ? whereOf(draft) : parsed && "where" in parsed && !parsed.refNames.length ? parsed.where : null;
+  const dirty = (mode === "text" && text !== textBase) || whereText(whereOf(draft)) !== whereText(value);
+  const counted = useDebounced(pending ? whereText(pending) : null, 250);
+  const live = useQuery({
+    queryKey: ["records", collectionId, "count", counted, count?.search],
+    queryFn: ({ signal }) => records.list({ collection_id: collectionId!, page: 1, limit: 1, search: count?.search || undefined, where: counted || undefined }, signal),
+    enabled: open && !!count && !!collectionId && counted !== null,
+    placeholderData: keepPreviousData, staleTime: 30_000,
+  });
+  const create = useMutation({
+    mutationFn: (p: { name: string; where: Where }) => {
+      const q = new URLSearchParams(window.location.search);
+      q.delete("page"); q.delete("filter");
+      const w = whereText(p.where);
+      if (w) q.set("where", w); else q.delete("where");
+      return tools.createView(collectionId!, { name: p.name, query: q.toString(), shared: false });
+    },
+    onSuccess: () => { setViewName(null); toast.success(t("views.saved")); void client.invalidateQueries({ queryKey: ["views", collectionId] }); },
+    onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
+  });
+
+  // The chip clicked: its field picker takes the focus once the editor shows.
+  useEffect(() => {
+    if (!open || !focus) return;
+    const id = requestAnimationFrame(() => (popup.current?.querySelector(`[aria-label="${t("rules.field")} ${focus}"]`) as HTMLElement | null)?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [open, focus, t]);
+
+  const show = (at = 0) => {
+    setDraft(draftFrom(value)); setMode("visual"); setText(""); setTextBase(""); setRefError(null);
+    setConfirm(false); setViewName(null); setFocus(at); setOpen(true);
+  };
+  const finish = () => { setOpen(false); setConfirm(false); };
+  // Clicking outside or Escape with edits not applied asks first.
+  const onOpenChange = (o: boolean) => {
+    if (o) return show();
+    if (dirty && !confirm) return setConfirm(true);
+    finish();
+  };
+  /** The text read into rules, names looked up; null (and the error shown) when it fails. */
+  const textWhere = async (): Promise<Where | null> => {
+    const r = parseRuleText(text, entries);
+    if ("error" in r) return null;
+    if (!r.refNames.length) return r.where;
+    setBusy(true);
+    try {
+      const res = await resolveNames(client, r.where, r.refNames, entries, text);
+      if ("error" in res) { setRefError(res.error); return null; }
+      return res.where;
+    } finally { setBusy(false); }
+  };
+  const toMode = async (m: "visual" | "text") => {
+    if (m === mode) return;
+    if (m === "text") {
+      const w = whereOf(draft);
+      setBusy(true);
+      const names = await idNames(client, w, entries).catch(() => ({}));
+      setBusy(false);
+      const s = ruleText(w, entries, lang, names);
+      setText(s); setTextBase(s); setCursor(s.length); setRefError(null); setMode("text");
+      requestAnimationFrame(() => textBox.current?.focus());
+      return;
     }
-    setOpen(o);
+    const w = await textWhere();
+    if (!w) return;
+    setDraft(draftFrom(w)); setMode("visual");
   };
-  const apply = () => {
-    const done = draft.groups.map((g) => ({ any: g.any, rules: g.rules.map((r) => fromDraft(r, kindOfKey(r.field))).filter((r): r is Rule => !!r) })).filter((g) => g.rules.length);
-    if (done.length <= 1) onChange({ any: done[0]?.any ?? false, rules: done[0]?.rules ?? [] });
-    else onChange({ any: draft.any, rules: done.filter((g) => g.rules.length === 1).map((g) => g.rules[0]), groups: done.filter((g) => g.rules.length > 1) });
-    setOpen(false);
+  const apply = async () => {
+    const w = mode === "visual" ? whereOf(draft) : await textWhere();
+    if (!w) return;
+    onChange(w);
+    finish();
   };
+
   const setGroup = (gi: number, patch: (g: DraftGroup) => DraftGroup) => setDraft((d) => ({ ...d, groups: d.groups.map((g, j) => (j === gi ? patch(g) : g)) }));
   const setRule = (gi: number, i: number, patch: Partial<DraftRule>) =>
     setGroup(gi, (g) => ({ ...g, rules: g.rules.map((r, j) => {
@@ -365,19 +408,33 @@ export function RecordRules({ fields: all, value, onChange, collectionId }: { fi
     }) }));
   const total = draft.groups.reduce((n, g) => n + g.rules.length, 0);
   const grouped = draft.groups.length > 1;
+  const duplicate = (gi: number, i: number) => setGroup(gi, (g) => ({ ...g, rules: [...g.rules.slice(0, i + 1), { ...g.rules[i], list: [...g.rules[i].list] }, ...g.rules.slice(i + 1)] }));
+  // The rule becomes a group of its own with a new blank rule, joined the other way round.
+  const toGroup = (gi: number, i: number) => setDraft((d) => {
+    const top: Draft = d.groups.length > 1 ? d : { any: d.groups[0].any, groups: d.groups[0].rules.map((r) => ({ any: false, rules: [r] })) };
+    const at = d.groups.length > 1 ? gi : i;
+    const g = top.groups[at];
+    const rule = d.groups.length > 1 ? g.rules[i] : g.rules[0];
+    const fresh = { any: !top.any, rules: [rule, blank()] };
+    const gs = [...top.groups];
+    if (g.rules.length === 1) gs.splice(at, 1, fresh);
+    else gs.splice(at, 1, { ...g, rules: g.rules.filter((_, j) => j !== i) }, fresh);
+    return { ...top, groups: gs };
+  });
 
   if (entries.length === 0) return null;
-  const fieldItems = Object.fromEntries(entries.map((f) => [f.key, f.name]));
-  const joinPicker = (any: boolean, label: string, onPick: (any: boolean) => void) => (
-    <div role="radiogroup" aria-label={label} className="flex items-center gap-2 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      {([false, true] as const).map((a) => (
-        <Button key={String(a)} type="button" size="sm" role="radio" aria-checked={any === a} variant={any === a ? "secondary" : "outline"} onClick={() => onPick(a)}>
-          {t(a ? "rules.any" : "rules.all")}
-        </Button>
-      ))}
-    </div>
+
+  const joinSelect = (any: boolean, label: string, onPick: (any: boolean) => void) => (
+    <Select value={any ? "or" : "and"} items={{ and: t("rules.and"), or: t("rules.or") }} onValueChange={(v) => onPick(v === "or")}>
+      <SelectTrigger className="w-full" aria-label={label}><SelectValue /></SelectTrigger>
+      <SelectContent><SelectItem value="and">{t("rules.and")}</SelectItem><SelectItem value="or">{t("rules.or")}</SelectItem></SelectContent>
+    </Select>
   );
+  /** "Where" before the first, the join picker before the second, the join's word after. */
+  const connector = (i: number, any: boolean, label: string, onPick: (any: boolean) => void) =>
+    i === 0 ? <span className="block py-1.5 text-sm text-muted-foreground">{t("rules.where")}</span>
+    : i === 1 ? joinSelect(any, label, onPick)
+    : <span className="block py-1.5 pl-2.5 text-sm text-muted-foreground">{joinWord(any)}</span>;
   const valueOf = (gi: number, r: DraftRule, i: number, n: number) => {
     const entry = entryOf(r.field);
     if (!entry || !needsValue(r.op)) return <span />;
@@ -390,13 +447,15 @@ export function RecordRules({ fields: all, value, onChange, collectionId }: { fi
       const many = LIST_OPS.includes(r.op);
       return <RecordsValue entry={entry} many={many} ids={many ? r.list : r.raw ? [r.raw] : []} label={label} onChange={(ids) => set(many ? { list: ids } : { raw: ids[0] ?? "" })} />;
     }
-    if (kind === "enum" && LIST_OPS.includes(r.op)) return <OptionsValue options={entry.options} picked={r.list} label={`${t("rules.value")} ${label}`} onChange={(list) => set({ list })} />;
+    if (kind === "enum" && LIST_OPS.includes(r.op)) return <OptionsValue options={entry.options} colors={entry.colors} picked={r.list} label={`${t("rules.value")} ${label}`} onChange={(list) => set({ list })} />;
     if (kind === "boolean" || kind === "enum") {
       const items = kind === "boolean" ? { true: t("common.yes"), false: t("common.no") } : Object.fromEntries(entry.options.map((o) => [o, o]));
       return (
         <Select value={r.raw || null} items={items} onValueChange={(v) => set({ raw: String(v) })}>
           <SelectTrigger className="w-full" aria-label={`${t("rules.value")} ${label}`}><SelectValue placeholder={t("rules.value")} /></SelectTrigger>
-          <SelectContent>{Object.entries(items).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+          <SelectContent>{Object.entries(items).map(([v, l]) => (
+            <SelectItem key={v} value={v}>{kind === "enum" && <span className={cn("size-2 rounded-full", optionColor(entry.colors[v]).dot)} aria-hidden />}{l}</SelectItem>
+          ))}</SelectContent>
         </Select>
       );
     }
@@ -411,92 +470,248 @@ export function RecordRules({ fields: all, value, onChange, collectionId }: { fi
     }
     return <TextValue collectionId={collectionId} entry={entry} raw={r.raw} label={label} onChange={(raw) => set({ raw })} />;
   };
-  const ruleRow = (gi: number, r: DraftRule, i: number, n: number) => {
+  const opSelect = (gi: number, r: DraftRule, i: number, n: number) => {
     const kind = kindOfKey(r.field);
-    const ops = Object.fromEntries(opsFor(kind).map((o) => [o, opLabel(o, kind, t)]));
+    const ops = opsFor(kind);
+    const items = Object.fromEntries(ops.map((o) => [o, opLabel(o, kind, t)]));
+    const item = (o: EditOp) => <SelectItem key={o} value={o}>{items[o]}</SelectItem>;
     return (
-      <li key={i} className="grid grid-cols-[minmax(0,1fr)_10rem_minmax(0,1.3fr)_auto] items-start gap-1.5 max-sm:grid-cols-2">
-        <Select value={r.field} items={fieldItems} onValueChange={(v) => setRule(gi, i, { field: String(v) })}>
-          <SelectTrigger className="w-full" aria-label={`${t("rules.field")} ${n}`}><SelectValue /></SelectTrigger>
-          <SelectContent>{entries.map((f) => <SelectItem key={f.key} value={f.key}>{f.name}</SelectItem>)}</SelectContent>
-        </Select>
-        <Select value={r.op} items={ops} onValueChange={(v) => setRule(gi, i, { op: v as EditOp })}>
-          <SelectTrigger className="w-full" aria-label={`${t("rules.op_label")} ${n}`}><SelectValue /></SelectTrigger>
-          <SelectContent>{Object.entries(ops).map(([o, label]) => <SelectItem key={o} value={o}>{label}</SelectItem>)}</SelectContent>
-        </Select>
-        {valueOf(gi, r, i, n)}
-        <IconAction label={t("rules.remove")} target={entryOf(r.field)?.name ?? r.field} onClick={() => setGroup(gi, (g) => ({ ...g, rules: g.rules.filter((_, j) => j !== i) }))}><Trash2 className="size-4" /></IconAction>
+      <Select value={r.op} items={items} onValueChange={(v) => setRule(gi, i, { op: v as EditOp })}>
+        <SelectTrigger className="w-full" aria-label={`${t("rules.op_label")} ${n}`}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {kind === "date"
+            ? DATE_SECTIONS.map(([k, list], si) => (
+              <SelectGroup key={k}>
+                {si > 0 && <SelectSeparator />}
+                <SelectLabel>{t(`rules.op_group.${k}`)}</SelectLabel>
+                {list.filter((o) => ops.includes(o)).map(item)}
+              </SelectGroup>
+            ))
+            : ops.map(item)}
+        </SelectContent>
+      </Select>
+    );
+  };
+  const ruleRow = (gi: number, g: DraftGroup, r: DraftRule, i: number, n: number) => {
+    const name = entryOf(r.field)?.name ?? r.field;
+    const join = connector(i, g.any, `${t("rules.join").replace(":", "")} ${n}`, (any) => setGroup(gi, (x) => ({ ...x, any })));
+    const field = <FieldPicker entries={entries} value={r.field} label={`${t("rules.field")} ${n}`} onPick={(key) => setRule(gi, i, { field: key })} />;
+    const actions = (
+      <div className="flex">
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label={`${t("rules.more")}: ${name}`} />}><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem disabled={total >= MAX_RULES} onClick={() => duplicate(gi, i)}><Copy />{t("rules.duplicate")}</DropdownMenuItem>
+            <DropdownMenuItem disabled={total >= MAX_RULES || draft.groups.length >= MAX_GROUPS} onClick={() => toGroup(gi, i)}><Group />{t("rules.to_group")}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <IconAction label={t("rules.remove")} target={name} onClick={() => setGroup(gi, (x) => ({ ...x, rules: x.rules.filter((_, j) => j !== i) }))}><Trash2 className="size-4" /></IconAction>
+      </div>
+    );
+    if (phone) return (
+      <li key={i} className="space-y-1.5 rounded-lg border bg-card p-2">
+        <div className="flex items-center gap-2"><div className="w-24">{join}</div><span className="flex-1" />{actions}</div>
+        {field}{opSelect(gi, r, i, n)}{valueOf(gi, r, i, n)}
+      </li>
+    );
+    return (
+      <li key={i} className="grid grid-cols-[4.5rem_minmax(0,1fr)_10rem_minmax(0,1.3fr)_auto] items-start gap-1.5">
+        {join}{field}{opSelect(gi, r, i, n)}{valueOf(gi, r, i, n)}{actions}
       </li>
     );
   };
-  const chipOf = (rules: Rule[], any: boolean) => rules.map((r, i) => <span key={i}>{i > 0 && ` ${joinWord(any)} `}<RuleText entry={entryOf(r.field)} rule={r} t={t} /></span>);
-  const wordsOf = (rules: Rule[], any: boolean) => rules.map((r) => ruleWords(entryOf(r.field), r, t)).join(` ${joinWord(any)} `);
+
+  const suggestions = mode === "text" ? suggestAt(text, cursor, entries, lang) : { from: 0, items: [] };
+  const take = (item: string) => {
+    const end = cursor;
+    const next = `${text.slice(0, suggestions.from)}${item} ${text.slice(end).replace(/^\s+/, "")}`;
+    const at = suggestions.from + item.length + 1;
+    setText(next); setCursor(at); setRefError(null);
+    requestAnimationFrame(() => { textBox.current?.focus(); textBox.current?.setSelectionRange(at, at); });
+  };
+  const n0 = live.data?.pagination.total_items;
   // Rules are numbered across the groups, so each control keeps a distinct name.
   let n = 0;
+  const editor = (
+    // React carries submit up through the portal: stop it before an outer form (a widget, an automation) takes it.
+    <form className="flex min-h-0 flex-1 flex-col gap-3" onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); void apply(); }}>
+      <div role="radiogroup" aria-label={t("rules.mode")} className="inline-flex self-start rounded-lg border p-0.5">
+        {(["visual", "text"] as const).map((m) => (
+          <button key={m} type="button" role="radio" aria-checked={mode === m} disabled={busy}
+            className={cn("rounded-md px-2.5 py-1 text-xs font-medium", mode === m ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")}
+            onClick={() => void toMode(m)}>
+            {m === "visual" ? <SlidersHorizontal className="mr-1 inline size-3.5" aria-hidden /> : <Code className="mr-1 inline size-3.5" aria-hidden />}{t(`rules.${m}`)}
+          </button>
+        ))}
+      </div>
+      {mode === "text" ? (
+        <div className="space-y-2">
+          <Textarea ref={textBox} aria-label={t("rules.text_label")} rows={phone ? 6 : 3} spellCheck={false} className="font-mono text-sm" value={text}
+            aria-invalid={!!textError || undefined} aria-describedby="rules-text-help"
+            onChange={(e) => { setText(e.target.value); setCursor(e.target.selectionStart); setRefError(null); }}
+            onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
+            onKeyDown={(e) => {
+              if (e.key === "Tab" && !e.shiftKey && suggestions.items.length) { e.preventDefault(); take(suggestions.items[0]); }
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); }
+            }} />
+          {suggestions.items.length > 0 && (
+            <ul aria-label={t("rules.suggest")} className="flex flex-wrap gap-1">
+              {suggestions.items.map((s, i) => (
+                <li key={s}><button type="button" className={cn("rounded-md border px-1.5 py-0.5 font-mono text-xs hover:bg-accent", i === 0 && "border-primary/40 bg-primary/5")} onClick={() => take(s)}>{s}</button></li>
+              ))}
+            </ul>
+          )}
+          {textError
+            ? <p role="alert" className="text-sm text-destructive">{errorText(textError, t)} <span className="text-xs opacity-80">({t("rules.err_at").replace("{n}", String(textError.at + 1))})</span></p>
+            : <p id="rules-text-help" className="text-xs text-muted-foreground">{t("rules.text_hint")}</p>}
+        </div>
+      ) : (
+        <div className={cn("min-h-0 space-y-2 overflow-y-auto", !phone && "max-h-96")}>
+          {draft.groups.map((g, gi) => {
+            const rows = <ul className="space-y-2">{g.rules.map((r, i) => ruleRow(gi, g, r, i, ++n))}</ul>;
+            const add = (
+              <Button type="button" variant="ghost" size="sm" disabled={total >= MAX_RULES} onClick={() => setGroup(gi, (x) => ({ ...x, rules: [...x.rules, blank()] }))}>
+                <Plus className="size-4" />{t("rules.add")}
+              </Button>
+            );
+            if (!grouped) return <div key={gi} className="space-y-2">{rows}{add}</div>;
+            return (
+              <div key={gi} className={cn("gap-1.5", !phone && "grid grid-cols-[4.5rem_minmax(0,1fr)] items-start")}>
+                <div className={cn(phone && "mb-1.5 w-24")}>{connector(gi, draft.any, t("rules.join_groups").replace(":", ""), (any) => setDraft((d) => ({ ...d, any })))}</div>
+                <section aria-label={t("rules.group").replace("{n}", String(gi + 1))} className="space-y-2 rounded-lg border bg-muted/30 p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-muted-foreground">{t("rules.group").replace("{n}", String(gi + 1))}</span>
+                    <IconAction label={t("rules.remove_group")} target={String(gi + 1)} onClick={() => setDraft((d) => ({ ...d, groups: d.groups.filter((_, j) => j !== gi) }))}><Trash2 className="size-4" /></IconAction>
+                  </div>
+                  {rows}{add}
+                </section>
+              </div>
+            );
+          })}
+          <Button type="button" variant="outline" size="sm" disabled={total >= MAX_RULES || draft.groups.length >= MAX_GROUPS}
+            onClick={() => setDraft((d) => ({ any: d.groups.length === 1 ? true : d.any, groups: [...d.groups, { any: false, rules: [blank()] }] }))}>
+            <Plus className="size-4" />{t("rules.add_group")}
+          </Button>
+        </div>
+      )}
+      {confirm ? (
+        <div role="alertdialog" aria-label={t("rules.discard_q")} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-sm">
+          <span>{t("rules.discard_q")}</span>
+          <div className="flex gap-2">
+            <Button type="button" size="sm" variant="ghost" onClick={finish}>{t("rules.discard")}</Button>
+            <Button type="button" size="sm" autoFocus onClick={() => setConfirm(false)}>{t("rules.keep_editing")}</Button>
+          </div>
+        </div>
+      ) : viewName !== null ? (
+        <div className="flex gap-2 border-t pt-3">
+          <Input autoFocus maxLength={80} aria-label={t("views.name")} placeholder={t("views.name")} value={viewName} onChange={(e) => setViewName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); if (viewName.trim() && pending) create.mutate({ name: viewName.trim(), where: pending }); } if (e.key === "Escape") { e.stopPropagation(); setViewName(null); } }} />
+          <Button type="button" variant="ghost" onClick={() => setViewName(null)}>{t("common.cancel")}</Button>
+          <Button type="button" disabled={!viewName.trim() || !pending || create.isPending} onClick={() => pending && create.mutate({ name: viewName.trim(), where: pending })}>{t("common.save")}</Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+          <div className="flex gap-1">
+            <Button type="button" variant="ghost" onClick={() => { onChange({ any: false, rules: [] }); finish(); }}>{t("filters.clear")}</Button>
+            {saveView && collectionId && <Button type="button" variant="ghost" disabled={!pending} onClick={() => setViewName("")}><Bookmark className="size-4" />{t("rules.save_view")}</Button>}
+          </div>
+          <Button type="submit" className="ml-auto" disabled={busy || (mode === "text" && !!parsed && "error" in parsed)}>
+            {busy && <Loader2 className="size-4 animate-spin" />}{t("filters.apply")}
+            {count && n0 !== undefined && <span className="font-normal opacity-80">· {plural(n0, t)}</span>}
+          </Button>
+        </div>
+      )}
+    </form>
+  );
+  const trigger = <><SlidersHorizontal className="size-4" />{t("rules.title")}{applied > 0 && <span className="rounded-full bg-primary/15 px-1.5 text-xs text-primary">{applied}</span>}</>;
+
+  // Chips: one per rule, groups bracketed, each opening the editor on itself.
+  let c = 0;
+  const chip = (r: Rule, onRemove: () => void) => {
+    const at = ++c;
+    const words = ruleWords(entryOf(r.field), r, t);
+    return (
+      <li key={`c${at}`} className="flex items-center rounded-full border bg-muted/40 text-xs">
+        <button type="button" className="rounded-l-full py-1 pl-2.5 pr-1 text-left hover:underline" aria-label={`${t("rules.edit")}: ${words}`} onClick={() => show(at)}>
+          <RuleText entry={entryOf(r.field)} rule={r} t={t} />
+        </button>
+        <button type="button" className="grid size-6 place-items-center rounded-full hover:bg-accent" aria-label={`${t("rules.remove")}: ${words}`} onClick={onRemove}><X className="size-3" /></button>
+      </li>
+    );
+  };
+  const join = (any: boolean, k: string) => <li key={k} aria-hidden className="text-xs text-muted-foreground">{joinWord(any)}</li>;
+  const parts = [
+    ...value.rules.map((r, i) => chip(r, () => onChange({ ...value, rules: value.rules.filter((_, j) => j !== i) }))),
+    ...groups.map((g, gi) => {
+      const drop = () => onChange({ ...value, groups: groups.filter((_, j) => j !== gi) });
+      if (g.rules.length === 1) return chip(g.rules[0], drop);
+      const words = g.rules.map((r) => ruleWords(entryOf(r.field), r, t)).join(` ${joinWord(g.any)} `);
+      return (
+        <li key={`g${gi}`} className="flex flex-wrap items-center gap-1 rounded-2xl border border-dashed py-0.5 pl-1 pr-0.5">
+          <ul className="flex flex-wrap items-center gap-1">
+            {g.rules.flatMap((r, i) => [
+              ...(i > 0 ? [join(g.any, `gj${gi}-${i}`)] : []),
+              chip(r, () => onChange({ ...value, groups: groups.map((x, j) => (j === gi ? { ...x, rules: x.rules.filter((_, k) => k !== i) } : x)) })),
+            ])}
+          </ul>
+          <button type="button" className="grid size-6 place-items-center rounded-full hover:bg-accent" aria-label={`${t("rules.remove_group")}: ${words}`} onClick={drop}><X className="size-3" /></button>
+        </li>
+      );
+    }),
+  ];
   return (
     <>
-      <Popover.Root open={open} onOpenChange={openWith}>
-        <Popover.Trigger render={<Button variant="outline" />}>
-          <SlidersHorizontal className="size-4" />{t("rules.title")}{count > 0 && <span className="rounded-full bg-primary/15 px-1.5 text-xs text-primary">{count}</span>}
-        </Popover.Trigger>
-        <Popover.Portal>
-          <Popover.Positioner sideOffset={4} align="start" collisionPadding={16} className="z-50">
-            <Popover.Popup aria-label={t("rules.title")} className="w-[38rem] max-w-[calc(100vw-32px)] space-y-3 rounded-lg bg-popover p-3 text-popover-foreground shadow-md ring-1 ring-foreground/10">
-              {/* React carries submit up through the portal: stop it before an outer form (a widget, an automation) takes it. */}
-              <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); apply(); }}>
-                {grouped && joinPicker(draft.any, t("rules.join_groups"), (any) => setDraft((d) => ({ ...d, any })))}
-                <div className="max-h-96 space-y-2 overflow-y-auto">
-                  {draft.groups.map((g, gi) => (
-                    <div key={gi}>
-                      {grouped && gi > 0 && <p className="py-1 text-center text-xs font-medium uppercase text-muted-foreground">{joinWord(draft.any)}</p>}
-                      <section aria-label={grouped ? t("rules.group").replace("{n}", String(gi + 1)) : undefined} className={grouped ? "space-y-2 rounded-lg border bg-muted/30 p-2" : "space-y-2"}>
-                        {(grouped || g.rules.length > 1) && (
-                          <div className="flex items-center justify-between gap-2">
-                            {g.rules.length > 1 ? joinPicker(g.any, t("rules.join"), (any) => setGroup(gi, (x) => ({ ...x, any }))) : <span className="text-xs font-medium text-muted-foreground">{t("rules.group").replace("{n}", String(gi + 1))}</span>}
-                            {grouped && <IconAction label={t("rules.remove_group")} target={String(gi + 1)} onClick={() => setDraft((d) => ({ ...d, groups: d.groups.filter((_, j) => j !== gi) }))}><X className="size-4" /></IconAction>}
-                          </div>
-                        )}
-                        <ul className="space-y-2">{g.rules.map((r, i) => ruleRow(gi, r, i, ++n))}</ul>
-                        <Button type="button" variant="ghost" size="sm" disabled={total >= MAX_RULES} onClick={() => setGroup(gi, (x) => ({ ...x, rules: [...x.rules, blank()] }))}>
-                          <Plus className="size-4" />{t("rules.add")}
-                        </Button>
-                      </section>
-                    </div>
-                  ))}
-                </div>
-                <Button type="button" variant="outline" size="sm" disabled={total >= MAX_RULES || draft.groups.length >= MAX_GROUPS}
-                  onClick={() => setDraft((d) => ({ any: d.groups.length === 1 ? true : d.any, groups: [...d.groups, { any: false, rules: [blank()] }] }))}>
-                  <Plus className="size-4" />{t("rules.add_group")}
-                </Button>
-                <div className="flex justify-between gap-2 border-t pt-3">
-                  <Button type="button" variant="ghost" onClick={() => { onChange({ any: false, rules: [] }); setOpen(false); }}>{t("filters.clear")}</Button>
-                  <Button type="submit">{t("filters.apply")}</Button>
-                </div>
-              </form>
-            </Popover.Popup>
-          </Popover.Positioner>
-        </Popover.Portal>
-      </Popover.Root>
-      {count > 0 && (
+      {phone ? (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+          <Button variant="outline" onClick={() => show()}>{trigger}</Button>
+          <SheetContent side="bottom" className="h-[92dvh] gap-3 rounded-t-xl p-4" showCloseButton={false}>
+            <div ref={popup} className="flex min-h-0 flex-1 flex-col gap-3">
+              <SheetTitle>{t("rules.title")}</SheetTitle>
+              {editor}
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Popover.Root open={open} onOpenChange={onOpenChange}>
+          <Popover.Trigger render={<Button variant="outline" />}>{trigger}</Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Positioner sideOffset={4} align="start" collisionPadding={16} className="z-50">
+              <Popover.Popup ref={popup} aria-label={t("rules.title")} className="flex w-[42rem] max-w-[calc(100vw-32px)] flex-col rounded-lg bg-popover p-3 text-popover-foreground shadow-md ring-1 ring-foreground/10">
+                {editor}
+              </Popover.Popup>
+            </Popover.Positioner>
+          </Popover.Portal>
+        </Popover.Root>
+      )}
+      {applied > 0 && (
         <ul className="flex basis-full flex-wrap items-center gap-1.5" aria-label={t("rules.active")}>
-          {value.rules.length + groups.length > 1 && <li className="text-xs text-muted-foreground">{t(value.any ? "rules.any" : "rules.all")}:</li>}
-          {value.rules.map((r, i) => (
-            <li key={`r${i}`} className="flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2.5 pr-0.5 text-xs">
-              <span>{chipOf([r], false)}</span>
-              <button type="button" className="grid size-6 place-items-center rounded-full hover:bg-accent" aria-label={`${t("rules.remove")}: ${wordsOf([r], false)}`}
-                onClick={() => onChange({ ...value, rules: value.rules.filter((_, j) => j !== i) })}><X className="size-3" /></button>
-            </li>
-          ))}
-          {groups.map((g, i) => (
-            <li key={`g${i}`} className="flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2.5 pr-0.5 text-xs">
-              <span>{g.rules.length > 1 && "("}{chipOf(g.rules, g.any)}{g.rules.length > 1 && ")"}</span>
-              <button type="button" className="grid size-6 place-items-center rounded-full hover:bg-accent" aria-label={`${t("rules.remove_group")}: ${wordsOf(g.rules, g.any)}`}
-                onClick={() => onChange({ ...value, groups: groups.filter((_, j) => j !== i) })}><X className="size-3" /></button>
-            </li>
-          ))}
+          {parts.flatMap((p, i) => (i > 0 ? [join(value.any, `j${i}`), p] : [p]))}
         </ul>
       )}
     </>
+  );
+}
+
+const plural = (n: number, t: Translate) => (n === 1 ? t("nav.record_one") : t("nav.record_many").replace("{n}", n.toLocaleString()));
+
+function errorText(e: TextError, t: Translate): string {
+  return Object.entries(e.params).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, v), t(`rules.err.${e.key}` as MessageKey));
+}
+
+const HINT_KEY = "dataset.cell-filter-hint";
+
+/** Once per browser: right-clicking a cell filters by it. */
+export function CellFilterHint() {
+  const { t } = useI18n();
+  const [dismissed, setDismissed] = useState(false);
+  const stored = useSyncExternalStore(() => () => {}, () => { try { return localStorage.getItem(HINT_KEY) === "1"; } catch { return true; } }, () => true);
+  if (stored || dismissed) return null;
+  const dismiss = () => { try { localStorage.setItem(HINT_KEY, "1"); } catch { /* private mode: shows again next time */ } setDismissed(true); };
+  return (
+    <p role="note" className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+      <MousePointerClick className="size-4 shrink-0" aria-hidden /><span className="flex-1">{t("rules.hint_cell")}</span>
+      <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={dismiss}>{t("rules.hint_ok")}</Button>
+    </p>
   );
 }
 

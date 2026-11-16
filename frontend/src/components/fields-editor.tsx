@@ -2,11 +2,7 @@
 
 import { useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  AlignLeft, ArrowDown, ArrowUp, AtSign, Binary, Braces, Calendar, CalendarClock, ChevronDown, ChevronRight, Copy, Eye, Files, Globe, GripVertical, Hash,
-  Link2, ListOrdered, ListTodo, MapPin, MoreHorizontal, Network, Paperclip, Plus, RotateCcw, Rows3, ScanSearch, Sigma, SquareFunction, Star, Tags, Text, ToggleLeft,
-  Trash2, UserCog, UserPlus, Users, Gauge, LayoutList, CircleDot, Search, type LucideIcon,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, Braces, ChevronDown, ChevronRight, Copy, Eye, GripVertical, ListTodo, MapPin, MoreHorizontal, Plus, RotateCcw, Star, Trash2, Users, Gauge, Search, type LucideIcon } from "lucide-react";
 import { IconAction } from "@/components/bits";
 import {
   AUTO_TYPES, FIELD_TYPES, FORMULA_RESULTS, ITEM_TYPES, LONG_TEXT, OPTION_COLORS, PATTERN_TYPES, ROLLUP_FNS, SHOW_OPS, SUBFIELD_TYPES, UNIQUE_TYPES, VIRTUAL_TYPES,
@@ -15,6 +11,7 @@ import {
   type Field, type FieldRow, type FieldType, type Schema, type ShowWhen,
 } from "@/components/field-builder";
 import { optionColor } from "@/components/option-chip";
+import { TYPE_ICONS } from "@/components/type-icons";
 import { SchemaForm } from "@/components/schema-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,11 +29,6 @@ import { cn } from "@/lib/utils";
 // The Fields page: a list of fields, each edited in a side panel with a live
 // preview of itself, a type gallery grouped by kind, and ready-made fields.
 
-export const TYPE_ICONS: Record<FieldType, LucideIcon> = {
-  string: Text, text: AlignLeft, email: AtSign, url: Globe, number: Hash, integer: Binary, boolean: ToggleLeft, enum: CircleDot, strings: Tags,
-  date: Calendar, datetime: CalendarClock, reference: Link2, references: Network, lookup: ScanSearch, rollup: Sigma, file: Paperclip, files: Files,
-  autonumber: ListOrdered, formula: SquareFunction, created_by: UserPlus, updated_by: UserCog, group: LayoutList, objects: Rows3, json: Braces,
-};
 
 /** The gallery's sections, in the order people look for them. */
 const TYPE_GROUPS: [string, FieldType[]][] = [

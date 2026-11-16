@@ -15,7 +15,7 @@ import { fieldsOf, fileRefs, recordTitle, REF, type FieldRow } from "@/component
 import { SavedViews } from "@/components/saved-views";
 import { ColumnPicker, EditableCell, editsInline, pickColumns, useSaveField } from "@/components/record-grid";
 import { RecordGroups, groupableOf, useNumberFormat } from "@/components/record-groups";
-import { CellFilter, RecordRules, andWhere, legacyRules, parseWhere, whereText as toWhereText, type Where } from "@/components/record-rules";
+import { CellFilter, CellFilterHint, RecordRules, andWhere, legacyRules, parseWhere, whereText as toWhereText, type Where } from "@/components/record-rules";
 import { BoardView, CalendarView, GalleryView, layoutFields, type Layout } from "@/components/record-views";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -146,6 +146,13 @@ function RecordList({ collection }: { collection: Collection }) {
   const isInvalid = (id: string, updatedAt: string) => invalid.has(id) && Date.parse(updatedAt) <= Date.parse(invalid.get(id)!);
   const selection = useSelection(canEdit ? items.map((r) => r.id) : []);
   const filtered = !!(q || whereText);
+  // Out of how many: the collection's total, beside a filtered list's count.
+  const all = useQuery({
+    queryKey: ["records", collection.id, "total"],
+    queryFn: ({ signal }) => records.list({ collection_id: collection.id, page: 1, limit: 1 }, signal),
+    enabled: layout === "table" && filtered,
+    staleTime: 30_000,
+  });
   const scope = { collection_id: collection.id, search: q || undefined, where: whereText };
   // Picking a group filters the list to its value (or to empty).
   const pickGroup = (key: unknown) => {
@@ -221,7 +228,7 @@ function RecordList({ collection }: { collection: Collection }) {
           <Input type="search" aria-label={t("common.search")} placeholder={t("records.search")} className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); set({ q: e.target.value.trim(), page: 1 }); }} />
         </div>
         <div className="toolbar-tools flex flex-wrap items-center gap-2 max-sm:w-full max-sm:justify-between sm:contents">
-          <RecordRules collectionId={collection.id} fields={rows} value={where} onChange={setWhere} />
+          <RecordRules collectionId={collection.id} fields={rows} value={where} onChange={setWhere} count={{ search: q || undefined }} saveView />
           {layout === "table" && <ColumnPicker fields={rows} value={columns} onChange={(keys) => set({ cols: keys.join(",") })} />}
           <div className="hidden items-center gap-2 lg:flex">{viewControls}</div>
           <Sheet>
@@ -258,6 +265,11 @@ function RecordList({ collection }: { collection: Collection }) {
           </div>
         </div>
         {search.trim() !== "" && !searchTerm(search) && <p className="basis-full text-xs text-muted-foreground" role="status">{t("common.search_min")}</p>}
+        {layout === "table" && filtered && list.data && all.data && (
+          <p className="basis-full text-xs text-muted-foreground" role="status">
+            {t("rules.filtered").replace("{n}", list.data.pagination.total_items.toLocaleString()).replace("{total}", all.data.pagination.total_items.toLocaleString())}
+          </p>
+        )}
       </div>
       {canEdit && <RecordImportDialog collectionId={collection.id} schema={collection.schema} open={importing} onOpenChange={setImporting} />}
       {groupRow && <RecordGroups selection={scope} group={groupRow} fields={rows} label={(k) => show(k, groupRow)} onPick={pickGroup} />}
@@ -276,6 +288,8 @@ function RecordList({ collection }: { collection: Collection }) {
           action={filtered && <Button variant="outline" onClick={clear}>{t("common.clear_filters")}</Button>}
         />
       ) : (
+        <>
+        <CellFilterHint />
         <Card className="gap-0 overflow-hidden p-0">
           <Table data-responsive data-compact data-records>
             <TableHeader>
@@ -328,6 +342,7 @@ function RecordList({ collection }: { collection: Collection }) {
             <TablePagination page={page} pageSize={limit} totalItems={list.data.pagination.total_items} onPageChange={(n) => set({ page: n })} onPageSizeChange={(n) => set({ limit: n, page: 1 })} />
           )}
         </Card>
+        </>
       )}
       <SelectionBar selection={selection}>
         <Button variant="outline" onClick={() => setBulk(true)}><PencilLine className="size-4" />{t("bulk.title")}</Button>
