@@ -94,7 +94,7 @@ function McpConnectCard({ secret }: { secret: string | null }) {
 
         <Step n={2} title={t("mcp_connect.step_client")}>
           <Tabs.Root defaultValue="claude-code">
-            <Tabs.List aria-label={t("mcp_connect.step_client")} className="flex gap-1 overflow-x-auto border-b">
+            <Tabs.List aria-label={t("mcp_connect.step_client")} className="flex flex-wrap gap-x-1 border-b">
               {clients.map((c) => (
                 <Tabs.Tab key={c.id} value={c.id} className="-mb-px shrink-0 whitespace-nowrap border-b-2 border-transparent px-3 py-1.5 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[active]:border-primary data-[active]:font-medium data-[active]:text-foreground">
                   {c.name}
