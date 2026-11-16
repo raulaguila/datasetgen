@@ -25,7 +25,7 @@ import { roleAllows } from "@/lib/permissions";
 import { McpActivity, McpTools } from "@/components/mcp-tools";
 import { CollectionPage } from "../_parts";
 
-/** The keys that reach this collection: members make them on their profile; an owner can take the collection out of one. */
+/** The keys that reach this collection, to see and cut off: members make and edit their keys on the API access page. */
 function Keys({ collection }: { collection: Collection }) {
   const { t } = useI18n();
   const client = useQueryClient();
@@ -49,7 +49,9 @@ function Keys({ collection }: { collection: Collection }) {
                     <span className="font-mono">{k.prefix}…</span>
                     {k.creator_name && ` · ${k.creator_name}`}
                     {` · ${k.last_used_at ? t("integrations.used_at").replace("{at}", format(k.last_used_at)) : t("integrations.never_used")}`}
+                    {k.expires_at && new Date(k.expires_at) > new Date() && ` · ${t("keys.expires_at").replace("{at}", format(k.expires_at))}`}
                   </p>
+                  {k.expires_at && new Date(k.expires_at) <= new Date() && <Badge variant="destructive">{t("keys.expired")}</Badge>}
                 </div>
                 <IconAction label={t("integrations.key_drop")} target={k.name} className="text-destructive" onClick={() => setRevoking(k)}><Trash2 className="size-4" /></IconAction>
               </li>

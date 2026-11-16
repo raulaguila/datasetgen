@@ -39,8 +39,6 @@ import (
 //	@tag.description	Interface choices of the current user
 //	@tag.name			Notifications
 //	@tag.description	Security notices for the current user
-//	@tag.name			API keys
-//	@tag.description	The current user's keys for programs and AI assistants, each reaching the collections it names, read only or read and write
 //	@tag.name			Users
 //	@tag.description	Accounts of other people, their roles and sessions. Users with a protected role stay out of reach
 //	@tag.name			Roles
@@ -53,13 +51,19 @@ import (
 //	@tag.description	Records of a collection, validated against its schema
 //	@tag.name			Trash
 //	@tag.description	Deleted records and collections, to restore or delete for good
-//	@tag.name			Integrations
-//	@tag.description	A collection's share links, webhooks and the API keys that reach it; owners
+//	@tag.name			API keys
+//	@tag.description	Keys for programs and AI assistants. Each member makes their own under /v1/me/keys, reaching the collections it names, read only or read and write; a collection's owner lists the keys that reach it and can cut one off
+//	@tag.name			Share links
+//	@tag.description	A collection's public form and read-only list links; owners
 //	@tag.name			Public
-//	@tag.description	Share links: a collection's form or read-only list, opened without a session
+//	@tag.description	Share links opened without a session: the form and the read-only list
+//	@tag.name			Webhooks
+//	@tag.description	Record changes POSTed to a URL, signed, with the newest calls kept; owners
+//	@tag.name			Automations
+//	@tag.description	Actions run when records change or daily; owners
 //	@tag.name			MCP
-//	@tag.description	Model Context Protocol for AI assistants, with an API key
-//	@x-tagGroups		[{"name":"System","tags":["Health"]},{"name":"Authentication","tags":["Auth","Registration","Password reset"]},{"name":"Account","tags":["Profile","Sessions","Preferences","Notifications","API keys"]},{"name":"Administration","tags":["Users","Roles","Audit"]},{"name":"Data","tags":["Collections","Records","Trash"]},{"name":"Integrations","tags":["Integrations","Public","MCP"]}]
+//	@tag.description	Model Context Protocol for AI assistants with an API key, the tools owners publish for it and what assistants did
+//	@x-tagGroups		[{"name":"System","tags":["Health"]},{"name":"Authentication","tags":["Auth","Registration","Password reset"]},{"name":"Account","tags":["Profile","Sessions","Preferences","Notifications"]},{"name":"Administration","tags":["Users","Roles","Audit"]},{"name":"Data","tags":["Collections","Records","Trash"]},{"name":"Integrations","tags":["API keys","Share links","Public","Webhooks","Automations","MCP"]}]
 
 var (
 	//go:embed docs/swagger.css

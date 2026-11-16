@@ -126,7 +126,7 @@ func keyList(keys []domain.APIKey) fiber.Map {
 
 // @Summary The API keys that reach a collection; owners
 // @Description can_write is each key's access to this collection.
-// @Tags Integrations
+// @Tags API keys
 // @Produce json
 // @Param id path string true "Collection ID"
 // @Security BearerAuth
@@ -144,7 +144,7 @@ func (h *Handler) Keys(c fiber.Ctx) error {
 
 // @Summary Take the collection out of an API key; owners
 // @Description The key keeps its other collections.
-// @Tags Integrations
+// @Tags API keys
 // @Param id path string true "Collection ID"
 // @Param keyId path string true "Key ID"
 // @Security BearerAuth
@@ -267,7 +267,7 @@ func toShareDTO(s domain.Share) shareDTO {
 }
 
 // @Summary A collection's share links; owners
-// @Tags Integrations
+// @Tags Share links
 // @Produce json
 // @Param id path string true "Collection ID"
 // @Security BearerAuth
@@ -288,7 +288,7 @@ func (h *Handler) Shares(c fiber.Ctx) error {
 }
 
 // @Summary Make a share link: a public form (kind form) or a read-only list (kind view); owners
-// @Tags Integrations
+// @Tags Share links
 // @Accept json
 // @Produce json
 // @Param id path string true "Collection ID"
@@ -313,7 +313,7 @@ func (h *Handler) CreateShare(c fiber.Ctx) error {
 }
 
 // @Summary Delete a share link; owners
-// @Tags Integrations
+// @Tags Share links
 // @Param id path string true "Collection ID"
 // @Param shareId path string true "Link ID"
 // @Security BearerAuth
@@ -342,7 +342,7 @@ func toHookDTO(w domain.Webhook) webhookDTO {
 }
 
 // @Summary A collection's webhooks; owners
-// @Tags Integrations
+// @Tags Webhooks
 // @Produce json
 // @Param id path string true "Collection ID"
 // @Security BearerAuth
@@ -373,7 +373,7 @@ type newHookDTO struct {
 
 // @Summary Add a webhook; owners
 // @Description Events: record.created, record.updated, record.deleted, records.imported. Calls are POSTs with a JSON body, retried with backoff on failure.
-// @Tags Integrations
+// @Tags Webhooks
 // @Accept json
 // @Produce json
 // @Param id path string true "Collection ID"
@@ -395,7 +395,7 @@ func (h *Handler) CreateWebhook(c fiber.Ctx) error {
 }
 
 // @Summary Delete a webhook; owners
-// @Tags Integrations
+// @Tags Webhooks
 // @Param id path string true "Collection ID"
 // @Param hookId path string true "Webhook ID"
 // @Security BearerAuth
@@ -409,7 +409,7 @@ func (h *Handler) DeleteWebhook(c fiber.Ctx) error {
 }
 
 // @Summary Send a ping to a webhook now; owners
-// @Tags Integrations
+// @Tags Webhooks
 // @Produce json
 // @Param id path string true "Collection ID"
 // @Param hookId path string true "Webhook ID"

@@ -1310,7 +1310,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "Automations"
                 ],
                 "summary": "A collection's automations; owners",
                 "parameters": [
@@ -1359,7 +1359,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "Automations"
                 ],
                 "summary": "Make an automation; owners",
                 "parameters": [
@@ -1410,7 +1410,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "Automations"
                 ],
                 "summary": "Change an automation; owners",
                 "parameters": [
@@ -1466,7 +1466,7 @@ const docTemplate = `{
                     }
                 ],
                 "tags": [
-                    "Integrations"
+                    "Automations"
                 ],
                 "summary": "Delete an automation; owners",
                 "parameters": [
@@ -1509,7 +1509,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "Automations"
                 ],
                 "summary": "Run an automation now on every matching record (up to 100); owners",
                 "parameters": [
@@ -1754,7 +1754,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "API keys"
                 ],
                 "summary": "The API keys that reach a collection; owners",
                 "parameters": [
@@ -1805,7 +1805,7 @@ const docTemplate = `{
                 ],
                 "description": "The key keeps its other collections.",
                 "tags": [
-                    "Integrations"
+                    "API keys"
                 ],
                 "summary": "Take the collection out of an API key; owners",
                 "parameters": [
@@ -1899,7 +1899,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "MCP"
                 ],
                 "summary": "What AI assistants did in a collection through MCP (newest 100, last 30 days); owners",
                 "parameters": [
@@ -1946,7 +1946,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "MCP"
                 ],
                 "summary": "A collection's MCP tools; owners",
                 "parameters": [
@@ -1995,7 +1995,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "MCP"
                 ],
                 "summary": "Publish an MCP tool; owners",
                 "parameters": [
@@ -2053,7 +2053,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "MCP"
                 ],
                 "summary": "Try an MCP tool before saving it; owners",
                 "parameters": [
@@ -2104,7 +2104,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "MCP"
                 ],
                 "summary": "Change an MCP tool; owners",
                 "parameters": [
@@ -2160,7 +2160,7 @@ const docTemplate = `{
                     }
                 ],
                 "tags": [
-                    "Integrations"
+                    "MCP"
                 ],
                 "summary": "Delete an MCP tool; owners",
                 "parameters": [
@@ -2790,7 +2790,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "Share links"
                 ],
                 "summary": "A collection's share links; owners",
                 "parameters": [
@@ -2844,7 +2844,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "Share links"
                 ],
                 "summary": "Make a share link: a public form (kind form) or a read-only list (kind view); owners",
                 "parameters": [
@@ -2900,7 +2900,7 @@ const docTemplate = `{
                     }
                 ],
                 "tags": [
-                    "Integrations"
+                    "Share links"
                 ],
                 "summary": "Delete a share link; owners",
                 "parameters": [
@@ -3257,7 +3257,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "Webhooks"
                 ],
                 "summary": "A collection's webhooks; owners",
                 "parameters": [
@@ -3300,7 +3300,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "Webhooks"
                 ],
                 "summary": "Add a webhook; owners",
                 "parameters": [
@@ -3345,7 +3345,7 @@ const docTemplate = `{
                     }
                 ],
                 "tags": [
-                    "Integrations"
+                    "Webhooks"
                 ],
                 "summary": "Delete a webhook; owners",
                 "parameters": [
@@ -3382,7 +3382,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "Webhooks"
                 ],
                 "summary": "A webhook's newest calls (up to 50) and their answers; owners",
                 "parameters": [
@@ -3436,7 +3436,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "Webhooks"
                 ],
                 "summary": "Send a webhook call again now, with the same body; owners",
                 "parameters": [
@@ -3489,7 +3489,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Integrations"
+                    "Webhooks"
                 ],
                 "summary": "Send a ping to a webhook now; owners",
                 "parameters": [
@@ -9573,10 +9573,6 @@ const docTemplate = `{
             "name": "Notifications"
         },
         {
-            "description": "The current user's keys for programs and AI assistants, each reaching the collections it names, read only or read and write",
-            "name": "API keys"
-        },
-        {
             "description": "Accounts of other people, their roles and sessions. Users with a protected role stay out of reach",
             "name": "Users"
         },
@@ -9601,15 +9597,27 @@ const docTemplate = `{
             "name": "Trash"
         },
         {
-            "description": "A collection's share links, webhooks and the API keys that reach it; owners",
-            "name": "Integrations"
+            "description": "Keys for programs and AI assistants. Each member makes their own under /v1/me/keys, reaching the collections it names, read only or read and write; a collection's owner lists the keys that reach it and can cut one off",
+            "name": "API keys"
         },
         {
-            "description": "Share links: a collection's form or read-only list, opened without a session",
+            "description": "A collection's public form and read-only list links; owners",
+            "name": "Share links"
+        },
+        {
+            "description": "Share links opened without a session: the form and the read-only list",
             "name": "Public"
         },
         {
-            "description": "Model Context Protocol for AI assistants, with an API key",
+            "description": "Record changes POSTed to a URL, signed, with the newest calls kept; owners",
+            "name": "Webhooks"
+        },
+        {
+            "description": "Actions run when records change or daily; owners",
+            "name": "Automations"
+        },
+        {
+            "description": "Model Context Protocol for AI assistants with an API key, the tools owners publish for it and what assistants did",
             "name": "MCP"
         }
     ],
@@ -9634,8 +9642,7 @@ const docTemplate = `{
                 "Profile",
                 "Sessions",
                 "Preferences",
-                "Notifications",
-                "API keys"
+                "Notifications"
             ]
         },
         {
@@ -9657,8 +9664,11 @@ const docTemplate = `{
         {
             "name": "Integrations",
             "tags": [
-                "Integrations",
+                "API keys",
+                "Share links",
                 "Public",
+                "Webhooks",
+                "Automations",
                 "MCP"
             ]
         }

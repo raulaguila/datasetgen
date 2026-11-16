@@ -23,7 +23,7 @@ func toDeliveryDTO(d domain.WebhookDelivery) deliveryDTO {
 }
 
 // @Summary A webhook's newest calls (up to 50) and their answers; owners
-// @Tags Integrations
+// @Tags Webhooks
 // @Produce json
 // @Param id path string true "Collection ID"
 // @Param hookId path string true "Webhook ID"
@@ -44,7 +44,7 @@ func (h *Handler) Deliveries(c fiber.Ctx) error {
 }
 
 // @Summary Send a webhook call again now, with the same body; owners
-// @Tags Integrations
+// @Tags Webhooks
 // @Produce json
 // @Param id path string true "Collection ID"
 // @Param hookId path string true "Webhook ID"
@@ -96,7 +96,7 @@ func (b automationBody) input() input.AutomationInput {
 }
 
 // @Summary A collection's automations; owners
-// @Tags Integrations
+// @Tags Automations
 // @Produce json
 // @Param id path string true "Collection ID"
 // @Security BearerAuth
@@ -117,7 +117,7 @@ func (h *Handler) Automations(c fiber.Ctx) error {
 
 // @Summary Make an automation; owners
 // @Description When a record is created or changed (or daily at hour), the records passing conditions get the action: set_field {"field","value"}, notify {"message"}, email {"to":"me"|"members","subject","message"}, webhook {"webhook_id"} or create_record {"collection_id","data"} (a text value naming a field, or id, in double curly braces copies it from the matching record). It acts as its maker.
-// @Tags Integrations
+// @Tags Automations
 // @Accept json
 // @Produce json
 // @Param id path string true "Collection ID"
@@ -139,7 +139,7 @@ func (h *Handler) CreateAutomation(c fiber.Ctx) error {
 }
 
 // @Summary Change an automation; owners
-// @Tags Integrations
+// @Tags Automations
 // @Accept json
 // @Produce json
 // @Param id path string true "Collection ID"
@@ -163,7 +163,7 @@ func (h *Handler) UpdateAutomation(c fiber.Ctx) error {
 }
 
 // @Summary Delete an automation; owners
-// @Tags Integrations
+// @Tags Automations
 // @Param id path string true "Collection ID"
 // @Param autoId path string true "Automation ID"
 // @Security BearerAuth
@@ -178,7 +178,7 @@ func (h *Handler) DeleteAutomation(c fiber.Ctx) error {
 }
 
 // @Summary Run an automation now on every matching record (up to 100); owners
-// @Tags Integrations
+// @Tags Automations
 // @Produce json
 // @Param id path string true "Collection ID"
 // @Param autoId path string true "Automation ID"

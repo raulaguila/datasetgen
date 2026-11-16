@@ -69,7 +69,7 @@ func (b mcpToolBody) input() input.MCPToolInput {
 }
 
 // @Summary A collection's MCP tools; owners
-// @Tags Integrations
+// @Tags MCP
 // @Produce json
 // @Param id path string true "Collection ID"
 // @Security BearerAuth
@@ -90,7 +90,7 @@ func (h *Handler) MCPTools(c fiber.Ctx) error {
 
 // @Summary Publish an MCP tool; owners
 // @Description A read-only search that API keys reaching the collection see on /v1/mcp as a tool of its own: fixed conditions, parameters compared with fields (each becomes an AND rule when given), the fields returned (empty: all), sort and page size.
-// @Tags Integrations
+// @Tags MCP
 // @Accept json
 // @Produce json
 // @Param id path string true "Collection ID"
@@ -113,7 +113,7 @@ func (h *Handler) CreateMCPTool(c fiber.Ctx) error {
 }
 
 // @Summary Change an MCP tool; owners
-// @Tags Integrations
+// @Tags MCP
 // @Accept json
 // @Produce json
 // @Param id path string true "Collection ID"
@@ -137,7 +137,7 @@ func (h *Handler) UpdateMCPTool(c fiber.Ctx) error {
 }
 
 // @Summary Delete an MCP tool; owners
-// @Tags Integrations
+// @Tags MCP
 // @Param id path string true "Collection ID"
 // @Param toolId path string true "Tool ID"
 // @Security BearerAuth
@@ -170,7 +170,7 @@ type mcpTestDTO struct {
 
 // @Summary Try an MCP tool before saving it; owners
 // @Description Checks the settings as a save does, then runs them once with args (the assistant's arguments) and answers what the assistant would get.
-// @Tags Integrations
+// @Tags MCP
 // @Accept json
 // @Produce json
 // @Param id path string true "Collection ID"
@@ -206,7 +206,7 @@ type mcpCallDTO struct {
 }
 
 // @Summary What AI assistants did in a collection through MCP (newest 100, last 30 days); owners
-// @Tags Integrations
+// @Tags MCP
 // @Produce json
 // @Param id path string true "Collection ID"
 // @Security BearerAuth
