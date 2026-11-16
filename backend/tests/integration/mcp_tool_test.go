@@ -158,6 +158,15 @@ func TestOwnersPublishMCPTools(t *testing.T) {
 	if failed := slices.IndexFunc(calls, func(m domain.MCPCall) bool { return !m.OK && m.Error != "" }); failed < 0 {
 		t.Fatalf("no failed call logged: %v", calls)
 	}
+	// The key's maker reads the same calls by key, with the collection's name; nobody else does.
+	mine, err := integ.KeyMCPCalls(owner, key.Key.ID)
+	if err != nil || len(mine) != 6 || mine[0].CollectionName != "Produtos" {
+		t.Fatalf("key calls: %v %v", mine, err)
+	}
+	other := reqctx.WithActor(context.Background(), e.userID(t, e.activeUser(t)))
+	if theirs, err := integ.KeyMCPCalls(other, key.Key.ID); err != nil || len(theirs) != 0 {
+		t.Fatalf("another member read the key's calls: %v %v", theirs, err)
+	}
 
 	// An owner tries settings before saving them.
 	tried, total, _, err := integ.TestMCPTool(owner, c.ID, tool, map[string]json.RawMessage{"cidade": json.RawMessage(`"Manaus"`)})

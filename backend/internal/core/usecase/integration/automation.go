@@ -300,7 +300,8 @@ func (s *Service) run(ctx context.Context, a *domain.Automation, recordID string
 	items, _, err := s.Records.List(ctx, filter)
 	if err == nil && len(items) == 0 {
 		if recordID == "" {
-			return s.Store.Integrations().AutomationRan(ctx, a.ID, "")
+			_, err := s.Store.Integrations().AutomationRan(ctx, a.ID, "")
+			return err
 		}
 		return nil // the record does not pass the conditions
 	}
@@ -311,8 +312,17 @@ func (s *Service) run(ctx context.Context, a *domain.Automation, recordID string
 	if err != nil {
 		errText = validate.Text(err.Error(), 300)
 	}
-	if markErr := s.Store.Integrations().AutomationRan(ctx, a.ID, errText); markErr != nil {
+	first, markErr := s.Store.Integrations().AutomationRan(ctx, a.ID, errText)
+	if markErr != nil {
 		return markErr
+	}
+	if first && a.CreatedBy != "" {
+		// Once per streak of failures: the next success clears last_error.
+		_ = s.Store.Notifications().Create(ctx, &domain.Notification{
+			UserID: a.CreatedBy, Level: domain.NotificationWarning, Kind: domain.NotifyAutomationError,
+			Params: map[string]string{"automation": a.Name, "collection_id": a.CollectionID, "error": errText},
+			Title:  "Automation failed", Message: a.Name + ": " + errText,
+		})
 	}
 	return err
 }

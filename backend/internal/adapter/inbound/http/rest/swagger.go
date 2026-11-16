@@ -62,7 +62,9 @@ import (
 //	@tag.description	Actions run when records change or daily; owners
 //	@tag.name			MCP
 //	@tag.description	Model Context Protocol for AI assistants with an API key, the tools owners publish for it and what assistants did
-//	@x-tagGroups		[{"name":"System","tags":["Health"]},{"name":"Authentication","tags":["Auth","Registration","Password reset"]},{"name":"Account","tags":["Profile","Sessions","Preferences","Notifications"]},{"name":"Administration","tags":["Users","Audit"]},{"name":"Data","tags":["Collections","Records","Trash"]},{"name":"Integrations","tags":["API keys","Share links","Public","Webhooks","Automations","MCP"]}]
+//	@tag.name			OAuth
+//	@tag.description	How an assistant that cannot take a pasted key (the ChatGPT app) gets one: register, the member approves, the code becomes a key.
+//	@x-tagGroups		[{"name":"System","tags":["Health"]},{"name":"Authentication","tags":["Auth","Registration","Password reset"]},{"name":"Account","tags":["Profile","Sessions","Preferences","Notifications"]},{"name":"Administration","tags":["Users","Audit"]},{"name":"Data","tags":["Collections","Records","Trash"]},{"name":"Integrations","tags":["API keys","Share links","Public","Webhooks","Automations","MCP","OAuth"]}]
 
 var (
 	//go:embed docs/swagger.css

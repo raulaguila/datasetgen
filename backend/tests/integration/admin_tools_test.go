@@ -8,11 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/rbac"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/internal/core/usecase/audit"
-	"github.com/raulaguila/dataset/internal/core/usecase/role"
 	"github.com/raulaguila/dataset/pkg/apperror"
 	"github.com/raulaguila/dataset/pkg/reqctx"
 )
@@ -61,23 +59,18 @@ func TestRevokeSessionsEndsAnotherUsersLogins(t *testing.T) {
 func TestUserListFiltersByRoleAndSorts(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
-	roles := role.New(e.store, e.store, rbac.NewRepository(testDB))
-	r, err := roles.Create(ctx, "t"+uuid.NewString()[:8])
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = testDB.Exec(`DELETE FROM usr.usr_role WHERE id = ?`, r.ID).Error })
+	roleID, _ := newRole(t, false)
 	var emails []string
 	for range 3 {
 		addr := e.activeUser(t)
-		if err := roles.AddMember(ctx, r.ID, e.userID(t, addr)); err != nil {
+		if err := e.store.Roles().Assign(ctx, e.userID(t, addr), roleID); err != nil {
 			t.Fatal(err)
 		}
 		emails = append(emails, addr)
 	}
 	e.activeUser(t) // outside the role
 
-	users, total, err := e.users().List(ctx, domain.UserFilter{Page: domain.NewPage(1, 10), RoleID: r.ID, Sort: "email", Order: "desc"})
+	users, total, err := e.users().List(ctx, domain.UserFilter{Page: domain.NewPage(1, 10), RoleID: roleID, Sort: "email", Order: "desc"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,29 +85,6 @@ func TestUserListFiltersByRoleAndSorts(t *testing.T) {
 	}
 	_, _, err = e.users().List(ctx, domain.UserFilter{Sort: "password_hash"})
 	wantCode(t, err, apperror.CodeInvalidInput)
-}
-
-func TestRoleListSortsByCreation(t *testing.T) {
-	e := newEnv(t)
-	ctx := context.Background()
-	roles := role.New(e.store, e.store, rbac.NewRepository(testDB))
-	prefix := "s" + uuid.NewString()[:6]
-	var ids []string
-	for _, suffix := range []string{"b", "a"} { // created b first, a second
-		r, err := roles.Create(ctx, prefix+suffix)
-		if err != nil {
-			t.Fatal(err)
-		}
-		ids = append(ids, r.ID)
-		t.Cleanup(func() { _ = testDB.Exec(`DELETE FROM usr.usr_role WHERE id = ?`, r.ID).Error })
-	}
-	list, _, err := roles.List(ctx, domain.RoleFilter{Page: domain.NewPage(1, 10), Search: prefix, Sort: "created_at", Order: "desc"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(list) != 2 || list[0].ID != ids[1] || list[1].ID != ids[0] {
-		t.Fatalf("order %+v", list)
-	}
 }
 
 func TestReinviteReplacesTheActivationToken(t *testing.T) {

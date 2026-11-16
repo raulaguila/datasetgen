@@ -267,6 +267,8 @@ export interface ShareLink {
   token: string;
   created_at: string;
   last_used_at?: string;
+  /** Absent: the link never ends. */
+  expires_at?: string;
 }
 
 /** What a share link opens, as anyone holding it sees it. */
@@ -378,6 +380,9 @@ export interface Webhook {
   last_status?: number;
   last_error?: string;
   last_at?: string;
+  /** Failed calls in a row; at 10 the hook pauses itself. */
+  failures: number;
+  paused_at?: string;
 }
 
 export interface TrashedRecord {
@@ -483,6 +488,9 @@ export interface McpTestResult {
 
 /** One tool call an AI assistant made in the collection. */
 export interface McpCall {
+  collection_id: string;
+  /** In a key's own log only. */
+  collection_name?: string;
   tool: string;
   key_name: string;
   /** False once the key is deleted. */

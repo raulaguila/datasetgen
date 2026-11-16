@@ -45,3 +45,11 @@ export const guestPage = (browser: Browser) => browser.newPage({ locale: "pt-BR"
 
 /** The page's own error, not Next's route announcer (also role="alert", and titled in production builds). */
 export const formAlert = '[role="alert"]:not(#__next-route-announcer__)';
+
+/** Deletes the caller's key by name, so runs never pile up to the 20-key cap. */
+export async function dropKey(page: Page, keyName: string) {
+  const keys = (await (await page.request.get("/api/proxy/v1/me/keys")).json()).items as { id: string; name: string }[];
+  const key = keys.find((k) => k.name === keyName);
+  expect(key).toBeTruthy();
+  expect((await page.request.delete(`/api/proxy/v1/me/keys/${key!.id}`)).status()).toBe(204);
+}

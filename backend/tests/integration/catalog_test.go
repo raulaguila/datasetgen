@@ -1,16 +1,17 @@
 package integration_test
 
 import (
-	"context"
 	"testing"
 
-	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/rbac"
 	"github.com/raulaguila/dataset/internal/core/domain"
 )
 
 func TestCatalogHoldsEveryResourceTheCodeChecks(t *testing.T) {
-	resources, err := rbac.NewRepository(testDB).ListResources(context.Background())
-	if err != nil {
+	var resources []struct {
+		Code    string
+		Actions int
+	}
+	if err := testDB.Raw(`SELECT code, actions FROM usr.usr_resource`).Scan(&resources).Error; err != nil {
 		t.Fatal(err)
 	}
 	found := map[string]bool{}

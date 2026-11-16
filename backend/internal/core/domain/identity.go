@@ -22,22 +22,6 @@ type Role struct {
 	MemberCount int64 // members the API may see; filled on reads
 }
 
-// RolePatch holds the role fields to change; nil keeps the current value.
-type RolePatch struct {
-	Name    *string
-	Enabled *bool
-	// IsDefault marks a role every new account gets.
-	IsDefault *bool
-}
-
-// RoleFilter selects one page of the roles the API may change.
-type RoleFilter struct {
-	Page   Page
-	Search string
-	Sort   string // a column the repository allows; checked by the service
-	Order  string // asc or desc
-}
-
 // Protected reports whether the role is out of reach of the HTTP API: it holds
 // full access, so only the operator commands of cmd/admin touch its members.
 func (r Role) Protected() bool {

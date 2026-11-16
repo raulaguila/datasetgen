@@ -2,42 +2,43 @@ package integration_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/ratelimit"
-	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/rbac"
-	"github.com/raulaguila/dataset/internal/core/usecase/role"
-	"github.com/raulaguila/dataset/pkg/apperror"
+	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/pkg/reqctx"
 )
 
-func TestRoleChangesLeaveAnAuditTrail(t *testing.T) {
+func TestChangesLeaveAnAuditTrail(t *testing.T) {
 	e := newEnv(t)
+	collections, _ := collectionServices(e)
 	actor := e.userID(t, e.activeUser(t))
 	ctx := reqctx.WithRequestID(reqctx.WithActor(context.Background(), actor), "req-1")
-	svc := role.New(e.store, e.store, rbac.NewRepository(testDB))
 
-	created, err := svc.Create(ctx, "t"+uuid.NewString()[:8])
+	name := "audit-" + uuid.NewString()[:8]
+	created, err := collections.Create(ctx, input.CreateCollectionCommand{Name: name, Schema: json.RawMessage(`{"type":"object"}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = testDB.Exec(`DELETE FROM usr.usr_role WHERE id = ?`, created.ID).Error })
 	// A refused change leaves nothing behind.
-	wantCode(t, svc.AddMember(ctx, created.ID, uuid.NewString()), apperror.CodeNotFound)
+	if _, err := collections.Create(ctx, input.CreateCollectionCommand{Name: "", Schema: json.RawMessage(`{"type":"object"}`)}); err == nil {
+		t.Fatal("a collection without a name was made")
+	}
 
 	var rows []struct {
 		ActorID   string
 		RequestID string
 		Action    string
 	}
-	if err := testDB.Raw(`SELECT actor_id::text AS actor_id, request_id, action FROM usr.usr_audit_log WHERE target_id = ?`, created.ID).Scan(&rows).Error; err != nil {
+	if err := testDB.Raw(`SELECT actor_id::text AS actor_id, request_id, action FROM usr.usr_audit_log WHERE actor_id = ? AND request_id = 'req-1'`, actor).Scan(&rows).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 1 || rows[0].Action != "role.create" || rows[0].ActorID != actor || rows[0].RequestID != "req-1" {
-		t.Fatalf("audit %+v", rows)
+	if len(rows) != 1 || rows[0].Action != "collection.create" || rows[0].ActorID != actor || rows[0].RequestID != "req-1" {
+		t.Fatalf("audit %+v for %s", rows, created.ID)
 	}
 }
 

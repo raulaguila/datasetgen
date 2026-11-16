@@ -69,6 +69,7 @@ export const account = {
   // renewDays: undefined keeps the end; 0 removes it; 1-365 counts from now.
   updateKey: (keyId: string, name: string, scopes: KeyScope[], renewDays?: number) => apiFetch<ApiKey>(`/v1/me/keys/${id(keyId)}`, { method: "PUT", json: { name, scopes, renew_days: renewDays } }),
   deleteKey: (keyId: string) => apiFetch<void>(`/v1/me/keys/${id(keyId)}`, { method: "DELETE" }),
+  keyCalls: (keyId: string) => apiFetch<{ items: McpCall[] }>(`/v1/me/keys/${id(keyId)}/calls`),
   mfa: () => apiFetch<{ enabled: boolean; recovery_left: number }>("/v1/me/mfa"),
   setupMFA: () => apiFetch<{ secret: string; uri: string }>("/v1/me/mfa/setup", { method: "POST" }),
   enableMFA: (code: string) => apiFetch<{ recovery_codes: string[] }>("/v1/me/mfa/enable", { method: "POST", json: { code } }),
@@ -179,15 +180,27 @@ export const records = {
 const col = (collectionId: string) => `/v1/collections/${id(collectionId)}`;
 
 /** API keys, webhooks, trash, field history, saved views and files of a collection. */
+/** The consent page of an assistant's OAuth sign in (the ChatGPT app). */
+export const oauth = {
+  client: (clientId: string, redirectUri: string) =>
+    apiFetch<{ client_name: string }>(`/v1/oauth/client?${new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri })}`),
+  approve: (body: { client_id: string; redirect_uri: string; code_challenge: string; code_challenge_method: string; name: string; scopes: KeyScope[]; expires_in_days: number }) =>
+    apiFetch<{ code: string }>("/v1/oauth/approve", { method: "POST", json: body }),
+};
+
 export const tools = {
   keys: (collectionId: string) => apiFetch<{ items: ApiKey[] }>(`${col(collectionId)}/keys`),
   /** Takes the collection out of the key; the key keeps its other collections. */
   deleteKey: (collectionId: string, keyId: string) => apiFetch<void>(`${col(collectionId)}/keys/${id(keyId)}`, { method: "DELETE" }),
   shares: (collectionId: string) => apiFetch<{ items: ShareLink[] }>(`${col(collectionId)}/shares`),
-  createShare: (collectionId: string, kind: ShareLink["kind"]) => apiFetch<ShareLink>(`${col(collectionId)}/shares`, { method: "POST", json: { kind } }),
+  createShare: (collectionId: string, kind: ShareLink["kind"], expiresInDays: number) =>
+    apiFetch<ShareLink>(`${col(collectionId)}/shares`, { method: "POST", json: { kind, expires_in_days: expiresInDays } }),
   deleteShare: (collectionId: string, shareId: string) => apiFetch<void>(`${col(collectionId)}/shares/${id(shareId)}`, { method: "DELETE" }),
   webhooks: (collectionId: string) => apiFetch<{ items: Webhook[] }>(`${col(collectionId)}/webhooks`),
   createWebhook: (collectionId: string, url: string, events: WebhookEvent[]) => apiFetch<Webhook & { secret: string }>(`${col(collectionId)}/webhooks`, { method: "POST", json: { url, events } }),
+  // enabled false pauses the hook; true resumes it and clears its failures. The secret stays.
+  updateWebhook: (collectionId: string, hookId: string, url: string, events: WebhookEvent[], enabled: boolean) =>
+    apiFetch<Webhook>(`${col(collectionId)}/webhooks/${id(hookId)}`, { method: "PATCH", json: { url, events, enabled } }),
   deleteWebhook: (collectionId: string, hookId: string) => apiFetch<void>(`${col(collectionId)}/webhooks/${id(hookId)}`, { method: "DELETE" }),
   /** Sends a test delivery now; answers the hook with its new last status. */
   testWebhook: (collectionId: string, hookId: string) => apiFetch<Webhook>(`${col(collectionId)}/webhooks/${id(hookId)}/test`, { method: "POST" }),

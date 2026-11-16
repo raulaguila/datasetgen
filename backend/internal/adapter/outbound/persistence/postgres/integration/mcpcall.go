@@ -46,28 +46,43 @@ func (r *Repository) LogMCPCalls(ctx context.Context, calls []domain.MCPCall) er
 }
 
 type mcpCallRow struct {
-	KeyID     *uuid.UUID `gorm:"column:key_id"`
-	KeyName   string     `gorm:"column:key_name"`
-	UserID    uuid.UUID  `gorm:"column:user_id"`
-	UserName  string     `gorm:"column:user_name"`
-	Tool      string     `gorm:"column:tool"`
-	OK        bool       `gorm:"column:ok"`
-	Error     string     `gorm:"column:error"`
-	CreatedAt time.Time  `gorm:"column:created_at"`
+	CollectionID   uuid.UUID  `gorm:"column:collection_id"`
+	CollectionName string     `gorm:"column:collection_name"`
+	KeyID          *uuid.UUID `gorm:"column:key_id"`
+	KeyName        string     `gorm:"column:key_name"`
+	UserID         uuid.UUID  `gorm:"column:user_id"`
+	UserName       string     `gorm:"column:user_name"`
+	Tool           string     `gorm:"column:tool"`
+	OK             bool       `gorm:"column:ok"`
+	Error          string     `gorm:"column:error"`
+	CreatedAt      time.Time  `gorm:"column:created_at"`
 }
 
 func (r *Repository) MCPCalls(ctx context.Context, collectionID string, limit int) ([]domain.MCPCall, error) {
 	var rows []mcpCallRow
 	err := r.db.WithContext(ctx).Raw(`
-		SELECT c.key_id, c.key_name, c.user_id, u.name AS user_name, c.tool, c.ok, c.error, c.created_at
+		SELECT c.collection_id, c.key_id, c.key_name, c.user_id, u.name AS user_name, c.tool, c.ok, c.error, c.created_at
 		FROM app.mcp_call c JOIN usr.usr_user u ON u.id = c.user_id
 		WHERE c.collection_id = ? ORDER BY c.created_at DESC, c.id DESC LIMIT ?`, collectionID, limit).Find(&rows).Error
+	return mcpCalls(rows, err)
+}
+
+func (r *Repository) KeyMCPCalls(ctx context.Context, keyID, userID string, limit int) ([]domain.MCPCall, error) {
+	var rows []mcpCallRow
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT c.collection_id, col.name AS collection_name, c.key_id, c.key_name, c.user_id, c.tool, c.ok, c.error, c.created_at
+		FROM app.mcp_call c JOIN app.collection col ON col.id = c.collection_id
+		WHERE c.key_id = ? AND c.user_id = ? ORDER BY c.created_at DESC, c.id DESC LIMIT ?`, keyID, userID, limit).Find(&rows).Error
+	return mcpCalls(rows, err)
+}
+
+func mcpCalls(rows []mcpCallRow, err error) ([]domain.MCPCall, error) {
 	if err != nil {
 		return nil, shared.WrapError(err, "mcp call")
 	}
 	out := make([]domain.MCPCall, len(rows))
 	for i, m := range rows {
-		out[i] = domain.MCPCall{CollectionID: collectionID, KeyName: m.KeyName, UserID: m.UserID.String(), UserName: m.UserName,
+		out[i] = domain.MCPCall{CollectionID: m.CollectionID.String(), CollectionName: m.CollectionName, KeyName: m.KeyName, UserID: m.UserID.String(), UserName: m.UserName,
 			Tool: m.Tool, OK: m.OK, Error: m.Error, CreatedAt: m.CreatedAt}
 		if m.KeyID != nil {
 			out[i].KeyID = m.KeyID.String()

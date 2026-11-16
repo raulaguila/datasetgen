@@ -21,7 +21,7 @@ import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
 
-type Access = "none" | "read" | "write";
+export type Access = "none" | "read" | "write";
 /** The key being made (no id) or changed: its name and each collection's access. */
 /** days: how long the key lasts from now, "0" for no end; "keep" leaves a saved key's end as it is. */
 type Draft = { id?: string; name: string; access: Record<string, Access>; days: string };
@@ -35,9 +35,14 @@ const draftOf = (k?: ApiKey): Draft => ({
   days: k ? "keep" : "90",
 });
 
-const DAYS = ["30", "90", "365", "0"];
+export const DAYS = ["30", "90", "365", "0"];
+/** The server's cap per member (maxKeys in the integration use case). */
+const MAX_KEYS = 20;
+/** A key ending within this many days shows a warning and a renew button. */
+const WARN_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-const scopesOf = (d: Draft): KeyScope[] =>
+export const scopesOf = (d: Pick<Draft, "access">): KeyScope[] =>
   Object.entries(d.access).filter(([, a]) => a !== "none").map(([collection_id, a]) => ({ collection_id, can_write: a === "write" }));
 
 /** The member's own API keys: each reaches the collections picked, read only or read and write.
@@ -49,15 +54,19 @@ export function ApiKeysCard({ onCreated, prefill }: { onCreated?: (secret: strin
   const list = useQuery({ queryKey: KEYS, queryFn: account.keys });
   const cols = useQuery({ queryKey: ["collections", "options"], queryFn: ({ signal }) => collections.options(signal), staleTime: 30_000 });
   const mine = (cols.data?.items ?? []).filter((c) => c.member !== false);
+  // Only collections the member holds count: a stale ?collection= link adds nothing.
+  const scopesFor = (d: Draft) => scopesOf(d).filter((s) => mine.some((c) => c.id === s.collection_id));
+  const [usage, setUsage] = useState<string | null>(null);
+  // Days left are counted from when the page opened: a render stays pure.
+  const [now] = useState(() => Date.now());
   // A link from a collection's Integrations opens a new key that reads it.
   const [draft, setDraft] = useState<Draft | null>(() => (prefill ? { ...draftOf(), access: { [prefill]: "read" } } : null));
-  const [filter, setFilter] = useState("");
   const [secret, setSecret] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<ApiKey | null>(null);
   const save = useMutation({
     mutationFn: (d: Draft) => (d.id
-      ? account.updateKey(d.id, d.name.trim(), scopesOf(d), d.days === "keep" ? undefined : Number(d.days))
-      : account.createKey(d.name.trim(), scopesOf(d), Number(d.days))),
+      ? account.updateKey(d.id, d.name.trim(), scopesFor(d), d.days === "keep" ? undefined : Number(d.days))
+      : account.createKey(d.name.trim(), scopesFor(d), Number(d.days))),
     onSuccess: (k: ApiKey & { secret?: string }) => {
       if (k.secret) {
         setSecret(k.secret);
@@ -69,14 +78,12 @@ export function ApiKeysCard({ onCreated, prefill }: { onCreated?: (secret: strin
     },
   });
   const items = list.data?.items ?? [];
-  const accessName: Record<Access, string> = { none: t("keys.access_none"), read: t("integrations.read_only"), write: t("integrations.read_write") };
-  const picked = draft ? scopesOf(draft).length : 0;
+  const picked = draft ? scopesFor(draft).length : 0;
+  const full = items.length >= MAX_KEYS;
   const daysName: Record<string, string> = {
     keep: t("keys.renew_keep"),
     ...Object.fromEntries(DAYS.map((d) => [d, d === "0" ? t("keys.expires_never") : t("keys.expires_days").replace("{n}", d)])),
   };
-  const shown = filter.trim() ? mine.filter((c) => c.name.toLowerCase().includes(filter.trim().toLowerCase())) : mine;
-  const setAll = (a: Access) => draft && setDraft({ ...draft, access: { ...draft.access, ...Object.fromEntries(shown.map((c) => [c.id, a])) } });
 
   return (
     <FormSection id="keys" title={t("keys.title")} description={t("keys.desc")}>
@@ -87,8 +94,10 @@ export function ApiKeysCard({ onCreated, prefill }: { onCreated?: (secret: strin
           <EmptyState compact title={t("integrations.keys_empty")} />
         ) : (
           <ul className="divide-y rounded-md border">
-            {items.map((k) => (
-              <li key={k.id} className="flex items-start gap-3 px-3 py-2">
+            {items.map((k) => {
+              const left = k.expires_at ? Math.ceil((new Date(k.expires_at).getTime() - now) / DAY_MS) : null;
+              return (
+              <li key={k.id} className="flex flex-wrap items-start gap-3 px-3 py-2">
                 <div className="min-w-0 flex-1 space-y-1.5">
                   <p className="text-sm font-medium">{k.name}</p>
                   <p className="text-xs text-muted-foreground">
@@ -96,7 +105,12 @@ export function ApiKeysCard({ onCreated, prefill }: { onCreated?: (secret: strin
                     {` · ${k.last_used_at ? t("integrations.used_at").replace("{at}", format(k.last_used_at)) : t("integrations.never_used")}`}
                     {k.expires_at && new Date(k.expires_at) > new Date() && ` · ${t("keys.expires_at").replace("{at}", format(k.expires_at))}`}
                   </p>
-                  {k.expires_at && new Date(k.expires_at) <= new Date() && <Badge variant="destructive">{t("keys.expired")}</Badge>}
+                  {left !== null && left <= WARN_DAYS && (
+                    <p className="flex flex-wrap items-center gap-2">
+                      {left <= 0 ? <Badge variant="destructive">{t("keys.expired")}</Badge> : <Badge variant="outline">{t("keys.ends_in").replace("{n}", String(left))}</Badge>}
+                      <Button type="button" size="sm" variant="link" className="h-auto p-0" onClick={() => { save.reset(); setDraft({ ...draftOf(k), days: "90" }); }}>{t("keys.renew")}</Button>
+                    </p>
+                  )}
                   {k.scopes?.length ? (
                     <ul className="flex flex-wrap gap-1.5" aria-label={t("keys.collections")}>
                       {k.scopes.map((s) => (
@@ -105,12 +119,15 @@ export function ApiKeysCard({ onCreated, prefill }: { onCreated?: (secret: strin
                     </ul>
                   ) : <p className="text-xs text-muted-foreground">{t("keys.no_collections")}</p>}
                 </div>
-                <div className="flex shrink-0">
+                <div className="flex shrink-0 items-center">
+                  <Button type="button" size="sm" variant="ghost" aria-expanded={usage === k.id} onClick={() => setUsage(usage === k.id ? null : k.id)}>{t("keys.usage")}</Button>
                   <IconAction label={t("common.edit")} target={k.name} onClick={() => { save.reset(); setDraft(draftOf(k)); }}><Pencil className="size-4" /></IconAction>
                   <IconAction label={t("integrations.revoke")} target={k.name} className="text-destructive" onClick={() => setRevoking(k)}><Trash2 className="size-4" /></IconAction>
                 </div>
+                {usage === k.id && <div className="basis-full"><KeyUsage keyId={k.id} /></div>}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
 
@@ -131,43 +148,7 @@ export function ApiKeysCard({ onCreated, prefill }: { onCreated?: (secret: strin
               </Select>
               <p className="text-xs text-muted-foreground">{t(draft.id ? "keys.renew_hint" : "keys.expires_hint")}</p>
             </div>
-            <fieldset className="space-y-1.5">
-              <legend className="text-sm font-medium">{t("keys.collections")}</legend>
-              <p className="text-xs text-muted-foreground">{t("keys.collections_hint")}</p>
-              {cols.isPending ? <ListSkeleton rows={2} /> : cols.isError ? <QueryErrorState error={cols.error} onRetry={() => void cols.refetch()} /> : (
-                <>
-                <div className="flex flex-wrap items-center gap-2">
-                  {mine.length > 8 && (
-                    <Input type="search" aria-label={t("keys.search")} placeholder={t("keys.search")} className="h-8 w-56 max-w-full" value={filter} onChange={(e) => setFilter(e.target.value)} />
-                  )}
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setAll("read")}>{t("keys.all_read")}</Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setAll("none")}>{t("keys.clear")}</Button>
-                </div>
-                <ul className="max-h-80 divide-y overflow-auto rounded-md border">
-                  {shown.map((c) => {
-                    const value = draft.access[c.id] ?? "none";
-                    const label = `key-access-${c.id}`;
-                    return (
-                      <li key={c.id} className="flex items-center gap-3 px-3 py-1.5">
-                        <span id={label} className="min-w-0 flex-1 truncate text-sm">{c.name}</span>
-                        <Select value={value} items={accessName} onValueChange={(v) => setDraft({ ...draft, access: { ...draft.access, [c.id]: v as Access } })}>
-                          <SelectTrigger size="sm" className="w-44" aria-labelledby={label}><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">{accessName.none}</SelectItem>
-                            <SelectItem value="read">{accessName.read}</SelectItem>
-                            {/* Writing needs the editor role; a key never goes past its maker. */}
-                            <SelectItem value="write" disabled={!roleAllows(c.role, "editor")}>
-                              {roleAllows(c.role, "editor") ? accessName.write : `${accessName.write} (${t("keys.needs_editor")})`}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </li>
-                    );
-                  })}
-                </ul>
-                </>
-              )}
-            </fieldset>
+            <CollectionAccess access={draft.access} onChange={(access) => setDraft({ ...draft, access })} />
             <FormError message={save.isError ? errorMessage(save.error, "common.save_failed", t) : null} />
             <div className="flex flex-wrap items-center gap-2">
               <Button type="submit" disabled={!draft.name.trim() || picked === 0 || save.isPending}>{draft.id ? t("common.save") : <><KeyRound className="size-4" />{t("integrations.create_key")}</>}</Button>
@@ -176,7 +157,10 @@ export function ApiKeysCard({ onCreated, prefill }: { onCreated?: (secret: strin
             </div>
           </form>
         ) : (
-          <Button variant="outline" onClick={() => { save.reset(); setDraft(draftOf()); }}><KeyRound className="size-4" />{t("keys.new")}</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" disabled={full} onClick={() => { save.reset(); setDraft(draftOf()); }}><KeyRound className="size-4" />{t("keys.new")}</Button>
+            {full && <span className="text-xs text-muted-foreground">{t("keys.full").replace("{n}", String(MAX_KEYS))}</span>}
+          </div>
         )}
       </div>
       <ConfirmDialog
@@ -193,5 +177,78 @@ export function ApiKeysCard({ onCreated, prefill }: { onCreated?: (secret: strin
         }}
       />
     </FormSection>
+  );
+}
+
+/** What one key did through MCP: its newest calls of the last 30 days. */
+function KeyUsage({ keyId }: { keyId: string }) {
+  const { t } = useI18n();
+  const format = useFormatDate();
+  const list = useQuery({ queryKey: [...KEYS, keyId, "calls"], queryFn: () => account.keyCalls(keyId) });
+  if (list.isPending) return <ListSkeleton rows={1} />;
+  if (list.isError) return <QueryErrorState error={list.error} onRetry={() => void list.refetch()} />;
+  const items = list.data.items;
+  if (!items.length) return <p className="text-xs text-muted-foreground">{t("keys.usage_empty")}</p>;
+  return (
+    <ul className="max-h-64 divide-y overflow-auto rounded border text-xs" aria-label={t("keys.usage")}>
+      {items.map((c, i) => (
+        <li key={i} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-2 py-1.5">
+          <span className="font-mono font-medium">{c.tool}</span>
+          <span className={c.ok ? "text-muted-foreground" : "text-destructive"}>{t(c.ok ? "mcp_activity.ok" : "mcp_activity.failed")}</span>
+          <span className="text-muted-foreground">{c.collection_name} · {format(c.created_at)}</span>
+          {c.error && <span className="basis-full break-words text-destructive">{c.error}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Each of the member's collections with the access a key gets to it: none, read, or read and write (editors only). */
+export function CollectionAccess({ access, onChange }: { access: Record<string, Access>; onChange: (access: Record<string, Access>) => void }) {
+  const { t } = useI18n();
+  const cols = useQuery({ queryKey: ["collections", "options"], queryFn: ({ signal }) => collections.options(signal), staleTime: 30_000 });
+  const mine = (cols.data?.items ?? []).filter((c) => c.member !== false);
+  const [filter, setFilter] = useState("");
+  const shown = filter.trim() ? mine.filter((c) => c.name.toLowerCase().includes(filter.trim().toLowerCase())) : mine;
+  const setAll = (a: Access) => onChange({ ...access, ...Object.fromEntries(shown.map((c) => [c.id, a])) });
+  const accessName: Record<Access, string> = { none: t("keys.access_none"), read: t("integrations.read_only"), write: t("integrations.read_write") };
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="text-sm font-medium">{t("keys.collections")}</legend>
+      <p className="text-xs text-muted-foreground">{t("keys.collections_hint")}</p>
+      {cols.isPending ? <ListSkeleton rows={2} /> : cols.isError ? <QueryErrorState error={cols.error} onRetry={() => void cols.refetch()} /> : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            {mine.length > 8 && (
+              <Input type="search" aria-label={t("keys.search")} placeholder={t("keys.search")} className="h-8 w-56 max-w-full" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            )}
+            <Button type="button" size="sm" variant="ghost" onClick={() => setAll("read")}>{t("keys.all_read")}</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setAll("none")}>{t("keys.clear")}</Button>
+          </div>
+          <ul className="max-h-80 divide-y overflow-auto rounded-md border">
+            {shown.map((c) => {
+              const value = access[c.id] ?? "none";
+              const label = `key-access-${c.id}`;
+              return (
+                <li key={c.id} className="flex items-center gap-3 px-3 py-1.5">
+                  <span id={label} className="min-w-0 flex-1 truncate text-sm">{c.name}</span>
+                  <Select value={value} items={accessName} onValueChange={(v) => onChange({ ...access, [c.id]: v as Access })}>
+                    <SelectTrigger size="sm" className="w-44" aria-labelledby={label}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">{accessName.none}</SelectItem>
+                      <SelectItem value="read">{accessName.read}</SelectItem>
+                      {/* Writing needs the editor role; a key never goes past its maker. */}
+                      <SelectItem value="write" disabled={!roleAllows(c.role, "editor")}>
+                        {roleAllows(c.role, "editor") ? accessName.write : `${accessName.write} (${t("keys.needs_editor")})`}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </fieldset>
   );
 }

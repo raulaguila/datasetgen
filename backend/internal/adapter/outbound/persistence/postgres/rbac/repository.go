@@ -22,18 +22,6 @@ func NewRepository(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
-// ListResources returns the catalog. It has few rows, so it has no pagination.
-func (r *Repository) ListResources(ctx context.Context) ([]domain.Resource, error) {
-	var rows []domain.Resource
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT code, description, actions FROM usr.usr_resource ORDER BY code
-	`).Find(&rows).Error
-	if err != nil {
-		return nil, shared.WrapError(err, "resources")
-	}
-	return rows, nil
-}
-
 type accessRow struct {
 	UserID    string     `gorm:"column:user_id"`
 	ExpiresAt time.Time  `gorm:"column:expires_at"`

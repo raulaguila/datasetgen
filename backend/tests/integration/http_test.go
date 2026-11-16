@@ -15,6 +15,7 @@ import (
 	"github.com/raulaguila/dataset/internal/composition"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/usecase/admin"
+	"github.com/raulaguila/dataset/internal/core/usecase/integration"
 	"github.com/raulaguila/dataset/internal/infra"
 	"github.com/raulaguila/dataset/pkg/logger"
 )
@@ -24,6 +25,7 @@ func (e *env) httpApp() *fiber.App {
 	log := logger.New(logger.Config{Format: "json", Out: io.Discard})
 	app := composition.NewApplication(cfg, &infra.Resources{PostgresDB: testDB}, log)
 	app.Auth = e.svc
+	app.Integrations.(*integration.Service).SealKey = make([]byte, 32) // the key toolServices seals with
 	return rest.New(cfg, app, composition.NewRateLimit(&infra.Resources{PostgresDB: testDB}), log)
 }
 

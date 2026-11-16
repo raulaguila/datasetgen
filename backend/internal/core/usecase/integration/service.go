@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"slices"
 	"strconv"
@@ -316,9 +317,13 @@ func (s *Service) Shares(ctx context.Context, collectionID string) ([]domain.Sha
 	return shares, nil
 }
 
-func (s *Service) CreateShare(ctx context.Context, collectionID, kind string) (*domain.Share, error) {
+func (s *Service) CreateShare(ctx context.Context, collectionID, kind string, expiresInDays int) (*domain.Share, error) {
 	if kind != domain.ShareForm && kind != domain.ShareView {
 		return nil, apperror.New(apperror.CodeInvalidInput, "kind must be form or view").WithField("kind")
+	}
+	expires, err := expiryOf(expiresInDays, "expires_in_days")
+	if err != nil {
+		return nil, err
 	}
 	random, err := tokenhash.RandomURLSafe()
 	if err != nil {
@@ -344,7 +349,7 @@ func (s *Service) CreateShare(ctx context.Context, collectionID, kind string) (*
 		if len(existing) >= maxShares {
 			return apperror.New(apperror.CodeInvalidInput, "a collection holds up to 10 links; delete one first")
 		}
-		if out, err = uow.Integrations().CreateShare(ctx, collectionID, kind, sealed, tokenhash.SHA256Bytes(token), reqctx.Actor(ctx)); err != nil {
+		if out, err = uow.Integrations().CreateShare(ctx, collectionID, kind, sealed, tokenhash.SHA256Bytes(token), reqctx.Actor(ctx), expires); err != nil {
 			return err
 		}
 		return policy.Audit(ctx, uow, "collection.share_create", collectionID, map[string]any{"collection_id": collectionID, "kind": kind})
@@ -406,19 +411,28 @@ func checkURL(raw string) (string, error) {
 	return raw, nil
 }
 
-func (s *Service) CreateWebhook(ctx context.Context, collectionID, rawURL string, events []string) (*input.NewWebhook, error) {
+// hookInput checks a hook's address and events, sorted without repeats.
+func hookInput(rawURL string, events []string) (string, []string, error) {
 	u, err := checkURL(rawURL)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	events = slices.Compact(slices.Sorted(slices.Values(events)))
 	if len(events) == 0 {
-		return nil, apperror.New(apperror.CodeInvalidInput, "pick at least one event").WithField("events")
+		return "", nil, apperror.New(apperror.CodeInvalidInput, "pick at least one event").WithField("events")
 	}
 	for _, e := range events {
 		if !slices.Contains(domain.WebhookEvents, e) {
-			return nil, apperror.New(apperror.CodeInvalidInput, "unknown event "+e).WithField("events")
+			return "", nil, apperror.New(apperror.CodeInvalidInput, "unknown event "+e).WithField("events")
 		}
+	}
+	return u, events, nil
+}
+
+func (s *Service) CreateWebhook(ctx context.Context, collectionID, rawURL string, events []string) (*input.NewWebhook, error) {
+	u, events, err := hookInput(rawURL, events)
+	if err != nil {
+		return nil, err
 	}
 	random, err := tokenhash.RandomURLSafe()
 	if err != nil {
@@ -451,6 +465,38 @@ func (s *Service) CreateWebhook(ctx context.Context, collectionID, rawURL string
 	}
 	out.Webhook.Secret = ""
 	return out, nil
+}
+
+func (s *Service) UpdateWebhook(ctx context.Context, collectionID, id, rawURL string, events []string, enabled bool) (*domain.Webhook, error) {
+	if err := validate.ID(id); err != nil {
+		return nil, err
+	}
+	u, events, err := hookInput(rawURL, events)
+	if err != nil {
+		return nil, err
+	}
+	err = s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		if err := s.owner(ctx, uow, collectionID); err != nil {
+			return err
+		}
+		if err := uow.Integrations().UpdateWebhook(ctx, &domain.Webhook{ID: id, CollectionID: collectionID, URL: u, Events: events}, enabled); err != nil {
+			return err
+		}
+		return policy.Audit(ctx, uow, "collection.webhook_update", collectionID, map[string]any{"collection_id": collectionID, "url": u, "enabled": enabled})
+	})
+	if err != nil {
+		return nil, err
+	}
+	hooks, err := s.Store.Integrations().Webhooks(ctx, collectionID)
+	if err != nil {
+		return nil, err
+	}
+	for _, w := range hooks {
+		if w.ID == id {
+			return &w, nil
+		}
+	}
+	return nil, apperror.New(apperror.CodeNotFound, "webhook not found")
 }
 
 func (s *Service) DeleteWebhook(ctx context.Context, collectionID, id string) error {
@@ -521,8 +567,12 @@ func (s *Service) deliver(ctx context.Context, h *domain.Webhook, payload map[st
 			errText = errText[:300]
 		}
 	}
-	if err := s.Store.Integrations().WebhookResult(ctx, h.ID, status, errText); err != nil {
+	paused, err := s.Store.Integrations().WebhookResult(ctx, h.ID, status, errText)
+	if err != nil {
 		return err
+	}
+	if paused {
+		s.hookPaused(ctx, h)
 	}
 	d := &domain.WebhookDelivery{WebhookID: h.ID, Event: asString(payload["event"]), Body: body, Error: errText}
 	if status > 0 {
@@ -532,6 +582,22 @@ func (s *Service) deliver(ctx context.Context, h *domain.Webhook, payload map[st
 		return err
 	}
 	return sendErr
+}
+
+// hookPaused tells the hook's maker that it stopped; a lost notice does not fail the delivery.
+func (s *Service) hookPaused(ctx context.Context, h *domain.Webhook) {
+	if h.CreatedBy == "" {
+		return
+	}
+	name := ""
+	if c, err := s.Store.Collections().FindByID(ctx, h.CollectionID); err == nil {
+		name = c.Name
+	}
+	_ = s.Store.Notifications().Create(ctx, &domain.Notification{
+		UserID: h.CreatedBy, Level: domain.NotificationWarning, Kind: domain.NotifyWebhookPaused,
+		Params: map[string]string{"url": h.URL, "collection": name, "collection_id": h.CollectionID},
+		Title:  "Webhook paused", Message: fmt.Sprintf("%s failed %d times in a row and was paused.", h.URL, domain.HookPauseAfter),
+	})
 }
 
 func asString(v any) string {
@@ -553,6 +619,9 @@ func (s *Service) Jobs() map[string]policy.JobHandler {
 			}
 			if err != nil {
 				return err
+			}
+			if h.PausedAt != nil {
+				return nil // paused after it was queued: the owner resumes it by hand
 			}
 			return s.deliver(ctx, h, job.Body)
 		},

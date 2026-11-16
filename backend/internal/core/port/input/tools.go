@@ -13,6 +13,16 @@ type NewKey struct {
 	Secret string
 }
 
+// OAuthGrant is what a member approves on the consent page: a key for the
+// client, with these collections and this validity.
+type OAuthGrant struct {
+	ClientID, RedirectURI      string
+	Challenge, ChallengeMethod string
+	Name                       string
+	Scopes                     []domain.KeyScope
+	Days                       int
+}
+
 // NewWebhook is a hook just made: its signing secret shows this once.
 type NewWebhook struct {
 	Webhook domain.Webhook
@@ -25,6 +35,12 @@ type IntegrationService interface {
 	// MyKeys lists the caller's keys; CreateMyKey and UpdateMyKey give a key the
 	// collections in scopes, each needing the caller's viewer (read) or editor (write) role.
 	MyKeys(ctx context.Context) ([]domain.APIKey, error)
+	// RegisterOAuthClient, OAuthClient, ApproveOAuth and ExchangeOAuthCode let an
+	// assistant get a key through OAuth (authorization code with PKCE).
+	RegisterOAuthClient(ctx context.Context, name string, redirectURIs []string) (clientID string, err error)
+	OAuthClient(ctx context.Context, clientID, redirectURI string) (name string, err error)
+	ApproveOAuth(ctx context.Context, g OAuthGrant) (code string, err error)
+	ExchangeOAuthCode(ctx context.Context, code, clientID, redirectURI, verifier string) (*NewKey, error)
 	// expiresInDays (1-365) makes the key stop working then; 0 never expires.
 	CreateMyKey(ctx context.Context, name string, scopes []domain.KeyScope, expiresInDays int) (*NewKey, error)
 	// renewDays nil keeps the key's end; 0 removes it; 1-365 sets it that many days from now.
@@ -37,7 +53,7 @@ type IntegrationService interface {
 	AuthenticateKey(ctx context.Context, secret string) (*domain.KeyGrant, error)
 
 	Shares(ctx context.Context, collectionID string) ([]domain.Share, error)
-	CreateShare(ctx context.Context, collectionID, kind string) (*domain.Share, error)
+	CreateShare(ctx context.Context, collectionID, kind string, expiresInDays int) (*domain.Share, error)
 	DeleteShare(ctx context.Context, collectionID, id string) error
 	// AuthenticateShare answers what a dss_ link allows; any failure is NotFound.
 	AuthenticateShare(ctx context.Context, token string) (*domain.KeyGrant, error)
@@ -45,6 +61,8 @@ type IntegrationService interface {
 	Webhooks(ctx context.Context, collectionID string) ([]domain.Webhook, error)
 	CreateWebhook(ctx context.Context, collectionID, url string, events []string) (*NewWebhook, error)
 	DeleteWebhook(ctx context.Context, collectionID, id string) error
+	// UpdateWebhook changes the address and events, keeping the secret; enabled false pauses it, true resumes it.
+	UpdateWebhook(ctx context.Context, collectionID, id, url string, events []string, enabled bool) (*domain.Webhook, error)
 	// TestWebhook sends a ping now and records the answer.
 	TestWebhook(ctx context.Context, collectionID, id string) (*domain.Webhook, error)
 	// Deliveries lists a hook's newest calls; Redeliver sends one again now.
@@ -73,6 +91,8 @@ type IntegrationService interface {
 	// collection's newest 100 (owners); PruneMCPCalls drops those older than 30 days.
 	LogMCPCalls(ctx context.Context, calls []domain.MCPCall) error
 	MCPCalls(ctx context.Context, collectionID string) ([]domain.MCPCall, error)
+	// KeyMCPCalls lists the newest 100 calls of one of the caller's keys.
+	KeyMCPCalls(ctx context.Context, keyID string) ([]domain.MCPCall, error)
 	PruneMCPCalls(ctx context.Context) error
 	// Schedule queues the daily automations that are due; the job worker calls it.
 	Schedule(ctx context.Context) error

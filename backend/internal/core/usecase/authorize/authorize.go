@@ -18,8 +18,7 @@ type Service struct {
 }
 
 var (
-	_ input.Authorizer      = (*Service)(nil)
-	_ input.ResourceCatalog = (*Service)(nil)
+	_ input.Authorizer = (*Service)(nil)
 )
 
 func New(reader output.PermissionReader, clock output.Clock) *Service {
@@ -50,10 +49,6 @@ func (s *Service) Authorize(ctx context.Context, p domain.Principal, resource st
 		return nil
 	}
 	return apperror.New(apperror.CodeForbidden, fmt.Sprintf("missing %s permission on %s", needLabel(need), resource))
-}
-
-func (s *Service) ListResources(ctx context.Context) ([]domain.Resource, error) {
-	return s.Reader.ListResources(ctx)
 }
 
 func needLabel(need domain.Action) string {

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { dropKey } from "./helpers";
 
 // CSV import, sort by a field, bulk edit, a saved view, the trash, an API key
 // used through the web address, and the field history.
@@ -80,6 +81,7 @@ test("a collection's tools: CSV, bulk edit, views, trash, API key, field history
   expect((await res.json()).pagination.total_items).toBe(3);
   const write = await page.request.post("/api/proxy/v1/records", { headers: { "X-API-Key": secret, Cookie: "" }, data: { collection_id: collectionId, data: { title: "x" } } });
   expect(write.status()).toBe(403);
+  await dropKey(page, `leitura-${name}`);
 
   // A field change is kept; loading the old version brings the field back.
   await page.goto(`${records}/fields`);

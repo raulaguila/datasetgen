@@ -31,10 +31,6 @@ func (s stubReader) Access(context.Context, string, string) (*domain.Session, do
 	return s.sess, s.have, nil
 }
 
-func (s stubReader) ListResources(context.Context) ([]domain.Resource, error) {
-	return nil, nil
-}
-
 func TestAuthorizeChecksTheSessionThenEveryNeededBit(t *testing.T) {
 	ctx := context.Background()
 	p := domain.Principal{UserID: "u1", SessionID: "s1"}

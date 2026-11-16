@@ -11,6 +11,7 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/outbound/files"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/webhook"
 	"github.com/raulaguila/dataset/internal/core/domain"
+	"github.com/raulaguila/dataset/internal/core/policy"
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/internal/core/usecase/integration"
 	"github.com/raulaguila/dataset/internal/core/usecase/tools"
@@ -491,15 +492,19 @@ func TestShareLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	form, err := keys.CreateShare(owner, c.ID, domain.ShareForm)
+	form, err := keys.CreateShare(owner, c.ID, domain.ShareForm, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	view, err := keys.CreateShare(owner, c.ID, domain.ShareView)
+	view, err := keys.CreateShare(owner, c.ID, domain.ShareView, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantCode(t, ignore(keys.CreateShare(owner, c.ID, "edit")), apperror.CodeInvalidInput)
+	wantCode(t, ignore(keys.CreateShare(owner, c.ID, "edit", 0)), apperror.CodeInvalidInput)
+	wantCode(t, ignore(keys.CreateShare(owner, c.ID, domain.ShareView, 400)), apperror.CodeInvalidInput)
+	if form.ExpiresAt != nil || view.ExpiresAt == nil || time.Until(*view.ExpiresAt) < 6*24*time.Hour {
+		t.Fatalf("expiry: form %v, view %v", form.ExpiresAt, view.ExpiresAt)
+	}
 	// The owner can copy a link again; the API key list leaves links out.
 	list, err := keys.Shares(owner, c.ID)
 	if err != nil || len(list) != 2 || (list[0].Token != view.Token && list[0].Token != form.Token) {
@@ -528,6 +533,11 @@ func TestShareLinks(t *testing.T) {
 	if items, total, err := records.List(as(view.Token), domain.RecordFilter{CollectionID: c.ID, Page: domain.NewPage(1, 10)}); err != nil || total != 1 || len(items) != 1 {
 		t.Fatalf("list: %d, %v", total, err)
 	}
+	// An expired link stops working.
+	if err := testDB.Exec(`UPDATE app.api_key SET expires_at = now() - interval '1 minute' WHERE id = ?`, form.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore(keys.AuthenticateShare(context.Background(), form.Token)), apperror.CodeNotFound)
 	if err := keys.DeleteShare(owner, c.ID, view.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -733,6 +743,20 @@ func TestAutomationActionsReachOutside(t *testing.T) {
 	if _, total, _ := records.List(owner, domain.RecordFilter{CollectionID: dst, Page: domain.NewPage(1, 10)}); total != 2 {
 		t.Fatalf("created %d records, want one per match", total)
 	}
+
+	// A run that starts failing tells its maker once; more failures stay quiet.
+	if err := testDB.Exec("UPDATE app.collection SET deleted_at = now() WHERE id = ?", dst).Error; err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if ran, _ := autos.RunAutomation(owner, src, create.ID); ran == nil || ran.LastError == "" {
+			t.Fatalf("a create into a deleted collection did not fail: %+v", ran)
+		}
+	}
+	var notes int64
+	if err := testDB.Raw("SELECT count(*) FROM usr.usr_notification WHERE kind = ? AND params->>'automation' = ?", domain.NotifyAutomationError, create.Name).Scan(&notes).Error; err != nil || notes != 1 {
+		t.Fatalf("failure notices: %d %v", notes, err)
+	}
 }
 
 // Every webhook call is kept with its answer, and can be sent again.
@@ -759,6 +783,43 @@ func TestWebhookDeliveriesAndRedelivery(t *testing.T) {
 	}
 	if list, _ := hooks.Deliveries(owner, c.ID, h.Webhook.ID); len(list) != 2 {
 		t.Fatalf("after redeliver: %d", len(list))
+	}
+
+	// Ten failures in a row pause the hook once, tell its maker, and queued calls stop.
+	for range domain.HookPauseAfter - 2 {
+		if _, err := hooks.TestWebhook(owner, c.ID, h.Webhook.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, _ := hooks.Webhooks(owner, c.ID)
+	if len(got) != 1 || got[0].PausedAt == nil || got[0].Failures != domain.HookPauseAfter {
+		t.Fatalf("pause: %+v", got)
+	}
+	var notes int64
+	if err := testDB.Raw("SELECT count(*) FROM usr.usr_notification WHERE kind = ?", domain.NotifyWebhookPaused).Scan(&notes).Error; err != nil || notes != 1 {
+		t.Fatalf("pause notices: %d %v", notes, err)
+	}
+	if _, err := hooks.TestWebhook(owner, c.ID, h.Webhook.ID); err != nil { // an 11th failure does not tell again
+		t.Fatal(err)
+	}
+	if err := testDB.Raw("SELECT count(*) FROM usr.usr_notification WHERE kind = ?", domain.NotifyWebhookPaused).Scan(&notes).Error; err != nil || notes != 1 {
+		t.Fatalf("pause notices after more failures: %d %v", notes, err)
+	}
+	body, _ := json.Marshal(policy.WebhookJob{HookID: h.Webhook.ID, Body: map[string]any{"event": "record.created"}})
+	if err := hooks.Jobs()[policy.JobWebhook](owner, body); err != nil {
+		t.Fatalf("queued call to a paused hook: %v", err)
+	}
+	if list, _ := hooks.Deliveries(owner, c.ID, h.Webhook.ID); len(list) != domain.HookPauseAfter+1 {
+		t.Fatalf("a paused hook still sent: %d deliveries", len(list))
+	}
+	// Editing keeps the secret's hook and resumes it; a bad address is refused.
+	wantCode(t, ignore(hooks.UpdateWebhook(owner, c.ID, h.Webhook.ID, "ftp://x", []string{domain.EventRecordCreated}, true)), apperror.CodeInvalidInput)
+	w, err := hooks.UpdateWebhook(owner, c.ID, h.Webhook.ID, "https://example.com/novo", []string{domain.EventRecordUpdated}, true)
+	if err != nil || w.PausedAt != nil || w.Failures != 0 || w.URL != "https://example.com/novo" || w.Events[0] != domain.EventRecordUpdated {
+		t.Fatalf("resume: %+v %v", w, err)
+	}
+	if w, err = hooks.UpdateWebhook(owner, c.ID, h.Webhook.ID, w.URL, w.Events, false); err != nil || w.PausedAt == nil {
+		t.Fatalf("pause by hand: %+v %v", w, err)
 	}
 }
 

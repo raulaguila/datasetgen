@@ -196,13 +196,15 @@ func (h *Handler) TestMCPTool(c fiber.Ctx) error {
 }
 
 type mcpCallDTO struct {
-	Tool      string    `json:"tool" example:"search_records"`
-	KeyName   string    `json:"key_name"`
-	KeyLive   bool      `json:"key_live"` // false once the key is deleted
-	UserName  string    `json:"user_name"`
-	OK        bool      `json:"ok"`
-	Error     string    `json:"error,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	CollectionID   string    `json:"collection_id"`
+	CollectionName string    `json:"collection_name,omitempty"` // in a key's log only
+	Tool           string    `json:"tool" example:"search_records"`
+	KeyName        string    `json:"key_name"`
+	KeyLive        bool      `json:"key_live"` // false once the key is deleted
+	UserName       string    `json:"user_name"`
+	OK             bool      `json:"ok"`
+	Error          string    `json:"error,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // @Summary What AI assistants did in a collection through MCP (newest 100, last 30 days); owners
@@ -218,9 +220,30 @@ func (h *Handler) MCPCalls(c fiber.Ctx) error {
 	if err != nil {
 		return fail(c, err)
 	}
+	return c.JSON(fiber.Map{"items": toMCPCallDTOs(list)})
+}
+
+// @Summary What one of the caller's keys did through MCP (newest 100, last 30 days)
+// @Tags API keys
+// @Produce json
+// @Param keyId path string true "Key ID"
+// @Security BearerAuth
+// @Success 200 {object} object{items=[]mcpCallDTO}
+// @Failure 400 {object} mapper.errorBody
+// @Router /v1/me/keys/{keyId}/calls [get]
+func (h *Handler) KeyMCPCalls(c fiber.Ctx) error {
+	list, err := h.integrations.KeyMCPCalls(c.Context(), c.Params("keyId"))
+	if err != nil {
+		return fail(c, err)
+	}
+	return c.JSON(fiber.Map{"items": toMCPCallDTOs(list)})
+}
+
+func toMCPCallDTOs(list []domain.MCPCall) []mcpCallDTO {
 	out := make([]mcpCallDTO, len(list))
 	for i, m := range list {
-		out[i] = mcpCallDTO{Tool: m.Tool, KeyName: m.KeyName, KeyLive: m.KeyID != "", UserName: m.UserName, OK: m.OK, Error: m.Error, CreatedAt: m.CreatedAt}
+		out[i] = mcpCallDTO{CollectionID: m.CollectionID, CollectionName: m.CollectionName, Tool: m.Tool, KeyName: m.KeyName, KeyLive: m.KeyID != "",
+			UserName: m.UserName, OK: m.OK, Error: m.Error, CreatedAt: m.CreatedAt}
 	}
-	return c.JSON(fiber.Map{"items": out})
+	return out
 }

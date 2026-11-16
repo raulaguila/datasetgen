@@ -133,17 +133,6 @@ type RoleRepository interface {
 	Assign(ctx context.Context, userID, roleID string) error
 	// HasMembers reports whether any user holds the role.
 	HasMembers(ctx context.Context, roleID string) (bool, error)
-	// Page lists unprotected roles by name, with the count of all matches.
-	Page(ctx context.Context, filter domain.RoleFilter) ([]domain.Role, int64, error)
-	// FindByID counts the members only when members is set: it costs a visit per member.
-	FindByID(ctx context.Context, id string, members bool) (*domain.Role, error)
-	Create(ctx context.Context, name string) (*domain.Role, error)
-	Delete(ctx context.Context, id string) error
-	Update(ctx context.Context, id string, patch domain.RolePatch) error
-	ClearPermissions(ctx context.Context, roleID string) error
-	Grant(ctx context.Context, roleID, resource string, actions domain.Action) error
-	Members(ctx context.Context, roleID string, filter domain.UserFilter) ([]domain.User, int64, error) // Page and Search only
 	// ForUser returns every role of a user, enabled or not, without member counts.
 	ForUser(ctx context.Context, userID string) ([]domain.Role, error)
-	Unassign(ctx context.Context, userID, roleID string) error
 }

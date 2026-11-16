@@ -5,12 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/google/uuid"
-
-	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/rbac"
 	"github.com/raulaguila/dataset/internal/core/port/input"
-	"github.com/raulaguila/dataset/internal/core/usecase/admin"
-	"github.com/raulaguila/dataset/internal/core/usecase/role"
 	"github.com/raulaguila/dataset/pkg/apperror"
 )
 
@@ -72,83 +67,5 @@ func TestProfileListsEnabledRoles(t *testing.T) {
 	}
 	if !slices.Equal(p.Roles, []string{"user"}) {
 		t.Fatalf("roles %v", p.Roles)
-	}
-}
-
-// The count must match the members list, which hides protected users.
-func TestRoleMemberCountSkipsProtectedUsers(t *testing.T) {
-	e := newEnv(t)
-	ctx := context.Background()
-	svc := role.New(e.store, e.store, rbac.NewRepository(testDB))
-	created, err := svc.Create(ctx, "t"+uuid.NewString()[:8])
-	if err != nil {
-		t.Fatal(err)
-	}
-	plain, boss := e.activeUser(t), e.activeUser(t)
-	for _, addr := range []string{plain, boss} {
-		if err := svc.AddMember(ctx, created.ID, e.userID(t, addr)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := admin.New(e.store, e.clock).Promote(ctx, boss); err != nil {
-		t.Fatal(err)
-	}
-	if got := findRole(t, svc, created.Name).MemberCount; got != 1 {
-		t.Fatalf("member count %d", got)
-	}
-	// Paths that never show the number must not pay for it.
-	roles, err := e.store.Roles().ForUser(ctx, e.userID(t, plain))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, r := range roles {
-		if r.MemberCount != 0 {
-			t.Fatalf("ForUser counted members of %s", r.Name)
-		}
-	}
-}
-
-func TestSetUserRolesReplacesTheSet(t *testing.T) {
-	e := newEnv(t)
-	ctx := context.Background()
-	svc := role.New(e.store, e.store, rbac.NewRepository(testDB))
-	a, err := svc.Create(ctx, "a"+uuid.NewString()[:8])
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := svc.Create(ctx, "b"+uuid.NewString()[:8])
-	if err != nil {
-		t.Fatal(err)
-	}
-	id := e.userID(t, e.activeUser(t))
-	names := func() []string {
-		roles, err := e.store.Roles().ForUser(ctx, id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var out []string
-		for _, r := range roles {
-			out = append(out, r.Name)
-		}
-		slices.Sort(out)
-		return out
-	}
-
-	if err := svc.SetUserRoles(ctx, id, []string{a.ID, b.ID}); err != nil {
-		t.Fatal(err)
-	}
-	if got := names(); !slices.Equal(got, []string{a.Name, b.Name}) {
-		t.Fatalf("roles %v", got)
-	}
-	if err := svc.SetUserRoles(ctx, id, []string{b.ID}); err != nil {
-		t.Fatal(err)
-	}
-	if got := names(); !slices.Equal(got, []string{b.Name}) {
-		t.Fatalf("roles %v", got)
-	}
-	// A protected role is refused and nothing changes.
-	wantCode(t, svc.SetUserRoles(ctx, id, []string{findRole(t, svc, "admin").ID}), apperror.CodeForbidden)
-	if got := names(); !slices.Equal(got, []string{b.Name}) {
-		t.Fatalf("roles after refusal %v", got)
 	}
 }

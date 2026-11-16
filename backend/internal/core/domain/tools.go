@@ -52,6 +52,7 @@ type Share struct {
 	Token      string // sealed at rest; plain only inside the use case
 	CreatedAt  time.Time
 	LastUsedAt *time.Time
+	ExpiresAt  *time.Time // nil: the link never ends
 }
 
 // KeyGrant is what an API key allows: the collections it reaches (id -> can
@@ -87,7 +88,13 @@ type Webhook struct {
 	LastStatus   *int
 	LastError    string
 	LastAt       *time.Time
+	Failures     int        // failed calls in a row; HookPauseAfter pauses the hook
+	PausedAt     *time.Time // set: no calls go out until the owner resumes it
+	CreatedBy    string     // read by Webhook only: who hears of a pause
 }
+
+// HookPauseAfter failed calls in a row pause a webhook.
+const HookPauseAfter = 10
 
 // Automation triggers and actions.
 const (
@@ -229,13 +236,14 @@ var MCPBuiltinTools = []string{"list_collections", "get_collection", "search_rec
 
 // MCPCall is one tool call an AI assistant made in a collection through MCP.
 type MCPCall struct {
-	CollectionID string
-	KeyID        string
-	KeyName      string
-	UserID       string
-	UserName     string
-	Tool         string
-	OK           bool
-	Error        string
-	CreatedAt    time.Time
+	CollectionID   string
+	CollectionName string // read by KeyMCPCalls only
+	KeyID          string
+	KeyName        string
+	UserID         string
+	UserName       string
+	Tool           string
+	OK             bool
+	Error          string
+	CreatedAt      time.Time
 }

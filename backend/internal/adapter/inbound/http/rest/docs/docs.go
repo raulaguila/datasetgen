@@ -2856,13 +2856,16 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Link",
+                        "description": "Link; expires_in_days 1 to 365, or 0 for no end",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
                             "type": "object",
                             "properties": {
+                                "expires_in_days": {
+                                    "type": "integer"
+                                },
                                 "kind": {
                                     "type": "string"
                                 }
@@ -3367,6 +3370,69 @@ const docTemplate = `{
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Keeps the signing secret. A hook pauses by itself after 10 failed calls in a row; send enabled true to resume it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "Change, pause or resume a webhook; owners",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Webhook ID",
+                        "name": "hookId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Webhook",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tools.updateHookDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/tools.webhookDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
                     }
                 }
             }
@@ -4086,6 +4152,53 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/me/keys/{keyId}/calls": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "API keys"
+                ],
+                "summary": "What one of the caller's keys did through MCP (newest 100, last 30 days)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Key ID",
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "items": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/tools.mcpCallDTO"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/me/mfa": {
             "get": {
                 "security": [
@@ -4694,6 +4807,246 @@ const docTemplate = `{
                         "description": "Too Many Requests",
                         "schema": {
                             "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/oauth/approve": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The key is made only when the assistant trades the code (POST /v1/oauth/token), with these collections and validity. The code lasts 5 minutes.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OAuth"
+                ],
+                "summary": "Approve an assistant's access; returns the code for its redirect",
+                "parameters": [
+                    {
+                        "description": "Approval",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tools.oauthApproveDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/oauth/client": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OAuth"
+                ],
+                "summary": "The client a consent page asks for",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Client ID",
+                        "name": "client_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Redirect URI the client registered",
+                        "name": "redirect_uri",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "client_name": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/oauth/register": {
+            "post": {
+                "description": "Public. Nothing is stored: client_id carries the client's name and redirect URIs, sealed. A redirect URI is https, or http on localhost.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OAuth"
+                ],
+                "summary": "Register an OAuth client (RFC 7591)",
+                "parameters": [
+                    {
+                        "description": "Client",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tools.oauthRegisterDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/tools.oauthClientDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string"
+                                },
+                                "error_description": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/oauth/token": {
+            "post": {
+                "description": "Public, form encoded: grant_type=authorization_code, code, redirect_uri, client_id, code_verifier (PKCE S256). The token is a dsk_ API key; it shows in the member's keys and ends when the member picked.",
+                "consumes": [
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "OAuth"
+                ],
+                "summary": "Trade an approved code for an access token (an API key)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "authorization_code",
+                        "name": "grant_type",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Code from the redirect",
+                        "name": "code",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Same redirect URI",
+                        "name": "redirect_uri",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Client ID",
+                        "name": "client_id",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "PKCE verifier",
+                        "name": "code_verifier",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "access_token": {
+                                    "type": "string"
+                                },
+                                "expires_in": {
+                                    "type": "integer"
+                                },
+                                "token_type": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string"
+                                },
+                                "error_description": {
+                                    "type": "string"
+                                }
+                            }
                         }
                     }
                 }
@@ -8170,6 +8523,13 @@ const docTemplate = `{
         "tools.mcpCallDTO": {
             "type": "object",
             "properties": {
+                "collection_id": {
+                    "type": "string"
+                },
+                "collection_name": {
+                    "description": "in a key's log only",
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -8387,6 +8747,10 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "failures": {
+                    "description": "Failures counts failed calls in a row; at 10 the hook pauses (paused_at) until resumed.",
+                    "type": "integer"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -8398,6 +8762,9 @@ const docTemplate = `{
                 },
                 "last_status": {
                     "type": "integer"
+                },
+                "paused_at": {
+                    "type": "string"
                 },
                 "secret": {
                     "description": "Secret signs every call (X-Dataset-Signature: t=\u003cunix\u003e,v1=\u003cHMAC-SHA256 of \"\u003ct\u003e.\u003cbody\u003e\"\u003e); shown once.",
@@ -8447,6 +8814,85 @@ const docTemplate = `{
                 }
             }
         },
+        "tools.oauthApproveDTO": {
+            "type": "object",
+            "properties": {
+                "client_id": {
+                    "type": "string"
+                },
+                "code_challenge": {
+                    "type": "string"
+                },
+                "code_challenge_method": {
+                    "type": "string",
+                    "example": "S256"
+                },
+                "expires_in_days": {
+                    "type": "integer",
+                    "example": 90
+                },
+                "name": {
+                    "type": "string",
+                    "example": "ChatGPT"
+                },
+                "redirect_uri": {
+                    "type": "string"
+                },
+                "scopes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/tools.scopeDTO"
+                    }
+                }
+            }
+        },
+        "tools.oauthClientDTO": {
+            "type": "object",
+            "properties": {
+                "client_id": {
+                    "type": "string"
+                },
+                "client_name": {
+                    "type": "string"
+                },
+                "grant_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "redirect_uris": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "response_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "token_endpoint_auth_method": {
+                    "type": "string"
+                }
+            }
+        },
+        "tools.oauthRegisterDTO": {
+            "type": "object",
+            "properties": {
+                "client_name": {
+                    "type": "string",
+                    "example": "ChatGPT"
+                },
+                "redirect_uris": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "tools.schemaVersionDTO": {
             "type": "object",
             "properties": {
@@ -8482,6 +8928,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "created_at": {
+                    "type": "string"
+                },
+                "expires_at": {
                     "type": "string"
                 },
                 "id": {
@@ -8536,6 +8985,29 @@ const docTemplate = `{
                 }
             }
         },
+        "tools.updateHookDTO": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "description": "Enabled false pauses the hook; true resumes it and clears its failures.",
+                    "type": "boolean",
+                    "example": true
+                },
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "record.created"
+                    ]
+                },
+                "url": {
+                    "type": "string",
+                    "example": "https://example.com/hooks/dataset"
+                }
+            }
+        },
         "tools.viewDTO": {
             "type": "object",
             "properties": {
@@ -8571,6 +9043,10 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "failures": {
+                    "description": "Failures counts failed calls in a row; at 10 the hook pauses (paused_at) until resumed.",
+                    "type": "integer"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -8582,6 +9058,9 @@ const docTemplate = `{
                 },
                 "last_status": {
                     "type": "integer"
+                },
+                "paused_at": {
+                    "type": "string"
                 },
                 "url": {
                     "type": "string"
@@ -8791,6 +9270,10 @@ const docTemplate = `{
         {
             "description": "Model Context Protocol for AI assistants with an API key, the tools owners publish for it and what assistants did",
             "name": "MCP"
+        },
+        {
+            "description": "How an assistant that cannot take a pasted key (the ChatGPT app) gets one: register, the member approves, the code becomes a key.",
+            "name": "OAuth"
         }
     ],
     "x-tagGroups": [
@@ -8840,7 +9323,8 @@ const docTemplate = `{
                 "Public",
                 "Webhooks",
                 "Automations",
-                "MCP"
+                "MCP",
+                "OAuth"
             ]
         }
     ]

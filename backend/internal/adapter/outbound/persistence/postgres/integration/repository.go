@@ -232,16 +232,17 @@ type shareRow struct {
 	Sealed     string     `gorm:"column:sealed"`
 	CreatedAt  time.Time  `gorm:"column:created_at"`
 	LastUsedAt *time.Time `gorm:"column:last_used_at"`
+	ExpiresAt  *time.Time `gorm:"column:expires_at"`
 }
 
 func (m shareRow) toDomain() domain.Share {
-	return domain.Share{ID: m.ID.String(), Kind: m.Share, Token: m.Sealed, CreatedAt: m.CreatedAt, LastUsedAt: m.LastUsedAt}
+	return domain.Share{ID: m.ID.String(), Kind: m.Share, Token: m.Sealed, CreatedAt: m.CreatedAt, LastUsedAt: m.LastUsedAt, ExpiresAt: m.ExpiresAt}
 }
 
 // Shares lists at most maxShares links: CreateShare caps them.
 func (r *Repository) Shares(ctx context.Context, collectionID string) ([]domain.Share, error) {
 	var rows []shareRow
-	err := r.db.WithContext(ctx).Table("app.api_key").Select("id, share, sealed, created_at, last_used_at").
+	err := r.db.WithContext(ctx).Table("app.api_key").Select("id, share, sealed, created_at, last_used_at, expires_at").
 		Where("collection_id = ? AND share IS NOT NULL", collectionID).Order("created_at DESC").Limit(50).Find(&rows).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "share link")
@@ -253,13 +254,13 @@ func (r *Repository) Shares(ctx context.Context, collectionID string) ([]domain.
 	return out, nil
 }
 
-func (r *Repository) CreateShare(ctx context.Context, collectionID, kind, sealed string, hash []byte, by string) (*domain.Share, error) {
+func (r *Repository) CreateShare(ctx context.Context, collectionID, kind, sealed string, hash []byte, by string, expires *time.Time) (*domain.Share, error) {
 	var m shareRow
 	// A form adds records (editor cap); a list only reads them.
 	err := r.db.WithContext(ctx).Raw(`
-		INSERT INTO app.api_key (collection_id, name, prefix, key_hash, can_write, created_by, share, sealed)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, share, created_at`,
-		collectionID, "link:"+kind, domain.SharePrefix, hash, kind == domain.ShareForm, by, kind, sealed).Take(&m).Error
+		INSERT INTO app.api_key (collection_id, name, prefix, key_hash, can_write, created_by, share, sealed, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, share, created_at, expires_at`,
+		collectionID, "link:"+kind, domain.SharePrefix, hash, kind == domain.ShareForm, by, kind, sealed, expires).Take(&m).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "share link")
 	}
@@ -277,6 +278,9 @@ type hookRow struct {
 	LastStatus   *int       `gorm:"column:last_status"`
 	LastError    string     `gorm:"column:last_error"`
 	LastAt       *time.Time `gorm:"column:last_at"`
+	Failures     int        `gorm:"column:failures"`
+	PausedAt     *time.Time `gorm:"column:paused_at"`
+	CreatedBy    *uuid.UUID `gorm:"column:created_by"`
 }
 
 func (m hookRow) toDomain() domain.Webhook {
@@ -285,6 +289,7 @@ func (m hookRow) toDomain() domain.Webhook {
 	return domain.Webhook{
 		ID: m.ID.String(), CollectionID: m.CollectionID.String(), URL: m.URL, Secret: m.Secret, Events: events,
 		CreatedAt: m.CreatedAt, LastStatus: m.LastStatus, LastError: m.LastError, LastAt: m.LastAt,
+		Failures: m.Failures, PausedAt: m.PausedAt, CreatedBy: idOrEmpty(m.CreatedBy),
 	}
 }
 
@@ -302,18 +307,18 @@ func (r *Repository) hooks(q *gorm.DB) ([]domain.Webhook, error) {
 
 func (r *Repository) Webhooks(ctx context.Context, collectionID string) ([]domain.Webhook, error) {
 	return r.hooks(r.db.WithContext(ctx).Raw(`
-		SELECT id, collection_id, url, array_to_json(events)::text AS events, created_at, last_status, last_error, last_at
+		SELECT id, collection_id, url, array_to_json(events)::text AS events, created_at, last_status, last_error, last_at, failures, paused_at
 		FROM app.webhook WHERE collection_id = ? ORDER BY created_at`, collectionID))
 }
 
 func (r *Repository) WebhooksFor(ctx context.Context, collectionID, event string) ([]domain.Webhook, error) {
 	return r.hooks(r.db.WithContext(ctx).Raw(`
-		SELECT id, url FROM app.webhook WHERE collection_id = ? AND ? = ANY (events)`, collectionID, event))
+		SELECT id, url FROM app.webhook WHERE collection_id = ? AND ? = ANY (events) AND paused_at IS NULL`, collectionID, event))
 }
 
 func (r *Repository) Webhook(ctx context.Context, id string) (*domain.Webhook, error) {
 	var m hookRow
-	err := r.db.WithContext(ctx).Raw(`SELECT id, collection_id, url, secret, array_to_json(events)::text AS events FROM app.webhook WHERE id = ?`, id).Take(&m).Error
+	err := r.db.WithContext(ctx).Raw(`SELECT id, collection_id, url, secret, array_to_json(events)::text AS events, paused_at, created_by FROM app.webhook WHERE id = ?`, id).Take(&m).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "webhook")
 	}
@@ -350,11 +355,47 @@ func (r *Repository) DeleteWebhook(ctx context.Context, collectionID, id string)
 	return urls[0], nil
 }
 
-func (r *Repository) WebhookResult(ctx context.Context, id string, status int, errText string) error {
+func (r *Repository) WebhookResult(ctx context.Context, id string, status int, errText string) (bool, error) {
 	var s *int
 	if status > 0 {
 		s = &status
 	}
-	err := r.db.WithContext(ctx).Exec(`UPDATE app.webhook SET last_status = ?, last_error = ?, last_at = now() WHERE id = ?`, s, errText, id).Error
-	return shared.WrapError(err, "webhook")
+	// Only the failure that reaches the limit reports the pause, so the owner hears of it once.
+	var paused []bool
+	err := r.db.WithContext(ctx).Raw(`
+		UPDATE app.webhook SET last_status = ?, last_error = ?, last_at = now(),
+			failures = CASE WHEN ? = '' THEN 0 ELSE failures + 1 END,
+			paused_at = CASE WHEN ? <> '' AND failures + 1 >= ? THEN COALESCE(paused_at, now()) ELSE paused_at END
+		WHERE id = ? RETURNING last_error <> '' AND failures = ?`,
+		s, errText, errText, errText, domain.HookPauseAfter, id, domain.HookPauseAfter).Find(&paused).Error
+	if err != nil {
+		return false, shared.WrapError(err, "webhook")
+	}
+	return len(paused) == 1 && paused[0], nil
+}
+
+func (r *Repository) UpdateWebhook(ctx context.Context, w *domain.Webhook, enabled bool) error {
+	events, err := json.Marshal(w.Events)
+	if err != nil {
+		return err
+	}
+	res := r.db.WithContext(ctx).Exec(`
+		UPDATE app.webhook SET url = ?, events = ARRAY(SELECT jsonb_array_elements_text(?::jsonb)),
+			paused_at = CASE WHEN ? THEN NULL ELSE COALESCE(paused_at, now()) END,
+			failures = CASE WHEN ? THEN 0 ELSE failures END
+		WHERE id = ? AND collection_id = ?`, w.URL, string(events), enabled, enabled, w.ID, w.CollectionID)
+	if res.Error != nil {
+		return shared.WrapError(res.Error, "webhook")
+	}
+	if res.RowsAffected == 0 {
+		return shared.WrapError(gorm.ErrRecordNotFound, "webhook")
+	}
+	return nil
+}
+
+func idOrEmpty(id *uuid.UUID) string {
+	if id == nil {
+		return ""
+	}
+	return id.String()
 }

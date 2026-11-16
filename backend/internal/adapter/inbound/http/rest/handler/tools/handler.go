@@ -39,6 +39,7 @@ func (h *Handler) CollectionRoutes(r fiber.Router) {
 	r.Delete("/:id/shares/:shareId", h.DeleteShare)
 	r.Get("/:id/webhooks", h.Webhooks)
 	r.Post("/:id/webhooks", h.CreateWebhook)
+	r.Patch("/:id/webhooks/:hookId", h.UpdateWebhook)
 	r.Delete("/:id/webhooks/:hookId", h.DeleteWebhook)
 	r.Post("/:id/webhooks/:hookId/test", h.TestWebhook)
 	r.Get("/:id/webhooks/:hookId/deliveries", h.Deliveries)
@@ -72,6 +73,7 @@ func (h *Handler) MeRoutes(r fiber.Router) {
 	r.Post("/", h.CreateMyKey)
 	r.Put("/:keyId", h.UpdateMyKey)
 	r.Delete("/:keyId", h.DeleteMyKey)
+	r.Get("/:keyId/calls", h.KeyMCPCalls)
 }
 
 // RecordRoutes mounts on /v1/records before its /:id routes.
@@ -262,10 +264,11 @@ type shareDTO struct {
 	Token      string     `json:"token"`
 	CreatedAt  time.Time  `json:"created_at"`
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
 }
 
 func toShareDTO(s domain.Share) shareDTO {
-	return shareDTO{ID: s.ID, Kind: s.Kind, Token: s.Token, CreatedAt: s.CreatedAt, LastUsedAt: s.LastUsedAt}
+	return shareDTO{ID: s.ID, Kind: s.Kind, Token: s.Token, CreatedAt: s.CreatedAt, LastUsedAt: s.LastUsedAt, ExpiresAt: s.ExpiresAt}
 }
 
 // @Summary A collection's share links; owners
@@ -294,7 +297,7 @@ func (h *Handler) Shares(c fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Param id path string true "Collection ID"
-// @Param body body object{kind=string} true "Link"
+// @Param body body object{kind=string,expires_in_days=int} true "Link; expires_in_days 1 to 365, or 0 for no end"
 // @Security BearerAuth
 // @Success 201 {object} shareDTO
 // @Failure 400 {object} mapper.errorBody
@@ -302,12 +305,13 @@ func (h *Handler) Shares(c fiber.Ctx) error {
 // @Router /v1/collections/{id}/shares [post]
 func (h *Handler) CreateShare(c fiber.Ctx) error {
 	var body struct {
-		Kind string `json:"kind"`
+		Kind          string `json:"kind"`
+		ExpiresInDays int    `json:"expires_in_days"`
 	}
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	s, err := h.integrations.CreateShare(c.Context(), c.Params("id"), body.Kind)
+	s, err := h.integrations.CreateShare(c.Context(), c.Params("id"), body.Kind, body.ExpiresInDays)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -337,10 +341,13 @@ type webhookDTO struct {
 	LastStatus *int       `json:"last_status,omitempty"`
 	LastError  string     `json:"last_error,omitempty"`
 	LastAt     *time.Time `json:"last_at,omitempty"`
+	// Failures counts failed calls in a row; at 10 the hook pauses (paused_at) until resumed.
+	Failures int        `json:"failures"`
+	PausedAt *time.Time `json:"paused_at,omitempty"`
 }
 
 func toHookDTO(w domain.Webhook) webhookDTO {
-	return webhookDTO{ID: w.ID, URL: w.URL, Events: w.Events, CreatedAt: w.CreatedAt, LastStatus: w.LastStatus, LastError: w.LastError, LastAt: w.LastAt}
+	return webhookDTO{ID: w.ID, URL: w.URL, Events: w.Events, CreatedAt: w.CreatedAt, LastStatus: w.LastStatus, LastError: w.LastError, LastAt: w.LastAt, Failures: w.Failures, PausedAt: w.PausedAt}
 }
 
 // @Summary A collection's webhooks; owners
@@ -394,6 +401,38 @@ func (h *Handler) CreateWebhook(c fiber.Ctx) error {
 		return fail(c, err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(newHookDTO{webhookDTO: toHookDTO(w.Webhook), Secret: w.Secret})
+}
+
+type updateHookDTO struct {
+	URL    string   `json:"url" example:"https://example.com/hooks/dataset"`
+	Events []string `json:"events" example:"record.created"`
+	// Enabled false pauses the hook; true resumes it and clears its failures.
+	Enabled bool `json:"enabled" example:"true"`
+}
+
+// @Summary Change, pause or resume a webhook; owners
+// @Description Keeps the signing secret. A hook pauses by itself after 10 failed calls in a row; send enabled true to resume it.
+// @Tags Webhooks
+// @Accept json
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Param hookId path string true "Webhook ID"
+// @Param body body updateHookDTO true "Webhook"
+// @Security BearerAuth
+// @Success 200 {object} webhookDTO
+// @Failure 400 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Router /v1/collections/{id}/webhooks/{hookId} [patch]
+func (h *Handler) UpdateWebhook(c fiber.Ctx) error {
+	var body updateHookDTO
+	if err := c.Bind().Body(&body); err != nil {
+		return badBody(c)
+	}
+	w, err := h.integrations.UpdateWebhook(c.Context(), c.Params("id"), c.Params("hookId"), body.URL, body.Events, body.Enabled)
+	if err != nil {
+		return fail(c, err)
+	}
+	return c.JSON(toHookDTO(*w))
 }
 
 // @Summary Delete a webhook; owners

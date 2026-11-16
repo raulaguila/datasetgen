@@ -186,9 +186,17 @@ func (r *Repository) AutomationsFor(ctx context.Context, collectionID, trigger s
 	return out, nil
 }
 
-func (r *Repository) AutomationRan(ctx context.Context, id, errText string) error {
-	err := r.db.WithContext(ctx).Exec(`UPDATE app.automation SET last_run_at = now(), last_error = ?, runs = runs + 1 WHERE id = ?`, errText, id).Error
-	return shared.WrapError(err, "automation")
+func (r *Repository) AutomationRan(ctx context.Context, id, errText string) (bool, error) {
+	// The CTE reads the row as it was before the update: a new error after none is the first failure.
+	var first []bool
+	err := r.db.WithContext(ctx).Raw(`
+		WITH before AS (SELECT last_error FROM app.automation WHERE id = ?)
+		UPDATE app.automation SET last_run_at = now(), last_error = ?, runs = runs + 1 WHERE id = ?
+		RETURNING ? <> '' AND (SELECT last_error FROM before) = ''`, id, errText, id, errText).Find(&first).Error
+	if err != nil {
+		return false, shared.WrapError(err, "automation")
+	}
+	return len(first) == 1 && first[0], nil
 }
 
 // shortcut: claims at most 100 daily automations per tick; the next tick takes the rest.

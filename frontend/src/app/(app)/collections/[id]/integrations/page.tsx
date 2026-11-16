@@ -4,7 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { Tabs } from "@base-ui/react/tabs";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, KeyRound, Link2, Plug, Send, Trash2, Webhook as WebhookIcon } from "lucide-react";
+import { ExternalLink, KeyRound, Link2, Pause, Pencil, Play, Plug, Send, Trash2, Webhook as WebhookIcon } from "lucide-react";
 import { toast } from "sonner";
 import { FormError, FormSection, FormSections, IconAction, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -15,10 +15,11 @@ import { ListSkeleton } from "@/components/skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { tools } from "@/lib/api/endpoints";
-import { WEBHOOK_EVENTS, type Collection, type ShareLink, type WebhookEvent } from "@/lib/api/types";
+import { WEBHOOK_EVENTS, type Collection, type ShareLink, type Webhook, type WebhookEvent } from "@/lib/api/types";
 import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
@@ -77,6 +78,8 @@ function Keys({ collection }: { collection: Collection }) {
   );
 }
 
+const SHARE_DAYS = ["7", "30", "90", "0"];
+
 /** Public links: a form anyone can fill, or a read-only list. The link is the access. */
 function Shares({ collection }: { collection: Collection }) {
   const { t } = useI18n();
@@ -85,8 +88,10 @@ function Shares({ collection }: { collection: Collection }) {
   const key = ["shares", collection.id];
   const list = useQuery({ queryKey: key, queryFn: () => tools.shares(collection.id) });
   const [removing, setRemoving] = useState<{ id: string; kind: ShareLink["kind"] } | null>(null);
+  const [days, setDays] = useState("30");
+  const dayNames: Record<string, string> = Object.fromEntries(SHARE_DAYS.map((d) => [d, d === "0" ? t("keys.expires_never") : t("keys.expires_days").replace("{n}", d)]));
   const create = useMutation({
-    mutationFn: (kind: ShareLink["kind"]) => tools.createShare(collection.id, kind),
+    mutationFn: (kind: ShareLink["kind"]) => tools.createShare(collection.id, kind, Number(days)),
     onSuccess: () => void client.invalidateQueries({ queryKey: key }),
   });
   const items = list.data?.items ?? [];
@@ -104,7 +109,11 @@ function Shares({ collection }: { collection: Collection }) {
                 <div className="min-w-48 flex-1">
                   <p className="text-sm font-medium">{kindName(s.kind)}</p>
                   <p className="truncate font-mono text-xs text-muted-foreground">{urlOf(s)}</p>
-                  <p className="text-xs text-muted-foreground">{s.last_used_at ? t("integrations.used_at").replace("{at}", format(s.last_used_at)) : t("integrations.never_used")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {s.last_used_at ? t("integrations.used_at").replace("{at}", format(s.last_used_at)) : t("integrations.never_used")}
+                    {" · "}
+                    {!s.expires_at ? t("share.no_end") : new Date(s.expires_at) < new Date() ? <span className="text-destructive">{t("share.expired")}</span> : t("share.expires_at").replace("{at}", format(s.expires_at))}
+                  </p>
                 </div>
                 <CopyButton text={urlOf(s)} />
                 <Button size="sm" variant="ghost" nativeButton={false} render={<a href={urlOf(s)} target="_blank" rel="noreferrer" />}><ExternalLink className="size-4" />{t("share.open")}</Button>
@@ -114,6 +123,10 @@ function Shares({ collection }: { collection: Collection }) {
           </ul>
         )}
         <div className="flex flex-wrap gap-2">
+          <Select value={days} items={dayNames} onValueChange={(v) => setDays(String(v))}>
+            <SelectTrigger className="w-44" aria-label={t("share.validity")}><SelectValue /></SelectTrigger>
+            <SelectContent>{SHARE_DAYS.map((d) => <SelectItem key={d} value={d}>{dayNames[d]}</SelectItem>)}</SelectContent>
+          </Select>
           <Button variant="outline" disabled={create.isPending} onClick={() => create.mutate("form")}><Link2 className="size-4" />{t("share.create_form")}</Button>
           <Button variant="outline" disabled={create.isPending} onClick={() => create.mutate("view")}><Link2 className="size-4" />{t("share.create_view")}</Button>
         </div>
@@ -184,11 +197,21 @@ function Webhooks({ collection }: { collection: Collection }) {
   const [secret, setSecret] = useState<string | null>(null);
   const [removing, setRemoving] = useState<{ id: string; url: string } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-  const close = () => { setAdding(false); setUrl(""); setEvents([...WEBHOOK_EVENTS]); };
-  const create = useMutation({
-    mutationFn: () => tools.createWebhook(collection.id, url.trim(), events),
-    onSuccess: (w) => { setSecret(w.secret); close(); void client.invalidateQueries({ queryKey: key }); },
+  // "new" opens an empty form; a hook opens it filled, to change its address or events.
+  const [editing, setEditing] = useState<Webhook | "new" | null>(null);
+  const close = () => { setEditing(null); setUrl(""); setEvents([...WEBHOOK_EVENTS]); };
+  const edit = (w: Webhook) => { save.reset(); setEditing(w); setUrl(w.url); setEvents(w.events); };
+  const save = useMutation({
+    mutationFn: async () => {
+      if (editing && editing !== "new") return { ...(await tools.updateWebhook(collection.id, editing.id, url.trim(), events, !editing.paused_at)), secret: null };
+      return tools.createWebhook(collection.id, url.trim(), events);
+    },
+    onSuccess: (w) => { if (w.secret) setSecret(w.secret); else toast.success(t("common.saved")); close(); void client.invalidateQueries({ queryKey: key }); },
+  });
+  const pause = useMutation({
+    mutationFn: (w: Webhook) => tools.updateWebhook(collection.id, w.id, w.url, w.events, !!w.paused_at),
+    onSuccess: (w) => { toast.success(t(w.paused_at ? "integrations.hook_paused_done" : "integrations.hook_resumed")); void client.invalidateQueries({ queryKey: key }); },
+    onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
   });
   const eventName = (e: WebhookEvent) => t(`webhook.event.${e}`);
   const test = useMutation({
@@ -215,7 +238,11 @@ function Webhooks({ collection }: { collection: Collection }) {
               return (
                 <li key={w.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
                   <div className="min-w-48 flex-1">
-                    <p className="flex min-w-0 items-center gap-2 text-sm"><span className="truncate font-mono">{w.url}</span>{failed && <Badge variant="destructive">{t("integrations.hook_failing")}</Badge>}</p>
+                    <p className="flex min-w-0 items-center gap-2 text-sm">
+                      <span className="truncate font-mono">{w.url}</span>
+                      {w.paused_at ? <Badge variant="outline">{t("integrations.hook_paused")}</Badge> : failed && <Badge variant="destructive">{t("integrations.hook_failing")}</Badge>}
+                    </p>
+                    {w.paused_at && <p className="text-xs text-muted-foreground">{t("integrations.hook_paused_hint").replace("{at}", format(w.paused_at))}</p>}
                     <p className="text-xs text-muted-foreground">
                       {w.events.map(eventName).join(", ")}
                       {w.last_at && (
@@ -227,6 +254,10 @@ function Webhooks({ collection }: { collection: Collection }) {
                   </div>
                   <Button type="button" size="sm" variant="outline" disabled={test.isPending} onClick={() => test.mutate(w.id)}><Send className="size-4" />{t("integrations.test")}</Button>
                   <Button type="button" size="sm" variant="ghost" aria-expanded={open === w.id} onClick={() => setOpen(open === w.id ? null : w.id)}>{t("deliveries.title")}</Button>
+                  <Button type="button" size="sm" variant="ghost" disabled={pause.isPending} onClick={() => pause.mutate(w)}>
+                    {w.paused_at ? <><Play className="size-4" />{t("integrations.hook_resume")}</> : <><Pause className="size-4" />{t("integrations.hook_pause")}</>}
+                  </Button>
+                  <IconAction label={t("common.edit")} target={w.url} onClick={() => edit(w)}><Pencil className="size-4" /></IconAction>
                   <IconAction label={t("common.delete")} target={w.url} className="text-destructive" onClick={() => setRemoving(w)}><Trash2 className="size-4" /></IconAction>
                   {open === w.id && <div className="basis-full"><Deliveries collection={collection} hookId={w.id} /></div>}
                 </li>
@@ -234,8 +265,9 @@ function Webhooks({ collection }: { collection: Collection }) {
             })}
           </ul>
         )}
-        {adding ? (
-          <form className="space-y-3 rounded-md border p-3" aria-label={t("integrations.hook_new")} onSubmit={(e) => { e.preventDefault(); if (url.trim() && events.length) create.mutate(); }}>
+        {editing ? (
+          <form className="space-y-3 rounded-md border p-3" aria-label={t(editing === "new" ? "integrations.hook_new" : "integrations.hook_edit")} onSubmit={(e) => { e.preventDefault(); if (url.trim() && events.length) save.mutate(); }}>
+            {editing !== "new" && <p className="text-xs text-muted-foreground">{t("integrations.hook_edit_hint")}</p>}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="hook-url">{t("integrations.hook_url")}</Label>
               <Input id="hook-url" type="url" inputMode="url" placeholder="https://" maxLength={2000} value={url} onChange={(e) => setUrl(e.target.value)} autoFocus />
@@ -248,14 +280,16 @@ function Webhooks({ collection }: { collection: Collection }) {
                 </label>
               ))}
             </fieldset>
-            <FormError message={create.isError ? errorMessage(create.error, "common.save_failed", t) : null} />
+            <FormError message={save.isError ? errorMessage(save.error, "common.save_failed", t) : null} />
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={!url.trim() || !events.length || create.isPending}><WebhookIcon className="size-4" />{t("integrations.create_hook")}</Button>
-              <Button type="button" variant="ghost" onClick={() => { create.reset(); close(); }}>{t("common.cancel")}</Button>
+              <Button type="submit" disabled={!url.trim() || !events.length || save.isPending}>
+                {editing === "new" ? <><WebhookIcon className="size-4" />{t("integrations.create_hook")}</> : t("common.save")}
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => { save.reset(); close(); }}>{t("common.cancel")}</Button>
             </div>
           </form>
         ) : (
-          <Button variant="outline" onClick={() => setAdding(true)}><WebhookIcon className="size-4" />{t("integrations.hook_new")}</Button>
+          <Button variant="outline" onClick={() => { save.reset(); setEditing("new"); }}><WebhookIcon className="size-4" />{t("integrations.hook_new")}</Button>
         )}
         <details className="text-sm">
           <summary className="cursor-pointer font-medium">{t("integrations.docs_signature")}</summary>

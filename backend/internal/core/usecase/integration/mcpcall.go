@@ -9,6 +9,7 @@ import (
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/pkg/apperror"
 	"github.com/raulaguila/dataset/pkg/reqctx"
+	"github.com/raulaguila/dataset/pkg/validate"
 )
 
 const (
@@ -26,6 +27,13 @@ func (s *Service) MCPCalls(ctx context.Context, collectionID string) ([]domain.M
 		return nil, err
 	}
 	return s.Store.Integrations().MCPCalls(ctx, collectionID, mcpCallsShown)
+}
+
+func (s *Service) KeyMCPCalls(ctx context.Context, keyID string) ([]domain.MCPCall, error) {
+	if err := validate.ID(keyID); err != nil {
+		return nil, err
+	}
+	return s.Store.Integrations().KeyMCPCalls(ctx, keyID, reqctx.Actor(ctx), mcpCallsShown)
 }
 
 func (s *Service) PruneMCPCalls(ctx context.Context) error {

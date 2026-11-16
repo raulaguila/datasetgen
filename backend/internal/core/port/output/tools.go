@@ -29,7 +29,7 @@ type IntegrationRepository interface {
 	DeleteShare(ctx context.Context, collectionID, id string) (string, error)
 	// Shares lists the collection's share links, tokens sealed.
 	Shares(ctx context.Context, collectionID string) ([]domain.Share, error)
-	CreateShare(ctx context.Context, collectionID, kind, sealed string, hash []byte, by string) (*domain.Share, error)
+	CreateShare(ctx context.Context, collectionID, kind, sealed string, hash []byte, by string, expires *time.Time) (*domain.Share, error)
 	// Grant finds a key by its hash; its member must still be active. It marks
 	// the key used (at most once a minute). NotFound when nothing matches.
 	Grant(ctx context.Context, hash []byte) (*domain.KeyGrant, error)
@@ -41,7 +41,10 @@ type IntegrationRepository interface {
 	CreateWebhook(ctx context.Context, w *domain.Webhook, createdBy string) error
 	// DeleteWebhook returns the removed hook's URL.
 	DeleteWebhook(ctx context.Context, collectionID, id string) (string, error)
-	WebhookResult(ctx context.Context, id string, status int, errText string) error
+	// WebhookResult records a call; paused is true when this failure paused the hook.
+	WebhookResult(ctx context.Context, id string, status int, errText string) (paused bool, err error)
+	// UpdateWebhook sets a hook's address and events; resume clears its pause and failures, pause sets it.
+	UpdateWebhook(ctx context.Context, w *domain.Webhook, enabled bool) error
 	// LogDelivery keeps a call and its answer, dropping all but the newest 50 of the hook.
 	LogDelivery(ctx context.Context, d *domain.WebhookDelivery) error
 	Deliveries(ctx context.Context, webhookID string, limit int) ([]domain.WebhookDelivery, error)
@@ -56,7 +59,8 @@ type IntegrationRepository interface {
 	DeleteAutomation(ctx context.Context, collectionID, id string) (string, error)
 	// AutomationsFor lists the enabled automations of a collection with this trigger.
 	AutomationsFor(ctx context.Context, collectionID, trigger string) ([]string, error)
-	AutomationRan(ctx context.Context, id, errText string) error
+	// AutomationRan records a run; firstFailure is true when it failed after a run that did not.
+	AutomationRan(ctx context.Context, id, errText string) (firstFailure bool, err error)
 	// MCPTools lists a collection's MCP tools; KeyMCPTools the enabled ones of
 	// the given live collections, with the collection name.
 	MCPTools(ctx context.Context, collectionID string) ([]domain.MCPTool, error)
@@ -71,6 +75,8 @@ type IntegrationRepository interface {
 	// (up to limit, with the member's name); PruneMCPCalls drops those before a time.
 	LogMCPCalls(ctx context.Context, calls []domain.MCPCall) error
 	MCPCalls(ctx context.Context, collectionID string, limit int) ([]domain.MCPCall, error)
+	// KeyMCPCalls lists one key's newest calls across collections, if userID made the key.
+	KeyMCPCalls(ctx context.Context, keyID, userID string, limit int) ([]domain.MCPCall, error)
 	PruneMCPCalls(ctx context.Context, before time.Time) error
 	// DueDaily claims the enabled daily automations whose hour has come and that
 	// have not run today, stamping them run, and returns their ids.

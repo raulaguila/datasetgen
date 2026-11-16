@@ -58,7 +58,12 @@ function McpConnectCard({ secret }: { secret: string | null }) {
   const codex = `# export DATASET_KEY="${key}"\n[mcp_servers.dataset]\nurl = "${url}"\nbearer_token_env_var = "DATASET_KEY"`;
   const openai = `curl https://api.openai.com/v1/responses \\\n  -H "Authorization: Bearer $OPENAI_API_KEY" -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({
     model: "gpt-5",
-    tools: [{ type: "mcp", server_label: "dataset", server_url: url, headers: { Authorization: `Bearer ${key}` }, require_approval: "never" }],
+    // Read tools only: with require_approval "never", a write tool would let the model change or delete records unasked.
+    tools: [{
+      type: "mcp", server_label: "dataset", server_url: url, headers: { Authorization: `Bearer ${key}` },
+      allowed_tools: ["list_collections", "get_collection", "search_records", "get_record", "related_records", "collection_stats"],
+      require_approval: "never",
+    }],
     input: t("mcp_connect.openai_prompt"),
   }, null, 2)}'`;
 
@@ -73,7 +78,8 @@ function McpConnectCard({ secret }: { secret: string | null }) {
     { id: "claude-code", name: "Claude Code", code: claudeCode },
     { id: "claude-desktop", name: "Claude Desktop", hint: t("mcp_connect.desktop_hint"), code: desktop },
     { id: "codex", name: "Codex", hint: t("mcp_connect.codex_hint"), code: codex },
-    { id: "openai", name: t("mcp_connect.openai_api"), hint: t("mcp_connect.openai_hint"), code: openai, note: t("mcp_connect.chatgpt_note") },
+    { id: "openai", name: t("mcp_connect.openai_api"), hint: t("mcp_connect.openai_hint"), code: openai, note: t("mcp_connect.openai_readonly") },
+    { id: "chatgpt", name: "ChatGPT", hint: t("mcp_connect.chatgpt_hint"), code: url },
     { id: "other", name: t("mcp_connect.generic"), hint: t("mcp_connect.generic_hint"), code: generic },
   ];
 

@@ -5,6 +5,7 @@
 // so the API answers on this one public address; the backend scopes the key.
 import { NextRequest, NextResponse } from "next/server";
 import { apiUrl, forwardHeaders, refreshSession } from "@/lib/api/upstream";
+import { resourceMetadata } from "@/lib/oauth";
 import { clearSessionCookie, readSession, unauthorized, writeSessionCookie, type Session } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +36,12 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   const open = routed.startsWith("v1/public/");
   const apiKey = req.headers.get("x-api-key") ?? req.headers.get("authorization")?.match(/^Bearer (dsk_\S+)$/)?.[1];
   const { session, present } = apiKey || open ? { session: null, present: false } : await readSession();
-  if (!session && !apiKey && !open) return unauthorized(present);
+  if (!session && !apiKey && !open) {
+    const out = await unauthorized(present);
+    // An MCP client without a key learns where to get one (OAuth, RFC 9728).
+    if (routed.startsWith("v1/mcp")) out.headers.set("www-authenticate", `Bearer resource_metadata="${resourceMetadata(req.nextUrl.origin)}"`);
+    return out;
+  }
 
   // Bytes, not text: an image body would not survive a UTF-8 round trip.
   const raw = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
@@ -94,6 +100,7 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
     const value = upstream.headers.get(name);
     if (value) out.headers.set(name, value);
   }
+  if (upstream.status === 401 && routed.startsWith("v1/mcp")) out.headers.set("www-authenticate", `Bearer resource_metadata="${resourceMetadata(req.nextUrl.origin)}"`);
   if (apiKey || open) return out;
   if (upstream.status === 401) await clearSessionCookie(out);
   else if (rotated) await writeSessionCookie(out, rotated);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC = ["/login", "/register", "/activate", "/forgot-password", "/reset-password", "/f", "/s"];
+// /.well-known and the OAuth register and token endpoints answer MCP clients, which have no session.
+const PUBLIC = ["/login", "/register", "/activate", "/forgot-password", "/reset-password", "/f", "/s", "/.well-known", "/oauth/register", "/oauth/token"];
 
 // Coarse gate by cookie presence; the API validates the session. A present but
 // invalid cookie is cleared by the BFF on 401, so /login never loops.
@@ -15,7 +16,8 @@ export function proxy(req: NextRequest) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
-    if (pathname !== "/") url.searchParams.set("next", pathname);
+    // The query goes along: the OAuth consent page needs its client's parameters back.
+    if (pathname !== "/") url.searchParams.set("next", pathname + req.nextUrl.search);
     return NextResponse.redirect(url);
   }
   return NextResponse.next();

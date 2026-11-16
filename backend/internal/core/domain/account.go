@@ -46,6 +46,8 @@ const (
 	NotifyPasswordReset   = "password_reset"   // no params
 	NotifyPasswordChanged = "password_changed" // no params
 	NotifyCollectionAdded = "collection_added" // params: collection, collection_id, role
+	NotifyWebhookPaused   = "webhook_paused"   // params: url, collection, collection_id
+	NotifyAutomationError = "automation_error" // params: automation, collection_id, error
 )
 
 // Notification is a notice shown to one user.

@@ -96,6 +96,8 @@ func New(cfg *config.Environment, app *input.Application, hits middleware.Hits, 
 	notificationhttp.New(app.Account).Routes(me.Group("/notifications"))
 	tools := toolshttp.New(app.Integrations, app.Tools, app.Records)
 	tools.MeRoutes(me.Group("/keys"))
+	// Assistants that cannot take a pasted key (the ChatGPT app) get one through OAuth.
+	tools.OAuthRoutes(v1.Group("/oauth"), bearer, middleware.RateLimit("oauth", cfg.API.AuthRateLimit, hits))
 
 	users := v1.Group("/users", token)
 	usershttp.New(app.Users, app.Auth).Routes(users, app.Authorizer)
