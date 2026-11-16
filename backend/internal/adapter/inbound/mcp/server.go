@@ -29,7 +29,13 @@ const maxRecords = 50 // per search_records call: enough to read, small enough f
 func Handler(app *input.Application, version string) http.Handler {
 	h := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { return newServer(r.Context(), app, version) },
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
-	return keyOnly(app.Integrations, h)
+	return keyOnly(app.Integrations, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Answers are always JSON (JSONResponse), so a client asking for JSON alone, as Swagger does, gets in too.
+		if r.Method == http.MethodPost {
+			r.Header.Set("Accept", "application/json, text/event-stream")
+		}
+		h.ServeHTTP(w, r)
+	}))
 }
 
 func newServer(ctx context.Context, app *input.Application, version string) *mcp.Server {
@@ -78,7 +84,7 @@ func keyOnly(keys input.IntegrationService, next http.Handler) http.Handler {
 		grant, err := keys.AuthenticateKey(r.Context(), secret)
 		if err != nil {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="dataset", error="invalid_token"`)
-			http.Error(w, "an API key is required: Authorization: Bearer dsk_...", http.StatusUnauthorized)
+			http.Error(w, "a valid API key is required: X-API-Key: dsk_... or Authorization: Bearer dsk_...", http.StatusUnauthorized)
 			return
 		}
 		ctx := reqctx.WithActor(r.Context(), grant.UserID)

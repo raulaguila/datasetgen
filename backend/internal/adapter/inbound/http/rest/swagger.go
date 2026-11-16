@@ -3,6 +3,7 @@ package rest
 import (
 	_ "embed"
 	"html/template"
+	"net/http"
 
 	"github.com/gofiber/contrib/v3/swaggo"
 	"github.com/gofiber/fiber/v3"
@@ -87,18 +88,69 @@ func mountSwagger(app *fiber.App, version string) {
 	}))
 }
 
-// mountMCP serves the MCP tools; the route lives here so its annotations sit with the docs.
+// mountMCP serves the MCP endpoint and its plain JSON shortcuts; the routes live
+// here so their annotations sit with the docs. The key goes in X-API-Key per
+// request, so testing here never replaces the session token in Authorize.
+func mountMCP(app *fiber.App, a *input.Application, version string) {
+	h := mcpserver.Handler(a, version)
+	mcpRPC(app, h)
+	short := adaptor.HTTPHandler(mcpserver.Shortcuts(h))
+	mcpListTools(app, short)
+	mcpCallTool(app, short)
+}
+
+// mcpRequest is a JSON-RPC 2.0 request as an MCP client sends it.
+type mcpRequest struct {
+	JSONRPC string         `json:"jsonrpc" example:"2.0"`
+	ID      int            `json:"id" example:"1"`
+	Method  string         `json:"method" example:"tools/list"`
+	Params  map[string]any `json:"params,omitempty" swaggerignore:"true"` // tools/call: {"name": ..., "arguments": {...}}
+}
+
+// mcpRPC is the endpoint assistants use.
 //
 //	@Summary		MCP endpoint for AI assistants (JSON-RPC 2.0, streamable HTTP, stateless)
-//	@Description	Takes an API key only ("Authorization: Bearer dsk_..." or "X-API-Key"). Read tools, each limited to the key's collections: list_collections, get_collection, search_records, get_record, related_records, collection_stats. Send tools/list to see their inputs.
+//	@Description	The address an assistant connects to. Takes an API key only (X-API-Key, or "Authorization: Bearer dsk_..." from assistants). Methods: initialize, tools/list, tools/call ({"name":"list_collections","arguments":{}}). Tools, limited to the key's collections: list_collections, get_collection, search_records, get_record, related_records, collection_stats; with a write scope create_record, update_record and delete_records; plus the tools collection owners publish. GET /v1/mcp/tools and POST /v1/mcp/tools/{name} do the same without the JSON-RPC envelope.
 //	@Tags			MCP
 //	@Accept			json
 //	@Produce		json
-//	@Param			body	body	object	true	"JSON-RPC request, e.g. {\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}"
-//	@Security		BearerAuth
-//	@Success		200	{object}	object
-//	@Failure		401	{string}	string
+//	@Param			X-API-Key	header	string		true	"API key (dsk_...)"
+//	@Param			body		body	mcpRequest	true	"JSON-RPC request"
+//	@Success		200			{object}	object
+//	@Failure		401			{string}	string
 //	@Router			/v1/mcp [post]
-func mountMCP(app *fiber.App, a *input.Application, version string) {
-	app.Post("/v1/mcp", adaptor.HTTPHandler(mcpserver.Handler(a, version)))
+func mcpRPC(app *fiber.App, h http.Handler) {
+	app.Post("/v1/mcp", adaptor.HTTPHandler(h))
+}
+
+// mcpListTools is tools/list without the envelope.
+//
+//	@Summary		List the MCP tools an API key gets
+//	@Description	The built-in tools, write tools when the key has a write scope, and the tools owners published in the key's collections, each with its description and inputSchema (the arguments POST /v1/mcp/tools/{name} takes).
+//	@Tags			MCP
+//	@Produce		json
+//	@Param			X-API-Key	header	string	true	"API key (dsk_...)"
+//	@Success		200			{object}	object	"tools: name, description, inputSchema"
+//	@Failure		401			{string}	string
+//	@Router			/v1/mcp/tools [get]
+func mcpListTools(app *fiber.App, h fiber.Handler) {
+	app.Get("/v1/mcp/tools", h)
+}
+
+// mcpCallTool is tools/call without the envelope.
+//
+//	@Summary		Call one MCP tool
+//	@Description	Runs the tool as an assistant would, with the key's scopes and the member's roles, and logs the call. The body holds the arguments from the tool's inputSchema; send {} for none. The answer is the MCP result: structuredContent holds the data; isError true means the tool refused (the reason is in content). An unknown tool or arguments outside the schema answer 400.
+//	@Tags			MCP
+//	@Accept			json
+//	@Produce		json
+//	@Param			X-API-Key	header	string	true	"API key (dsk_...)"
+//	@Param			name		path	string	true	"Tool name, e.g. list_collections"
+//	@Param			body		body	object	false	"Arguments from the tool inputSchema; {} for none"
+//	@Success		200			{object}	object
+//	@Failure		400			{object}	mapper.errorBody
+//	@Failure		401			{string}	string
+//	@Router			/v1/mcp/tools/{name} [post]
+func mcpCallTool(app *fiber.App, h fiber.Handler) {
+	app.Post("/v1/mcp/tools/:name", h)
 }

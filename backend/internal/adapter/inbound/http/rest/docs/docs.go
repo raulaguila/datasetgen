@@ -3559,12 +3559,7 @@ const docTemplate = `{
         },
         "/v1/mcp": {
             "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Takes an API key only (\"Authorization: Bearer dsk_...\" or \"X-API-Key\"). Read tools, each limited to the key's collections: list_collections, get_collection, search_records, get_record, related_records, collection_stats. Send tools/list to see their inputs.",
+                "description": "The address an assistant connects to. Takes an API key only (X-API-Key, or \"Authorization: Bearer dsk_...\" from assistants). Methods: initialize, tools/list, tools/call ({\"name\":\"list_collections\",\"arguments\":{}}). Tools, limited to the key's collections: list_collections, get_collection, search_records, get_record, related_records, collection_stats; with a write scope create_record, update_record and delete_records; plus the tools collection owners publish. GET /v1/mcp/tools and POST /v1/mcp/tools/{name} do the same without the JSON-RPC envelope.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3577,10 +3572,105 @@ const docTemplate = `{
                 "summary": "MCP endpoint for AI assistants (JSON-RPC 2.0, streamable HTTP, stateless)",
                 "parameters": [
                     {
-                        "description": "JSON-RPC request, e.g. {\\",
+                        "type": "string",
+                        "description": "API key (dsk_...)",
+                        "name": "X-API-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "JSON-RPC request",
                         "name": "body",
                         "in": "body",
                         "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.mcpRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/mcp/tools": {
+            "get": {
+                "description": "The built-in tools, write tools when the key has a write scope, and the tools owners published in the key's collections, each with its description and inputSchema (the arguments POST /v1/mcp/tools/{name} takes).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MCP"
+                ],
+                "summary": "List the MCP tools an API key gets",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API key (dsk_...)",
+                        "name": "X-API-Key",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "tools: name, description, inputSchema",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/mcp/tools/{name}": {
+            "post": {
+                "description": "Runs the tool as an assistant would, with the key's scopes and the member's roles, and logs the call. The body holds the arguments from the tool's inputSchema; send {} for none. The answer is the MCP result: structuredContent holds the data; isError true means the tool refused (the reason is in content). An unknown tool or arguments outside the schema answer 400.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "MCP"
+                ],
+                "summary": "Call one MCP tool",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API key (dsk_...)",
+                        "name": "X-API-Key",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tool name, e.g. list_collections",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Arguments from the tool inputSchema; {} for none",
+                        "name": "body",
+                        "in": "body",
                         "schema": {
                             "type": "object"
                         }
@@ -3591,6 +3681,12 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
                         }
                     },
                     "401": {
@@ -4827,13 +4923,13 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Rules as JSON: {\\",
+                        "description": "Rules as JSON: {'any': false, 'rules': [{'field': 'price', 'op': 'gt', 'value': 10}]} with double quotes; ops eq, neq, contains, gt, gte, lt, lte, empty, not_empty, in, has; any joins them by OR; groups (one level) bracket rules: {'any': true, 'groups': [{'rules': [...]}, {'rules': [...]}]}",
                         "name": "where",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "JSON object of top-level fields and exact values, up to 10, such as {\\",
+                        "description": "JSON object of top-level fields and exact values, up to 10, such as {'category': 'trigger'} with double quotes",
                         "name": "filter",
                         "in": "query"
                     }
@@ -7766,6 +7862,23 @@ const docTemplate = `{
                 },
                 "version": {
                     "type": "integer"
+                }
+            }
+        },
+        "rest.mcpRequest": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "jsonrpc": {
+                    "type": "string",
+                    "example": "2.0"
+                },
+                "method": {
+                    "type": "string",
+                    "example": "tools/list"
                 }
             }
         },

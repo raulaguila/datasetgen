@@ -212,8 +212,8 @@ func listFilter(c fiber.Ctx) (domain.RecordFilter, error) {
 // @Param search query string false "Text anywhere in the record JSON"
 // @Param sort query string false "Sort field" default(created_at)
 // @Param order query string false "Sort order" Enums(asc, desc) default(desc)
-// @Param where query string false "Rules as JSON: {\"any\": false, \"rules\": [{\"field\": \"price\", \"op\": \"gt\", \"value\": 10}]}; ops eq, neq, contains, gt, gte, lt, lte, empty, not_empty, in, has; any joins them by OR; groups (one level) bracket rules: {\"any\": true, \"groups\": [{\"rules\": [...]}, {\"rules\": [...]}]}"
-// @Param filter query string false "JSON object of top-level fields and exact values, up to 10, such as {\"category\":\"trigger\"}"
+// @Param where query string false "Rules as JSON: {'any': false, 'rules': [{'field': 'price', 'op': 'gt', 'value': 10}]} with double quotes; ops eq, neq, contains, gt, gte, lt, lte, empty, not_empty, in, has; any joins them by OR; groups (one level) bracket rules: {'any': true, 'groups': [{'rules': [...]}, {'rules': [...]}]}"
+// @Param filter query string false "JSON object of top-level fields and exact values, up to 10, such as {'category': 'trigger'} with double quotes"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]recordDTO,pagination=mapper.PaginationDTO}
 // @Failure 400 {object} mapper.errorBody

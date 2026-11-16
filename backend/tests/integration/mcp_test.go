@@ -165,6 +165,47 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 		t.Fatal("a deleted record still reads")
 	}
 
+	// Swagger asks for JSON alone and sends the key in X-API-Key; the shortcuts skip the envelope.
+	plain := func(method, path, body string, want int) map[string]any {
+		t.Helper()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("X-API-Key", key.Secret)
+		res, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+		data, _ := io.ReadAll(res.Body)
+		if res.StatusCode != want {
+			t.Fatalf("%s %s: %d want %d: %s", method, path, res.StatusCode, want, data)
+		}
+		var out map[string]any
+		_ = json.Unmarshal(data, &out)
+		return out
+	}
+	if out := plain("POST", "/v1/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 200); out["result"] == nil {
+		t.Fatalf("JSON-only accept: %v", out)
+	}
+	if tools, _ := plain("GET", "/v1/mcp/tools", "", 200)["tools"].([]any); len(tools) != 9 {
+		t.Fatal("GET /v1/mcp/tools: want 9 tools")
+	}
+	if got, _ := plain("POST", "/v1/mcp/tools/get_collection", `{"collection_id":"`+a+`"}`, 200)["structuredContent"].(map[string]any); got["schema"] == nil {
+		t.Fatal("POST /v1/mcp/tools/get_collection: no schema")
+	}
+	if out := plain("POST", "/v1/mcp/tools/get_collection", `{"collection_id":"`+hidden+`"}`, 200); out["isError"] != true {
+		t.Fatalf("shortcut reached a collection outside the key: %v", out)
+	}
+	if out := plain("POST", "/v1/mcp/tools/list_collections", `[`, 400); out["code"] != "INVALID_INPUT" {
+		t.Fatalf("bad body: %v", out)
+	}
+	plain("POST", "/v1/mcp/tools/no_such_tool", `{}`, 400)
+	req := httptest.NewRequest("GET", "/v1/mcp/tools", nil)
+	if res, err := app.Test(req); err != nil || res.StatusCode != 401 {
+		t.Fatalf("GET /v1/mcp/tools without a key: %v %v", res, err)
+	}
+
 	// Outside the key's collections everything reads as missing.
 	for tool, args := range map[string]any{
 		"get_collection":   map[string]any{"collection_id": hidden},
