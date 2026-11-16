@@ -46,6 +46,21 @@ type CredentialRepository interface {
 	// RecordSuccess clears the counters only if the verified hash is still current
 	// and no lock started meanwhile. False means the login must be refused.
 	RecordSuccess(ctx context.Context, userID, verifiedHash string, now time.Time) (bool, error)
+
+	// MFA is the user's second step, enabled or being set up; NOT_FOUND when none.
+	MFA(ctx context.Context, userID string) (*domain.MFA, error)
+	// SetupMFA stores a new secret to confirm, unless one is enabled (false then).
+	SetupMFA(ctx context.Context, userID, sealedSecret string) (bool, error)
+	// EnableMFA turns the stored secret on, taking step as used, and replaces
+	// the recovery codes; false when there is none to enable.
+	EnableMFA(ctx context.Context, userID string, step int64, codeHashes [][]byte, now time.Time) (bool, error)
+	// UseMFAStep takes a step's code once: false for that step or an earlier one.
+	UseMFAStep(ctx context.Context, userID string, step int64) (bool, error)
+	// UseRecoveryCode spends an unused recovery code; false when it is not one.
+	UseRecoveryCode(ctx context.Context, userID string, hash []byte, now time.Time) (bool, error)
+	RecoveryCodesLeft(ctx context.Context, userID string) (int, error)
+	// DeleteMFA removes the second step and its recovery codes.
+	DeleteMFA(ctx context.Context, userID string) error
 }
 
 // SessionRepository persists usr.usr_session.

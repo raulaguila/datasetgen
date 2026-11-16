@@ -89,13 +89,16 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 		}
 		failed, _ := res["isError"].(bool)
 		got, _ := res["structuredContent"].(map[string]any)
+		if failed {
+			got = map[string]any{"error": res["content"]} // the message, for a failure report
+		}
 		return got, failed
 	}
 
 	post("", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 401)
 	post("dsk_nope", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 401)
 	list := post(key.Secret, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 200)
-	if tools, _ := list["result"].(map[string]any)["tools"].([]any); len(tools) != 6 {
+	if tools, _ := list["result"].(map[string]any)["tools"].([]any); len(tools) != 9 {
 		t.Fatalf("tools: %v", list)
 	}
 
@@ -122,6 +125,36 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if got, failed := call("collection_stats", map[string]any{"collection_id": a}); failed || got["records"].(float64) != 2 {
 		t.Fatalf("collection_stats: %v", got)
 	}
+	// A read key cannot write; a write key creates, changes some fields and deletes.
+	if _, failed := call("create_record", map[string]any{"collection_id": a, "data": map[string]any{"nome": "x"}}); !failed {
+		t.Fatal("a read key created a record")
+	}
+	writer, err := keys.UpdateMyKey(owner, key.Key.ID, "Assistente", []domain.KeyScope{{CollectionID: a, CanWrite: true}})
+	if err != nil || !writer.Scopes[0].CanWrite {
+		t.Fatalf("update key: %+v, %v", writer, err)
+	}
+	got, failed := call("create_record", map[string]any{"collection_id": a, "data": map[string]any{"nome": "borracha", "preco": 1}})
+	if failed || got["id"] == nil {
+		t.Fatalf("create_record: %v", got)
+	}
+	made := got["id"].(string)
+	if _, failed := call("create_record", map[string]any{"collection_id": a, "data": map[string]any{"preco": "caro"}}); !failed {
+		t.Fatal("create_record took data against the schema")
+	}
+	got, failed = call("update_record", map[string]any{"record_id": made, "set": map[string]any{"preco": 3, "nome": nil}})
+	if data, _ := got["data"].(map[string]any); failed || data["preco"].(float64) != 3 || data["nome"] != nil {
+		t.Fatalf("update_record: %v", got)
+	}
+	if _, failed := call("update_record", map[string]any{"record_id": made, "set": map[string]any{"preco": 4}, "version": 1}); !failed {
+		t.Fatal("update_record ignored a stale version")
+	}
+	if got, failed := call("delete_records", map[string]any{"record_ids": []string{made}}); failed || got["deleted"].(float64) != 1 {
+		t.Fatalf("delete_records: %v", got)
+	}
+	if _, failed := call("get_record", map[string]any{"record_id": made}); !failed {
+		t.Fatal("a deleted record still reads")
+	}
+
 	// Outside the key's collections everything reads as missing.
 	for tool, args := range map[string]any{
 		"get_collection":   map[string]any{"collection_id": hidden},

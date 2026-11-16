@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { tools } from "@/lib/api/endpoints";
+import { collections, tools } from "@/lib/api/endpoints";
 import type { Automation, AutomationAction, AutomationInput, AutomationTrigger, Collection } from "@/lib/api/types";
 import { errorMessage } from "@/lib/errors";
 import type { MessageKey } from "@/lib/i18n/messages";
@@ -29,11 +29,92 @@ import { roleAllows } from "@/lib/permissions";
 import { CollectionPage } from "../_parts";
 
 const TRIGGERS: AutomationTrigger[] = ["record.created", "record.updated", "daily"];
-const ACTIONS: AutomationAction[] = ["set_field", "notify"];
+const ACTIONS: AutomationAction[] = ["set_field", "notify", "email", "webhook", "create_record"];
 const HOURS = Array.from({ length: 24 }, (_, h) => String(h));
 const settable = (rows: FieldRow[]) => rows.filter((r) => !r.advanced && ["string", "email", "url", "number", "integer", "boolean", "enum", "date"].includes(r.field.type));
 
 const blank = (): AutomationInput => ({ name: "", enabled: true, trigger: "record.created", conditions: { any: false, rules: [] }, action: "notify", config: { message: "" } });
+
+/** The config each action starts with. */
+function startConfig(action: AutomationAction, fields: FieldRow[]): AutomationInput["config"] {
+  switch (action) {
+    case "set_field": return { field: fields[0]?.key };
+    case "email": return { to: "me", subject: "", message: "" };
+    case "webhook": return { webhook_id: undefined };
+    case "create_record": return { collection_id: undefined, data: {} };
+    default: return { message: "" };
+  }
+}
+
+/** Whether the action's settings are filled in enough to save. */
+function configReady(action: AutomationAction, c: AutomationInput["config"]): boolean {
+  switch (action) {
+    case "set_field": return !!c.field;
+    case "email": return !!c.subject?.trim() && !!c.message?.trim();
+    case "webhook": return !!c.webhook_id;
+    case "create_record": return !!c.collection_id && Object.keys(c.data ?? {}).length > 0;
+    default: return !!c.message?.trim();
+  }
+}
+
+const FIXED = "\u0000fixed"; // the mapping choice "a fixed value" (no field key can hold a NUL)
+const RECORD_ID = "{{id}}";
+
+/**
+ * create_record settings: the target collection, then for each of its fields
+ * nothing, a fixed value, the matching record's id, or one of its fields.
+ */
+function CreateRecordConfig({ sources, value, onChange }: { sources: FieldRow[]; value: AutomationInput["config"]; onChange: (c: AutomationInput["config"]) => void }) {
+  const { t } = useI18n();
+  const options = useQuery({ queryKey: ["collections", "options"], queryFn: ({ signal }) => collections.options(signal) });
+  const writable = (options.data?.items ?? []).filter((c) => roleAllows(c.role, "editor"));
+  const target = useQuery({ queryKey: ["collection", value.collection_id], queryFn: () => collections.get(value.collection_id!), enabled: !!value.collection_id });
+  const fields = fieldsOf(target.data?.schema ?? null).filter((r) => !r.advanced);
+  const data = value.data ?? {};
+  const choice = (key: string) => {
+    const v = data[key];
+    if (v === undefined) return "";
+    if (typeof v === "string" && /^\{\{.+\}\}$/.test(v)) return v;
+    return FIXED;
+  };
+  const setData = (key: string, v: unknown) => {
+    const next = { ...data };
+    if (v === undefined) delete next[key];
+    else next[key] = v;
+    onChange({ ...value, data: next });
+  };
+  const sourceItems: [string, string][] = [["", t("automations.map.none")], [FIXED, t("automations.map.fixed")], [RECORD_ID, t("automations.map.record_id")], ...sources.map((s): [string, string] => [`{{${s.key}}}`, s.field.name])];
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="auto-target">{t("automations.target")}</Label>
+        <Select value={value.collection_id ?? null} items={Object.fromEntries(writable.map((c) => [c.id, c.name]))} onValueChange={(v) => onChange({ collection_id: String(v), data: {} })}>
+          <SelectTrigger id="auto-target" className="w-full"><SelectValue placeholder={t("automations.target")} /></SelectTrigger>
+          <SelectContent>{writable.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      {value.collection_id && (
+        <div className="space-y-2" role="group" aria-label={t("automations.map.title")}>
+          <p className="text-sm font-medium">{t("automations.map.title")}</p>
+          {fields.length === 0 && <p className="text-xs text-muted-foreground">{t("automations.map.no_fields")}</p>}
+          {fields.map((f) => (
+            <div key={f.key} className="grid items-center gap-2 sm:grid-cols-[minmax(8rem,1fr)_minmax(10rem,1fr)_minmax(10rem,1fr)]">
+              <span className="truncate text-sm" id={`map-${f.key}`}>{f.field.name}</span>
+              <Select value={choice(f.key)} items={Object.fromEntries(sourceItems)} onValueChange={(v) => setData(f.key, v === "" ? undefined : v === FIXED ? typed(f, "") ?? "" : v)}>
+                <SelectTrigger aria-labelledby={`map-${f.key}`} className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>{sourceItems.map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
+              </Select>
+              {choice(f.key) === FIXED ? (
+                <Input aria-label={`${f.field.name}: ${t("automations.map.fixed")}`} type={f.field.type === "number" || f.field.type === "integer" ? "number" : f.field.type === "date" ? "date" : "text"}
+                  value={data[f.key] === null || data[f.key] === undefined ? "" : String(data[f.key])} onChange={(e) => setData(f.key, typed(f, e.target.value) ?? "")} />
+              ) : <span />}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** The value typed for a set_field action, in the field's type; "" clears the field. */
 function typed(row: FieldRow | undefined, raw: string): unknown {
@@ -54,12 +135,13 @@ function AutomationForm({ collection, initial, onDone }: { collection: Collectio
   const target = fields.find((f) => f.key === draft.config.field);
   const save = useMutation({
     mutationFn: () => {
-      const input: AutomationInput = { ...draft, hour: draft.trigger === "daily" ? (draft.hour ?? 8) : undefined, config: draft.action === "set_field" ? { field: draft.config.field, value: typed(target, raw) } : { message: draft.config.message } };
+      const input: AutomationInput = { ...draft, hour: draft.trigger === "daily" ? (draft.hour ?? 8) : undefined, config: draft.action === "set_field" ? { field: draft.config.field, value: typed(target, raw) } : draft.config };
       return initial ? tools.updateAutomation(collection.id, initial.id, input) : tools.createAutomation(collection.id, input);
     },
     onSuccess: () => { void client.invalidateQueries({ queryKey: ["automations", collection.id] }); toast.success(t("common.saved")); onDone(); },
   });
-  const ready = draft.name.trim() && (draft.action === "notify" ? !!draft.config.message?.trim() : !!draft.config.field);
+  const ready = draft.name.trim() && configReady(draft.action, draft.config);
+  const hooks = useQuery({ queryKey: ["webhooks", collection.id], queryFn: () => tools.webhooks(collection.id), enabled: draft.action === "webhook" });
   const valueInput = () => {
     if (target?.field.type === "boolean" || target?.field.type === "enum") {
       const options = target.field.type === "boolean" ? [["true", t("common.yes")], ["false", t("common.no")]] : target.field.options.split(",").map((o) => o.trim()).filter(Boolean).map((o) => [o, o]);
@@ -108,7 +190,7 @@ function AutomationForm({ collection, initial, onDone }: { collection: Collectio
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="auto-action">{t("automations.then")}</Label>
-          <Select value={draft.action} items={Object.fromEntries(ACTIONS.map((x) => [x, t(`automations.action.${x}` as MessageKey)]))} onValueChange={(v) => set({ action: v as AutomationAction, config: v === "notify" ? { message: "" } : { field: fields[0]?.key } })}>
+          <Select value={draft.action} items={Object.fromEntries(ACTIONS.map((x) => [x, t(`automations.action.${x}` as MessageKey)]))} onValueChange={(v) => set({ action: v as AutomationAction, config: startConfig(v as AutomationAction, fields) })}>
             <SelectTrigger id="auto-action" className="w-full"><SelectValue /></SelectTrigger>
             <SelectContent>{ACTIONS.map((x) => <SelectItem key={x} value={x}>{t(`automations.action.${x}` as MessageKey)}</SelectItem>)}</SelectContent>
           </Select>
@@ -122,12 +204,47 @@ function AutomationForm({ collection, initial, onDone }: { collection: Collectio
             </Select>
           </div>
         )}
+        {draft.action === "email" && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="auto-to">{t("automations.to")}</Label>
+            <Select value={draft.config.to ?? "me"} items={{ me: t("automations.to.me"), members: t("automations.to.members") }} onValueChange={(v) => set({ config: { ...draft.config, to: v as "me" | "members" } })}>
+              <SelectTrigger id="auto-to" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="me">{t("automations.to.me")}</SelectItem><SelectItem value="members">{t("automations.to.members")}</SelectItem></SelectContent>
+            </Select>
+          </div>
+        )}
+        {draft.action === "webhook" && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="auto-hook">{t("automations.webhook")}</Label>
+            <Select value={draft.config.webhook_id ?? null} items={Object.fromEntries((hooks.data?.items ?? []).map((h) => [h.id, h.url]))} onValueChange={(v) => set({ config: { webhook_id: String(v) } })}>
+              <SelectTrigger id="auto-hook" className="w-full"><SelectValue placeholder={t("automations.webhook")} /></SelectTrigger>
+              <SelectContent>{(hooks.data?.items ?? []).map((h) => <SelectItem key={h.id} value={h.id}>{h.url}</SelectItem>)}</SelectContent>
+            </Select>
+            {hooks.data && hooks.data.items.length === 0 && <p className="text-xs text-muted-foreground">{t("automations.webhook_none")}</p>}
+          </div>
+        )}
       </div>
       {draft.action === "set_field" ? (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="auto-value">{t("automations.value")}</Label>
           {valueInput()}
         </div>
+      ) : draft.action === "email" ? (
+        <>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="auto-subject">{t("automations.subject")}</Label>
+            <Input id="auto-subject" maxLength={80} value={draft.config.subject ?? ""} onChange={(e) => set({ config: { ...draft.config, subject: e.target.value } })} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="auto-message">{t("automations.email_message")}</Label>
+            <Textarea id="auto-message" maxLength={500} rows={3} value={draft.config.message ?? ""} onChange={(e) => set({ config: { ...draft.config, message: e.target.value } })} />
+            <p className="text-xs text-muted-foreground">{t("automations.email_hint")}</p>
+          </div>
+        </>
+      ) : draft.action === "webhook" ? (
+        <p className="text-xs text-muted-foreground">{t("automations.webhook_hint")}</p>
+      ) : draft.action === "create_record" ? (
+        <CreateRecordConfig sources={rows.filter((r) => !r.advanced)} value={draft.config} onChange={(config) => set({ config })} />
       ) : (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="auto-message">{t("automations.message")}</Label>
@@ -165,7 +282,9 @@ function Automations({ collection }: { collection: Collection }) {
   });
   const summary = (a: Automation) => {
     const when = a.trigger === "daily" ? t("automations.daily_at").replace("{hour}", `${String(a.hour ?? 0).padStart(2, "0")}:00`) : t(`automations.trigger.${a.trigger}` as MessageKey);
-    const then = a.action === "notify" ? t("automations.action.notify") : t("automations.sets").replace("{field}", names.get(a.config.field ?? "") ?? a.config.field ?? "").replace("{value}", a.config.value === null || a.config.value === undefined ? "—" : String(a.config.value));
+    const then = a.action === "set_field"
+      ? t("automations.sets").replace("{field}", names.get(a.config.field ?? "") ?? a.config.field ?? "").replace("{value}", a.config.value === null || a.config.value === undefined ? "—" : String(a.config.value))
+      : a.action === "email" ? `${t("automations.action.email")}: ${a.config.subject ?? ""}` : t(`automations.action.${a.action}` as MessageKey);
     const n = a.conditions.rules.length + ((a.conditions as Where).groups ?? []).reduce((k, g) => k + g.rules.length, 0);
     const rules = n ? ` · ${plural(t("automations.n_conditions"), n)}` : "";
     return `${when}${rules} → ${then}`;

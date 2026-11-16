@@ -5,6 +5,10 @@ type EmailToken struct {
 	Email string
 	Token string
 	Lang  string // the user's language for the email text; empty means the default
+	// An automation's email: its subject, and the web app page it links to.
+	// Token then holds the message, sealed at rest like a token.
+	Subject string
+	Path    string
 }
 
 // EmailTokenCodec owns the durable wire format and secret protection.

@@ -90,12 +90,19 @@ type Webhook struct {
 
 // Automation triggers and actions.
 const (
-	TriggerCreated  = "record.created"
-	TriggerUpdated  = "record.updated"
-	TriggerDaily    = "daily"
-	ActionSetField  = "set_field" // config {"field": key, "value": any JSON, null clears}
-	ActionNotify    = "notify"    // config {"message": text}: a notice to the automation's maker
-	AutomationBatch = 100         // records one daily run acts on
+	TriggerCreated = "record.created"
+	TriggerUpdated = "record.updated"
+	TriggerDaily   = "daily"
+	ActionSetField = "set_field" // config {"field": key, "value": any JSON, null clears}
+	ActionNotify   = "notify"    // config {"message": text}: a notice to the automation's maker
+	// config {"to": "me" or "members", "subject", "message"}: one email per run
+	ActionEmail = "email"
+	// config {"webhook_id"}: one call of that collection webhook per run, with the records
+	ActionWebhook = "webhook"
+	// config {"collection_id", "data"}: a record per match; a string value "{{field}}"
+	// takes the matching record's field, "{{id}}" its id
+	ActionCreateRecord = "create_record"
+	AutomationBatch    = 100 // records one daily run acts on
 )
 
 // Automation acts on the records that pass Conditions when Trigger happens.

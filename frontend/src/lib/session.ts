@@ -7,6 +7,8 @@ import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const SESSION_COOKIE = "dataset_session";
+/** The sealed single sign-on flow, from start to callback. */
+export const SSO_FLOW_COOKIE = "dataset_sso_flow";
 const MAX_AGE = 60 * 60 * 24 * 30; // the refresh token lifetime caps real validity
 
 export interface Session {
@@ -48,7 +50,7 @@ function decode(raw: string): Session | null {
 // when the page was served over HTTPS: browsers drop a Secure cookie sent over
 // plain HTTP, so a production build on a LAN address could never sign in.
 // Next fills x-forwarded-proto from the socket; a TLS proxy in front sends it.
-async function cookieOpts() {
+export async function cookieOpts() {
   const v = (process.env.COOKIE_SECURE ?? "").trim().toLowerCase();
   let secure: boolean;
   if (["0", "false", "no"].includes(v)) secure = false;

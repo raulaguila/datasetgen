@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/raulaguila/dataset/internal/adapter/outbound/emailpayload"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/files"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/webhook"
 	"github.com/raulaguila/dataset/internal/core/domain"
@@ -19,7 +20,7 @@ import (
 func toolServices(e *env, t *testing.T) (*integration.Service, *tools.Service) {
 	key := make([]byte, 32)
 	_, records := collectionServices(e)
-	return &integration.Service{Store: e.store, Tx: e.store, Send: webhook.New(true), SealKey: key, Records: records},
+	return &integration.Service{Store: e.store, Tx: e.store, Send: webhook.New(true), SealKey: key, Records: records, Mail: emailpayload.New(key)},
 		&tools.Service{Store: e.store, Tx: e.store, Files: &files.Local{Dir: t.TempDir()}}
 }
 
@@ -621,6 +622,83 @@ func TestAutomationsActOnMatchingRecords(t *testing.T) {
 	testDB.Raw(`SELECT count(*) FROM sys.job WHERE kind = 'automation.run' AND payload->>'automation_id' = ?`, daily.ID).Find(&queued)
 	if queued != 1 {
 		t.Fatalf("daily queued %d, want 1", queued)
+	}
+}
+
+// Email, webhook and create_record actions: each run queues one email per
+// recipient, one webhook call, and one record per match in the target.
+func TestAutomationActionsReachOutside(t *testing.T) {
+	e := newEnv(t)
+	collections, records := collectionServices(e)
+	autos, _ := toolServices(e, t)
+	ownerAddr := e.activeUser(t)
+	owner := reqctx.WithActor(context.Background(), e.userID(t, ownerAddr))
+	mk := func(name, schema string) string {
+		c, err := collections.Create(owner, input.CreateCollectionCommand{Name: name, Schema: json.RawMessage(schema)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.ID
+	}
+	src := mk("Pedidos", `{"type":"object","properties":{"cliente":{"type":"string"},"total":{"type":"number"}}}`)
+	dst := mk("Tarefas", `{"type":"object","properties":{"titulo":{"type":"string"},"quem":{"type":"string"},"pedido":{"type":"string"}},"required":["titulo"]}`)
+	other := mk("Outra", `{"type":"object"}`)
+	if _, err := collections.AddMember(owner, input.AddMemberCommand{CollectionID: src, Email: e.activeUser(t), Role: domain.RoleViewer}); err != nil {
+		t.Fatal(err)
+	}
+	hook, err := autos.CreateWebhook(owner, src, "https://example.com/h", []string{domain.EventRecordCreated})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign, err := autos.CreateWebhook(owner, other, "https://example.com/o", []string{domain.EventRecordCreated})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newAuto := func(action, config string) (*domain.Automation, error) {
+		hour := 3
+		return autos.CreateAutomation(owner, src, input.AutomationInput{Name: action, Enabled: true, Trigger: domain.TriggerDaily, Hour: &hour, Action: action, Config: json.RawMessage(config)})
+	}
+	for _, bad := range [][2]string{
+		{domain.ActionEmail, `{"to":"everyone","subject":"s","message":"m"}`},
+		{domain.ActionEmail, `{"to":"me","subject":"a\nBcc: x@y","message":"m"}`},
+		{domain.ActionWebhook, `{"webhook_id":"` + foreign.Webhook.ID + `"}`},
+		{domain.ActionCreateRecord, `{"collection_id":"` + dst + `"}`},
+	} {
+		wantCode(t, ignore(newAuto(bad[0], bad[1])), apperror.CodeInvalidInput)
+	}
+	email, err := newAuto(domain.ActionEmail, `{"to":"members","subject":"Novos pedidos","message":"Veja os pedidos."}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call, err := newAuto(domain.ActionWebhook, `{"webhook_id":"`+hook.Webhook.ID+`"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	create, err := newAuto(domain.ActionCreateRecord, `{"collection_id":"`+dst+`","data":{"titulo":"Separar","quem":"{{cliente}}","pedido":"{{id}}"}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r1, _ := records.Create(owner, input.CreateRecordCommand{CollectionID: src, Data: json.RawMessage(`{"cliente":"Ana","total":10}`)})
+	if _, err := records.Create(owner, input.CreateRecordCommand{CollectionID: src, Data: json.RawMessage(`{"total":5}`)}); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range []*domain.Automation{email, call, create} {
+		if ran, err := autos.RunAutomation(owner, src, a.ID); err != nil || ran.LastError != "" {
+			t.Fatalf("%s: %+v, %v", a.Action, ran, err)
+		}
+	}
+	var mails, calls int64
+	testDB.Raw(`SELECT count(*) FROM sys.outbox WHERE purpose = 'automation'`).Find(&mails)
+	testDB.Raw(`SELECT count(*) FROM sys.job WHERE kind = 'webhook.deliver' AND payload->>'hook_id' = ? AND payload->'body'->>'event' = 'automation.run' AND jsonb_array_length(payload->'body'->'records') = 2`, hook.Webhook.ID).Find(&calls)
+	if mails != 2 || calls != 1 {
+		t.Fatalf("emails %d (want 2, both members), webhook calls %d (want 1)", mails, calls)
+	}
+	made, total, err := records.List(owner, domain.RecordFilter{CollectionID: dst, Page: domain.NewPage(1, 10), Search: "Ana"})
+	if err != nil || total != 1 || !strings.Contains(string(made[0].Data), r1.ID) {
+		t.Fatalf("created: %+v, %d, %v", made, total, err)
+	}
+	if _, total, _ := records.List(owner, domain.RecordFilter{CollectionID: dst, Page: domain.NewPage(1, 10)}); total != 2 {
+		t.Fatalf("created %d records, want one per match", total)
 	}
 }
 

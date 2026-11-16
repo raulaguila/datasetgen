@@ -43,6 +43,8 @@ type Service struct {
 	SealKey []byte
 	// Records runs automations' conditions and changes, as the automation's maker.
 	Records input.RecordService
+	// Mail seals an automation's email for the outbox the mailer sends from.
+	Mail output.EmailTokenCodec
 }
 
 var _ input.IntegrationService = (*Service)(nil)

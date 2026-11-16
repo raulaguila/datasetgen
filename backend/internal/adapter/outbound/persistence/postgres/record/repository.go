@@ -394,6 +394,74 @@ func (r *Repository) prune(ctx context.Context, ids string, args ...any) error {
 	return shared.WrapError(err, "record")
 }
 
+func (r *Repository) LookupValues(ctx context.Context, collectionID string, ids []string, field string) (map[string]json.RawMessage, error) {
+	out := map[string]json.RawMessage{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	var rows []struct {
+		ID    string
+		Value string
+	}
+	// ids come from one page of records (up to 100, each list ref up to its schema's size).
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT id::text AS id, (data->?::text)::text AS value FROM app.record
+		WHERE collection_id = ? AND id IN ? AND data->?::text IS NOT NULL`, field, collectionID, ids, field).Scan(&rows).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "record")
+	}
+	for _, row := range rows {
+		out[row.ID] = json.RawMessage(row.Value)
+	}
+	return out, nil
+}
+
+// rollupSQL holds each function's aggregate; only numbers count toward sum,
+// avg, min and max, so a text value in the field is skipped, not an error.
+var rollupSQL = map[string]string{
+	"count": "count(*)",
+	"sum":   "sum((r.data->>?::text)::numeric) FILTER (WHERE jsonb_typeof(r.data->?::text) = 'number')",
+	"avg":   "round(avg((r.data->>?::text)::numeric) FILTER (WHERE jsonb_typeof(r.data->?::text) = 'number'), 6)",
+	"min":   "min((r.data->>?::text)::numeric) FILTER (WHERE jsonb_typeof(r.data->?::text) = 'number')",
+	"max":   "max((r.data->>?::text)::numeric) FILTER (WHERE jsonb_typeof(r.data->?::text) = 'number')",
+}
+
+func (r *Repository) Rollup(ctx context.Context, collectionID, ref string, parents []string, fn, field string) (map[string]json.RawMessage, error) {
+	out := map[string]json.RawMessage{}
+	agg, ok := rollupSQL[fn]
+	if !ok {
+		return nil, fmt.Errorf("unknown rollup %q", fn)
+	}
+	if len(parents) == 0 {
+		return out, nil
+	}
+	args := []any{}
+	if fn != "count" {
+		args = append(args, field, field)
+	}
+	args = append(args, strings.Join(parents, ","), collectionID, ref, ref) // ids checked by the caller: no commas
+	var rows []struct {
+		ID    string
+		Value *string
+	}
+	// Both containment forms use idx_app_record_data_path (GIN jsonb_path_ops).
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT p.id::text AS id, to_jsonb(`+agg+`)::text AS value
+		FROM unnest(string_to_array(?, ',')::uuid[]) AS p(id)
+		JOIN app.record r ON r.collection_id = ?
+			AND (r.data @> jsonb_build_object(?::text, p.id::text) OR r.data @> jsonb_build_object(?::text, jsonb_build_array(p.id::text)))
+		GROUP BY p.id`, args...).Scan(&rows).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "record")
+	}
+	for _, row := range rows {
+		if row.Value != nil && *row.Value != "null" {
+			out[row.ID] = json.RawMessage(*row.Value)
+		}
+	}
+	return out, nil
+}
+
 func (r *Repository) CollectionsOf(ctx context.Context, ids []string) (map[string]string, error) {
 	var rows []row
 	if err := r.db.WithContext(ctx).Raw(`SELECT id, collection_id FROM app.record WHERE id IN ?`, ids).Find(&rows).Error; err != nil {

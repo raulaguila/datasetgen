@@ -17,10 +17,14 @@ import type { FileRef } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
-export const FIELD_TYPES = ["string", "text", "number", "integer", "boolean", "enum", "strings", "date", "datetime", "email", "url", "reference", "references", "file", "files", "autonumber", "formula", "created_by", "updated_by", "group", "objects", "json"] as const;
+export const FIELD_TYPES = ["string", "text", "number", "integer", "boolean", "enum", "strings", "date", "datetime", "email", "url", "reference", "references", "file", "files", "autonumber", "formula", "lookup", "rollup", "created_by", "updated_by", "group", "objects", "json"] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 /** Types the server fills on every write; the form shows them read-only. */
-export const AUTO_TYPES: readonly FieldType[] = ["autonumber", "formula", "created_by", "updated_by"];
+export const AUTO_TYPES: readonly FieldType[] = ["autonumber", "formula", "lookup", "rollup", "created_by", "updated_by"];
+/** Computed when records are read, never stored: lists cannot filter or group by them. */
+export const VIRTUAL_TYPES: readonly FieldType[] = ["lookup", "rollup"];
+export const ROLLUP_FNS = ["count", "sum", "avg", "min", "max"] as const;
+const FORMULA_RESULTS = ["number", "text", "boolean", "date"] as const;
 /** Groups hold one level of subfields: no group inside a group; the server checks references and files on top-level fields only. */
 const SUBFIELD_TYPES = FIELD_TYPES.filter((t) => t !== "group" && t !== "objects" && t !== "reference" && t !== "references" && t !== "file" && t !== "files" && !AUTO_TYPES.includes(t));
 /** A list of objects' items may also point at a record: the server checks a reference subfield of each item. */
@@ -36,6 +40,8 @@ export const REF = "x-ref";
 /** The keywords the server reads (schema.AutoKeyword, schema.FormulaKeyword): fields it fills itself. */
 export const AUTO = "x-auto";
 export const FORMULA = "x-formula";
+export const LOOKUP = "x-lookup";
+export const ROLLUP = "x-rollup";
 export const FILE = "x-file";
 /** Types with no default the builder edits; any default is kept as it was. */
 const isObjectType = (t: FieldType) => t === "group" || t === "objects" || t === "json" || t === "file" || t === "files" || t === "reference" || t === "references" || AUTO_TYPES.includes(t);
@@ -78,8 +84,16 @@ export type Field = {
   default: string;
   min: string;
   max: string;
-  /** A reference's collection id. */
+  /** A reference's collection id; a rollup's: the collection it sums up. */
   ref: string;
+  /** Lookup: this record's reference field. Rollup: the other collection's reference field naming this record. */
+  via: string;
+  /** The field read there (a rollup's count needs none). */
+  source: string;
+  /** A rollup's function: count, sum, avg, min or max. */
+  fn: string;
+  /** What a formula gives: number (default), text, boolean or date. */
+  result: string;
 };
 /** A top-level field: `key` is where its value is stored, `field.name` its label. Advanced ones are edited as JSON. */
 export type FieldRow = { key: string; field: Field; advanced: boolean };
@@ -87,7 +101,7 @@ export type FieldRow = { key: string; field: Field; advanced: boolean };
 type Schema = Record<string, unknown>;
 type Props = Record<string, Record<string, unknown>>;
 
-export const blankField: Field = { name: "", key: "", type: "string", required: false, unique: false, private: false, options: "", description: "", placeholder: "", default: "", min: "", max: "", ref: "" };
+export const blankField: Field = { name: "", key: "", type: "string", required: false, unique: false, private: false, options: "", description: "", placeholder: "", default: "", min: "", max: "", ref: "", via: "", source: "", fn: "", result: "" };
 
 const optionsOf = (f: Pick<Field, "options">) => f.options.split(",").map((o) => o.trim()).filter(Boolean);
 
@@ -154,8 +168,11 @@ function typeBase(f: Field): Record<string, unknown> {
     case "reference": return { type: "string", format: "uuid" };
     case "references": return { type: "array", items: { type: "string", format: "uuid" }, uniqueItems: true };
     case "autonumber": return { type: "integer", [AUTO]: "number" };
-    case "formula": return { type: "number", [FORMULA]: f.options.trim() };
+    case "formula": return { ...(f.result === "date" ? { type: "string", format: "date" } : { type: f.result === "text" ? "string" : f.result === "boolean" ? "boolean" : "number" }), [FORMULA]: f.options.trim() };
     case "created_by": case "updated_by": return { type: "string", [AUTO]: f.type };
+    // No type: a lookup shows whatever the other field holds.
+    case "lookup": return { [LOOKUP]: { ref: f.via, field: f.source } };
+    case "rollup": return { type: "number", [ROLLUP]: { collection: f.ref, ref: f.via, fn: f.fn, ...(f.fn !== "count" ? { field: f.source } : {}) } };
     case "file": return FILE_PROP;
     case "files": return FILES_PROP;
     default: return { type: f.type };
@@ -192,7 +209,9 @@ export function typeOf(p: unknown): FieldType | undefined {
   const s = p as Record<string, unknown>;
   // Options are edited comma separated, so an option holding a comma stays in JSON.
   if (Array.isArray(s.enum)) return s.enum.every((v) => typeof v === "string" && !v.includes(",")) ? "enum" : undefined;
-  if (typeof s[FORMULA] === "string" && s.type === "number") return "formula";
+  if (s[LOOKUP] && typeof s[LOOKUP] === "object") return "lookup";
+  if (s[ROLLUP] && typeof s[ROLLUP] === "object") return "rollup";
+  if (typeof s[FORMULA] === "string" && (s.type === "number" || s.type === "string" || s.type === "boolean")) return "formula";
   if (s[AUTO] === "number" && s.type === "integer") return "autonumber";
   if ((s[AUTO] === "created_by" || s[AUTO] === "updated_by") && s.type === "string") return s[AUTO] as FieldType;
   if (s.type === "string" && typeof s[REF] === "string") return "reference";
@@ -247,6 +266,8 @@ export function fieldsOf(schema: Schema | null): FieldRow[] {
     const limits = limitKeys(type);
     const num = (k?: string) => (k && typeof p?.[k] === "number" ? String(p[k]) : "");
     const examples = Array.isArray(p?.examples) ? p.examples : [];
+    const lookup = p?.[LOOKUP] as Record<string, unknown> | undefined;
+    const rollup = p?.[ROLLUP] as Record<string, unknown> | undefined;
     return {
       key,
       advanced: !typeOf(p),
@@ -264,7 +285,11 @@ export function fieldsOf(schema: Schema | null): FieldRow[] {
         min: num(limits?.[0]),
         // The long-text default limit is how the type is stored, not a rule someone set.
         max: type === "text" && p?.maxLength === LONG_TEXT ? "" : num(limits?.[1]),
-        ref: typeof p?.[REF] === "string" ? p[REF] : "",
+        ref: typeof p?.[REF] === "string" ? p[REF] : typeof rollup?.collection === "string" ? rollup.collection : "",
+        via: typeof (lookup ?? rollup)?.ref === "string" ? String((lookup ?? rollup)!.ref) : "",
+        source: typeof (lookup ?? rollup)?.field === "string" ? String((lookup ?? rollup)!.field) : "",
+        fn: typeof rollup?.fn === "string" ? rollup.fn : "",
+        result: type !== "formula" ? "" : p?.type === "boolean" ? "boolean" : p?.type === "string" ? (p?.format === "date" ? "date" : "text") : "number",
       },
     };
   });
@@ -282,6 +307,8 @@ export function fieldProblem(f: Field, taken: (key: string) => boolean, initialK
   if (f.type === "enum" && optionsOf(f).length === 0) return "collections.field_options_needed";
   if (f.type === "formula" && !f.options.trim()) return "collections.field_formula_needed";
   if ((f.type === "reference" || f.type === "references") && !f.ref) return "collections.field_ref_needed";
+  if (f.type === "lookup" && (!f.via || !f.source)) return "collections.field_lookup_needed";
+  if (f.type === "rollup" && (!f.ref || !f.via || !f.fn || (f.fn !== "count" && !f.source))) return "collections.field_rollup_needed";
   const limits = limitKeys(f.type);
   const lo = f.min.trim() ? Number(f.min) : undefined;
   const hi = f.max.trim() ? Number(f.max) : undefined;
@@ -407,9 +434,11 @@ export function schemaChanges(original: Schema | null, next: Schema | null): Sch
 }
 
 /** The form that writes one field into the schema, so nobody types JSON for the common cases. */
-function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, initial, initialKey, keyLocked, taken, submitLabel, onSubmit, onCancel }: {
+function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, initial, initialKey, keyLocked, taken, siblings = [], submitLabel, onSubmit, onCancel }: {
   /** Names the group for assistive tech: adding, or editing which field. */
   label: string;
+  /** The other fields of the same schema: a lookup goes through one of its references. */
+  siblings?: FieldRow[];
   types?: readonly FieldType[];
   /** False inside a group: the server checks unique values on top-level fields only. */
   uniqueAllowed?: boolean;
@@ -495,13 +524,24 @@ function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, 
         </div>
       )}
       {field.type === "formula" && (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor={`${id}-formula`}>{t("collections.field_formula")}</Label>
-          <Input id={`${id}-formula`} className="font-mono" placeholder="preco * quantidade" value={field.options} aria-invalid={shown === "collections.field_formula_needed"} aria-describedby={`${id}-formula-hint`} onChange={(e) => set({ options: e.target.value })} />
-          <p id={`${id}-formula-hint`} className="text-xs text-muted-foreground">{t("collections.field_formula_hint")}</p>
+        <div className="grid gap-3 @sm:grid-cols-[minmax(0,1fr)_10rem]">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${id}-formula`}>{t("collections.field_formula")}</Label>
+            <Input id={`${id}-formula`} className="font-mono" placeholder="preco * quantidade" value={field.options} aria-invalid={shown === "collections.field_formula_needed"} aria-describedby={`${id}-formula-hint`} onChange={(e) => set({ options: e.target.value })} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${id}-result`}>{t("collections.field_formula_result")}</Label>
+            <Select value={field.result || "number"} items={Object.fromEntries(FORMULA_RESULTS.map((r) => [r, t(`collections.formula_result.${r}`)]))} onValueChange={(v) => set({ result: String(v) })}>
+              <SelectTrigger id={`${id}-result`} className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>{FORMULA_RESULTS.map((r) => <SelectItem key={r} value={r}>{t(`collections.formula_result.${r}`)}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <p id={`${id}-formula-hint`} className="text-xs text-muted-foreground @sm:col-span-2">{t("collections.field_formula_hint")}</p>
         </div>
       )}
-      {AUTO_TYPES.includes(field.type) && field.type !== "formula" && <p className="text-xs text-muted-foreground">{t("collections.field_auto_hint")}</p>}
+      {AUTO_TYPES.includes(field.type) && field.type !== "formula" && !VIRTUAL_TYPES.includes(field.type) && <p className="text-xs text-muted-foreground">{t("collections.field_auto_hint")}</p>}
+      {field.type === "lookup" && <LookupSettings id={id} field={field} siblings={siblings} invalid={shown === "collections.field_lookup_needed"} set={set} />}
+      {field.type === "rollup" && <RollupSettings id={id} field={field} invalid={shown === "collections.field_rollup_needed"} set={set} />}
       {(field.type === "reference" || field.type === "references") && <RefSelect id={`${id}-ref`} value={field.ref} invalid={shown === "collections.field_ref_needed"} onChange={(ref) => set({ ref })} />}
       {(field.type === "group" || field.type === "objects" || field.type === "json") && (
         <p className={cn("text-xs", field.type === "json" ? "text-warn" : "text-muted-foreground")}>
@@ -569,8 +609,69 @@ function FieldForm({ label, types: offered = FIELD_TYPES, uniqueAllowed = true, 
   );
 }
 
+/** The fields of another collection, for a lookup or rollup to read. */
+function useFieldsOf(collectionId: string) {
+  const q = useQuery({ queryKey: ["collection", collectionId], queryFn: () => collections.get(collectionId), enabled: !!collectionId, staleTime: 30_000 });
+  return fieldsOf((q.data?.schema as Schema | undefined) ?? null).filter((r) => !r.advanced && !VIRTUAL_TYPES.includes(r.field.type));
+}
+
+function PickField({ id, label, value, rows, invalid, onChange }: { id: string; label: string; value: string; rows: FieldRow[]; invalid: boolean; onChange: (key: string) => void }) {
+  const items = Object.fromEntries(rows.map((r) => [r.key, r.field.name]));
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Select value={value || null} items={items} onValueChange={(v) => onChange(String(v ?? ""))}>
+        <SelectTrigger id={id} className="w-full" aria-invalid={invalid && !value}><SelectValue placeholder={label} /></SelectTrigger>
+        <SelectContent>{rows.map((r) => <SelectItem key={r.key} value={r.key}>{r.field.name}</SelectItem>)}</SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+/** A lookup: which reference of this record, and which field of the record it names. */
+function LookupSettings({ id, field, siblings, invalid, set }: { id: string; field: Field; siblings: FieldRow[]; invalid: boolean; set: (p: Partial<Field>) => void }) {
+  const { t } = useI18n();
+  const refs = siblings.filter((r) => r.field.type === "reference" || r.field.type === "references");
+  const target = refs.find((r) => r.key === field.via)?.field.ref ?? "";
+  const shown = useFieldsOf(target);
+  return (
+    <div className="space-y-2">
+      <div className="grid gap-3 @sm:grid-cols-2">
+        <PickField id={`${id}-via`} label={t("collections.field_lookup_via")} value={field.via} rows={refs} invalid={invalid} onChange={(via) => set({ via, source: "" })} />
+        <PickField id={`${id}-source`} label={t("collections.field_lookup_source")} value={field.source} rows={shown} invalid={invalid} onChange={(source) => set({ source })} />
+      </div>
+      <p className="text-xs text-muted-foreground">{t(refs.length ? "collections.field_lookup_hint" : "collections.field_lookup_no_refs")}</p>
+    </div>
+  );
+}
+
+/** A rollup: another collection, its reference naming this record, a function and a number field. */
+function RollupSettings({ id, field, invalid, set }: { id: string; field: Field; invalid: boolean; set: (p: Partial<Field>) => void }) {
+  const { t } = useI18n();
+  const rows = useFieldsOf(field.ref);
+  const refs = rows.filter((r) => r.field.type === "reference" || r.field.type === "references");
+  const numbers = rows.filter((r) => ["number", "integer", "formula", "autonumber"].includes(r.field.type));
+  const fns = Object.fromEntries(ROLLUP_FNS.map((f) => [f, t(`collections.rollup_fn.${f}` as MessageKey)]));
+  return (
+    <div className="space-y-2">
+      <div className="grid gap-3 @sm:grid-cols-2">
+        <RefSelect id={`${id}-ref`} value={field.ref} invalid={invalid && !field.ref} label="collections.field_rollup_collection" hint="collections.field_rollup_hint" onChange={(ref) => set({ ref, via: "", source: "" })} />
+        <PickField id={`${id}-via`} label={t("collections.field_rollup_via")} value={field.via} rows={refs} invalid={invalid} onChange={(via) => set({ via })} />
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${id}-fn`}>{t("collections.field_rollup_fn")}</Label>
+          <Select value={field.fn || null} items={fns} onValueChange={(v) => set({ fn: String(v ?? ""), ...(v === "count" ? { source: "" } : {}) })}>
+            <SelectTrigger id={`${id}-fn`} className="w-full" aria-invalid={invalid && !field.fn}><SelectValue placeholder={t("collections.field_rollup_fn")} /></SelectTrigger>
+            <SelectContent>{ROLLUP_FNS.map((f) => <SelectItem key={f} value={f}>{fns[f]}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        {field.fn && field.fn !== "count" && <PickField id={`${id}-source`} label={t("collections.field_rollup_source")} value={field.source} rows={numbers} invalid={invalid} onChange={(source) => set({ source })} />}
+      </div>
+    </div>
+  );
+}
+
 /** Picks the collection a reference points at, among those the user reaches. */
-function RefSelect({ id, value, invalid, onChange }: { id: string; value: string; invalid: boolean; onChange: (v: string) => void }) {
+function RefSelect({ id, value, invalid, label = "collections.field_ref", hint = "collections.field_ref_hint", onChange }: { id: string; value: string; invalid: boolean; label?: MessageKey; hint?: MessageKey; onChange: (v: string) => void }) {
   const { t } = useI18n();
   // shortcut: up to 1000 collections by name in one select; a search box when people reach more.
   const list = useQuery({ queryKey: ["collections", "options"], queryFn: ({ signal }) => collections.options(signal), staleTime: 30_000 });
@@ -578,14 +679,14 @@ function RefSelect({ id, value, invalid, onChange }: { id: string; value: string
   if (value && !(value in items)) items[value] = t("collections.field_ref_unknown");
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{t("collections.field_ref")}</Label>
+      <Label htmlFor={id}>{t(label)}</Label>
       <Select value={value || null} items={items} onValueChange={(v) => onChange(String(v ?? ""))}>
         <SelectTrigger id={id} className="w-full" aria-invalid={invalid}><SelectValue placeholder={t("collections.field_ref_pick")} /></SelectTrigger>
         <SelectContent>
           {Object.entries(items).map(([v, label]) => <SelectItem key={v} value={v}>{label}</SelectItem>)}
         </SelectContent>
       </Select>
-      <p className="text-xs text-muted-foreground">{t("collections.field_ref_hint")}</p>
+      <p className="text-xs text-muted-foreground">{t(hint)}</p>
     </div>
   );
 }
@@ -666,6 +767,7 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
                     initialKey={key}
                     keyLocked={keysLocked && key in saved}
                     taken={(k) => k !== key && keys.has(k)}
+                    siblings={rows}
                     submitLabel={t("collections.field_save")}
                     onSubmit={(f) => { onChange(updateField(schema, key, f)); setEditing(null); }}
                     onCancel={() => setEditing(null)}
@@ -784,6 +886,7 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
           uniqueAllowed={!group}
           initial={blankField}
           taken={(k) => keys.has(k)}
+          siblings={rows}
           submitLabel={t(group ? "collections.add_subfield" : "collections.add_field")}
           // Stays open for the next one; Cancel closes it.
           onSubmit={(f) => onChange(addField(schema, f))}

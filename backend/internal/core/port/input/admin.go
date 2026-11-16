@@ -14,4 +14,5 @@ type AdminService interface {
 	Promote(context.Context, string) error
 	Disable(context.Context, string) error
 	Enable(context.Context, string) error
+	ResetMFA(context.Context, string) error
 }

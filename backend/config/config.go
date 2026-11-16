@@ -74,6 +74,12 @@ type AuthConfig struct {
 	LoginAttemptIPMaxFailures    int                `env:"AUTH_LOGIN_ATTEMPT_IP_MAX" default:"20"`
 	EmailTokenCooldown           time.Duration      `env:"AUTH_EMAIL_TOKEN_COOLDOWN" default:"60s"`
 	EmailTokenHourlyMax          int                `env:"AUTH_EMAIL_TOKEN_HOURLY_MAX" default:"5"`
+	// Single sign-on with an OpenID Connect provider; an empty issuer turns it off.
+	OIDCIssuer       string `env:"OIDC_ISSUER" default:""`
+	OIDCClientID     string `env:"OIDC_CLIENT_ID" default:""`
+	OIDCClientSecret string `env:"OIDC_CLIENT_SECRET" default:""`
+	OIDCRedirectURL  string `env:"OIDC_REDIRECT_URL" default:""` // the web app's /api/auth/sso/callback
+	OIDCName         string `env:"OIDC_NAME" default:"SSO"`      // the login button label
 }
 
 type PostgresConfig struct {

@@ -32,7 +32,7 @@ function fillable(schema: Record<string, unknown>): Record<string, unknown> {
   const props = { ...((schema.properties ?? {}) as Record<string, unknown>) };
   for (const [key, p] of Object.entries(props)) {
     const type = typeOf(p);
-    if (type === "reference" || type === "references" || type === "file" || type === "files") delete props[key];
+    if (type === "reference" || type === "references" || type === "file" || type === "files" || type === "lookup" || type === "rollup") delete props[key];
   }
   const required = Array.isArray(schema.required) ? (schema.required as string[]).filter((k) => k in props) : undefined;
   return { ...schema, properties: props, ...(required ? { required } : {}) };
@@ -130,7 +130,7 @@ function PublicList({ token, link }: { token: string; link: PublicLink }) {
   const [q, setQ] = useState("");
   const search = useDebounced(q.trim(), 300);
   const columns = useMemo(() => {
-    const rows = fieldsOf(link.schema as never).filter((r) => !["file", "files", "reference", "references"].includes(r.field.type));
+    const rows = fieldsOf(link.schema as never).filter((r) => !["file", "files", "reference", "references", "lookup", "rollup"].includes(r.field.type));
     return pickColumns(rows, "").length ? pickColumns(rows, "") : rows.slice(0, 4);
   }, [link.schema]);
   const list = useQuery({

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useMemo, useRef, useState, type Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Copy, FileUp, Loader2, Paperclip, Plus, Search, X } from "lucide-react";
-import { AUTO, FILE, FORMULA, REF, fileRefs, isImage, recordTitle } from "@/components/field-builder";
+import { AUTO, FILE, FORMULA, LOOKUP, REF, ROLLUP, fileRefs, isImage, recordTitle } from "@/components/field-builder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -327,7 +327,23 @@ function FileField({ formData, onChange, fieldPathId, schema, name, required, di
   );
 }
 
-const fields = { json: JsonField, reference: ReferenceField, references: ReferencesField, file: FileField };
+/** A lookup or rollup: the server works it out when the record is read; the form only shows it. */
+function ComputedField({ formData, fieldPathId, schema, name }: FieldProps) {
+  const { t } = useI18n();
+  const id = fieldPathId.$id;
+  const text = formData === undefined || formData === null || (Array.isArray(formData) && formData.length === 0) ? "—"
+    : Array.isArray(formData) ? formData.map((v) => (typeof v === "object" ? JSON.stringify(v) : String(v))).join(", ")
+    : typeof formData === "object" ? JSON.stringify(formData) : String(formData);
+  return (
+    <>
+      <Head id={id} schema={schema} name={name} required={false} />
+      <p id={id} className="min-h-[var(--control-h)] rounded-md border border-dashed px-3 py-2 text-sm" aria-readonly="true">{text}</p>
+      <p className="text-xs text-muted-foreground">{t("schema.computed")}</p>
+    </>
+  );
+}
+
+const fields = { json: JsonField, reference: ReferenceField, references: ReferencesField, file: FileField, computed: ComputedField };
 
 const NONE = "\u0000none";
 const DefaultSelect = getDefaultRegistry().widgets.SelectWidget;
@@ -363,10 +379,11 @@ const widgets = { SelectWidget };
  */
 export function uiFor(schema: unknown, nested = false): UiSchema {
   if (!schema || typeof schema !== "object") return {};
-  const s = schema as { type?: unknown; maxLength?: unknown; examples?: unknown; properties?: Record<string, unknown>; items?: unknown; [REF]?: unknown; [FILE]?: unknown; [AUTO]?: unknown; [FORMULA]?: unknown };
+  const s = schema as { type?: unknown; maxLength?: unknown; examples?: unknown; properties?: Record<string, unknown>; items?: unknown; [REF]?: unknown; [FILE]?: unknown; [AUTO]?: unknown; [FORMULA]?: unknown; [LOOKUP]?: unknown; [ROLLUP]?: unknown };
   if (nested && s.type === "string" && typeof s[REF] === "string") return { "ui:field": "reference" };
   if (nested && s.type === "array" && typeof s[REF] === "string") return { "ui:field": "references" };
   if (nested && (s.type === "object" || s.type === "array") && s[FILE] === true) return { "ui:field": "file" };
+  if (nested && (s[LOOKUP] || s[ROLLUP])) return { "ui:field": "computed" };
   if (nested && (typeof s[AUTO] === "string" || typeof s[FORMULA] === "string")) return { "ui:readonly": true }; // the server fills it on save
   const out: UiSchema = {};
   if (Array.isArray(s.examples) && typeof s.examples[0] === "string") out["ui:placeholder"] = s.examples[0];

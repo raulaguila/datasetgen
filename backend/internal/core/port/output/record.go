@@ -21,6 +21,13 @@ type RecordRepository interface {
 	Create(ctx context.Context, r *domain.Record) error
 	// Update replaces data; with version set, a row changed since that version is a conflict.
 	Update(ctx context.Context, id string, data json.RawMessage, version *int) (*domain.Record, error)
+	// LookupValues maps each listed record of the collection that holds the
+	// top-level field to its value.
+	LookupValues(ctx context.Context, collectionID string, ids []string, field string) (map[string]json.RawMessage, error)
+	// Rollup maps each parent id to fn (count, sum, avg, min, max) over field of
+	// the collection's records whose ref field names it (the id, or a list
+	// holding it); parents no record names are left out.
+	Rollup(ctx context.Context, collectionID, ref string, parents []string, fn, field string) (map[string]json.RawMessage, error)
 	// CollectionsOf maps each listed record that exists to its collection id.
 	CollectionsOf(ctx context.Context, ids []string) (map[string]string, error)
 	// Scan returns up to limit records of the collection after afterID (by id),

@@ -174,6 +174,13 @@ func render(msg *domain.OutboxMessage, codec output.EmailTokenCodec, appURL stri
 	if err != nil {
 		return "", "", "", err
 	}
+	if msg.Purpose == domain.OutboxPurposeAutomation {
+		body = p.Token + "\n"
+		if appURL != "" && p.Path != "" {
+			body += "\n" + strings.TrimRight(appURL, "/") + p.Path + "\n"
+		}
+		return p.Email, p.Subject, body, nil
+	}
 	texts, ok := emailTexts[msg.Purpose]
 	if !ok {
 		return "", "", "", fmt.Errorf("unknown_purpose")

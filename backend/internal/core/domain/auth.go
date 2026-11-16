@@ -8,6 +8,7 @@ const (
 
 	OutboxPurposeActivation    = "activation"
 	OutboxPurposePasswordReset = "password_reset"
+	OutboxPurposeAutomation    = "automation" // an automation's email action
 
 	RevokeUserLogout      = "user_logout"
 	RevokeTokenReuse      = "token_reuse"
@@ -17,6 +18,7 @@ const (
 	RevokeAdmin           = "admin_revoked"
 
 	FailureBadPassword      = "bad_password"
+	FailureBadCode          = "bad_code" // a wrong second-step code
 	FailureUserNotFound     = "user_not_found"
 	FailureAccountLocked    = "account_locked"
 	FailureAccountDisabled  = "account_disabled"

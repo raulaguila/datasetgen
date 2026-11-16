@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Plus, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { IconAction } from "@/components/bits";
-import { type FieldRow, type FieldType } from "@/components/field-builder";
+import { VIRTUAL_TYPES, type FieldRow, type FieldType } from "@/components/field-builder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -107,7 +107,8 @@ export function viewWhere(query: string): Where {
   return andWhere(parseWhere(p.get("where") ?? ""), legacyRules(p.get("filter") ?? ""));
 }
 
-const filterable = (rows: FieldRow[]) => rows.filter((r) => !r.advanced && r.field.type !== "group" && r.field.type !== "json");
+// Lookups and rollups are worked out on read: the server cannot filter by them.
+const filterable = (rows: FieldRow[]) => rows.filter((r) => !r.advanced && r.field.type !== "group" && r.field.type !== "json" && !VIRTUAL_TYPES.includes(r.field.type));
 
 type DraftRule = { field: string; op: RuleOp; raw: string };
 type DraftGroup = { any: boolean; rules: DraftRule[] };

@@ -61,7 +61,7 @@ func ErrorHandler(c fiber.Ctx, err error) error {
 
 func statusFor(code apperror.Code) int {
 	switch code {
-	case apperror.CodeUnauthorized, apperror.CodeInvalidCredentials, apperror.CodeTokenExpired:
+	case apperror.CodeUnauthorized, apperror.CodeInvalidCredentials, apperror.CodeTokenExpired, apperror.CodeMFARequired:
 		return fiber.StatusUnauthorized
 	case apperror.CodeForbidden:
 		return fiber.StatusForbidden

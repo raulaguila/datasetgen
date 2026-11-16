@@ -328,7 +328,7 @@ export type WebhookEvent = "record.created" | "record.updated" | "record.deleted
 export const WEBHOOK_EVENTS: WebhookEvent[] = ["record.created", "record.updated", "record.deleted", "records.imported"];
 
 export type AutomationTrigger = "record.created" | "record.updated" | "daily";
-export type AutomationAction = "set_field" | "notify";
+export type AutomationAction = "set_field" | "notify" | "email" | "webhook" | "create_record";
 
 export interface Automation {
   id: string;
@@ -339,8 +339,12 @@ export interface Automation {
   hour?: number;
   conditions: { any: boolean; rules: { field: string; op: string; value?: unknown }[]; groups?: { any: boolean; rules: { field: string; op: string; value?: unknown }[] }[] };
   action: AutomationAction;
-  /** set_field: {field, value}; notify: {message}. */
-  config: { field?: string; value?: unknown; message?: string };
+  /**
+   * set_field: {field, value}; notify: {message}; email: {to, subject, message};
+   * webhook: {webhook_id}; create_record: {collection_id, data}, where a string
+   * value "{{field}}" copies the matching record's field and "{{id}}" its id.
+   */
+  config: { field?: string; value?: unknown; message?: string; to?: "me" | "members"; subject?: string; webhook_id?: string; collection_id?: string; data?: Record<string, unknown> };
   created_at: string;
   last_run_at?: string;
   last_error?: string;

@@ -134,3 +134,18 @@ func (s *Service) Enable(ctx context.Context, email string) error {
 }
 
 var _ input.AdminService = (*Service)(nil)
+
+// ResetMFA turns off two-step login for a user who lost the authenticator and
+// the recovery codes; the password alone logs in again.
+func (s *Service) ResetMFA(ctx context.Context, email string) error {
+	return s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		user, err := uow.Users().FindByEmail(ctx, policy.NormalizeEmail(email))
+		if err != nil {
+			return err
+		}
+		if err := uow.Credentials().DeleteMFA(ctx, user.ID); err != nil {
+			return err
+		}
+		return policy.Audit(ctx, uow, "user.mfa_reset", user.ID, nil)
+	})
+}

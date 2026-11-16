@@ -10,6 +10,7 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/emailpayload"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/files"
+	"github.com/raulaguila/dataset/internal/adapter/outbound/oidc"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/job"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/outbox"
@@ -116,7 +117,7 @@ func hourly(fn func(context.Context) error) func(context.Context) error {
 func NewIntegrations(cfg *config.Environment, res *infra.Resources) *integration.Service {
 	store := postgres.NewStore(res.PostgresDB)
 	return &integration.Service{Store: store, Tx: store, Send: webhook.New(cfg.API.WebhookAllowPrivate), SealKey: cfg.SMTP.TokenKey(),
-		Records: record.New(store.Records(), store.Collections(), store)}
+		Records: record.New(store.Records(), store.Collections(), store), Mail: emailpayload.New(cfg.SMTP.TokenKey())}
 }
 
 // NewApplication wires concrete adapters into use cases / inbound ports.
@@ -153,6 +154,10 @@ func NewApplication(cfg *config.Environment, res *infra.Resources, log *logger.L
 	}, emailpayload.New(cfg.SMTP.TokenKey()))
 
 	authSvc.Log = log
+	authSvc.SealKey = cfg.SMTP.TokenKey()
+	if a := cfg.Auth; a.OIDCIssuer != "" {
+		authSvc.SSO = &oidc.Provider{Issuer: a.OIDCIssuer, ClientID: a.OIDCClientID, ClientSecret: a.OIDCClientSecret, RedirectURL: a.OIDCRedirectURL, Label: a.OIDCName}
+	}
 
 	authorizer := authorize.New(permReader, output.RealClock{})
 	audit := auditsvc.New(store.Audit())

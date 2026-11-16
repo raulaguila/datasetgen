@@ -1,10 +1,11 @@
 // Package mcp serves the Model Context Protocol at /v1/mcp: tools that let an AI
-// assistant read the collections an API key reaches. Every tool runs through
+// assistant read, and with a write scope change, the collections an API key reaches. Every tool runs through
 // the same services as the REST API, so the key's scopes and the member's
 // roles apply unchanged (policy.CollectionRole).
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/pkg/apperror"
+	"github.com/raulaguila/dataset/pkg/pointer"
 	"github.com/raulaguila/dataset/pkg/reqctx"
 )
 
@@ -41,6 +43,14 @@ func Handler(app *input.Application, version string) http.Handler {
 		Annotations: readOnly}, t.relatedRecords)
 	mcp.AddTool(s, &mcp.Tool{Name: "collection_stats", Description: "A collection's totals: records, members, last change, records created per day and top contributors over the last 30 days (UTC).",
 		Annotations: readOnly}, t.collectionStats)
+
+	// Writing tools: the key's write scope and the member's editor role apply (services check both).
+	mcp.AddTool(s, &mcp.Tool{Name: "create_record", Description: "Create a record in a collection the key may write. data must follow the collection's JSON Schema (get_collection); fields the server fills (auto numbers, formulas, created_by) are left out.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: pointer.Of(false)}}, t.createRecord)
+	mcp.AddTool(s, &mcp.Tool{Name: "update_record", Description: "Change some top-level fields of one record, keeping the others: set holds the new values, null removes a field. The result must still follow the schema. Pass the version you read to refuse the change if someone else changed the record since.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: pointer.Of(false), IdempotentHint: true}}, t.updateRecord)
+	mcp.AddTool(s, &mcp.Tool{Name: "delete_records", Description: "Move up to 100 records to the trash, all or none; an owner can restore them from the trash.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: pointer.Of(true), IdempotentHint: true}}, t.deleteRecords)
 
 	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s }, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
 	return keyOnly(app.Integrations, h)
@@ -267,4 +277,71 @@ func (t tools) collectionStats(ctx context.Context, _ *mcp.CallToolRequest, in c
 		people[i] = map[string]any{"name": p.Name, "created": p.Created, "edited": p.Edited}
 	}
 	return nil, map[string]any{"records": st.Records, "members": st.Members, "last_update": st.LastUpdate, "per_day": perDay, "contributors": people}, nil
+}
+
+type createIn struct {
+	CollectionID string         `json:"collection_id" jsonschema:"the collection's id, from list_collections"`
+	Data         map[string]any `json:"data" jsonschema:"the record, a JSON object following the collection's schema"`
+}
+
+func (t tools) createRecord(ctx context.Context, _ *mcp.CallToolRequest, in createIn) (*mcp.CallToolResult, any, error) {
+	data, err := json.Marshal(in.Data)
+	if err != nil || in.Data == nil {
+		return nil, nil, apperror.New(apperror.CodeInvalidInput, "data must be a JSON object").WithField("data")
+	}
+	r, err := t.app.Records.Create(ctx, input.CreateRecordCommand{CollectionID: in.CollectionID, Data: data})
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, recordOf(*r), nil
+}
+
+type updateIn struct {
+	RecordID string         `json:"record_id" jsonschema:"the record's id"`
+	Set      map[string]any `json:"set" jsonschema:"the top-level fields to change and their new values; null removes the field"`
+	Version  *int           `json:"version,omitempty" jsonschema:"the version you read; the change is refused if the record moved on"`
+}
+
+func (t tools) updateRecord(ctx context.Context, _ *mcp.CallToolRequest, in updateIn) (*mcp.CallToolResult, any, error) {
+	if len(in.Set) == 0 {
+		return nil, nil, apperror.New(apperror.CodeInvalidInput, "set names no field").WithField("set")
+	}
+	current, err := t.app.Records.Get(ctx, in.RecordID)
+	if err != nil {
+		return nil, nil, err
+	}
+	data := map[string]any{}
+	dec := json.NewDecoder(bytes.NewReader(current.Data))
+	dec.UseNumber() // the fields left alone keep their exact numbers
+	if err := dec.Decode(&data); err != nil {
+		return nil, nil, apperror.New(apperror.CodeInvalidInput, "the record is not a JSON object")
+	}
+	for k, v := range in.Set {
+		if v == nil {
+			delete(data, k)
+		} else {
+			data[k] = v
+		}
+	}
+	merged, _ := json.Marshal(data)
+	version := in.Version
+	if version == nil { // still refuse a change made between the read above and the write
+		version = &current.Version
+	}
+	r, err := t.app.Records.Update(ctx, input.UpdateRecordCommand{ID: in.RecordID, Data: merged, Version: version})
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, recordOf(*r), nil
+}
+
+type deleteIn struct {
+	RecordIDs []string `json:"record_ids" jsonschema:"1 to 100 record ids"`
+}
+
+func (t tools) deleteRecords(ctx context.Context, _ *mcp.CallToolRequest, in deleteIn) (*mcp.CallToolResult, any, error) {
+	if err := t.app.Records.DeleteMany(ctx, in.RecordIDs); err != nil {
+		return nil, nil, err
+	}
+	return nil, map[string]any{"deleted": len(in.RecordIDs)}, nil
 }

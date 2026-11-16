@@ -113,3 +113,64 @@ func (r *Repository) RecordSuccess(ctx context.Context, userID, verifiedHash str
 	}
 	return res.RowsAffected == 1, nil
 }
+
+func (r *Repository) MFA(ctx context.Context, userID string) (*domain.MFA, error) {
+	var m struct {
+		UserID    string
+		Secret    string
+		EnabledAt *time.Time
+		LastStep  int64
+	}
+	err := r.db.WithContext(ctx).Raw(`SELECT user_id, secret, enabled_at, last_step FROM usr.usr_mfa WHERE user_id = ?`, userID).Take(&m).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "mfa")
+	}
+	return &domain.MFA{UserID: m.UserID, Secret: m.Secret, EnabledAt: m.EnabledAt, LastStep: m.LastStep}, nil
+}
+
+func (r *Repository) SetupMFA(ctx context.Context, userID, sealedSecret string) (bool, error) {
+	res := r.db.WithContext(ctx).Exec(`
+		INSERT INTO usr.usr_mfa (user_id, secret) VALUES (?, ?)
+		ON CONFLICT (user_id) DO UPDATE SET secret = EXCLUDED.secret, last_step = 0, created_at = now()
+		WHERE usr.usr_mfa.enabled_at IS NULL`, userID, sealedSecret)
+	return res.RowsAffected == 1, shared.WrapError(res.Error, "mfa")
+}
+
+func (r *Repository) EnableMFA(ctx context.Context, userID string, step int64, codeHashes [][]byte, now time.Time) (bool, error) {
+	res := r.db.WithContext(ctx).Exec(`UPDATE usr.usr_mfa SET enabled_at = ?, last_step = ? WHERE user_id = ? AND enabled_at IS NULL`, now, step, userID)
+	if res.Error != nil || res.RowsAffected == 0 {
+		return false, shared.WrapError(res.Error, "mfa")
+	}
+	if err := r.db.WithContext(ctx).Exec(`DELETE FROM usr.usr_recovery_code WHERE user_id = ?`, userID).Error; err != nil {
+		return false, shared.WrapError(err, "mfa")
+	}
+	for _, h := range codeHashes { // 10 codes, once per enable
+		if err := r.db.WithContext(ctx).Exec(`INSERT INTO usr.usr_recovery_code (user_id, code_hash) VALUES (?, ?)`, userID, h).Error; err != nil {
+			return false, shared.WrapError(err, "mfa")
+		}
+	}
+	return true, nil
+}
+
+func (r *Repository) UseMFAStep(ctx context.Context, userID string, step int64) (bool, error) {
+	res := r.db.WithContext(ctx).Exec(`UPDATE usr.usr_mfa SET last_step = ? WHERE user_id = ? AND enabled_at IS NOT NULL AND last_step < ?`, step, userID, step)
+	return res.RowsAffected == 1, shared.WrapError(res.Error, "mfa")
+}
+
+func (r *Repository) UseRecoveryCode(ctx context.Context, userID string, hash []byte, now time.Time) (bool, error) {
+	res := r.db.WithContext(ctx).Exec(`UPDATE usr.usr_recovery_code SET used_at = ? WHERE user_id = ? AND code_hash = ? AND used_at IS NULL`, now, userID, hash)
+	return res.RowsAffected == 1, shared.WrapError(res.Error, "mfa")
+}
+
+func (r *Repository) RecoveryCodesLeft(ctx context.Context, userID string) (int, error) {
+	var n int
+	err := r.db.WithContext(ctx).Raw(`SELECT count(*) FROM usr.usr_recovery_code WHERE user_id = ? AND used_at IS NULL`, userID).Scan(&n).Error
+	return n, shared.WrapError(err, "mfa")
+}
+
+func (r *Repository) DeleteMFA(ctx context.Context, userID string) error {
+	if err := r.db.WithContext(ctx).Exec(`DELETE FROM usr.usr_recovery_code WHERE user_id = ?`, userID).Error; err != nil {
+		return shared.WrapError(err, "mfa")
+	}
+	return shared.WrapError(r.db.WithContext(ctx).Exec(`DELETE FROM usr.usr_mfa WHERE user_id = ?`, userID).Error, "mfa")
+}

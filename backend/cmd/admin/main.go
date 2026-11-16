@@ -20,7 +20,7 @@ import (
 	"github.com/raulaguila/dataset/pkg/logger"
 )
 
-const usage = "usage: admin [bootstrap] | admin promote | admin disable | admin enable"
+const usage = "usage: admin [bootstrap] | admin promote | admin disable | admin enable | admin mfa-reset"
 
 // action runs against the database and returns the line to print.
 type action func(context.Context, ports.AdminService) (string, error)
@@ -75,6 +75,8 @@ func parse(args []string, in *os.File, out io.Writer) (action, error) {
 		"promote": (ports.AdminService).Promote,
 		"disable": (ports.AdminService).Disable,
 		"enable":  (ports.AdminService).Enable,
+		// mfa-reset turns off two-step login for a user who lost the phone and the recovery codes.
+		"mfa-reset": (ports.AdminService).ResetMFA,
 	}[args[0]]
 	if !ok {
 		return nil, errors.New(usage)

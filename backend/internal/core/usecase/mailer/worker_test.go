@@ -12,6 +12,7 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/outbound/emailpayload"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
+	"github.com/raulaguila/dataset/internal/core/port/output"
 	"github.com/raulaguila/dataset/pkg/aescrypt"
 )
 
@@ -188,3 +189,19 @@ func TestSlowSendDoesNotEatTheMarkTimeout(t *testing.T) {
 type fixedClock struct{}
 
 func (fixedClock) Now() time.Time { return time.Unix(1000, 0) }
+
+func TestAutomationEmailSendsItsOwnText(t *testing.T) {
+	payload, err := emailpayload.New(testKey).Encode(output.EmailToken{Email: "a@acme.io", Token: "Veja os pedidos.", Subject: "Novos pedidos", Path: "/collections/c1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	box := &fakeOutbox{msgs: []domain.OutboxMessage{{ID: "1", Purpose: domain.OutboxPurposeAutomation, Payload: payload}}}
+	mail := &fakeMail{}
+	w := &Worker{Outbox: box, Mail: mail, Codec: emailpayload.New(testKey), Clock: fixedClock{}, AppURL: "https://id.acme.io/"}
+	if err := w.tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(box.sent) != 1 || mail.bodies[0] != "Veja os pedidos.\n\nhttps://id.acme.io/collections/c1\n" {
+		t.Fatalf("sent %v bodies %q", box.sent, mail.bodies)
+	}
+}

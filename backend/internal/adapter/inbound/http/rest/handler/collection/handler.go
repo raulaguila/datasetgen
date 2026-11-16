@@ -70,7 +70,7 @@ type optionDTO struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Role   string `json:"role" enums:"owner,editor,viewer"` // the caller's role
-	Member bool   `json:"member"`                          // false for a platform admin outside the collection
+	Member bool   `json:"member"`                           // false for a platform admin outside the collection
 }
 
 type createDTO struct {

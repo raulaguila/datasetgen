@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
@@ -82,6 +83,25 @@ func (s *Service) authenticate(ctx context.Context, email string, cmd input.Logi
 	}
 	if err != nil || !ok {
 		return s.failedPassword(ctx, user.ID, now)
+	}
+
+	// Two-step login: the password was right; without its code there is no session.
+	mfa, err := s.UOW.Credentials().MFA(ctx, user.ID)
+	if err != nil && !apperror.IsNotFound(err) {
+		return nil, "", err
+	}
+	if err == nil && mfa.EnabledAt != nil {
+		if strings.TrimSpace(cmd.Code) == "" {
+			return nil, "", mfaRequired()
+		}
+		ok, err := s.secondStep(ctx, mfa, cmd.Code, now)
+		if err != nil {
+			return nil, "", err
+		}
+		if !ok {
+			_, _, err := s.failedPassword(ctx, user.ID, now)
+			return nil, domain.FailureBadCode, err
+		}
 	}
 
 	if cred.LastLoginAt != nil { // a first login has no client to compare with

@@ -116,7 +116,6 @@ func (h *Handler) List(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{"items": out, "pagination": mapper.Pagination(filter.Page, total)})
 }
 
-
 // @Summary Get a user with their roles
 // @Tags Users
 // @Produce json

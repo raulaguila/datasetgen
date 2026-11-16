@@ -40,6 +40,10 @@ type Service struct {
 	Cfg    Config
 	Codec  output.EmailTokenCodec
 	Log    output.Logger // optional: a nil logger drops the message
+	// SealKey seals two-step login secrets at rest (the SMTP token key).
+	SealKey []byte
+	// SSO is the OpenID Connect provider; nil turns single sign-on off.
+	SSO output.SingleSignOn
 }
 
 var _ input.AuthService = (*Service)(nil)

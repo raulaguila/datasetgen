@@ -3,6 +3,7 @@ module github.com/raulaguila/dataset
 go 1.26.11
 
 require (
+	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/godeh/dotenvgo v0.6.0
 	github.com/gofiber/contrib/v3/swaggo v1.0.16
 	github.com/gofiber/fiber/v3 v3.6.1
@@ -14,6 +15,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/swaggo/swag v1.16.6
 	golang.org/x/crypto v0.58.0
+	golang.org/x/oauth2 v0.35.0
 	golang.org/x/term v0.47.0
 	gorm.io/driver/postgres v1.6.2
 	gorm.io/gorm v1.31.2
@@ -21,6 +23,7 @@ require (
 
 require (
 	github.com/KyleBanks/depth v1.2.1 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/go-openapi/jsonpointer v1.0.2 // indirect
 	github.com/go-openapi/jsonreference v1.0.3 // indirect
 	github.com/go-openapi/spec v1.0.1 // indirect
@@ -54,7 +57,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.6 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
-	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect

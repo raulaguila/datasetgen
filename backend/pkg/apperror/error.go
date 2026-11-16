@@ -17,6 +17,7 @@ const (
 	CodeForbidden          Code = "FORBIDDEN"
 	CodeInvalidCredentials Code = "INVALID_CREDENTIALS"
 	CodeTokenExpired       Code = "TOKEN_EXPIRED"
+	CodeMFARequired        Code = "MFA_REQUIRED" // the password was right; the login needs its code
 
 	// Resource errors
 	CodeNotFound      Code = "NOT_FOUND"

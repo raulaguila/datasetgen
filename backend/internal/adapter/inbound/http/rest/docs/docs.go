@@ -298,7 +298,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "MFA_REQUIRED: send the same body again with code",
                         "schema": {
                             "$ref": "#/definitions/mapper.errorBody"
                         }
@@ -546,6 +546,115 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/sso": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Whether single sign-on is on, and its button label",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.ssoInfoDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/sso/callback": {
+            "post": {
+                "description": "Logs in the existing, active account whose email the provider verified; it never creates accounts.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Finish single sign-on",
+                "parameters": [
+                    {
+                        "description": "Request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.ssoCallbackDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.tokenPairDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/sso/start": {
+            "post": {
+                "description": "Answers the provider address to send the browser to, and a sealed flow for the callback.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Start single sign-on",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.ssoStartDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/mapper.errorBody"
                         }
@@ -1242,7 +1351,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "When a record is created or changed (or daily at hour), the records passing conditions get the action: set_field {\"field\",\"value\"} or notify {\"message\"}. It acts as its maker.",
+                "description": "When a record is created or changed (or daily at hour), the records passing conditions get the action: set_field {\"field\",\"value\"}, notify {\"message\"}, email {\"to\":\"me\"|\"members\",\"subject\",\"message\"}, webhook {\"webhook_id\"} or create_record {\"collection_id\",\"data\"} (a text value naming a field, or id, in double curly braces copies it from the matching record). It acts as its maker.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3570,6 +3679,186 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/me/mfa": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Whether two-step login is on",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.mfaStatusDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/me/mfa/disable": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Turn two-step login off",
+                "parameters": [
+                    {
+                        "description": "Request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.mfaDisableDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/me/mfa/enable": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Answers the recovery codes, shown this once.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Turn two-step login on with a code from the app",
+                "parameters": [
+                    {
+                        "description": "Request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.mfaCodeDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.mfaRecoveryDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/me/mfa/setup": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Nothing changes at login until /v1/me/mfa/enable confirms a code.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Profile"
+                ],
+                "summary": "Start two-step login: a new secret for an authenticator app",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.mfaSetupDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/mapper.errorBody"
                         }
@@ -6849,6 +7138,10 @@ const docTemplate = `{
         "auth.loginDTO": {
             "type": "object",
             "properties": {
+                "code": {
+                    "description": "Code is the authenticator or recovery code; send it again after MFA_REQUIRED.",
+                    "type": "string"
+                },
                 "email": {
                     "type": "string"
                 },
@@ -6865,6 +7158,55 @@ const docTemplate = `{
                 },
                 "user": {
                     "$ref": "#/definitions/auth.userDTO"
+                }
+            }
+        },
+        "auth.mfaCodeDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.mfaDisableDTO": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.mfaRecoveryDTO": {
+            "type": "object",
+            "properties": {
+                "recovery_codes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "auth.mfaSetupDTO": {
+            "type": "object",
+            "properties": {
+                "secret": {
+                    "type": "string"
+                },
+                "uri": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.mfaStatusDTO": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "recovery_left": {
+                    "type": "integer"
                 }
             }
         },
@@ -6910,6 +7252,43 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.ssoCallbackDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "flow": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.ssoInfoDTO": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.ssoStartDTO": {
+            "type": "object",
+            "properties": {
+                "flow": {
+                    "description": "keep it (an httpOnly cookie) and send it back to the callback",
+                    "type": "string"
+                },
+                "url": {
                     "type": "string"
                 }
             }
@@ -8061,7 +8440,10 @@ const docTemplate = `{
                     "type": "string",
                     "enum": [
                         "set_field",
-                        "notify"
+                        "notify",
+                        "email",
+                        "webhook",
+                        "create_record"
                     ],
                     "example": "notify"
                 },

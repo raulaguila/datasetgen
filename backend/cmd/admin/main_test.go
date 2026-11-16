@@ -38,7 +38,7 @@ func TestNoArgumentMeansBootstrap(t *testing.T) {
 }
 
 func TestPromoteAndDisableAskTheEmail(t *testing.T) {
-	for _, command := range []string{"promote", "disable", "enable"} {
+	for _, command := range []string{"promote", "disable", "enable", "mfa-reset"} {
 		if _, err := parse([]string{command}, input(t, "ana@acme.io\n"), io.Discard); err != nil {
 			t.Fatal(command, err)
 		}

@@ -29,6 +29,10 @@ func (h *Handler) MeRoutes(r fiber.Router, passwordLimit fiber.Handler) {
 	r.Get("/", h.Me)
 	r.Patch("/", h.Rename)
 	r.Post("/password", passwordLimit, h.ChangePassword)
+	r.Get("/mfa", h.MFAStatus)
+	r.Post("/mfa/setup", h.SetupMFA)
+	r.Post("/mfa/enable", passwordLimit, h.EnableMFA)
+	r.Post("/mfa/disable", passwordLimit, h.DisableMFA)
 	r.Get("/avatar", h.Avatar)
 	r.Put("/avatar", h.SetAvatar)
 	r.Delete("/avatar", h.RemoveAvatar)
@@ -39,6 +43,9 @@ func (h *Handler) Routes(r fiber.Router, bearer, authLimit, passwordLimit fiber.
 	r.Post("/register", authLimit, h.Register)
 	r.Post("/activate", authLimit, h.Activate)
 	r.Post("/login", authLimit, h.Login)
+	r.Get("/sso", h.SSOInfo)
+	r.Post("/sso/start", authLimit, h.SSOStart)
+	r.Post("/sso/callback", authLimit, h.SSOCallback)
 	r.Post("/refresh", h.Refresh)
 	r.Post("/logout", bearer, h.Logout)
 	r.Post("/password-reset/request", passwordLimit, h.RequestPasswordReset)
@@ -58,6 +65,8 @@ type activateDTO struct {
 type loginDTO struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	// Code is the authenticator or recovery code; send it again after MFA_REQUIRED.
+	Code string `json:"code,omitempty"`
 }
 
 type refreshDTO struct {
@@ -201,7 +210,7 @@ func (h *Handler) Activate(c fiber.Ctx) error {
 // @Param body body loginDTO true "Request"
 // @Success 200 {object} tokenPairDTO
 // @Failure 400 {object} mapper.errorBody
-// @Failure 401 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody "MFA_REQUIRED: send the same body again with code"
 // @Failure 429 {object} mapper.errorBody
 // @Router /v1/auth/login [post]
 func (h *Handler) Login(c fiber.Ctx) error {
@@ -214,6 +223,7 @@ func (h *Handler) Login(c fiber.Ctx) error {
 	pair, err := h.svc.Login(c.Context(), input.LoginCommand{
 		Email:     body.Email,
 		Password:  body.Password,
+		Code:      body.Code,
 		IPAddress: &ip,
 		UserAgent: &ua,
 	})

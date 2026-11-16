@@ -121,3 +121,18 @@ type EffectivePermissions struct {
 	IsSuperuser bool
 	ByResource  map[string]Action // includes "*" if granted
 }
+
+// MFA is a user's second login step: a TOTP secret (sealed at rest), not in
+// use until EnabledAt is set, and the last 30-second step a code was taken for.
+type MFA struct {
+	UserID    string
+	Secret    string
+	EnabledAt *time.Time
+	LastStep  int64
+}
+
+// MFAStatus is what the account page shows of it.
+type MFAStatus struct {
+	Enabled      bool
+	RecoveryLeft int
+}

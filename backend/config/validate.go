@@ -89,6 +89,9 @@ func validateAPIConfig(cfg APIConfig) error {
 }
 
 func validateAuthConfig(cfg AuthConfig) error {
+	if cfg.OIDCIssuer != "" && (cfg.OIDCClientID == "" || cfg.OIDCRedirectURL == "") {
+		return errors.New("OIDC_ISSUER needs OIDC_CLIENT_ID and OIDC_REDIRECT_URL")
+	}
 	if cfg.AccessExpiration <= 0 || cfg.RefreshExpiration <= 0 || cfg.RegistrationTokenTTL <= 0 || cfg.PasswordResetTokenTTL <= 0 {
 		return errors.New("token expiration durations must be greater than 0")
 	}

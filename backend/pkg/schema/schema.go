@@ -95,8 +95,14 @@ func compile(raw []byte) (*jsonschema.Schema, error) {
 	if err != nil {
 		return nil, invalid(err.Error())
 	}
-	for key, src := range Formulas(raw) {
-		if _, err := ParseFormula(src); err != nil {
+	if err := checkVirtual(raw); err != nil {
+		return nil, invalid(err.Error())
+	}
+	for key, f := range Formulas(raw) {
+		if f.Type != "number" && f.Type != "string" && f.Type != "boolean" {
+			return nil, invalid("formula " + key + " must hold a number, a string or a boolean")
+		}
+		if _, err := ParseFormula(f.Expr); err != nil {
 			return nil, invalid("formula of " + key + ": " + err.Error())
 		}
 	}

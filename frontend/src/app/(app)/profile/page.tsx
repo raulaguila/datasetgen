@@ -217,6 +217,109 @@ function PasswordCard() {
   );
 }
 
+const MFA_KEY = ["mfa"] as const;
+
+/** Two-step login: setup shows the secret, a code turns it on, the recovery codes show once. */
+function TwoStepCard() {
+  const { t } = useI18n();
+  const client = useQueryClient();
+  const status = useQuery({ queryKey: MFA_KEY, queryFn: account.mfa });
+  const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [recovery, setRecovery] = useState<string[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const done = () => {
+    setCode("");
+    setPassword("");
+    setError(null);
+    void client.invalidateQueries({ queryKey: MFA_KEY });
+  };
+  const fail = (err: unknown) => setError(errorMessage(err, "profile.save_failed", t));
+  const start = useMutation({ mutationFn: account.setupMFA, onSuccess: (s) => { setError(null); setSetup(s); }, onError: fail });
+  const enable = useMutation({
+    mutationFn: () => account.enableMFA(code),
+    onSuccess: (r) => { setSetup(null); setRecovery(r.recovery_codes); done(); toast.success(t("profile.mfa_on")); },
+    onError: fail,
+  });
+  const disable = useMutation({
+    mutationFn: () => account.disableMFA(password),
+    onSuccess: () => { setRecovery(null); done(); toast.success(t("profile.mfa_off")); },
+    onError: fail,
+  });
+
+  let body: React.ReactNode;
+  if (status.isPending) body = <ListSkeleton rows={1} />;
+  else if (status.isError) body = <QueryErrorState onRetry={() => void status.refetch()} />;
+  else if (status.data.enabled) {
+    body = (
+      <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); disable.mutate(); }}>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <Badge variant="secondary">{t("profile.mfa_enabled")}</Badge>
+          <span className="text-muted-foreground">{t("profile.mfa_recovery_left").replace("{n}", String(status.data.recovery_left))}</span>
+        </div>
+        {recovery && (
+          <div className="space-y-2 rounded-lg border p-4">
+            <p className="text-sm font-medium">{t("profile.mfa_recovery_title")}</p>
+            <p className="text-xs text-muted-foreground">{t("profile.mfa_recovery_hint")}</p>
+            <ul className="grid grid-cols-2 gap-1 font-mono text-sm">{recovery.map((c) => <li key={c}>{c}</li>)}</ul>
+            <Button type="button" variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(recovery.join("\n")).then(() => toast.success(t("profile.mfa_copied")))}>{t("profile.mfa_copy")}</Button>
+          </div>
+        )}
+        <div className="space-y-2">
+          <Label htmlFor="mfa-password">{t("profile.mfa_disable_password")}</Label>
+          <PasswordInput id="mfa-password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+        </div>
+        <div className="flex justify-end">
+          <Button type="submit" variant="outline" disabled={disable.isPending || !password}>
+            {disable.isPending && <Loader2 className="size-4 animate-spin" />}
+            {t("profile.mfa_disable")}
+          </Button>
+        </div>
+      </form>
+    );
+  } else if (setup) {
+    body = (
+      <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); enable.mutate(); }}>
+        <p className="text-sm text-muted-foreground">{t("profile.mfa_scan")}</p>
+        <div className="space-y-1 rounded-lg border p-4">
+          <div className="text-xs text-muted-foreground">{t("profile.mfa_secret")}</div>
+          <code className="block break-all font-mono text-sm">{setup.secret.match(/.{1,4}/g)?.join(" ")}</code>
+          <a href={setup.uri} className="text-xs text-primary hover:underline">{t("profile.mfa_open_app")}</a>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="mfa-code">{t("auth.mfa_code")}</Label>
+          <Input id="mfa-code" autoComplete="one-time-code" inputMode="numeric" required maxLength={7} value={code} onChange={(e) => setCode(e.target.value)} />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={() => setSetup(null)}>{t("common.cancel")}</Button>
+          <Button type="submit" disabled={enable.isPending || code.replace(/\s/g, "").length !== 6}>
+            {enable.isPending && <Loader2 className="size-4 animate-spin" />}
+            {t("profile.mfa_enable")}
+          </Button>
+        </div>
+      </form>
+    );
+  } else {
+    body = (
+      <div className="flex justify-end">
+        <Button variant="outline" disabled={start.isPending} onClick={() => start.mutate()}>
+          {start.isPending && <Loader2 className="size-4 animate-spin" />}
+          {t("profile.mfa_start")}
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <FormSection title={t("profile.mfa")} description={t("profile.mfa_hint")}>
+      <div className="space-y-4">
+        <FormError message={error} />
+        {body}
+      </div>
+    </FormSection>
+  );
+}
+
 function PreferencesCard() {
   const { t, setLocale } = useI18n();
   const { setTheme } = useTheme();
@@ -349,6 +452,7 @@ export default function ProfilePage() {
             <FormSections>
               <NameCard />
               <PasswordCard />
+              <TwoStepCard />
               <PreferencesCard />
               <SessionsCard />
               <ApiKeysCard />

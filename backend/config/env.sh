@@ -84,4 +84,9 @@ AUTH_LOGIN_ATTEMPT_EMAIL_MAX='50'               # Failures per account, all clie
 AUTH_LOGIN_ATTEMPT_PAIR_MAX='5'                 # Failures per client and account, per window
 AUTH_EMAIL_TOKEN_HOURLY_MAX='5'                 # Emails per hour, account and purpose (0 = no cap)
 AUTH_ALLOW_REGISTRATION='1'                     # Public sign-up; 0 leaves only invitations by an administrator
-AUTH_MANUAL_TOKEN_DELIVERY='1'                  # Manual token delivery allowed only in local/dev" >.env
+AUTH_MANUAL_TOKEN_DELIVERY='1'                  # Manual token delivery allowed only in local/dev
+OIDC_ISSUER=''                                  # Single sign-on provider (OpenID Connect issuer URL); empty turns it off
+OIDC_CLIENT_ID=''
+OIDC_CLIENT_SECRET=''
+OIDC_REDIRECT_URL=''                            # The web app address + /api/auth/sso/callback
+OIDC_NAME='SSO'                                 # Login button label" >.env

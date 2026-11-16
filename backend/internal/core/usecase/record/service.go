@@ -46,7 +46,11 @@ func (s *Service) List(ctx context.Context, filter domain.RecordFilter) ([]domai
 	if _, err := policy.CollectionRole(ctx, s.Collections, filter.CollectionID, domain.RoleViewer); err != nil {
 		return nil, 0, err
 	}
-	return s.Repo.List(ctx, filter)
+	items, total, err := s.Repo.List(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, total, s.withVirtual(ctx, filter.CollectionID, items)
 }
 
 // checkFilter checks and normalizes what selects records: search, sort, ids and rules.
@@ -154,7 +158,11 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Record, error) {
 		}
 		return nil, err
 	}
-	return r, nil
+	one := []domain.Record{*r}
+	if err := s.withVirtual(ctx, r.CollectionID, one); err != nil {
+		return nil, err
+	}
+	return &one[0], nil
 }
 
 func (s *Service) Create(ctx context.Context, cmd input.CreateRecordCommand) (*domain.Record, error) {

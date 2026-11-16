@@ -190,3 +190,26 @@ describe("list of objects", () => {
     expect(typeOf({ type: "array", items: { type: "object", properties: { g: { type: "object", properties: {} } } } })).toBeUndefined();
   });
 });
+
+describe("lookups and rollups", () => {
+  it("write the server's keywords and read back the same settings", () => {
+    let s = addField({ type: "object" }, field({ name: "Cliente", type: "reference", ref: "c1" }));
+    s = addField(s, field({ name: "Nome do cliente", type: "lookup", via: "cliente", source: "nome", required: true }));
+    s = addField(s, field({ name: "Gasto", type: "rollup", ref: "p1", via: "cliente", fn: "sum", source: "total" }));
+    s = addField(s, field({ name: "Pedidos", type: "rollup", ref: "p1", via: "cliente", fn: "count", source: "total" }));
+    const props = s.properties as Record<string, Record<string, unknown>>;
+    expect(props.nome_do_cliente["x-lookup"]).toEqual({ ref: "cliente", field: "nome" });
+    expect(props.gasto["x-rollup"]).toEqual({ collection: "p1", ref: "cliente", fn: "sum", field: "total" });
+    expect(props.pedidos["x-rollup"]).toEqual({ collection: "p1", ref: "cliente", fn: "count" });
+    expect(s.required).toBeUndefined(); // computed fields are never required
+    const rows = fieldsOf(s);
+    expect(rows.map((r) => r.field.type)).toEqual(["reference", "lookup", "rollup", "rollup"]);
+    expect(rows[2].field).toMatchObject({ ref: "p1", via: "cliente", fn: "sum", source: "total" });
+  });
+
+  it("need every setting", () => {
+    expect(fieldProblem(field({ name: "x", key: "x", type: "lookup", via: "cliente" }), () => false)).toBe("collections.field_lookup_needed");
+    expect(fieldProblem(field({ name: "x", key: "x", type: "rollup", ref: "p1", via: "cliente", fn: "sum" }), () => false)).toBe("collections.field_rollup_needed");
+    expect(fieldProblem(field({ name: "x", key: "x", type: "rollup", ref: "p1", via: "cliente", fn: "count" }), () => false)).toBeNull();
+  });
+});

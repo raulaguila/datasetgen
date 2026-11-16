@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"time"
 
 	"github.com/raulaguila/dataset/internal/core/port/output"
 	"github.com/raulaguila/dataset/pkg/reqctx"
@@ -11,21 +12,23 @@ import (
 )
 
 // fill writes the fields the server owns into each doc (in place): the next
-// number, who made or changed the record, and formulas. creating is true for
+// number, who made or changed the record, and formulas; lookups and rollups
+// are dropped. creating is true for
 // new records. Docs that are not objects are left for the schema to refuse.
 func fill(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionID string, docs [][]byte, creating bool) error {
-	autos, formulas := schema.AutoKeys(raw), schema.Formulas(raw)
-	if len(autos) == 0 && len(formulas) == 0 {
+	autos, formulas, virtual := schema.AutoKeys(raw), schema.Formulas(raw), schema.VirtualKeys(raw)
+	if len(autos) == 0 && len(formulas) == 0 && len(virtual) == 0 {
 		return nil
 	}
 	parsed := make(map[string]*schema.Formula, len(formulas))
-	for k, src := range formulas {
-		f, err := schema.ParseFormula(src)
+	for k, spec := range formulas {
+		f, err := schema.ParseFormula(spec.Expr)
 		if err != nil {
 			return err // Compile refused it already
 		}
 		parsed[k] = f
 	}
+	now := time.Now()
 	var who json.RawMessage
 	next := map[string]int64{}
 	for _, a := range autos {
@@ -57,6 +60,9 @@ func fill(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionID s
 		if json.Unmarshal(d, &doc) != nil || doc == nil {
 			continue
 		}
+		for _, k := range virtual {
+			delete(doc, k) // computed on read, never stored
+		}
 		for _, a := range autos {
 			switch {
 			case a.Kind == schema.AutoNumber && creating:
@@ -67,10 +73,14 @@ func fill(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionID s
 			}
 		}
 		for k, f := range parsed {
-			if v, ok := f.Eval(doc); ok {
-				doc[k], _ = json.Marshal(math.Round(v*1e9) / 1e9) // drop float noise such as 0.30000000000000004
+			v, ok := f.Eval(doc, now)
+			if x, isNum := v.(float64); isNum {
+				v = math.Round(x*1e9) / 1e9 // drop float noise such as 0.30000000000000004
+			}
+			if ok && kindOf(v) == formulas[k].Type {
+				doc[k], _ = json.Marshal(v)
 			} else {
-				delete(doc, k)
+				delete(doc, k) // no value, or one the field's type cannot hold
 			}
 		}
 		out, err := json.Marshal(doc)
@@ -80,4 +90,17 @@ func fill(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionID s
 		docs[i] = out
 	}
 	return nil
+}
+
+// kindOf names a formula value's JSON type.
+func kindOf(v any) string {
+	switch v.(type) {
+	case float64:
+		return "number"
+	case string:
+		return "string"
+	case bool:
+		return "boolean"
+	}
+	return ""
 }

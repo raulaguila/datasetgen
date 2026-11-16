@@ -13,6 +13,9 @@ type wireEmail struct {
 	Email string `json:"email"`
 	Token string `json:"token"`
 	Lang  string `json:"lang,omitempty"`
+
+	Subject string `json:"subject,omitempty"`
+	Path    string `json:"path,omitempty"`
 }
 
 type Codec struct{ key []byte }

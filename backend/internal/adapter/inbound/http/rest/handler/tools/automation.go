@@ -87,7 +87,7 @@ type automationBody struct {
 	Trigger    string          `json:"trigger" example:"record.created" enums:"record.created,record.updated,daily"`
 	Hour       *int            `json:"hour,omitempty" example:"8"`
 	Conditions domain.Where    `json:"conditions" swaggertype:"object"`
-	Action     string          `json:"action" example:"notify" enums:"set_field,notify"`
+	Action     string          `json:"action" example:"notify" enums:"set_field,notify,email,webhook,create_record"`
 	Config     json.RawMessage `json:"config" swaggertype:"object"`
 }
 
@@ -116,7 +116,7 @@ func (h *Handler) Automations(c fiber.Ctx) error {
 }
 
 // @Summary Make an automation; owners
-// @Description When a record is created or changed (or daily at hour), the records passing conditions get the action: set_field {"field","value"} or notify {"message"}. It acts as its maker.
+// @Description When a record is created or changed (or daily at hour), the records passing conditions get the action: set_field {"field","value"}, notify {"message"}, email {"to":"me"|"members","subject","message"}, webhook {"webhook_id"} or create_record {"collection_id","data"} (a text value naming a field, or id, in double curly braces copies it from the matching record). It acts as its maker.
 // @Tags Integrations
 // @Accept json
 // @Produce json

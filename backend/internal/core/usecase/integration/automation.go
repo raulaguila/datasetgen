@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
@@ -115,8 +116,40 @@ func (s *Service) checkAutomation(ctx context.Context, collectionID string, in i
 		}
 		c.Message = strings.TrimSpace(c.Message)
 		a.Config, _ = json.Marshal(c)
+	case domain.ActionEmail:
+		var c emailConfig
+		if json.Unmarshal(a.Config, &c) != nil || (c.To != emailToMe && c.To != emailToMembers) {
+			return nil, bad("config", `email needs {"to": "me" or "members", "subject", "message"}`)
+		}
+		c.Subject, c.Message = strings.TrimSpace(c.Subject), strings.TrimSpace(c.Message)
+		if n := utf8.RuneCountInString(c.Subject); n < 1 || n > maxName || strings.ContainsAny(c.Subject, "\r\n") {
+			return nil, bad("config", "the email subject must be 1-80 characters on one line")
+		}
+		if c.Message == "" || utf8.RuneCountInString(c.Message) > maxMessage {
+			return nil, bad("config", "the email message must be 1-500 characters")
+		}
+		a.Config, _ = json.Marshal(c)
+	case domain.ActionWebhook:
+		var c webhookConfig
+		if json.Unmarshal(a.Config, &c) != nil || validate.ID(c.WebhookID) != nil {
+			return nil, bad("config", `webhook needs {"webhook_id": one of the collection's webhooks}`)
+		}
+		if h, err := s.Store.Integrations().Webhook(ctx, c.WebhookID); err != nil || h.CollectionID != collectionID {
+			return nil, bad("config", "the webhook is not one of this collection's")
+		}
+		a.Config, _ = json.Marshal(c)
+	case domain.ActionCreateRecord:
+		var c createConfig
+		if json.Unmarshal(a.Config, &c) != nil || len(c.Data) == 0 {
+			return nil, bad("config", `create_record needs {"collection_id", "data": a JSON object}`)
+		}
+		// The maker must be able to write there now; each run checks again.
+		if _, err := policy.CollectionRole(ctx, s.Store.Collections(), c.CollectionID, domain.RoleEditor); err != nil {
+			return nil, err
+		}
+		a.Config, _ = json.Marshal(c)
 	default:
-		return nil, bad("action", "action must be set_field or notify")
+		return nil, bad("action", "action must be set_field, notify, email, webhook or create_record")
 	}
 	if _, _, err := s.Records.List(ctx, domain.RecordFilter{CollectionID: collectionID, Page: domain.NewPage(1, 1), Where: &a.Conditions}); err != nil {
 		return nil, err
@@ -314,6 +347,115 @@ func (s *Service) act(ctx context.Context, a *domain.Automation, items []domain.
 		return s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
 			return uow.Notifications().Create(ctx, &domain.Notification{UserID: a.CreatedBy, Level: domain.NotificationInfo, Params: params, Title: a.Name, Message: c.Message})
 		})
+	case domain.ActionEmail:
+		return s.email(ctx, a, ids)
+	case domain.ActionWebhook:
+		var c webhookConfig
+		if err := json.Unmarshal(a.Config, &c); err != nil {
+			return err
+		}
+		records := make([]map[string]any, len(items))
+		for i, r := range items {
+			records[i] = map[string]any{"id": r.ID, "data": r.Data, "version": r.Version, "updated_at": r.UpdatedAt}
+		}
+		body := map[string]any{"event": "automation.run", "collection_id": a.CollectionID, "automation": a.Name,
+			"occurred_at": time.Now().UTC().Format(time.RFC3339), "records": records}
+		// Queued, so the call gets the hook's retries and lands in its delivery log.
+		return s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+			return policy.EnqueueJob(ctx, uow, policy.JobWebhook, policy.WebhookJob{HookID: c.WebhookID, Body: body})
+		})
+	case domain.ActionCreateRecord:
+		var c createConfig
+		if err := json.Unmarshal(a.Config, &c); err != nil {
+			return err
+		}
+		for _, r := range items {
+			data, err := fillTemplate(c.Data, r)
+			if err != nil {
+				return err
+			}
+			if _, err := s.Records.Create(ctx, input.CreateRecordCommand{CollectionID: c.CollectionID, Data: data}); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	return fmt.Errorf("unknown action %q", a.Action)
+}
+
+const (
+	emailToMe      = "me"
+	emailToMembers = "members"
+)
+
+type emailConfig struct {
+	To      string `json:"to"`
+	Subject string `json:"subject"`
+	Message string `json:"message"`
+}
+
+type webhookConfig struct {
+	WebhookID string `json:"webhook_id"`
+}
+
+type createConfig struct {
+	CollectionID string                     `json:"collection_id"`
+	Data         map[string]json.RawMessage `json:"data"`
+}
+
+// email queues one message per recipient for the run: the maker, or every
+// active member. The mailer adds the link to the collection (or the record).
+func (s *Service) email(ctx context.Context, a *domain.Automation, ids []string) error {
+	var c emailConfig
+	if err := json.Unmarshal(a.Config, &c); err != nil {
+		return err
+	}
+	members, err := s.Store.Collections().Members(ctx, a.CollectionID)
+	if err != nil {
+		return err
+	}
+	path := "/collections/" + a.CollectionID
+	if len(ids) == 1 {
+		path = "/records/" + ids[0]
+	}
+	return s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		for _, m := range members {
+			if m.Status != domain.UserStatusActive || (c.To == emailToMe && m.UserID != a.CreatedBy) {
+				continue
+			}
+			payload, err := s.Mail.Encode(output.EmailToken{Email: m.Email, Token: c.Message, Subject: c.Subject, Path: path})
+			if err != nil {
+				return err
+			}
+			if err := uow.Outbox().Enqueue(ctx, domain.OutboxPurposeAutomation, payload); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// fillTemplate builds a record from an automation's data: a string value that
+// is exactly "{{field}}" takes that top-level field of the matching record
+// (left out when the record has none), "{{id}}" the record's id.
+func fillTemplate(tpl map[string]json.RawMessage, r domain.Record) (json.RawMessage, error) {
+	var src map[string]json.RawMessage
+	if err := json.Unmarshal(r.Data, &src); err != nil {
+		return nil, err
+	}
+	out := make(map[string]json.RawMessage, len(tpl))
+	for k, v := range tpl {
+		var ref string
+		if json.Unmarshal(v, &ref) != nil || !strings.HasPrefix(ref, "{{") || !strings.HasSuffix(ref, "}}") {
+			out[k] = v
+			continue
+		}
+		name := strings.TrimSpace(ref[2 : len(ref)-2])
+		if name == "id" {
+			out[k], _ = json.Marshal(r.ID)
+		} else if val, ok := src[name]; ok {
+			out[k] = val
+		}
+	}
+	return json.Marshal(out)
 }

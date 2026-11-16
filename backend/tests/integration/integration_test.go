@@ -116,6 +116,7 @@ func newEnv(t testing.TB) *env {
 		LoginAttemptIPWindow:         time.Minute,
 		LoginAttemptIPMaxFailures:    20,
 	}, emailpayload.New(testKey))
+	svc.SealKey = testKey
 	return &env{svc: svc, store: store, clock: c}
 }
 
