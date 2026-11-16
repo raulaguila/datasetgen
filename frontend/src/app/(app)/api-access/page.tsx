@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Tabs } from "@base-ui/react/tabs";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2, PlugZap } from "lucide-react";
 import { FormError, FormSection, FormSections, PageBody, PageHeader } from "@/components/bits";
@@ -53,69 +54,98 @@ function McpConnectCard({ secret }: { secret: string | null }) {
   const desktop = JSON.stringify({
     mcpServers: { dataset: { command: "npx", args: ["-y", "mcp-remote", url, "--header", "Authorization:${DATASET_AUTH}"], env: { DATASET_AUTH: `Bearer ${key}` } } },
   }, null, 2);
+  const codex = `# export DATASET_KEY="${key}"\n[mcp_servers.dataset]\nurl = "${url}"\nbearer_token_env_var = "DATASET_KEY"`;
+  const openai = `curl https://api.openai.com/v1/responses \\\n  -H "Authorization: Bearer $OPENAI_API_KEY" -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({
+    model: "gpt-5",
+    tools: [{ type: "mcp", server_label: "dataset", server_url: url, headers: { Authorization: `Bearer ${key}` }, require_approval: "never" }],
+    input: t("mcp_connect.openai_prompt"),
+  }, null, 2)}'`;
 
   // The typed key wins; a key just made fills the field until then.
   const [typed, setTyped] = useState<string | null>(null);
   const testKey = (typed ?? secret ?? "").trim();
   const check = useMutation({ mutationFn: () => reachOf(testKey) });
 
+  // Hosted clients (the OpenAI API) call the server from the internet: a local or plain-HTTP address cannot work for them.
+  const local = /^http:|\/\/(localhost|127\.|\[::1\])/.test(url);
+  const clients: { id: string; name: string; hint?: string; code: string; note?: string }[] = [
+    { id: "claude-code", name: "Claude Code", code: claudeCode },
+    { id: "claude-desktop", name: "Claude Desktop", hint: t("mcp_connect.desktop_hint"), code: desktop },
+    { id: "codex", name: "Codex", hint: t("mcp_connect.codex_hint"), code: codex },
+    { id: "openai", name: t("mcp_connect.openai_api"), hint: t("mcp_connect.openai_hint"), code: openai, note: t("mcp_connect.chatgpt_note") },
+    { id: "other", name: t("mcp_connect.generic"), hint: t("mcp_connect.generic_hint"), code: generic },
+  ];
+
   return (
     <FormSection id="mcp" title={t("mcp_connect.title")} description={t(secret ? "mcp_connect.desc_filled" : "mcp_connect.desc")} wide>
-      <div className="space-y-4 text-sm">
-        <div className="space-y-1.5">
-          <h3 className="font-medium">{t("mcp_connect.url")}</h3>
+      <ol className="space-y-6 text-sm">
+        <Step n={1} title={t("mcp_connect.url")}>
           <CodeBlock>{url}</CodeBlock>
           <p className="text-xs text-muted-foreground">{t("mcp_connect.url_hint")}</p>
-        </div>
-        <div className="space-y-1.5">
-          <h3 className="font-medium">Claude Code</h3>
-          <CodeBlock>{claudeCode}</CodeBlock>
-        </div>
-        <div className="space-y-1.5">
-          <h3 className="font-medium">Claude Desktop</h3>
-          <p className="text-xs text-muted-foreground">{t("mcp_connect.desktop_hint")}</p>
-          <CodeBlock>{desktop}</CodeBlock>
-        </div>
-        <div className="space-y-1.5">
-          <h3 className="font-medium">{t("mcp_connect.generic")}</h3>
-          <p className="text-xs text-muted-foreground">{t("mcp_connect.generic_hint")}</p>
-          <CodeBlock>{generic}</CodeBlock>
-        </div>
+          {local && <p role="note" className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">{t("mcp_connect.local_warning")}</p>}
+        </Step>
 
-        <form className="space-y-2 rounded-md border p-3" aria-label={t("mcp_connect.test")} onSubmit={(e) => { e.preventDefault(); if (testKey) check.mutate(); }}>
-          <h3 className="font-medium">{t("mcp_connect.test")}</h3>
-          <p className="text-xs text-muted-foreground">{t("mcp_connect.test_hint")}</p>
-          <Label htmlFor="mcp-test-key" className="sr-only">{t("mcp_connect.test_key")}</Label>
-          <div className="flex flex-wrap gap-2">
-            <Input id="mcp-test-key" type="password" autoComplete="off" className="min-w-0 flex-1 font-mono" placeholder="dsk_…" value={typed ?? secret ?? ""} onChange={(e) => setTyped(e.target.value)} />
-            <Button type="submit" variant="outline" disabled={!testKey || check.isPending}>
-              {check.isPending ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
-              {t("mcp_connect.test_action")}
-            </Button>
-          </div>
-          <FormError message={check.isError ? t(check.error.message === "unauthorized" ? "mcp_connect.test_unauthorized" : "mcp_connect.test_failed") : null} />
-          {check.data && (
-            <div role="status" className="space-y-1 rounded-md bg-muted/40 p-2 text-sm">
-              <p className="font-medium">{t("mcp_connect.test_ok").replace("{tools}", String(check.data.tools.length)).replace("{collections}", String(check.data.collections.length))}</p>
-              {check.data.collections.length > 0 && (
-                <ul className="list-disc pl-5 text-xs text-muted-foreground">
-                  {check.data.collections.map((c) => <li key={c.name}>{c.name} · {t(c.access === "write" ? "integrations.read_write" : "integrations.read_only")}</li>)}
-                </ul>
-              )}
+        <Step n={2} title={t("mcp_connect.step_client")}>
+          <Tabs.Root defaultValue="claude-code">
+            <Tabs.List aria-label={t("mcp_connect.step_client")} className="flex gap-1 overflow-x-auto border-b">
+              {clients.map((c) => (
+                <Tabs.Tab key={c.id} value={c.id} className="-mb-px shrink-0 whitespace-nowrap border-b-2 border-transparent px-3 py-1.5 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[active]:border-primary data-[active]:font-medium data-[active]:text-foreground">
+                  {c.name}
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+            {clients.map((c) => (
+              <Tabs.Panel key={c.id} value={c.id} className="space-y-1.5 pt-3 outline-none">
+                {c.hint && <p className="text-xs text-muted-foreground">{c.hint}</p>}
+                <CodeBlock>{c.code}</CodeBlock>
+                {c.note && <p className="text-xs text-muted-foreground">{c.note}</p>}
+              </Tabs.Panel>
+            ))}
+          </Tabs.Root>
+        </Step>
+
+        <Step n={3} title={t("mcp_connect.test")}>
+          <form className="space-y-2" aria-label={t("mcp_connect.test")} onSubmit={(e) => { e.preventDefault(); if (testKey) check.mutate(); }}>
+            <p className="text-xs text-muted-foreground">{t("mcp_connect.test_hint")}</p>
+            <Label htmlFor="mcp-test-key" className="sr-only">{t("mcp_connect.test_key")}</Label>
+            <div className="flex flex-wrap gap-2">
+              <Input id="mcp-test-key" type="password" autoComplete="off" className="min-w-0 flex-1 font-mono" placeholder="dsk_…" value={typed ?? secret ?? ""} onChange={(e) => setTyped(e.target.value)} />
+              <Button type="submit" variant="outline" disabled={!testKey || check.isPending}>
+                {check.isPending ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
+                {t("mcp_connect.test_action")}
+              </Button>
             </div>
-          )}
-        </form>
-
-        <div className="space-y-1.5">
-          <h3 className="font-medium">{t("mcp_connect.tools")}</h3>
-          <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-            <li>{t("mcp_connect.tools_read")}</li>
-            <li>{t("mcp_connect.tools_write")}</li>
-            <li>{t("mcp_connect.tools_own")}</li>
-          </ul>
-        </div>
-      </div>
+            <FormError message={check.isError ? t(check.error.message === "unauthorized" ? "mcp_connect.test_unauthorized" : "mcp_connect.test_failed") : null} />
+            {check.data && (
+              <div role="status" className="space-y-2 rounded-md bg-muted/40 p-3 text-sm">
+                <p className="font-medium">{t("mcp_connect.test_ok").replace("{tools}", String(check.data.tools.length)).replace("{collections}", String(check.data.collections.length))}</p>
+                {check.data.collections.length > 0 && (
+                  <ul className="list-disc pl-5 text-xs text-muted-foreground">
+                    {check.data.collections.map((c) => <li key={c.name}>{c.name} · {t(c.access === "write" ? "integrations.read_write" : "integrations.read_only")}</li>)}
+                  </ul>
+                )}
+                <ul aria-label={t("mcp_connect.test_tools")} className="flex flex-wrap gap-1">
+                  {check.data.tools.map((name) => <li key={name}><code className="rounded bg-background px-1.5 py-0.5 font-mono text-xs">{name}</code></li>)}
+                </ul>
+              </div>
+            )}
+          </form>
+        </Step>
+      </ol>
     </FormSection>
+  );
+}
+
+/** One numbered step of the connection guide. */
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <li className="flex gap-3">
+      <span aria-hidden className="flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium tabular-nums">{n}</span>
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <h3 className="font-medium leading-6">{title}</h3>
+        {children}
+      </div>
+    </li>
   );
 }
 

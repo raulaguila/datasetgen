@@ -47,6 +47,9 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
   await expect(page.getByText(/vence em/).first()).toBeVisible();
   await page.getByRole("form", { name: "Testar conexão" }).getByRole("button", { name: "Testar" }).click();
   await expect(page.getByText(/^Conectado: 10 tools, 1 coleção/)).toBeVisible();
+  await expect(page.getByRole("list", { name: "Tools que a chave alcança" }).getByText("nota_por_titulo")).toBeVisible();
+  await page.getByRole("tab", { name: "Codex" }).click();
+  await expect(page.locator("pre").filter({ hasText: "[mcp_servers.dataset]" })).toContainText(secret);
 
   const mcp = (body: object) =>
     page.request.post("/api/proxy/v1/mcp", {
