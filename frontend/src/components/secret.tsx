@@ -30,3 +30,13 @@ export function Secret({ value, onClose }: { value: string; onClose: () => void 
     </div>
   );
 }
+
+/** A copyable code sample. */
+export function CodeBlock({ children }: { children: string }) {
+  return (
+    <div className="relative">
+      <pre className="overflow-x-auto rounded-md border bg-muted/40 p-3 pr-24 font-mono text-xs leading-relaxed">{children}</pre>
+      <div className="absolute right-2 top-2"><CopyButton text={children} /></div>
+    </div>
+  );
+}

@@ -17,7 +17,7 @@ type IntegrationRepository interface {
 	// UserKey is one key the member made (NotFound otherwise).
 	UserKey(ctx context.Context, id, userID string) (*domain.APIKey, error)
 	// CreateKey stores the key and the collections in k.Scopes.
-	CreateKey(ctx context.Context, k *domain.APIKey, hash []byte) error
+	CreateKey(ctx context.Context, k *domain.APIKey, hash []byte) error // with k.ExpiresAt
 	// UpdateKey renames a key and sets its collections to exactly scopes.
 	UpdateKey(ctx context.Context, id, name string, scopes []domain.KeyScope) error
 	DeleteKey(ctx context.Context, id string) error
@@ -65,6 +65,11 @@ type IntegrationRepository interface {
 	UpdateMCPTool(ctx context.Context, t *domain.MCPTool) error
 	// DeleteMCPTool returns the removed tool's name.
 	DeleteMCPTool(ctx context.Context, collectionID, id string) (string, error)
+	// LogMCPCalls keeps assistant tool calls; MCPCalls lists a collection's newest
+	// (up to limit, with the member's name); PruneMCPCalls drops those before a time.
+	LogMCPCalls(ctx context.Context, calls []domain.MCPCall) error
+	MCPCalls(ctx context.Context, collectionID string, limit int) ([]domain.MCPCall, error)
+	PruneMCPCalls(ctx context.Context, before time.Time) error
 	// DueDaily claims the enabled daily automations whose hour has come and that
 	// have not run today, stamping them run, and returns their ids.
 	DueDaily(ctx context.Context) ([]string, error)

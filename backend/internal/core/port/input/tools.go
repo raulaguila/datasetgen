@@ -25,7 +25,8 @@ type IntegrationService interface {
 	// MyKeys lists the caller's keys; CreateMyKey and UpdateMyKey give a key the
 	// collections in scopes, each needing the caller's viewer (read) or editor (write) role.
 	MyKeys(ctx context.Context) ([]domain.APIKey, error)
-	CreateMyKey(ctx context.Context, name string, scopes []domain.KeyScope) (*NewKey, error)
+	// expiresInDays (1-365) makes the key stop working then; 0 never expires.
+	CreateMyKey(ctx context.Context, name string, scopes []domain.KeyScope, expiresInDays int) (*NewKey, error)
 	UpdateMyKey(ctx context.Context, id, name string, scopes []domain.KeyScope) (*domain.APIKey, error)
 	DeleteMyKey(ctx context.Context, id string) error
 	// Keys lists the keys that reach a collection; DeleteKey takes the collection out of one (owners).
@@ -65,6 +66,13 @@ type IntegrationService interface {
 	// with the assistant's arguments and returns the page of records, the total and the page number.
 	KeyMCPTools(ctx context.Context) ([]domain.MCPTool, error)
 	RunMCPTool(ctx context.Context, t domain.MCPTool, args map[string]json.RawMessage) ([]domain.Record, int64, int, error)
+	// TestMCPTool checks unsaved settings and runs them with args, as the owner (owners).
+	TestMCPTool(ctx context.Context, collectionID string, in MCPToolInput, args map[string]json.RawMessage) ([]domain.Record, int64, int, error)
+	// LogMCPCalls keeps the tool calls an assistant made; MCPCalls lists a
+	// collection's newest 100 (owners); PruneMCPCalls drops those older than 30 days.
+	LogMCPCalls(ctx context.Context, calls []domain.MCPCall) error
+	MCPCalls(ctx context.Context, collectionID string) ([]domain.MCPCall, error)
+	PruneMCPCalls(ctx context.Context) error
 	// Schedule queues the daily automations that are due; the job worker calls it.
 	Schedule(ctx context.Context) error
 }

@@ -26,6 +26,7 @@ type APIKey struct {
 	CreatorName string
 	CreatedAt   time.Time
 	LastUsedAt  *time.Time
+	ExpiresAt   *time.Time // the key stops working then; nil never expires
 }
 
 // KeyScope is one collection a key reaches, read only or read and write.
@@ -225,3 +226,16 @@ var MCPToolOps = []string{"eq", "neq", "contains", "gt", "gte", "lt", "lte", "in
 // MCPBuiltinTools are the server's own tool names, which an owner's tool cannot take.
 var MCPBuiltinTools = []string{"list_collections", "get_collection", "search_records", "get_record", "related_records",
 	"collection_stats", "create_record", "update_record", "delete_records"}
+
+// MCPCall is one tool call an AI assistant made in a collection through MCP.
+type MCPCall struct {
+	CollectionID string
+	KeyID        string
+	KeyName      string
+	UserID       string
+	UserName     string
+	Tool         string
+	OK           bool
+	Error        string
+	CreatedAt    time.Time
+}

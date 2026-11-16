@@ -49,6 +49,7 @@ func inputSchema(t domain.MCPTool) map[string]any {
 
 func (t tools) runOwnTool(tool domain.MCPTool) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		touch(ctx, tool.CollectionID)
 		var args map[string]json.RawMessage
 		if raw := req.Params.Arguments; len(raw) > 0 {
 			if err := json.Unmarshal(raw, &args); err != nil {

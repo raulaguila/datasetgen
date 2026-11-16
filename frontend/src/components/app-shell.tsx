@@ -151,6 +151,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem render={<Link href="/profile" />}>{t("nav.profile")}</DropdownMenuItem>
+                  <DropdownMenuItem render={<Link href="/api-access" />}>{t("nav.api_access")}</DropdownMenuItem>
                   {admin.length > 0 && (
                     <>
                       <DropdownMenuSeparator />

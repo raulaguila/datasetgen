@@ -22,7 +22,8 @@ import { roleAllows } from "@/lib/permissions";
 
 type Access = "none" | "read" | "write";
 /** The key being made (no id) or changed: its name and each collection's access. */
-type Draft = { id?: string; name: string; access: Record<string, Access> };
+/** days: how long a new key lasts, "0" for no end; a saved key keeps its end. */
+type Draft = { id?: string; name: string; access: Record<string, Access>; days: string };
 
 const KEYS = ["me", "keys"] as const;
 
@@ -30,13 +31,17 @@ const draftOf = (k?: ApiKey): Draft => ({
   id: k?.id,
   name: k?.name ?? "",
   access: Object.fromEntries((k?.scopes ?? []).map((s) => [s.collection_id, s.can_write ? "write" : "read"])),
+  days: "90",
 });
+
+const DAYS = ["30", "90", "365", "0"];
 
 const scopesOf = (d: Draft): KeyScope[] =>
   Object.entries(d.access).filter(([, a]) => a !== "none").map(([collection_id, a]) => ({ collection_id, can_write: a === "write" }));
 
-/** The member's own API keys: each reaches the collections picked, read only or read and write. */
-export function ApiKeysCard() {
+/** The member's own API keys: each reaches the collections picked, read only or read and write.
+ * onCreated gets a new key's secret, shown this once, so the page can fill its examples with it. */
+export function ApiKeysCard({ onCreated }: { onCreated?: (secret: string) => void } = {}) {
   const { t } = useI18n();
   const client = useQueryClient();
   const format = useFormatDate();
@@ -47,9 +52,12 @@ export function ApiKeysCard() {
   const [secret, setSecret] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<ApiKey | null>(null);
   const save = useMutation({
-    mutationFn: (d: Draft) => (d.id ? account.updateKey(d.id, d.name.trim(), scopesOf(d)) : account.createKey(d.name.trim(), scopesOf(d))),
+    mutationFn: (d: Draft) => (d.id ? account.updateKey(d.id, d.name.trim(), scopesOf(d)) : account.createKey(d.name.trim(), scopesOf(d), Number(d.days))),
     onSuccess: (k: ApiKey & { secret?: string }) => {
-      if (k.secret) setSecret(k.secret);
+      if (k.secret) {
+        setSecret(k.secret);
+        onCreated?.(k.secret);
+      }
       else toast.success(t("common.saved"));
       setDraft(null);
       void client.invalidateQueries({ queryKey: KEYS });
@@ -58,6 +66,7 @@ export function ApiKeysCard() {
   const items = list.data?.items ?? [];
   const accessName: Record<Access, string> = { none: t("keys.access_none"), read: t("integrations.read_only"), write: t("integrations.read_write") };
   const picked = draft ? scopesOf(draft).length : 0;
+  const daysName: Record<string, string> = Object.fromEntries(DAYS.map((d) => [d, d === "0" ? t("keys.expires_never") : t("keys.expires_days").replace("{n}", d)]));
 
   return (
     <FormSection id="keys" title={t("keys.title")} description={t("keys.desc")}>
@@ -74,7 +83,9 @@ export function ApiKeysCard() {
                   <p className="text-xs text-muted-foreground">
                     <span className="font-mono">{k.prefix}…</span>
                     {` · ${k.last_used_at ? t("integrations.used_at").replace("{at}", format(k.last_used_at)) : t("integrations.never_used")}`}
+                    {k.expires_at && new Date(k.expires_at) > new Date() && ` · ${t("keys.expires_at").replace("{at}", format(k.expires_at))}`}
                   </p>
+                  {k.expires_at && new Date(k.expires_at) <= new Date() && <Badge variant="destructive">{t("keys.expired")}</Badge>}
                   {k.scopes?.length ? (
                     <ul className="flex flex-wrap gap-1.5" aria-label={t("keys.collections")}>
                       {k.scopes.map((s) => (
@@ -98,6 +109,18 @@ export function ApiKeysCard() {
               <Label htmlFor="key-name">{t("integrations.key_name")}</Label>
               <Input id="key-name" maxLength={80} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} autoFocus />
             </div>
+            {!draft.id && (
+              <div className="flex flex-col gap-1.5">
+                <Label id="key-days">{t("keys.expires")}</Label>
+                <Select value={draft.days} items={daysName} onValueChange={(v) => setDraft({ ...draft, days: v as string })}>
+                  <SelectTrigger className="w-56" aria-labelledby="key-days"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {DAYS.map((d) => <SelectItem key={d} value={d}>{daysName[d]}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{t("keys.expires_hint")}</p>
+              </div>
+            )}
             <fieldset className="space-y-1.5">
               <legend className="text-sm font-medium">{t("keys.collections")}</legend>
               <p className="text-xs text-muted-foreground">{t("keys.collections_hint")}</p>

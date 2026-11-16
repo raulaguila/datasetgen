@@ -292,6 +292,8 @@ export interface ApiKey {
   creator_name?: string;
   created_at: string;
   last_used_at?: string;
+  /** When the key stops working; absent when it never does. */
+  expires_at?: string;
 }
 
 export interface KeyScope {
@@ -470,4 +472,23 @@ export interface Widget {
   decimals?: number;
   /** How bars and timelines draw: bars, a donut or a table; columns or a line. */
   visual?: "bars" | "donut" | "table" | "columns" | "line";
+}
+
+/** What an owner's MCP tool answered when tried before saving. */
+export interface McpTestResult {
+  total: number;
+  page: number;
+  records: { id: string; data: Record<string, unknown>; updated_at: string }[];
+}
+
+/** One tool call an AI assistant made in the collection. */
+export interface McpCall {
+  tool: string;
+  key_name: string;
+  /** False once the key is deleted. */
+  key_live: boolean;
+  user_name: string;
+  ok: boolean;
+  error?: string;
+  created_at: string;
 }

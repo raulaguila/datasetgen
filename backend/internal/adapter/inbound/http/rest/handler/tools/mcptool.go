@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -148,4 +149,78 @@ func (h *Handler) DeleteMCPTool(c fiber.Ctx) error {
 		return fail(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+type mcpTestBody struct {
+	Tool mcpToolBody                `json:"tool"`
+	Args map[string]json.RawMessage `json:"args" swaggertype:"object"`
+}
+
+type mcpTestRecordDTO struct {
+	ID        string          `json:"id"`
+	Data      json.RawMessage `json:"data" swaggertype:"object"`
+	UpdatedAt time.Time       `json:"updated_at"`
+}
+
+type mcpTestDTO struct {
+	Total   int64              `json:"total"`
+	Page    int                `json:"page"`
+	Records []mcpTestRecordDTO `json:"records"`
+}
+
+// @Summary Try an MCP tool before saving it; owners
+// @Description Checks the settings as a save does, then runs them once with args (the assistant's arguments) and answers what the assistant would get.
+// @Tags Integrations
+// @Accept json
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Param body body mcpTestBody true "Tool and arguments"
+// @Security BearerAuth
+// @Success 200 {object} mcpTestDTO
+// @Failure 400 {object} mapper.errorBody
+// @Router /v1/collections/{id}/mcp-tools/test [post]
+func (h *Handler) TestMCPTool(c fiber.Ctx) error {
+	var body mcpTestBody
+	if err := c.Bind().Body(&body); err != nil {
+		return badBody(c)
+	}
+	items, total, page, err := h.integrations.TestMCPTool(c.Context(), c.Params("id"), body.Tool.input(), body.Args)
+	if err != nil {
+		return fail(c, err)
+	}
+	out := mcpTestDTO{Total: total, Page: page, Records: make([]mcpTestRecordDTO, len(items))}
+	for i, r := range items {
+		out.Records[i] = mcpTestRecordDTO{ID: r.ID, Data: r.Data, UpdatedAt: r.UpdatedAt}
+	}
+	return c.JSON(out)
+}
+
+type mcpCallDTO struct {
+	Tool      string    `json:"tool" example:"search_records"`
+	KeyName   string    `json:"key_name"`
+	KeyLive   bool      `json:"key_live"` // false once the key is deleted
+	UserName  string    `json:"user_name"`
+	OK        bool      `json:"ok"`
+	Error     string    `json:"error,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// @Summary What AI assistants did in a collection through MCP (newest 100, last 30 days); owners
+// @Tags Integrations
+// @Produce json
+// @Param id path string true "Collection ID"
+// @Security BearerAuth
+// @Success 200 {object} object{items=[]mcpCallDTO}
+// @Failure 403 {object} mapper.errorBody
+// @Router /v1/collections/{id}/mcp-calls [get]
+func (h *Handler) MCPCalls(c fiber.Ctx) error {
+	list, err := h.integrations.MCPCalls(c.Context(), c.Params("id"))
+	if err != nil {
+		return fail(c, err)
+	}
+	out := make([]mcpCallDTO, len(list))
+	for i, m := range list {
+		out[i] = mcpCallDTO{Tool: m.Tool, KeyName: m.KeyName, KeyLive: m.KeyID != "", UserName: m.UserName, OK: m.OK, Error: m.Error, CreatedAt: m.CreatedAt}
+	}
+	return c.JSON(fiber.Map{"items": out})
 }

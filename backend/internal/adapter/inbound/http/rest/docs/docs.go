@@ -1888,6 +1888,53 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/collections/{id}/mcp-calls": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "What AI assistants did in a collection through MCP (newest 100, last 30 days); owners",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "items": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/tools.mcpCallDTO"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/collections/{id}/mcp-tools": {
             "get": {
                 "security": [
@@ -1984,6 +2031,58 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/collections/{id}/mcp-tools/test": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Checks the settings as a save does, then runs them once with args (the assistant's arguments) and answers what the assistant would get.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "Try an MCP tool before saving it; owners",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Tool and arguments",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/tools.mcpTestBody"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/tools.mcpTestDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/mapper.errorBody"
                         }
@@ -8840,6 +8939,11 @@ const docTemplate = `{
         "tools.keyBodyDTO": {
             "type": "object",
             "properties": {
+                "expires_in_days": {
+                    "description": "ExpiresInDays (1-365) ends the key that many days after it is made; 0 or absent never ends. Ignored on update.",
+                    "type": "integer",
+                    "example": 90
+                },
                 "name": {
                     "type": "string",
                     "example": "Assistente"
@@ -8864,6 +8968,9 @@ const docTemplate = `{
                 "creator_name": {
                     "type": "string"
                 },
+                "expires_at": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -8881,6 +8988,34 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/tools.scopeDTO"
                     }
+                }
+            }
+        },
+        "tools.mcpCallDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "key_live": {
+                    "description": "false once the key is deleted",
+                    "type": "boolean"
+                },
+                "key_name": {
+                    "type": "string"
+                },
+                "ok": {
+                    "type": "boolean"
+                },
+                "tool": {
+                    "type": "string",
+                    "example": "search_records"
+                },
+                "user_name": {
+                    "type": "string"
                 }
             }
         },
@@ -8921,6 +9056,48 @@ const docTemplate = `{
                     "description": "set by the server from the schema",
                     "type": "string",
                     "example": "string"
+                }
+            }
+        },
+        "tools.mcpTestBody": {
+            "type": "object",
+            "properties": {
+                "args": {
+                    "type": "object"
+                },
+                "tool": {
+                    "$ref": "#/definitions/tools.mcpToolBody"
+                }
+            }
+        },
+        "tools.mcpTestDTO": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "records": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/tools.mcpTestRecordDTO"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "tools.mcpTestRecordDTO": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "object"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -9065,6 +9242,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "creator_name": {
+                    "type": "string"
+                },
+                "expires_at": {
                     "type": "string"
                 },
                 "id": {

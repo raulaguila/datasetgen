@@ -76,7 +76,7 @@ func TestOwnersPublishMCPTools(t *testing.T) {
 	_, err = integ.CreateMCPTool(owner, c.ID, tool)
 	wantCode(t, err, apperror.CodeAlreadyExists)
 
-	key, err := integ.CreateMyKey(owner, "Assistente", []domain.KeyScope{{CollectionID: c.ID}})
+	key, err := integ.CreateMyKey(owner, "Assistente", []domain.KeyScope{{CollectionID: c.ID}}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,6 +147,25 @@ func TestOwnersPublishMCPTools(t *testing.T) {
 	}
 	if got, _ = call(`{"cidade":"Belem","nomes":["mesa","x"]}`); got["total"].(float64) != 1 {
 		t.Fatalf("in: %v", got)
+	}
+
+	// The owners' log keeps each call in the collection, newest first; listing tools is not a call.
+	rpc("tools/call", `{"name":"search_records","arguments":{"collection_id":"`+c.ID+`"}}`)
+	calls, err := integ.MCPCalls(owner, c.ID)
+	if err != nil || len(calls) != 6 || calls[0].Tool != "search_records" || !calls[0].OK || calls[0].KeyName != "Assistente" {
+		t.Fatalf("calls: %v %v", calls, err)
+	}
+	if failed := slices.IndexFunc(calls, func(m domain.MCPCall) bool { return !m.OK && m.Error != "" }); failed < 0 {
+		t.Fatalf("no failed call logged: %v", calls)
+	}
+
+	// An owner tries settings before saving them.
+	tried, total, _, err := integ.TestMCPTool(owner, c.ID, tool, map[string]json.RawMessage{"cidade": json.RawMessage(`"Manaus"`)})
+	if err != nil || total != 1 || string(tried[0].Data) != `{"nome":"caneta"}` {
+		t.Fatalf("test: %v %d %v", tried, total, err)
+	}
+	if _, _, _, err := integ.TestMCPTool(owner, c.ID, tool, nil); !apperror.IsCode(err, apperror.CodeInvalidInput) {
+		t.Fatalf("test without the required argument: %v", err)
 	}
 
 	// A disabled tool leaves the list; a key for another collection never sees it.

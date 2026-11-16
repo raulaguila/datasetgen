@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Database, Search, User as UserIcon, UserRound, type LucideIcon } from "lucide-react";
+import { Bell, Database, KeyRound, Search, User as UserIcon, UserRound, type LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { collections, users } from "@/lib/api/endpoints";
 import { useMe } from "@/lib/context/me";
@@ -22,6 +22,7 @@ interface Hit {
 
 const EXTRA: NavItem[] = [
   { href: "/profile", key: "nav.profile", icon: UserRound },
+  { href: "/api-access", key: "nav.api_access", icon: KeyRound },
   { href: "/notifications", key: "nav.notifications", icon: Bell },
 ];
 

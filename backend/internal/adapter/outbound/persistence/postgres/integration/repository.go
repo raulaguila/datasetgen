@@ -31,12 +31,13 @@ type keyRow struct {
 	CreatorName string          `gorm:"column:creator_name"`
 	CreatedAt   time.Time       `gorm:"column:created_at"`
 	LastUsedAt  *time.Time      `gorm:"column:last_used_at"`
+	ExpiresAt   *time.Time      `gorm:"column:expires_at"`
 }
 
 func (m keyRow) toDomain() (domain.APIKey, error) {
 	k := domain.APIKey{
 		ID: m.ID.String(), Name: m.Name, Prefix: m.Prefix, CanWrite: m.CanWrite,
-		CreatedBy: m.CreatedBy.String(), CreatorName: m.CreatorName, CreatedAt: m.CreatedAt, LastUsedAt: m.LastUsedAt,
+		CreatedBy: m.CreatedBy.String(), CreatorName: m.CreatorName, CreatedAt: m.CreatedAt, LastUsedAt: m.LastUsedAt, ExpiresAt: m.ExpiresAt,
 	}
 	if len(m.Scopes) > 0 {
 		if err := json.Unmarshal(m.Scopes, &k.Scopes); err != nil {
@@ -63,7 +64,7 @@ func keysOf(rows []keyRow) ([]domain.APIKey, error) {
 func (r *Repository) Keys(ctx context.Context, collectionID string) ([]domain.APIKey, error) {
 	var rows []keyRow
 	err := r.db.WithContext(ctx).Raw(`
-		SELECT k.id, k.name, k.prefix, s.can_write, k.created_by, u.name AS creator_name, k.created_at, k.last_used_at
+		SELECT k.id, k.name, k.prefix, s.can_write, k.created_by, u.name AS creator_name, k.created_at, k.last_used_at, k.expires_at
 		FROM app.api_key_collection s
 		JOIN app.api_key k ON k.id = s.key_id
 		JOIN usr.usr_user u ON u.id = k.created_by
@@ -83,7 +84,7 @@ const scopesOf = `COALESCE((
 func (r *Repository) UserKeys(ctx context.Context, userID string) ([]domain.APIKey, error) {
 	var rows []keyRow
 	err := r.db.WithContext(ctx).Raw(`
-		SELECT k.id, k.name, k.prefix, k.created_by, k.created_at, k.last_used_at, `+scopesOf+` AS scopes
+		SELECT k.id, k.name, k.prefix, k.created_by, k.created_at, k.last_used_at, k.expires_at, `+scopesOf+` AS scopes
 		FROM app.api_key k WHERE k.created_by = ? AND k.share IS NULL ORDER BY k.created_at DESC`, userID).Find(&rows).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "api key")
@@ -94,7 +95,7 @@ func (r *Repository) UserKeys(ctx context.Context, userID string) ([]domain.APIK
 func (r *Repository) UserKey(ctx context.Context, id, userID string) (*domain.APIKey, error) {
 	var m keyRow
 	err := r.db.WithContext(ctx).Raw(`
-		SELECT k.id, k.name, k.prefix, k.created_by, k.created_at, k.last_used_at, `+scopesOf+` AS scopes
+		SELECT k.id, k.name, k.prefix, k.created_by, k.created_at, k.last_used_at, k.expires_at, `+scopesOf+` AS scopes
 		FROM app.api_key k WHERE k.id = ? AND k.created_by = ? AND k.share IS NULL`, id, userID).Take(&m).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "api key")
@@ -116,13 +117,13 @@ func (r *Repository) CreateKey(ctx context.Context, k *domain.APIKey, hash []byt
 	var m keyRow
 	err = r.db.WithContext(ctx).Raw(`
 		WITH k AS (
-			INSERT INTO app.api_key (name, prefix, key_hash, created_by) VALUES (?, ?, ?, ?) RETURNING id, created_at
+			INSERT INTO app.api_key (name, prefix, key_hash, created_by, expires_at) VALUES (?, ?, ?, ?, ?) RETURNING id, created_at
 		), s AS (
 			INSERT INTO app.api_key_collection (key_id, collection_id, can_write)
 			SELECT k.id, x.collection_id, x.can_write FROM k, json_to_recordset(?::json) AS x(collection_id uuid, can_write boolean)
 		)
 		SELECT id, created_at FROM k`,
-		k.Name, k.Prefix, hash, k.CreatedBy, scopes).Take(&m).Error
+		k.Name, k.Prefix, hash, k.CreatedBy, k.ExpiresAt, scopes).Take(&m).Error
 	if err != nil {
 		return shared.WrapError(err, "api key")
 	}
@@ -199,7 +200,7 @@ func (r *Repository) Grant(ctx context.Context, hash []byte) (*domain.KeyGrant, 
 		WITH k AS (
 			SELECT k.id, k.name, k.collection_id, k.can_write, k.created_by, k.share, k.last_used_at
 			FROM app.api_key k JOIN usr.usr_user u ON u.id = k.created_by AND u.status = 'active'
-			WHERE k.key_hash = ?
+			WHERE k.key_hash = ? AND (k.expires_at IS NULL OR k.expires_at > now())
 		), used AS (
 			UPDATE app.api_key a SET last_used_at = now() FROM k
 			WHERE a.id = k.id AND (k.last_used_at IS NULL OR k.last_used_at < now() - INTERVAL '1 minute')

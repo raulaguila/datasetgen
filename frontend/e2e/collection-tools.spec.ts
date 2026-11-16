@@ -66,7 +66,7 @@ test("a collection's tools: CSV, bulk edit, views, trash, API key, field history
 
   // An API key made on the profile for this collection reads its records through
   // the web address; it never writes with read access.
-  await page.goto("/profile#keys");
+  await page.goto("/api-access");
   await page.getByRole("button", { name: "Nova chave" }).click();
   await page.getByLabel("Nome da chave").fill(`leitura-${name}`);
   await page.getByRole("combobox", { name, exact: true }).click();

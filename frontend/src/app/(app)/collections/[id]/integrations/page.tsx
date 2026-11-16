@@ -7,7 +7,7 @@ import { ExternalLink, Link2, Plug, Send, Trash2, Webhook as WebhookIcon } from 
 import { toast } from "sonner";
 import { FormError, FormSection, FormSections, IconAction, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { CopyButton, Secret } from "@/components/secret";
+import { CodeBlock, CopyButton, Secret } from "@/components/secret";
 import { EmptyState } from "@/components/empty-state";
 import { fieldsOf } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -22,7 +22,7 @@ import { WEBHOOK_EVENTS, type Collection, type ShareLink, type WebhookEvent } fr
 import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
-import { McpTools } from "@/components/mcp-tools";
+import { McpActivity, McpTools } from "@/components/mcp-tools";
 import { CollectionPage } from "../_parts";
 
 /** The keys that reach this collection: members make them on their profile; an owner can take the collection out of one. */
@@ -58,7 +58,7 @@ function Keys({ collection }: { collection: Collection }) {
         )}
         <p className="text-sm text-muted-foreground">
           {t("integrations.keys_profile")}{" "}
-          <Link href="/profile#keys" className="text-primary underline-offset-2 hover:underline">{t("integrations.keys_profile_link")}</Link>
+          <Link href="/api-access" className="text-primary underline-offset-2 hover:underline">{t("integrations.keys_profile_link")}</Link>
         </p>
       </div>
       <ConfirmDialog
@@ -266,15 +266,6 @@ function Webhooks({ collection }: { collection: Collection }) {
   );
 }
 
-function Code({ children }: { children: string }) {
-  return (
-    <div className="relative">
-      <pre className="overflow-x-auto rounded-md border bg-muted/40 p-3 pr-24 font-mono text-xs leading-relaxed">{children}</pre>
-      <div className="absolute right-2 top-2"><CopyButton text={children} /></div>
-    </div>
-  );
-}
-
 /** How a program reads and writes this collection, with examples built from its fields. */
 function Docs({ collection }: { collection: Collection }) {
   const { t } = useI18n();
@@ -292,29 +283,29 @@ function Docs({ collection }: { collection: Collection }) {
         <p>{t("integrations.docs_base")} <code className="font-mono text-xs">{base}</code></p>
         <div className="space-y-1.5">
           <h3 className="font-medium">{t("integrations.docs_list")}</h3>
-          <Code>{`curl ${auth} \\\n  "${base}/v1/records?collection_id=${collection.id}&page=1&limit=50&sort=updated_at&order=desc"`}</Code>
+          <CodeBlock>{`curl ${auth} \\\n  "${base}/v1/records?collection_id=${collection.id}&page=1&limit=50&sort=updated_at&order=desc"`}</CodeBlock>
           <p className="text-xs text-muted-foreground">{t("integrations.docs_list_hint")}</p>
         </div>
         <div className="space-y-1.5">
           <h3 className="font-medium">{t("integrations.docs_create")}</h3>
-          <Code>{`curl ${auth} -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ collection_id: collection.id, data: example })}' \\\n  "${base}/v1/records"`}</Code>
+          <CodeBlock>{`curl ${auth} -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ collection_id: collection.id, data: example })}' \\\n  "${base}/v1/records"`}</CodeBlock>
         </div>
         <div className="space-y-1.5">
           <h3 className="font-medium">{t("integrations.docs_update")}</h3>
-          <Code>{`curl ${auth} -X PATCH -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ data: example, version: 1 })}' \\\n  "${base}/v1/records/<record-id>"`}</Code>
+          <CodeBlock>{`curl ${auth} -X PATCH -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ data: example, version: 1 })}' \\\n  "${base}/v1/records/<record-id>"`}</CodeBlock>
           <p className="text-xs text-muted-foreground">{t("integrations.docs_update_hint")}</p>
         </div>
         <div className="space-y-1.5">
           <h3 className="font-medium">{t("integrations.docs_delete")}</h3>
-          <Code>{`curl ${auth} -H "Content-Type: application/json" \\\n  -d '{"ids":["<record-id>"]}' "${base}/v1/records/delete"`}</Code>
+          <CodeBlock>{`curl ${auth} -H "Content-Type: application/json" \\\n  -d '{"ids":["<record-id>"]}' "${base}/v1/records/delete"`}</CodeBlock>
         </div>
         <div className="space-y-1.5">
           <h3 className="font-medium">{t("integrations.docs_signature")}</h3>
           <p className="text-muted-foreground">{t("integrations.docs_signature_desc")}</p>
-          <Code>{`// Node.js
+          <CodeBlock>{`// Node.js
 const [t, v1] = req.headers["x-dataset-signature"].split(",").map((p) => p.split("=")[1]);
 const expected = crypto.createHmac("sha256", process.env.DATASET_WEBHOOK_SECRET).update(\`\${t}.\${rawBody}\`).digest("hex");
-const ok = crypto.timingSafeEqual(Buffer.from(v1), Buffer.from(expected)) && Date.now() / 1000 - Number(t) < 300;`}</Code>
+const ok = crypto.timingSafeEqual(Buffer.from(v1), Buffer.from(expected)) && Date.now() / 1000 - Number(t) < 300;`}</CodeBlock>
         </div>
       </div>
     </FormSection>
@@ -330,6 +321,7 @@ export default function CollectionIntegrationsPage() {
           <Shares collection={collection} />
           <Keys collection={collection} />
           <McpTools collection={collection} />
+          <McpActivity collection={collection} />
           <Webhooks collection={collection} />
           <Docs collection={collection} />
         </FormSections>

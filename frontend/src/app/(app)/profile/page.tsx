@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { Loader2, Monitor, Smartphone } from "lucide-react";
 import { toast } from "sonner";
-import { ApiKeysCard } from "@/components/api-keys";
 import { FieldNote, FormError, FormSection, FormSections, PageBody, SaveBar, PageHeader, initials, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PasswordInput } from "@/components/password-input";
@@ -455,7 +454,6 @@ export default function ProfilePage() {
               <TwoStepCard />
               <PreferencesCard />
               <SessionsCard />
-              <ApiKeysCard />
             </FormSections>
           </>
         ) : (

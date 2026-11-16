@@ -24,17 +24,29 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
   await form.getByLabel("Nome do parâmetro").fill("titulo");
   await form.getByText("Obrigatório").click();
   await form.getByText("Notas", { exact: true }).click(); // returns only the notes
+  // Tried before saving, with the value an assistant would send.
+  await form.getByLabel("titulo *").fill("Alfa");
+  await form.getByRole("button", { name: "Testar tool" }).click();
+  await expect(form.getByText("1 registro(s) encontrados.", { exact: false })).toBeVisible();
+  await expect(form.locator("pre")).toContainText("nota Alfa");
   await form.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByRole("list", { name: "Tools do assistente (MCP)" }).getByText("nota_por_titulo")).toBeVisible();
   await expect(page.getByText("(titulo)")).toBeVisible();
 
-  await page.goto("/profile#keys");
+  await page.goto("/api-access");
+  await expect(page.getByRole("heading", { name: "Conectar um assistente de IA (MCP)" })).toBeVisible();
+  await expect(page.locator("pre").filter({ hasText: /^http:\/\/localhost:\d+\/api\/proxy\/v1\/mcp$/ })).toBeVisible();
   await page.getByRole("button", { name: "Nova chave" }).click();
   await page.getByLabel("Nome da chave").fill(`assistente-${name}`);
   await page.getByRole("combobox", { name, exact: true }).click();
   await page.getByRole("option", { name: "Só leitura" }).click();
   await page.getByRole("button", { name: "Criar chave" }).click();
   const secret = await page.locator("code").filter({ hasText: /^dsk_/ }).innerText();
+  // The examples carry the new key, and the page's own test reaches the collection.
+  await expect(page.locator("pre").filter({ hasText: "claude mcp add" })).toContainText(secret);
+  await expect(page.getByText(/vence em/).first()).toBeVisible();
+  await page.getByRole("form", { name: "Testar conexão" }).getByRole("button", { name: "Testar" }).click();
+  await expect(page.getByText(/^Conectado: 10 tools, 1 coleção/)).toBeVisible();
 
   const mcp = (body: object) =>
     page.request.post("/api/proxy/v1/mcp", {
@@ -46,4 +58,10 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
   const call = await (await mcp({ method: "tools/call", params: { name: "nota_por_titulo", arguments: { titulo: "Beta" } } })).json();
   expect(call.result.structuredContent.total).toBe(1);
   expect(call.result.structuredContent.records[0].data).toEqual({ notes: "nota Beta" });
+
+  // The owner sees what the assistant did.
+  await page.goto(`${records}/integrations`);
+  const activity = page.getByRole("list", { name: "Atividade dos assistentes" });
+  await expect(activity.getByText("nota_por_titulo")).toBeVisible();
+  await expect(activity.getByText(`chave assistente-${name}`, { exact: false }).first()).toBeVisible();
 });

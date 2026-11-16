@@ -3,6 +3,8 @@ import { apiDownload, apiFetch } from "@/lib/api/client";
 import type {
   Automation,
   AutomationInput,
+  McpCall,
+  McpTestResult,
   McpTool,
   McpToolInput,
   Widget,
@@ -62,7 +64,8 @@ export const account = {
   sessions: () => apiFetch<{ items: Session[] }>("/v1/me/sessions"),
   revokeSession: (sessionId: string) => apiFetch<void>(`/v1/me/sessions/${id(sessionId)}`, { method: "DELETE" }),
   keys: () => apiFetch<{ items: ApiKey[] }>("/v1/me/keys"),
-  createKey: (name: string, scopes: KeyScope[]) => apiFetch<ApiKey & { secret: string }>("/v1/me/keys", { method: "POST", json: { name, scopes } }),
+  createKey: (name: string, scopes: KeyScope[], expiresInDays = 0) =>
+    apiFetch<ApiKey & { secret: string }>("/v1/me/keys", { method: "POST", json: { name, scopes, expires_in_days: expiresInDays } }),
   updateKey: (keyId: string, name: string, scopes: KeyScope[]) => apiFetch<ApiKey>(`/v1/me/keys/${id(keyId)}`, { method: "PUT", json: { name, scopes } }),
   deleteKey: (keyId: string) => apiFetch<void>(`/v1/me/keys/${id(keyId)}`, { method: "DELETE" }),
   mfa: () => apiFetch<{ enabled: boolean; recovery_left: number }>("/v1/me/mfa"),
@@ -198,6 +201,9 @@ export const tools = {
   createMcpTool: (collectionId: string, input: McpToolInput) => apiFetch<McpTool>(`${col(collectionId)}/mcp-tools`, { method: "POST", json: input }),
   updateMcpTool: (collectionId: string, toolId: string, input: McpToolInput) => apiFetch<McpTool>(`${col(collectionId)}/mcp-tools/${id(toolId)}`, { method: "PUT", json: input }),
   deleteMcpTool: (collectionId: string, toolId: string) => apiFetch<void>(`${col(collectionId)}/mcp-tools/${id(toolId)}`, { method: "DELETE" }),
+  testMcpTool: (collectionId: string, tool: McpToolInput, args: Record<string, unknown>) =>
+    apiFetch<McpTestResult>(`${col(collectionId)}/mcp-tools/test`, { method: "POST", json: { tool, args } }),
+  mcpCalls: (collectionId: string) => apiFetch<{ items: McpCall[] }>(`${col(collectionId)}/mcp-calls`),
   runAutomation: (collectionId: string, autoId: string) => apiFetch<Automation>(`${col(collectionId)}/automations/${id(autoId)}/run`, { method: "POST" }),
   trash: (collectionId: string, signal?: AbortSignal) => apiFetch<{ items: TrashedRecord[]; retention_days: number }>(`${col(collectionId)}/trash`, { signal }),
   restoreRecords: (collectionId: string, ids: string[]) => apiFetch<{ count: number }>(`${col(collectionId)}/trash/restore`, { method: "POST", json: { ids } }),

@@ -1,0 +1,134 @@
+"use client";
+
+import { useState, useSyncExternalStore } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { Loader2, PlugZap } from "lucide-react";
+import { FormError, FormSection, FormSections, PageBody, PageHeader } from "@/components/bits";
+import { ApiKeysCard } from "@/components/api-keys";
+import { CodeBlock } from "@/components/secret";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useI18n } from "@/lib/i18n/provider";
+
+const MCP_PATH = "/api/proxy/v1/mcp";
+
+type Reach = { tools: string[]; collections: { name: string; access: string }[] };
+
+/** One JSON-RPC call to the MCP endpoint with key, as an assistant would make it. */
+async function rpc(key: string, method: string, params: object): Promise<Record<string, unknown>> {
+  const res = await fetch(MCP_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  const body = (await res.json().catch(() => null)) as { result?: Record<string, unknown> } | null;
+  if (!res.ok || !body?.result) throw new Error("failed");
+  return body.result;
+}
+
+/** What a key reaches through MCP: its tools and its collections. */
+async function reachOf(key: string): Promise<Reach> {
+  const list = await rpc(key, "tools/list", {});
+  const call = await rpc(key, "tools/call", { name: "list_collections", arguments: {} });
+  const tools = (list.tools as { name: string }[] | undefined) ?? [];
+  const collections = ((call.structuredContent as { collections?: Reach["collections"] } | undefined)?.collections) ?? [];
+  return { tools: tools.map((x) => x.name), collections };
+}
+
+/** How to plug an AI assistant into /v1/mcp; a key just made fills the examples. */
+function McpConnectCard({ secret }: { secret: string | null }) {
+  const { t } = useI18n();
+  // The origin is known only in the browser; the server render shows the path alone.
+  const origin = useSyncExternalStore(() => () => {}, () => window.location.origin, () => "");
+  const url = `${origin}${MCP_PATH}`;
+  const key = secret ?? t("mcp_connect.key_placeholder");
+  const claudeCode = `claude mcp add --transport http dataset \\\n  ${url} \\\n  --header "Authorization: Bearer ${key}"`;
+  const generic = JSON.stringify({ mcpServers: { dataset: { url, headers: { Authorization: `Bearer ${key}` } } } }, null, 2);
+  // Claude Desktop runs local servers only; mcp-remote bridges it to the HTTP endpoint.
+  const desktop = JSON.stringify({
+    mcpServers: { dataset: { command: "npx", args: ["-y", "mcp-remote", url, "--header", "Authorization:${DATASET_AUTH}"], env: { DATASET_AUTH: `Bearer ${key}` } } },
+  }, null, 2);
+
+  // The typed key wins; a key just made fills the field until then.
+  const [typed, setTyped] = useState<string | null>(null);
+  const testKey = (typed ?? secret ?? "").trim();
+  const check = useMutation({ mutationFn: () => reachOf(testKey) });
+
+  return (
+    <FormSection id="mcp" title={t("mcp_connect.title")} description={t(secret ? "mcp_connect.desc_filled" : "mcp_connect.desc")} wide>
+      <div className="space-y-4 text-sm">
+        <div className="space-y-1.5">
+          <h3 className="font-medium">{t("mcp_connect.url")}</h3>
+          <CodeBlock>{url}</CodeBlock>
+          <p className="text-xs text-muted-foreground">{t("mcp_connect.url_hint")}</p>
+        </div>
+        <div className="space-y-1.5">
+          <h3 className="font-medium">Claude Code</h3>
+          <CodeBlock>{claudeCode}</CodeBlock>
+        </div>
+        <div className="space-y-1.5">
+          <h3 className="font-medium">Claude Desktop</h3>
+          <p className="text-xs text-muted-foreground">{t("mcp_connect.desktop_hint")}</p>
+          <CodeBlock>{desktop}</CodeBlock>
+        </div>
+        <div className="space-y-1.5">
+          <h3 className="font-medium">{t("mcp_connect.generic")}</h3>
+          <p className="text-xs text-muted-foreground">{t("mcp_connect.generic_hint")}</p>
+          <CodeBlock>{generic}</CodeBlock>
+        </div>
+
+        <form className="space-y-2 rounded-md border p-3" aria-label={t("mcp_connect.test")} onSubmit={(e) => { e.preventDefault(); if (testKey) check.mutate(); }}>
+          <h3 className="font-medium">{t("mcp_connect.test")}</h3>
+          <p className="text-xs text-muted-foreground">{t("mcp_connect.test_hint")}</p>
+          <Label htmlFor="mcp-test-key" className="sr-only">{t("mcp_connect.test_key")}</Label>
+          <div className="flex flex-wrap gap-2">
+            <Input id="mcp-test-key" type="password" autoComplete="off" className="min-w-0 flex-1 font-mono" placeholder="dsk_…" value={typed ?? secret ?? ""} onChange={(e) => setTyped(e.target.value)} />
+            <Button type="submit" variant="outline" disabled={!testKey || check.isPending}>
+              {check.isPending ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
+              {t("mcp_connect.test_action")}
+            </Button>
+          </div>
+          <FormError message={check.isError ? t(check.error.message === "unauthorized" ? "mcp_connect.test_unauthorized" : "mcp_connect.test_failed") : null} />
+          {check.data && (
+            <div role="status" className="space-y-1 rounded-md bg-muted/40 p-2 text-sm">
+              <p className="font-medium">{t("mcp_connect.test_ok").replace("{tools}", String(check.data.tools.length)).replace("{collections}", String(check.data.collections.length))}</p>
+              {check.data.collections.length > 0 && (
+                <ul className="list-disc pl-5 text-xs text-muted-foreground">
+                  {check.data.collections.map((c) => <li key={c.name}>{c.name} · {t(c.access === "write" ? "integrations.read_write" : "integrations.read_only")}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+        </form>
+
+        <div className="space-y-1.5">
+          <h3 className="font-medium">{t("mcp_connect.tools")}</h3>
+          <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+            <li>{t("mcp_connect.tools_read")}</li>
+            <li>{t("mcp_connect.tools_write")}</li>
+            <li>{t("mcp_connect.tools_own")}</li>
+          </ul>
+        </div>
+      </div>
+    </FormSection>
+  );
+}
+
+export default function ApiAccessPage() {
+  const { t } = useI18n();
+  // A key's secret shows once: while this page stays open, the examples use it.
+  const [secret, setSecret] = useState<string | null>(null);
+  return (
+    <>
+      <PageHeader title={t("nav.api_access")} description={t("api_access.subtitle")} />
+      <PageBody>
+        <FormSections>
+          <ApiKeysCard onCreated={setSecret} />
+          <McpConnectCard secret={secret} />
+        </FormSections>
+      </PageBody>
+    </>
+  );
+}

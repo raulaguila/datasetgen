@@ -84,9 +84,9 @@ func NewJobs(cfg *config.Environment, res *infra.Resources, log *logger.Logger) 
 		Handlers: handlers,
 		Log:      log,
 		Clock:    output.RealClock{},
-		// Daily automations are checked once a minute; unused files are swept hourly.
+		// Daily automations are checked once a minute; unused files and old MCP call logs are swept hourly.
 		Every:    time.Minute,
-		Periodic: periodic(integrations.Schedule, hourly(files.SweepFiles)),
+		Periodic: periodic(integrations.Schedule, hourly(files.SweepFiles), hourly(integrations.PruneMCPCalls)),
 	}
 }
 

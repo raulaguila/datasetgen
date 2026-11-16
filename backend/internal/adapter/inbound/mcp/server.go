@@ -61,6 +61,7 @@ func newServer(ctx context.Context, app *input.Application, version string) *mcp
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: pointer.Of(true), IdempotentHint: true}}, t.deleteRecords)
 
 	t.addOwnTools(ctx, s)
+	s.AddReceivingMiddleware(t.logCalls)
 	return s
 }
 
@@ -244,6 +245,7 @@ func (t tools) getRecord(ctx context.Context, _ *mcp.CallToolRequest, in recordI
 	if err != nil {
 		return nil, nil, err
 	}
+	touch(ctx, r.CollectionID)
 	return nil, recordOf(*r), nil
 }
 
@@ -318,6 +320,7 @@ func (t tools) updateRecord(ctx context.Context, _ *mcp.CallToolRequest, in upda
 	if err != nil {
 		return nil, nil, err
 	}
+	touch(ctx, current.CollectionID)
 	data := map[string]any{}
 	dec := json.NewDecoder(bytes.NewReader(current.Data))
 	dec.UseNumber() // the fields left alone keep their exact numbers

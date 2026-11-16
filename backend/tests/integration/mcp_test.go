@@ -49,7 +49,7 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if i := slices.IndexFunc(opts, func(c domain.Collection) bool { return c.ID == a }); i < 0 || opts[i].Role != domain.RoleOwner || !opts[i].Member {
 		t.Fatalf("options: %+v", opts)
 	}
-	key, err := keys.CreateMyKey(owner, "Assistente", []domain.KeyScope{{CollectionID: a}})
+	key, err := keys.CreateMyKey(owner, "Assistente", []domain.KeyScope{{CollectionID: a}}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,16 +20,18 @@ import (
 	"github.com/raulaguila/dataset/internal/core/port/output"
 	"github.com/raulaguila/dataset/pkg/aescrypt"
 	"github.com/raulaguila/dataset/pkg/apperror"
+	"github.com/raulaguila/dataset/pkg/pointer"
 	"github.com/raulaguila/dataset/pkg/reqctx"
 	"github.com/raulaguila/dataset/pkg/tokenhash"
 	"github.com/raulaguila/dataset/pkg/validate"
 )
 
 const (
-	maxName  = 80
-	maxURL   = 2000
-	maxHooks = 10
-	maxKeys  = 20 // per member
+	maxName    = 80
+	maxURL     = 2000
+	maxHooks   = 10
+	maxKeys    = 20 // per member
+	maxKeyDays = 365
 	// maxScopes caps the collections one key reaches.
 	maxScopes = 50
 )
@@ -128,10 +130,16 @@ func keyAudit(ctx context.Context, uow output.UnitOfWork, action, name, prefix s
 	return policy.Audit(ctx, uow, action, sc.CollectionID, map[string]any{"collection_id": sc.CollectionID, "key": name, "prefix": prefix, "write": sc.CanWrite})
 }
 
-func (s *Service) CreateMyKey(ctx context.Context, name string, scopes []domain.KeyScope) (*input.NewKey, error) {
+func (s *Service) CreateMyKey(ctx context.Context, name string, scopes []domain.KeyScope, expiresInDays int) (*input.NewKey, error) {
 	name, scopes, err := keyInput(ctx, name, scopes)
 	if err != nil {
 		return nil, err
+	}
+	var expires *time.Time
+	if expiresInDays < 0 || expiresInDays > maxKeyDays {
+		return nil, apperror.New(apperror.CodeInvalidInput, "a key lasts 1 to 365 days, or 0 for no end").WithField("expires_in_days")
+	} else if expiresInDays > 0 {
+		expires = pointer.Of(time.Now().Add(time.Duration(expiresInDays) * 24 * time.Hour))
 	}
 	random, err := tokenhash.RandomURLSafe()
 	if err != nil {
@@ -139,7 +147,7 @@ func (s *Service) CreateMyKey(ctx context.Context, name string, scopes []domain.
 	}
 	secret := domain.APIKeyPrefix + random
 	actor := reqctx.Actor(ctx)
-	out := &input.NewKey{Secret: secret, Key: domain.APIKey{Name: name, Prefix: secret[:12], Scopes: scopes, CreatedBy: actor}}
+	out := &input.NewKey{Secret: secret, Key: domain.APIKey{Name: name, Prefix: secret[:12], Scopes: scopes, CreatedBy: actor, ExpiresAt: expires}}
 	err = s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
 		if err := allowed(ctx, uow, scopes); err != nil {
 			return err

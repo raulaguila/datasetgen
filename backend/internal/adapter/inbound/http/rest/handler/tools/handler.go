@@ -52,6 +52,8 @@ func (h *Handler) CollectionRoutes(r fiber.Router) {
 	r.Post("/:id/mcp-tools", h.CreateMCPTool)
 	r.Put("/:id/mcp-tools/:toolId", h.UpdateMCPTool)
 	r.Delete("/:id/mcp-tools/:toolId", h.DeleteMCPTool)
+	r.Post("/:id/mcp-tools/test", h.TestMCPTool)
+	r.Get("/:id/mcp-calls", h.MCPCalls)
 	r.Get("/:id/trash", h.TrashedRecords)
 	r.Post("/:id/trash/restore", h.RestoreRecords)
 	r.Post("/:id/trash/purge", h.PurgeRecords)
@@ -103,6 +105,7 @@ type keyDTO struct {
 	CreatorName string     `json:"creator_name,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
 
 func toKeyDTO(k domain.APIKey) keyDTO {
@@ -110,7 +113,7 @@ func toKeyDTO(k domain.APIKey) keyDTO {
 	for _, sc := range k.Scopes {
 		scopes = append(scopes, scopeDTO(sc))
 	}
-	return keyDTO{ID: k.ID, Name: k.Name, Prefix: k.Prefix, CanWrite: k.CanWrite, Scopes: scopes, CreatorName: k.CreatorName, CreatedAt: k.CreatedAt, LastUsedAt: k.LastUsedAt}
+	return keyDTO{ID: k.ID, Name: k.Name, Prefix: k.Prefix, CanWrite: k.CanWrite, Scopes: scopes, CreatorName: k.CreatorName, CreatedAt: k.CreatedAt, LastUsedAt: k.LastUsedAt, ExpiresAt: k.ExpiresAt}
 }
 
 func keyList(keys []domain.APIKey) fiber.Map {
@@ -158,6 +161,8 @@ func (h *Handler) DeleteKey(c fiber.Ctx) error {
 type keyBodyDTO struct {
 	Name   string     `json:"name" example:"Assistente"`
 	Scopes []scopeDTO `json:"scopes"`
+	// ExpiresInDays (1-365) ends the key that many days after it is made; 0 or absent never ends. Ignored on update.
+	ExpiresInDays int `json:"expires_in_days,omitempty" example:"90"`
 }
 
 func (b keyBodyDTO) scopes() []domain.KeyScope {
@@ -205,7 +210,7 @@ func (h *Handler) CreateMyKey(c fiber.Ctx) error {
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	k, err := h.integrations.CreateMyKey(c.Context(), body.Name, body.scopes())
+	k, err := h.integrations.CreateMyKey(c.Context(), body.Name, body.scopes(), body.ExpiresInDays)
 	if err != nil {
 		return fail(c, err)
 	}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import { FormError, FormSection, IconAction } from "@/components/bits";
+import { FormError, FormSection, IconAction, useFormatDate } from "@/components/bits";
 import { ViewConditions } from "@/components/collection-stats";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { fieldsOf, type FieldRow } from "@/components/field-builder";
@@ -44,6 +44,19 @@ export function opsFor(row: FieldRow): McpParamOp[] {
 /** A parameter name from a field key: lower case, a-z 0-9 _. */
 const paramNameOf = (key: string) => key.toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^[^a-z]+/, "").slice(0, 40) || "valor";
 
+/** The JSON an assistant would send for a typed value: numbers and true/false by the field, a list for "in"; undefined when empty. */
+export function argOf(row: FieldRow | undefined, op: McpParamOp, raw: string): unknown {
+  const one = (v: string): unknown => {
+    const type = row?.field.type === "formula" ? row.field.result : row?.field.type;
+    if (["number", "integer", "autonumber"].includes(type ?? "")) return Number(v);
+    if (type === "boolean") return v === "true";
+    return v;
+  };
+  const text = raw.trim();
+  if (!text) return undefined;
+  return op === "in" ? text.split(",").map((v) => v.trim()).filter(Boolean).map(one) : one(text);
+}
+
 const blank = (): McpToolInput => ({ name: "", description: "", enabled: true, conditions: { any: false, rules: [] }, params: [], fields: [], sort: "updated_at", order: "desc", limit: 20 });
 
 function ToolForm({ collection, initial, onDone }: { collection: Collection; initial?: McpTool; onDone: () => void }) {
@@ -57,6 +70,18 @@ function ToolForm({ collection, initial, onDone }: { collection: Collection; ini
   const save = useMutation({
     mutationFn: () => (initial ? tools.updateMcpTool(collection.id, initial.id, draft) : tools.createMcpTool(collection.id, draft)),
     onSuccess: () => { void client.invalidateQueries({ queryKey: ["mcp-tools", collection.id] }); toast.success(t("common.saved")); onDone(); },
+  });
+  // Trying the unsaved settings with the values an assistant would send.
+  const [tryArgs, setTryArgs] = useState<Record<string, string>>({});
+  const tryRun = useMutation({
+    mutationFn: () => {
+      const args: Record<string, unknown> = {};
+      for (const p of draft.params) {
+        const v = argOf(rows.find((r) => r.key === p.field), p.op, tryArgs[p.name] ?? "");
+        if (v !== undefined) args[p.name] = v;
+      }
+      return tools.testMcpTool(collection.id, draft, args);
+    },
   });
   const names = draft.params.map((p) => p.name);
   const paramsOk = draft.params.every((p, i) => PARAM.test(p.name) && p.name !== "page" && names.indexOf(p.name) === i && p.field);
@@ -145,6 +170,30 @@ function ToolForm({ collection, initial, onDone }: { collection: Collection; ini
           <Input id="tool-limit" type="number" min={1} max={50} value={draft.limit} onChange={(e) => set({ limit: Math.min(50, Math.max(1, Number(e.target.value) || 1)) })} />
         </div>
       </div>
+      <fieldset className="space-y-2 rounded-md border border-dashed p-3">
+        <legend className="px-1 text-sm font-medium">{t("mcp_tools.try")}</legend>
+        <p className="text-xs text-muted-foreground">{t("mcp_tools.try_hint")}</p>
+        {draft.params.length > 0 && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {draft.params.map((p) => (
+              <div key={p.name} className="flex flex-col gap-1">
+                <Label htmlFor={`try-${p.name}`} className="font-mono text-xs">{p.name}{p.required && " *"}</Label>
+                <Input id={`try-${p.name}`} value={tryArgs[p.name] ?? ""} placeholder={p.op === "in" ? t("mcp_tools.try_list") : undefined} onChange={(e) => setTryArgs({ ...tryArgs, [p.name]: e.target.value })} />
+              </div>
+            ))}
+          </div>
+        )}
+        <Button type="button" variant="outline" size="sm" disabled={!ready || tryRun.isPending} onClick={() => tryRun.mutate()}>{t("mcp_tools.try_action")}</Button>
+        <FormError message={tryRun.isError ? errorMessage(tryRun.error, "common.save_failed", t) : null} />
+        {tryRun.data && (
+          <div className="space-y-1.5" role="status">
+            <p className="text-sm">{t("mcp_tools.try_total").replace("{n}", String(tryRun.data.total))}</p>
+            {tryRun.data.records.length > 0 && (
+              <pre className="max-h-64 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs">{JSON.stringify(tryRun.data.records.slice(0, 5).map((r) => r.data), null, 2)}</pre>
+            )}
+          </div>
+        )}
+      </fieldset>
       <FormError message={save.isError ? errorMessage(save.error, "common.save_failed", t) : null} />
       <div className="flex gap-2">
         <Button type="submit" disabled={!ready || save.isPending}>{t("common.save")}</Button>
@@ -209,6 +258,36 @@ export function McpTools({ collection }: { collection: Collection }) {
           setRemoving(null);
         }}
       />
+    </FormSection>
+  );
+}
+
+/** What AI assistants did in the collection through MCP: newest 100 calls of the last 30 days. */
+export function McpActivity({ collection }: { collection: Collection }) {
+  const { t } = useI18n();
+  const format = useFormatDate();
+  const list = useQuery({ queryKey: ["mcp-calls", collection.id], queryFn: () => tools.mcpCalls(collection.id) });
+  const items = list.data?.items ?? [];
+  return (
+    <FormSection id="mcp-activity" title={t("mcp_activity.title")} description={t("mcp_activity.desc")}>
+      {list.isPending ? <ListSkeleton rows={2} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
+        <p className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">{t("mcp_activity.empty")}</p>
+      ) : (
+        <ul className="max-h-96 divide-y overflow-auto rounded-md border" aria-label={t("mcp_activity.title")}>
+          {items.map((c, i) => (
+            <li key={i} className="space-y-0.5 px-3 py-2 text-sm">
+              <p className="flex flex-wrap items-center gap-2">
+                <span className="font-mono font-medium">{c.tool}</span>
+                <Badge variant={c.ok ? "outline" : "destructive"}>{t(c.ok ? "mcp_activity.ok" : "mcp_activity.failed")}</Badge>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {format(c.created_at)} · {c.user_name} · {t("mcp_activity.key").replace("{name}", c.key_name)}{!c.key_live && ` (${t("mcp_activity.key_gone")})`}
+              </p>
+              {c.error && <p className="break-words text-xs text-destructive">{c.error}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
     </FormSection>
   );
 }

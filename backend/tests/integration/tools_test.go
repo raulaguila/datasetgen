@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/raulaguila/dataset/internal/adapter/outbound/emailpayload"
 	"github.com/raulaguila/dataset/internal/adapter/outbound/files"
@@ -40,16 +41,16 @@ func TestAPIKeysReachTheirCollections(t *testing.T) {
 		return c.ID
 	}
 	a, b, other := mk("Chaves"), mk("Outra"), mk("Fora")
-	read, err := keys.CreateMyKey(owner, "Leitura", []domain.KeyScope{{CollectionID: a}})
+	read, err := keys.CreateMyKey(owner, "Leitura", []domain.KeyScope{{CollectionID: a}}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	write, err := keys.CreateMyKey(owner, "Escrita", []domain.KeyScope{{CollectionID: a, CanWrite: true}, {CollectionID: b}})
+	write, err := keys.CreateMyKey(owner, "Escrita", []domain.KeyScope{{CollectionID: a, CanWrite: true}, {CollectionID: b}}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantCode(t, ignore(keys.CreateMyKey(owner, "Vazia", nil)), apperror.CodeInvalidInput)
-	wantCode(t, ignore(keys.CreateMyKey(owner, "Dupla", []domain.KeyScope{{CollectionID: a}, {CollectionID: a}})), apperror.CodeInvalidInput)
+	wantCode(t, ignore(keys.CreateMyKey(owner, "Vazia", nil, 0)), apperror.CodeInvalidInput)
+	wantCode(t, ignore(keys.CreateMyKey(owner, "Dupla", []domain.KeyScope{{CollectionID: a}, {CollectionID: a}}, 0)), apperror.CodeInvalidInput)
 	as := func(secret string) context.Context {
 		g, err := keys.AuthenticateKey(context.Background(), secret)
 		if err != nil {
@@ -76,7 +77,7 @@ func TestAPIKeysReachTheirCollections(t *testing.T) {
 	wantCode(t, ignore(records.Create(as(write.Secret), input.CreateRecordCommand{CollectionID: b, Data: json.RawMessage(`{}`)})), apperror.CodeForbidden)
 	wantCode(t, ignore2(records.List(as(write.Secret), domain.RecordFilter{CollectionID: other})), apperror.CodeNotFound)
 	wantCode(t, ignore(collections.Update(as(write.Secret), input.UpdateCollectionCommand{ID: a, Schema: json.RawMessage(`{}`)})), apperror.CodeForbidden)
-	wantCode(t, ignore(keys.CreateMyKey(as(write.Secret), "Filha", []domain.KeyScope{{CollectionID: a}})), apperror.CodeForbidden)
+	wantCode(t, ignore(keys.CreateMyKey(as(write.Secret), "Filha", []domain.KeyScope{{CollectionID: a}}, 0)), apperror.CodeForbidden)
 
 	// The log names the key.
 	log, _, err := collections.AuditLog(owner, a, domain.AuditFilter{Action: "record.create", Page: domain.NewPage(1, 5)})
@@ -90,9 +91,9 @@ func TestAPIKeysReachTheirCollections(t *testing.T) {
 		t.Fatal(err)
 	}
 	viewer := reqctx.WithActor(context.Background(), e.userID(t, viewerAddr))
-	wantCode(t, ignore(keys.CreateMyKey(viewer, "V", []domain.KeyScope{{CollectionID: a, CanWrite: true}})), apperror.CodeForbidden)
-	wantCode(t, ignore(keys.CreateMyKey(viewer, "V", []domain.KeyScope{{CollectionID: b}})), apperror.CodeNotFound)
-	if _, err := keys.CreateMyKey(viewer, "V", []domain.KeyScope{{CollectionID: a}}); err != nil {
+	wantCode(t, ignore(keys.CreateMyKey(viewer, "V", []domain.KeyScope{{CollectionID: a, CanWrite: true}}, 0)), apperror.CodeForbidden)
+	wantCode(t, ignore(keys.CreateMyKey(viewer, "V", []domain.KeyScope{{CollectionID: b}}, 0)), apperror.CodeNotFound)
+	if _, err := keys.CreateMyKey(viewer, "V", []domain.KeyScope{{CollectionID: a}}, 0); err != nil {
 		t.Fatal(err)
 	}
 	// The owner sees every key that reaches the collection, each member's own list only theirs.
@@ -106,7 +107,7 @@ func TestAPIKeysReachTheirCollections(t *testing.T) {
 	wantCode(t, keys.DeleteMyKey(viewer, read.Key.ID), apperror.CodeNotFound)
 
 	// Removing a member takes the collection out of their keys: coming back does not revive them.
-	viewerKey, err := keys.CreateMyKey(viewer, "Volta", []domain.KeyScope{{CollectionID: a}})
+	viewerKey, err := keys.CreateMyKey(viewer, "Volta", []domain.KeyScope{{CollectionID: a}}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,6 +150,20 @@ func TestAPIKeysReachTheirCollections(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantCode(t, ignore(keys.AuthenticateKey(context.Background(), write.Secret)), apperror.CodeUnauthorized)
+
+	// A key with an end date works until then and not after.
+	wantCode(t, ignore(keys.CreateMyKey(owner, "Longa", []domain.KeyScope{{CollectionID: a}}, 400)), apperror.CodeInvalidInput)
+	brief, err := keys.CreateMyKey(owner, "Breve", []domain.KeyScope{{CollectionID: a}}, 30)
+	if err != nil || brief.Key.ExpiresAt == nil || time.Until(*brief.Key.ExpiresAt) < 29*24*time.Hour {
+		t.Fatalf("expiring key: %v %v", brief, err)
+	}
+	if _, err := keys.AuthenticateKey(context.Background(), brief.Secret); err != nil {
+		t.Fatal(err)
+	}
+	if err := testDB.Exec("UPDATE app.api_key SET expires_at = now() - INTERVAL '1 second' WHERE id = ?", brief.Key.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore(keys.AuthenticateKey(context.Background(), brief.Secret)), apperror.CodeUnauthorized)
 }
 
 // Record changes queue one delivery per hook that asked for the event.
