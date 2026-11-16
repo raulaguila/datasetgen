@@ -180,7 +180,7 @@ export function useRecordLabel(collectionId: string | undefined, recordId: strin
 }
 
 /** Searches the target collection and hands back the picked record's id. */
-function RecordPicker({ id, target, onPick, onClose }: { id: string; target: string; onPick: (id: string) => void; onClose: () => void }) {
+export function RecordPicker({ id, target, onPick, onClose }: { id: string; target: string; onPick: (id: string) => void; onClose: () => void }) {
   const { t } = useI18n();
   const [text, setText] = useState("");
   const q = searchTerm(useDebounced(text));
@@ -241,7 +241,7 @@ function ReferenceField({ formData, onChange, fieldPathId, schema, name, require
   );
 }
 
-function RefChip({ target, value, onRemove }: { target: string; value: string; onRemove?: () => void }) {
+export function RefChip({ target, value, onRemove }: { target: string; value: string; onRemove?: () => void }) {
   const { t } = useI18n();
   const label = useRecordLabel(target, value);
   return (

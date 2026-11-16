@@ -47,6 +47,9 @@ import type {
   StatsBucket,
 } from "@/lib/api/types";
 
+/** The caller's time zone: rules with {"today": n} dates count days in it. */
+const withTz = <T extends { where?: string }>(p: T) => (p.where ? { ...p, tz: Intl.DateTimeFormat().resolvedOptions().timeZone } : p);
+
 function query(params: Record<string, string | number | boolean | undefined>): string {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") q.set(k, String(v));
@@ -150,7 +153,7 @@ export const records = {
   /** filter: a JSON object of top-level fields and exact values. */
   /** sort: created_at, updated_at or data.<field>; ids: up to 100 record ids, comma separated. */
   list: (p: { collection_id: string; page: number; limit: number; search?: string; sort?: string; order?: SortOrder; filter?: string; where?: string; ids?: string }, signal?: AbortSignal) =>
-    apiFetch<Paged<DataRecord>>(`/v1/records${query(p)}`, { signal }),
+    apiFetch<Paged<DataRecord>>(`/v1/records${query(withTz(p))}`, { signal }),
   versions: (recordId: string, signal?: AbortSignal) => apiFetch<{ items: RecordVersion[] }>(`/v1/records/${id(recordId)}/versions`, { signal }),
   restore: (recordId: string, version: number, current_version?: number) =>
     apiFetch<DataRecord>(`/v1/records/${id(recordId)}/restore`, { method: "POST", json: { version, current_version } }),
@@ -161,10 +164,10 @@ export const records = {
     apiDownload(`/v1/records/export${query({ collection_id, format, valid: valid || undefined })}`, `records.${format}`),
   /** Counts the selected records by a field (or all together) with sums and averages of numeric fields. */
   aggregate: (p: { collection_id: string; search?: string; filter?: string; where?: string; group?: string; sum?: string }, signal?: AbortSignal) =>
-    apiFetch<{ items: RecordGroup[] }>(`/v1/records/aggregate${query(p)}`, { signal }),
+    apiFetch<{ items: RecordGroup[] }>(`/v1/records/aggregate${query(withTz(p))}`, { signal }),
   /** Field lists are comma separated: filled counts, number ranges, date ranges with a series, common values. */
   stats: (p: { collection_id: string; where?: string; filled?: string; numbers?: string; dates?: string; values?: string; bucket?: StatsBucket }, signal?: AbortSignal) =>
-    apiFetch<RecordStats>(`/v1/records/stats${query(p)}`, { signal }),
+    apiFetch<RecordStats>(`/v1/records/stats${query(withTz(p))}`, { signal }),
   get: (recordId: string) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`),
   create: (collection_id: string, data: unknown) => apiFetch<DataRecord>("/v1/records", { method: "POST", json: { collection_id, data } }),
   update: (recordId: string, data: unknown, version?: number) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`, { method: "PUT", json: { data, version } }),

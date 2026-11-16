@@ -142,7 +142,7 @@ func (t tools) getCollection(ctx context.Context, _ *mcp.CallToolRequest, in col
 
 type ruleIn struct {
 	Field string `json:"field" jsonschema:"a top-level field of the record data"`
-	Op    string `json:"op" jsonschema:"eq, neq, contains (text, ignoring case), gt, gte, lt, lte, empty, not_empty, in (value is a list), has (the field is a list holding value)"`
+	Op    string `json:"op" jsonschema:"eq, neq, contains / not_contains / starts_with (text, ignoring case), gt, gte, lt, lte, between (value is [from, to]), empty, not_empty, in / not_in (value is a list), has (the field is a list holding value), has_any (the field is a list holding one of the values). A date value is YYYY-MM-DD or {'today': n} (with double quotes), days from today (UTC); it matches date-times by day. Field $created_at or $updated_at is the record's own date."`
 	Value any    `json:"value,omitempty" jsonschema:"the JSON value to compare with; left out for empty and not_empty"`
 }
 

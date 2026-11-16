@@ -3112,12 +3112,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Record ids (1 to 100)",
+                        "description": "Record ids (1 to 100); values, for one record, give its unique fields new values",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.idsDTO"
+                            "$ref": "#/definitions/tools.restoreDTO"
                         }
                     }
                 ],
@@ -5276,7 +5276,14 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Rules as JSON: {'any': false, 'rules': [{'field': 'price', 'op': 'gt', 'value': 10}]} with double quotes; ops eq, neq, contains, gt, gte, lt, lte, empty, not_empty, in, has; any joins them by OR; groups (one level) bracket rules: {'any': true, 'groups': [{'rules': [...]}, {'rules': [...]}]}",
+                        "default": "UTC",
+                        "description": "IANA time zone for {'today': n} dates",
+                        "name": "tz",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Rules as JSON: {'any': false, 'rules': [{'field': 'price', 'op': 'gt', 'value': 10}]} with double quotes; ops eq, neq, contains, not_contains, starts_with, gt, gte, lt, lte, between ([from, to]), empty, not_empty, in, not_in, has, has_any (lists take a list); a date value is YYYY-MM-DD or {'today': n} (days from today in tz) and matches date-times by day; fields $created_at and $updated_at are the record's dates; lookups and rollups filter too; any joins them by OR; groups (one level) bracket rules: {'any': true, 'groups': [{'rules': [...]}, {'rules': [...]}]}",
                         "name": "where",
                         "in": "query"
                     },
@@ -8892,6 +8899,9 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "tools.restoreDTO": {
+            "type": "object"
         },
         "tools.schemaVersionDTO": {
             "type": "object",

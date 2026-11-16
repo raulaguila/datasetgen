@@ -19,33 +19,58 @@ type RecordFilter struct {
 	IDs []string
 	// Where keeps records that pass its rules (all, or any of them).
 	Where *Where
+	// TZ is the caller's IANA time zone, for {"today": n} dates; UTC when empty.
+	TZ string
 }
 
 // Where operators. Values compare as JSON: numbers as numbers, strings
-// (ISO dates too) as text, so gt and lt work on both.
+// (ISO dates too) as text, so gt and lt work on both. A date value
+// (YYYY-MM-DD, or {"today": n}, the caller's today plus n days) compares
+// with the first 10 characters of the field, so a date-time matches by its day.
 const (
-	OpEq       = "eq"
-	OpNeq      = "neq"
-	OpContains = "contains" // text holds the value, ignoring case
-	OpGt       = "gt"
-	OpGte      = "gte"
-	OpLt       = "lt"
-	OpLte      = "lte"
-	OpEmpty    = "empty" // absent, null, "" or []
-	OpNotEmpty = "not_empty"
-	OpIn       = "in"  // value is an array; the field equals one of its items
-	OpHas      = "has" // the field is an array holding the value
+	OpEq          = "eq"
+	OpNeq         = "neq"
+	OpContains    = "contains"     // text holds the value, ignoring case
+	OpNotContains = "not_contains" // text does not hold the value (empty counts)
+	OpStartsWith  = "starts_with"  // text begins with the value, ignoring case
+	OpGt          = "gt"
+	OpGte         = "gte"
+	OpLt          = "lt"
+	OpLte         = "lte"
+	OpBetween     = "between" // value is [from, to], both ends included
+	OpEmpty       = "empty"   // absent, null, "" or []
+	OpNotEmpty    = "not_empty"
+	OpIn          = "in"      // value is an array; the field equals one of its items
+	OpNotIn       = "not_in"  // the field equals none of the items (empty counts)
+	OpHas         = "has"     // the field is an array holding the value
+	OpHasAny      = "has_any" // the field is an array holding one of the items
 )
 
 // WhereOps lists the operators a rule may use.
-var WhereOps = []string{OpEq, OpNeq, OpContains, OpGt, OpGte, OpLt, OpLte, OpEmpty, OpNotEmpty, OpIn, OpHas}
+var WhereOps = []string{OpEq, OpNeq, OpContains, OpNotContains, OpStartsWith, OpGt, OpGte, OpLt, OpLte, OpBetween, OpEmpty, OpNotEmpty, OpIn, OpNotIn, OpHas, OpHasAny}
+
+// The record's own dates, usable as a rule's field.
+const (
+	FieldCreatedAt = "$created_at"
+	FieldUpdatedAt = "$updated_at"
+)
 
 // Condition compares one top-level field with a JSON value.
 type Condition struct {
 	Field string          `json:"field"`
 	Op    string          `json:"op"`
 	Value json.RawMessage `json:"value,omitempty"`
+	// Set by the record service for a lookup or rollup field the caller may
+	// read; never read from a request.
+	Lookup *LookupRule `json:"-"`
+	Rollup *RollupRule `json:"-"`
 }
+
+// LookupRule reads Field of the records of Collection that this record's Ref names.
+type LookupRule struct{ Collection, Ref, Field string }
+
+// RollupRule aggregates (Fn) Field over the records of Collection whose Ref names this record.
+type RollupRule struct{ Collection, Ref, Fn, Field string }
 
 // Where is a set of rules joined by AND, or by OR when Any is set.
 type Where struct {

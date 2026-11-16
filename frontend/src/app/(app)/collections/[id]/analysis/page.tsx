@@ -36,7 +36,7 @@ function Analysis({ collection }: { collection: Collection }) {
     <div className="space-y-8">
       {/* One filter for the page: the dashboard and the fields read the same records. */}
       <div className="flex flex-wrap items-center gap-2">
-        <RecordRules fields={fieldsOf(collection.schema ?? null)} value={where} onChange={(w: Where) => set({ where: whereText(w) })} />
+        <RecordRules collectionId={collection.id} fields={fieldsOf(collection.schema ?? null)} value={where} onChange={(w: Where) => set({ where: whereText(w) })} />
         <ViewConditions collectionId={collection.id} onPick={(w) => set({ where: whereText(w) })} />
         <span className="text-xs text-muted-foreground">{t("analysis.filter_hint")}</span>
         <p className="ml-auto text-sm text-muted-foreground" role="status">

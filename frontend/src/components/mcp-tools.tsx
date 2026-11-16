@@ -109,7 +109,7 @@ function ToolForm({ collection, initial, onDone }: { collection: Collection; ini
       <div className="space-y-1.5">
         <p className="text-sm font-medium">{t("mcp_tools.fixed")}</p>
         <div className="flex flex-wrap items-center gap-2">
-          <RecordRules fields={rows} value={draft.conditions as Where} onChange={(w) => set({ conditions: w })} />
+          <RecordRules collectionId={collection.id} fields={rows} value={draft.conditions as Where} onChange={(w) => set({ conditions: w })} />
           <ViewConditions collectionId={collection.id} onPick={(w) => set({ conditions: w })} />
         </div>
       </div>

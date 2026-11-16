@@ -1019,3 +1019,98 @@ func TestReferencesInListItems(t *testing.T) {
 		t.Fatalf("links: %+v, %v", links, err)
 	}
 }
+
+// The richer rules: text, lists, ranges, dates by day and relative to today,
+// the record's own dates, and lookup and rollup fields.
+func TestWhereRicherRules(t *testing.T) {
+	e := newEnv(t)
+	collections, records := collectionServices(e)
+	owner := reqctx.WithActor(context.Background(), e.userID(t, e.activeUser(t)))
+	people, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Clientes filtro", Schema: json.RawMessage(`{"type":"object","properties":{"nome":{"type":"string"},"cidade":{"type":"string"}}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	add := func(id, data string) string {
+		t.Helper()
+		r, err := records.Create(owner, input.CreateRecordCommand{CollectionID: id, Data: json.RawMessage(data)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r.ID
+	}
+	ana, bia := add(people.ID, `{"nome":"Ana","cidade":"Recife"}`), add(people.ID, `{"nome":"Bia","cidade":"Natal"}`)
+	today := time.Now().UTC()
+	day := func(n int) string { return today.AddDate(0, 0, n).Format(time.DateOnly) }
+	orders, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Pedidos filtro", Schema: json.RawMessage(`{"type":"object","properties":{
+		"cliente":{"type":"string","format":"uuid","x-ref":"` + people.ID + `"},
+		"cidade":{"x-lookup":{"ref":"cliente","field":"cidade"}},
+		"valor":{"type":"number"},"nome":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}},
+		"quando":{"type":"string"},"cat":{"type":"string"}}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	add(orders.ID, `{"cliente":"`+ana+`","valor":10,"nome":"Caneta azul","tags":["x","y"],"quando":"`+day(-3)+`","cat":"a"}`)
+	add(orders.ID, `{"cliente":"`+ana+`","valor":5,"nome":"Lápis","tags":["z"],"quando":"`+day(0)+`T10:00:00Z","cat":"b"}`)
+	add(orders.ID, `{"cliente":"`+bia+`","valor":7,"nome":"Borracha caneta","quando":"`+day(5)+`","cat":"c"}`)
+	if _, err := collections.Update(owner, input.UpdateCollectionCommand{ID: people.ID, Schema: json.RawMessage(`{"type":"object","properties":{"nome":{"type":"string"},"cidade":{"type":"string"},
+		"pedidos":{"x-rollup":{"collection":"` + orders.ID + `","ref":"cliente","fn":"count"}},
+		"gasto":{"x-rollup":{"collection":"` + orders.ID + `","ref":"cliente","fn":"sum","field":"valor"}}}}`)}); err != nil {
+		t.Fatal(err)
+	}
+	rule := func(f, op, v string) domain.Condition {
+		return domain.Condition{Field: f, Op: op, Value: json.RawMessage(v)}
+	}
+	count := func(id string, rules ...domain.Condition) int {
+		t.Helper()
+		list, _, err := records.List(owner, domain.RecordFilter{CollectionID: id, Where: &domain.Where{Rules: rules}, TZ: "UTC"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(list)
+	}
+	for _, tc := range []struct {
+		name string
+		id   string
+		r    domain.Condition
+		want int
+	}{
+		{"not contains", orders.ID, rule("nome", "not_contains", `"caneta"`), 1},
+		{"starts with", orders.ID, rule("nome", "starts_with", `"can"`), 1},
+		{"not in", orders.ID, rule("cat", "not_in", `["a","b"]`), 1},
+		{"has any", orders.ID, rule("tags", "has_any", `["z","q"]`), 1},
+		{"between numbers", orders.ID, rule("valor", "between", `[5,7]`), 2},
+		{"date-time by day", orders.ID, rule("quando", "eq", `"`+day(0)+`"`), 1},
+		{"before today", orders.ID, rule("quando", "lt", `{"today":0}`), 1},
+		{"next 7 days", orders.ID, rule("quando", "between", `[{"today":0},{"today":7}]`), 2},
+		{"made today", orders.ID, rule("$created_at", "eq", `{"today":0}`), 3},
+		{"made before today", orders.ID, rule("$updated_at", "lt", `{"today":0}`), 0},
+		{"lookup", orders.ID, rule("cidade", "eq", `"Recife"`), 2},
+		{"lookup contains", orders.ID, rule("cidade", "contains", `"nat"`), 1},
+		{"rollup count", people.ID, rule("pedidos", "gte", `2`), 1},
+		{"rollup sum", people.ID, rule("gasto", "between", `[7,7]`), 1},
+		{"rollup empty", people.ID, rule("gasto", "empty", ``), 0},
+	} {
+		if got := count(tc.id, tc.r); got != tc.want {
+			t.Errorf("%s: %d records, want %d", tc.name, got, tc.want)
+		}
+	}
+	for _, r := range []domain.Condition{rule("valor", "between", `[5]`), rule("tags", "has_any", `"z"`), rule("nome", "starts_with", `3`), rule("quando", "lt", `{"today":99999}`)} {
+		wantCode(t, ignore2(records.List(owner, domain.RecordFilter{CollectionID: orders.ID, Where: &domain.Where{Rules: []domain.Condition{r}}})), apperror.CodeInvalidInput)
+	}
+	wantCode(t, ignore2(records.List(owner, domain.RecordFilter{CollectionID: orders.ID, TZ: "Lua/Base", Where: &domain.Where{Rules: []domain.Condition{rule("quando", "lt", `{"today":0}`)}}})), apperror.CodeInvalidInput)
+
+	// A viewer of the orders who cannot see the people may not filter by what the lookup reads.
+	helperAddr := e.activeUser(t)
+	helper := reqctx.WithActor(context.Background(), e.userID(t, helperAddr))
+	if _, err := collections.AddMember(owner, input.AddMemberCommand{CollectionID: orders.ID, Email: helperAddr, Role: domain.RoleViewer}); err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore2(records.List(helper, domain.RecordFilter{CollectionID: orders.ID, Where: &domain.Where{Rules: []domain.Condition{rule("cidade", "eq", `"Recife"`)}}})), apperror.CodeForbidden)
+	if list, _, err := records.List(helper, domain.RecordFilter{CollectionID: orders.ID, Where: &domain.Where{Rules: []domain.Condition{rule("valor", "gt", `6`)}}}); err != nil || len(list) != 2 {
+		t.Fatalf("helper plain rule: %d, %v", len(list), err)
+	}
+	// Totals and profiles take the same rules.
+	if g, err := records.Aggregate(owner, domain.RecordFilter{CollectionID: orders.ID, Where: &domain.Where{Rules: []domain.Condition{rule("cidade", "eq", `"Recife"`)}}}, "", []string{"valor"}); err != nil || g[0].Sums["valor"] != 15 {
+		t.Fatalf("aggregate by lookup: %+v, %v", g, err)
+	}
+}

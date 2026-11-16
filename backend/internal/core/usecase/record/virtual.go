@@ -11,7 +11,7 @@ import (
 
 // withVirtual fills the lookups and rollups of records of one collection (in
 // place). A field reading a collection the caller cannot see stays empty.
-// shortcut: computed per read, so lists cannot filter, sort or chart by them; store them if that is asked for.
+// shortcut: computed per read, so lists cannot sort or chart by them (conditions filter through a subquery per record); store them if that is asked for.
 func (s *Service) withVirtual(ctx context.Context, collectionID string, recs []domain.Record) error {
 	if len(recs) == 0 {
 		return nil

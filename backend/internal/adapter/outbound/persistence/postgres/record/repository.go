@@ -96,29 +96,8 @@ func whereSQL(w *domain.Where) (string, []any) {
 		}
 	}
 	for _, c := range w.Rules {
-		v := string(c.Value)
-		switch c.Op {
-		case domain.OpEq:
-			parts, vars = append(parts, "data -> ? = ?::jsonb"), append(vars, c.Field, v)
-		case domain.OpNeq:
-			parts, vars = append(parts, "data -> ? IS DISTINCT FROM ?::jsonb"), append(vars, c.Field, v)
-		case domain.OpContains:
-			var text string
-			_ = json.Unmarshal(c.Value, &text)
-			parts, vars = append(parts, "data ->> ? ILIKE ?"), append(vars, c.Field, shared.Contains(text))
-		case domain.OpGt, domain.OpGte, domain.OpLt, domain.OpLte:
-			op := map[string]string{domain.OpGt: ">", domain.OpGte: ">=", domain.OpLt: "<", domain.OpLte: "<="}[c.Op]
-			// Same JSON type only: a number never compares with a string.
-			parts = append(parts, "(jsonb_typeof(data -> ?) = jsonb_typeof(?::jsonb) AND data -> ? "+op+" ?::jsonb)")
-			vars = append(vars, c.Field, v, c.Field, v)
-		case domain.OpEmpty:
-			parts, vars = append(parts, `coalesce(data -> ?, 'null') IN ('null'::jsonb, '""'::jsonb, '[]'::jsonb)`), append(vars, c.Field)
-		case domain.OpNotEmpty:
-			parts, vars = append(parts, `coalesce(data -> ?, 'null') NOT IN ('null'::jsonb, '""'::jsonb, '[]'::jsonb)`), append(vars, c.Field)
-		case domain.OpIn:
-			parts, vars = append(parts, "?::jsonb @> jsonb_build_array(data -> ?)"), append(vars, v, c.Field)
-		case domain.OpHas:
-			parts, vars = append(parts, "data -> ? @> jsonb_build_array(?::jsonb)"), append(vars, c.Field, v)
+		if sql, v := ruleSQL(c); sql != "" {
+			parts, vars = append(parts, sql), append(vars, v...)
 		}
 	}
 	join := " AND "
@@ -126,6 +105,134 @@ func whereSQL(w *domain.Where) (string, []any) {
 		join = " OR "
 	}
 	return "(" + strings.Join(parts, join) + ")", vars
+}
+
+// uuidText matches an id as text, so a cast never fails on an odd value.
+const uuidText = `'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'`
+
+// fieldSQL is the rule's field as a jsonb expression: a top-level key, the
+// record's own date, a lookup's value(s) on the named records, or a rollup.
+// Subqueries name the outer row "record" (matching gives app.record no alias).
+func fieldSQL(c domain.Condition) (string, []any) {
+	switch {
+	case c.Field == domain.FieldCreatedAt:
+		return "to_jsonb(record.created_at)", nil
+	case c.Field == domain.FieldUpdatedAt:
+		return "to_jsonb(record.updated_at)", nil
+	case c.Lookup != nil:
+		l := c.Lookup
+		// One id gives the value; a list of ids gives the list of values.
+		return `(CASE jsonb_typeof(record.data -> ?::text)
+			WHEN 'string' THEN (SELECT t.data -> ?::text FROM app.record t WHERE t.collection_id = ?::uuid
+				AND t.id = (SELECT (record.data ->> ?::text)::uuid WHERE record.data ->> ?::text ~ ` + uuidText + `))
+			WHEN 'array' THEN (SELECT jsonb_agg(t.data -> ?::text) FROM app.record t WHERE t.collection_id = ?::uuid
+				AND t.id = ANY(ARRAY(SELECT x::uuid FROM jsonb_array_elements_text(record.data -> ?::text) x WHERE x ~ ` + uuidText + `))
+				AND t.data -> ?::text IS NOT NULL) END)`,
+			[]any{l.Ref, l.Field, l.Collection, l.Ref, l.Ref, l.Field, l.Collection, l.Ref, l.Field}
+	case c.Rollup != nil:
+		r := c.Rollup
+		agg, args := "count(*)", []any{}
+		if r.Fn != "count" {
+			num := map[string]string{"sum": "sum(%s)", "avg": "round(avg(%s), 6)", "min": "min(%s)", "max": "max(%s)"}[r.Fn]
+			agg = fmt.Sprintf(num, "(o.data ->> ?::text)::numeric") + " FILTER (WHERE jsonb_typeof(o.data -> ?::text) = 'number')"
+			args = append(args, r.Field, r.Field)
+		}
+		// Both containment forms use idx_app_record_data_path, as Rollup does.
+		return `(SELECT to_jsonb(` + agg + `) FROM app.record o WHERE o.collection_id = ?::uuid
+			AND (o.data @> jsonb_build_object(?::text, record.id::text) OR o.data @> jsonb_build_object(?::text, jsonb_build_array(record.id::text))))`,
+			append(args, r.Collection, r.Ref, r.Ref)
+	}
+	return "record.data -> ?::text", []any{c.Field}
+}
+
+// isDate is a YYYY-MM-DD value: it compares with the first 10 characters of
+// the field, so a date-time matches by its day.
+func isDate(v json.RawMessage) (string, bool) {
+	var s string
+	if json.Unmarshal(v, &s) != nil || len(s) != 10 {
+		return "", false
+	}
+	_, err := time.Parse(time.DateOnly, s)
+	return s, err == nil
+}
+
+// prefilter is a necessary condition on the whole JSON text that the trigram
+// index (idx_app_record_data_trgm) serves; text JSON escapes cannot have one.
+func prefilter(c domain.Condition, text string) (string, []any) {
+	if c.Lookup != nil || c.Rollup != nil || strings.HasPrefix(c.Field, "$") || len([]rune(text)) < 3 ||
+		strings.ContainsFunc(text, func(r rune) bool { return r == '"' || r == '\\' || r < ' ' }) {
+		return "", nil
+	}
+	return "record.data::text ILIKE ? AND ", []any{shared.Contains(text)}
+}
+
+// ruleSQL is one rule's condition.
+func ruleSQL(c domain.Condition) (string, []any) {
+	x, xv := fieldSQL(c)
+	text := "(" + x + " #>> '{}')"
+	with := func(vals ...any) []any { return append(append([]any{}, xv...), vals...) }
+	// byDay compares the field's first 10 characters (the expression appears twice).
+	byDay := func(op, d string) (string, []any) {
+		return "(jsonb_typeof(" + x + ") = 'string' AND left(" + text + ", 10) " + op + " ?)", append(with(xv...), d)
+	}
+	// compare is the field op one value: by day for a date, else same JSON type only
+	// (a number never compares with a string).
+	compare := func(op string, v json.RawMessage) (string, []any) {
+		if d, ok := isDate(v); ok {
+			return byDay(op, d)
+		}
+		return "(jsonb_typeof(" + x + ") = jsonb_typeof(?::jsonb) AND " + x + " " + op + " ?::jsonb)", append(append(with(string(v)), xv...), string(v))
+	}
+	v := string(c.Value)
+	switch c.Op {
+	case domain.OpEq:
+		if d, ok := isDate(c.Value); ok {
+			return byDay("=", d)
+		}
+		return x + " = ?::jsonb", with(v)
+	case domain.OpNeq:
+		if d, ok := isDate(c.Value); ok {
+			sql, args := byDay("=", d)
+			return "NOT coalesce(" + sql + ", false)", args
+		}
+		return x + " IS DISTINCT FROM ?::jsonb", with(v)
+	case domain.OpContains, domain.OpStartsWith:
+		var t string
+		_ = json.Unmarshal(c.Value, &t)
+		pattern := shared.Contains(t)
+		if c.Op == domain.OpStartsWith {
+			pattern = strings.TrimPrefix(pattern, "%")
+		}
+		pre, pv := prefilter(c, t)
+		return "(" + pre + text + " ILIKE ?)", append(append(pv, xv...), pattern)
+	case domain.OpNotContains:
+		var t string
+		_ = json.Unmarshal(c.Value, &t)
+		return "coalesce(" + text + ", '') NOT ILIKE ?", with(shared.Contains(t))
+	case domain.OpGt, domain.OpGte, domain.OpLt, domain.OpLte:
+		op := map[string]string{domain.OpGt: ">", domain.OpGte: ">=", domain.OpLt: "<", domain.OpLte: "<="}[c.Op]
+		return compare(op, c.Value)
+	case domain.OpBetween:
+		var ends []json.RawMessage
+		_ = json.Unmarshal(c.Value, &ends)
+		from, fv := compare(">=", ends[0])
+		to, tv := compare("<=", ends[1])
+		return "(" + from + " AND " + to + ")", append(fv, tv...)
+	case domain.OpEmpty:
+		return "coalesce(" + x + `, 'null') IN ('null'::jsonb, '""'::jsonb, '[]'::jsonb)`, xv
+	case domain.OpNotEmpty:
+		return "coalesce(" + x + `, 'null') NOT IN ('null'::jsonb, '""'::jsonb, '[]'::jsonb)`, xv
+	case domain.OpIn:
+		return "?::jsonb @> jsonb_build_array(" + x + ")", append([]any{v}, xv...)
+	case domain.OpNotIn:
+		return "NOT coalesce(?::jsonb @> jsonb_build_array(" + x + "), false)", append([]any{v}, xv...)
+	case domain.OpHas:
+		return x + " @> jsonb_build_array(?::jsonb)", with(v)
+	case domain.OpHasAny:
+		return "(jsonb_typeof(" + x + ") = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements(?::jsonb) e WHERE " + x + " @> jsonb_build_array(e)))",
+			append(append(append([]any{}, xv...), v), xv...)
+	}
+	return "", nil
 }
 
 // shortcut: groups and sums scan the filter's rows each time, fine to ~100 000 records per collection.

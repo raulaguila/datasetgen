@@ -523,14 +523,56 @@ func checkWhere(w *domain.Where) error {
 		if len(c.Value) == 0 || json.Unmarshal(c.Value, &v) != nil {
 			return bad("rule " + c.Field + " needs a JSON value")
 		}
-		if _, isList := v.([]any); (c.Op == domain.OpIn) != isList {
-			return bad("in takes an array; other operators a single value")
-		}
-		if _, isText := v.(string); c.Op == domain.OpContains && !isText {
-			return bad("contains takes text")
+		list, isList := v.([]any)
+		switch c.Op {
+		case domain.OpIn, domain.OpNotIn, domain.OpHasAny:
+			if !isList {
+				return bad(c.Op + " takes an array")
+			}
+		case domain.OpBetween:
+			if !isList || len(list) != 2 || !orderable(list[0]) || !orderable(list[1]) {
+				return bad("between takes [from, to]: numbers, texts or dates")
+			}
+		case domain.OpContains, domain.OpNotContains, domain.OpStartsWith:
+			if _, isText := v.(string); !isText {
+				return bad(c.Op + " takes text")
+			}
+		default: // eq, neq, gt, gte, lt, lte, has
+			if isList {
+				return bad(c.Op + " takes a single value")
+			}
+			if m, isObj := v.(map[string]any); isObj && m["today"] != nil && isToday(v) == nil {
+				return bad(`{"today": n} takes whole days, up to 3650 either way`)
+			}
 		}
 	}
 	return nil
+}
+
+// maxTodayDays bounds {"today": n}: ten years either way.
+const maxTodayDays = 3650
+
+// isToday reads {"today": n}, a date relative to the caller's today; nil when v is not one.
+func isToday(v any) *int {
+	m, ok := v.(map[string]any)
+	if !ok || len(m) != 1 {
+		return nil
+	}
+	n, ok := m["today"].(float64)
+	if !ok || n != float64(int(n)) || n < -maxTodayDays || n > maxTodayDays {
+		return nil
+	}
+	days := int(n)
+	return &days
+}
+
+// orderable is a value between can order: a number, a text or {"today": n}.
+func orderable(v any) bool {
+	switch v.(type) {
+	case float64, string:
+		return true
+	}
+	return isToday(v) != nil
 }
 
 // Aggregate counts the selected records, by a group field or all together,
@@ -549,6 +591,10 @@ func (s *Service) Aggregate(ctx context.Context, filter domain.RecordFilter, gro
 		}
 	}
 	if _, err := policy.CollectionRole(ctx, s.Collections, filter.CollectionID, domain.RoleViewer); err != nil {
+		return nil, err
+	}
+	var err error
+	if filter.Where, err = s.resolveWhere(ctx, filter); err != nil {
 		return nil, err
 	}
 	return s.Repo.Aggregate(ctx, filter, group, numeric)
@@ -579,6 +625,10 @@ func (s *Service) Stats(ctx context.Context, filter domain.RecordFilter, q domai
 		}
 	}
 	if _, err := policy.CollectionRole(ctx, s.Collections, filter.CollectionID, domain.RoleViewer); err != nil {
+		return nil, err
+	}
+	var err error
+	if filter.Where, err = s.resolveWhere(ctx, filter); err != nil {
 		return nil, err
 	}
 	return s.Repo.Stats(ctx, filter, q)

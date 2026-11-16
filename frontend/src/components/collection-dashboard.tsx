@@ -134,7 +134,7 @@ function WidgetForm({ formId, collection, initial, onSave }: { formId: string; c
       <div className="space-y-1.5">
         <p className="text-sm font-medium">{t("dashboard.records")}</p>
         <div className="flex flex-wrap items-center gap-2">
-          <RecordRules fields={rows} value={where} onChange={setWhere} />
+          <RecordRules collectionId={collection.id} fields={rows} value={where} onChange={setWhere} />
           <ViewConditions collectionId={collection.id} onPick={setWhere} />
           {!where.rules.length && !where.groups?.length && <span className="text-xs text-muted-foreground">{t("dashboard.all_records")}</span>}
         </div>

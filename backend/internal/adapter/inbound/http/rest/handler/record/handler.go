@@ -186,6 +186,7 @@ func listFilter(c fiber.Ctx) (domain.RecordFilter, error) {
 		Search:       c.Query("search"),
 		Sort:         c.Query("sort"),
 		Order:        c.Query("order"),
+		TZ:           c.Query("tz"),
 	}
 	if f := c.Query("filter"); f != "" {
 		filter.Match = json.RawMessage(f) // the service checks its shape
@@ -212,7 +213,8 @@ func listFilter(c fiber.Ctx) (domain.RecordFilter, error) {
 // @Param search query string false "Text anywhere in the record JSON"
 // @Param sort query string false "Sort field" default(created_at)
 // @Param order query string false "Sort order" Enums(asc, desc) default(desc)
-// @Param where query string false "Rules as JSON: {'any': false, 'rules': [{'field': 'price', 'op': 'gt', 'value': 10}]} with double quotes; ops eq, neq, contains, gt, gte, lt, lte, empty, not_empty, in, has; any joins them by OR; groups (one level) bracket rules: {'any': true, 'groups': [{'rules': [...]}, {'rules': [...]}]}"
+// @Param tz query string false "IANA time zone for {'today': n} dates" default(UTC)
+// @Param where query string false "Rules as JSON: {'any': false, 'rules': [{'field': 'price', 'op': 'gt', 'value': 10}]} with double quotes; ops eq, neq, contains, not_contains, starts_with, gt, gte, lt, lte, between ([from, to]), empty, not_empty, in, not_in, has, has_any (lists take a list); a date value is YYYY-MM-DD or {'today': n} (days from today in tz) and matches date-times by day; fields $created_at and $updated_at are the record's dates; lookups and rollups filter too; any joins them by OR; groups (one level) bracket rules: {'any': true, 'groups': [{'rules': [...]}, {'rules': [...]}]}"
 // @Param filter query string false "JSON object of top-level fields and exact values, up to 10, such as {'category': 'trigger'} with double quotes"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]recordDTO,pagination=mapper.PaginationDTO}

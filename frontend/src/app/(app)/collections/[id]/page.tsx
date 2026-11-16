@@ -15,7 +15,7 @@ import { fieldsOf, fileRefs, recordTitle, REF, type FieldRow } from "@/component
 import { SavedViews } from "@/components/saved-views";
 import { ColumnPicker, EditableCell, editsInline, pickColumns, useSaveField } from "@/components/record-grid";
 import { RecordGroups, groupableOf, useNumberFormat } from "@/components/record-groups";
-import { RecordRules, andWhere, legacyRules, parseWhere, whereText as toWhereText, type Where } from "@/components/record-rules";
+import { CellFilter, RecordRules, andWhere, legacyRules, parseWhere, whereText as toWhereText, type Where } from "@/components/record-rules";
 import { BoardView, CalendarView, GalleryView, layoutFields, type Layout } from "@/components/record-views";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -221,7 +221,7 @@ function RecordList({ collection }: { collection: Collection }) {
           <Input type="search" aria-label={t("common.search")} placeholder={t("records.search")} className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); set({ q: e.target.value.trim(), page: 1 }); }} />
         </div>
         <div className="toolbar-tools flex flex-wrap items-center gap-2 max-sm:w-full max-sm:justify-between sm:contents">
-          <RecordRules fields={rows} value={where} onChange={setWhere} />
+          <RecordRules collectionId={collection.id} fields={rows} value={where} onChange={setWhere} />
           {layout === "table" && <ColumnPicker fields={rows} value={columns} onChange={(keys) => set({ cols: keys.join(",") })} />}
           <div className="hidden items-center gap-2 lg:flex">{viewControls}</div>
           <Sheet>
@@ -295,7 +295,7 @@ function RecordList({ collection }: { collection: Collection }) {
                 return (
                   <TableRow key={r.id} className="cursor-pointer hover:bg-muted/60" onClick={() => router.push(`/records/${r.id}`)}>
                     {canEdit && <SelectCell selection={selection} id={r.id} label={cells[0].text} />}
-                    {cells.map((c, i) => (
+                    {cells.map((c, i) => { const cell = (
                       <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : "field"} className={cn(i === 0 ? "max-w-0 min-w-40" : "max-w-0 min-w-24 text-muted-foreground", i > 0 && c.row?.field.unique && "font-mono text-xs xl:min-w-48")} title={c.row?.field.type === "url" ? String(data[c.key] ?? "") : undefined}>
                         {i === 0 ? (
                           <span className="flex min-w-0 items-center gap-1.5">
@@ -314,7 +314,7 @@ function RecordList({ collection }: { collection: Collection }) {
                           <span className="flex min-w-0 items-center gap-1.5">{c.row?.field.type === "enum" && <OptionDot color={c.row.field.colors[String(data[c.key])]} />}<span className="truncate">{c.text}</span></span>
                         )}
                       </TableCell>
-                    ))}
+                    ); return c.row ? <CellFilter key={c.key} row={c.row} value={data[c.key]} text={c.text} onAdd={(rule) => setWhere(andWhere(where, [rule]))} render={cell} /> : cell; })}
                     <TableCell data-label={t("common.updated_at")} data-cell="date" className="whitespace-nowrap text-muted-foreground" title={ago(r.updated_at).abs}>{ago(r.updated_at).rel}</TableCell>
                   </TableRow>
                 );

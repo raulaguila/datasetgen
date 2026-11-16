@@ -182,7 +182,7 @@ function AutomationForm({ collection, initial, onDone }: { collection: Collectio
       <div className="space-y-1.5">
         <p className="text-sm font-medium">{t("automations.if")}</p>
         <div className="flex flex-wrap items-center gap-2">
-          <RecordRules fields={rows} value={draft.conditions as Where} onChange={(w) => set({ conditions: w })} />
+          <RecordRules collectionId={collection.id} fields={rows} value={draft.conditions as Where} onChange={(w) => set({ conditions: w })} />
           <ViewConditions collectionId={collection.id} onPick={(w) => set({ conditions: w })} />
           {whereEmpty(draft.conditions as Where) && <span className="text-xs text-muted-foreground">{t("automations.every_record")}</span>}
         </div>

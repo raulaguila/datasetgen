@@ -46,6 +46,10 @@ func (s *Service) List(ctx context.Context, filter domain.RecordFilter) ([]domai
 	if _, err := policy.CollectionRole(ctx, s.Collections, filter.CollectionID, domain.RoleViewer); err != nil {
 		return nil, 0, err
 	}
+	var err error
+	if filter.Where, err = s.resolveWhere(ctx, filter); err != nil {
+		return nil, 0, err
+	}
 	items, total, err := s.Repo.List(ctx, filter)
 	if err != nil {
 		return nil, 0, err
