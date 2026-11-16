@@ -36,6 +36,8 @@ type RecordService interface {
 	Update(ctx context.Context, cmd UpdateRecordCommand) (*domain.Record, error)
 	// DeleteMany deletes every listed record or none.
 	DeleteMany(ctx context.Context, ids []string) error
+	// DeleteManyIn trashes ids only when every one is in collectionID (NotFound otherwise).
+	DeleteManyIn(ctx context.Context, collectionID string, ids []string) error
 	// Versions lists earlier versions (viewers); Restore writes one back as a new version (editors).
 	Versions(ctx context.Context, id string) ([]domain.RecordVersion, error)
 	Restore(ctx context.Context, cmd RestoreRecordCommand) (*domain.Record, error)

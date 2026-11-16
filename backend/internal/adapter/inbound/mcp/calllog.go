@@ -27,7 +27,7 @@ func touch(ctx context.Context, collectionID string) {
 
 // logCalls keeps each tool call in the log of every collection it acted in: a
 // collection named in the arguments (when the key reaches it) or one a tool marked.
-// shortcut: calls that name no collection (list_collections, delete_records) go unlogged; deletes are in the audit log.
+// Calls that name no collection (list_collections, related_records) go unlogged.
 func (t tools) logCalls(next mcp.MethodHandler) mcp.MethodHandler {
 	return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 		call, isCall := req.(*mcp.CallToolRequest)

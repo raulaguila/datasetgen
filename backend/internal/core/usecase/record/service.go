@@ -231,6 +231,19 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateRecordCommand) (*d
 }
 
 func (s *Service) DeleteMany(ctx context.Context, ids []string) error {
+	return s.deleteMany(ctx, "", ids)
+}
+
+// DeleteManyIn is DeleteMany for one collection: every record must be in it, or none goes.
+func (s *Service) DeleteManyIn(ctx context.Context, collectionID string, ids []string) error {
+	if err := validate.ID(collectionID); err != nil {
+		return apperror.New(apperror.CodeInvalidInput, "invalid collection").WithField("collection_id")
+	}
+	return s.deleteMany(ctx, collectionID, ids)
+}
+
+// deleteMany trashes ids; a non-empty only refuses records of any other collection.
+func (s *Service) deleteMany(ctx context.Context, only string, ids []string) error {
 	if len(ids) == 0 || len(ids) > maxBatch {
 		return apperror.New(apperror.CodeInvalidInput, "ids must hold 1 to 100 ids").WithField("ids")
 	}
@@ -244,6 +257,13 @@ func (s *Service) DeleteMany(ctx context.Context, ids []string) error {
 		owners, err := uow.Records().CollectionsOf(ctx, ids)
 		if err != nil {
 			return err
+		}
+		if only != "" {
+			for _, id := range ids {
+				if owners[id] != only {
+					return apperror.New(apperror.CodeNotFound, "record "+id+" is not in this collection").WithField("record_ids")
+				}
+			}
 		}
 		checked := map[string]bool{}
 		for _, c := range owners {

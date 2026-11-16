@@ -30,11 +30,11 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 		return c.ID
 	}
 	a, hidden := mk("Produtos"), mk("Segredo")
-	var cheap, dear string
+	var cheap, dear, safe string
 	for _, row := range []struct {
 		col, data string
 		id        *string
-	}{{a, `{"nome":"lapis","preco":2}`, &cheap}, {a, `{"nome":"caneta","preco":12}`, &dear}, {hidden, `{"nome":"cofre","preco":99}`, new(string)}} {
+	}{{a, `{"nome":"lapis","preco":2}`, &cheap}, {a, `{"nome":"caneta","preco":12}`, &dear}, {hidden, `{"nome":"cofre","preco":99}`, &safe}} {
 		r, err := records.Create(owner, input.CreateRecordCommand{CollectionID: row.col, Data: json.RawMessage(row.data)})
 		if err != nil {
 			t.Fatal(err)
@@ -148,7 +148,17 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if _, failed := call("update_record", map[string]any{"record_id": made, "set": map[string]any{"preco": 4}, "version": 1}); !failed {
 		t.Fatal("update_record ignored a stale version")
 	}
-	if got, failed := call("delete_records", map[string]any{"record_ids": []string{made}}); failed || got["deleted"].(float64) != 1 {
+	// A delete names its collection: a record outside it refuses the whole call.
+	if _, failed := call("delete_records", map[string]any{"record_ids": []string{made}}); !failed {
+		t.Fatal("delete_records ran without its collection")
+	}
+	if _, failed := call("delete_records", map[string]any{"collection_id": a, "record_ids": []string{made, safe}}); !failed {
+		t.Fatal("delete_records took a record of another collection")
+	}
+	if _, failed := call("get_record", map[string]any{"record_id": made}); failed {
+		t.Fatal("a refused delete still removed a record")
+	}
+	if got, failed := call("delete_records", map[string]any{"collection_id": a, "record_ids": []string{made}}); failed || got["deleted"].(float64) != 1 {
 		t.Fatalf("delete_records: %v", got)
 	}
 	if _, failed := call("get_record", map[string]any{"record_id": made}); !failed {

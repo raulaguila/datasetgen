@@ -57,7 +57,7 @@ func newServer(ctx context.Context, app *input.Application, version string) *mcp
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: pointer.Of(false)}}, t.createRecord)
 	mcp.AddTool(s, &mcp.Tool{Name: "update_record", Description: "Change some top-level fields of one record, keeping the others: set holds the new values, null removes a field. The result must still follow the schema. Pass the version you read to refuse the change if someone else changed the record since.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: pointer.Of(false), IdempotentHint: true}}, t.updateRecord)
-	mcp.AddTool(s, &mcp.Tool{Name: "delete_records", Description: "Move up to 100 records to the trash, all or none; an owner can restore them from the trash.",
+	mcp.AddTool(s, &mcp.Tool{Name: "delete_records", Description: "Move up to 100 records of one collection to the trash, all or none; a record of another collection refuses the whole call. An owner can restore them from the trash.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: pointer.Of(true), IdempotentHint: true}}, t.deleteRecords)
 
 	t.addOwnTools(ctx, s)
@@ -347,11 +347,12 @@ func (t tools) updateRecord(ctx context.Context, _ *mcp.CallToolRequest, in upda
 }
 
 type deleteIn struct {
-	RecordIDs []string `json:"record_ids" jsonschema:"1 to 100 record ids"`
+	CollectionID string   `json:"collection_id" jsonschema:"the collection's id, from list_collections; every record must be in it"`
+	RecordIDs    []string `json:"record_ids" jsonschema:"1 to 100 record ids"`
 }
 
 func (t tools) deleteRecords(ctx context.Context, _ *mcp.CallToolRequest, in deleteIn) (*mcp.CallToolResult, any, error) {
-	if err := t.app.Records.DeleteMany(ctx, in.RecordIDs); err != nil {
+	if err := t.app.Records.DeleteManyIn(ctx, in.CollectionID, in.RecordIDs); err != nil {
 		return nil, nil, err
 	}
 	return nil, map[string]any{"deleted": len(in.RecordIDs)}, nil
