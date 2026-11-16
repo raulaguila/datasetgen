@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { OptionDot } from "@/components/option-chip";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { keepPreviousData, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -309,7 +310,7 @@ function RecordList({ collection }: { collection: Collection }) {
                             <Paperclip className="size-3.5 shrink-0" /><span className="truncate">{c.text}</span>
                           </a>
                         ) : (
-                          <span className="block truncate">{c.text}</span>
+                          <span className="flex min-w-0 items-center gap-1.5">{c.row?.field.type === "enum" && <OptionDot color={c.row.field.colors[String(data[c.key])]} />}<span className="truncate">{c.text}</span></span>
                         )}
                       </TableCell>
                     ))}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addField, blankField, fieldProblem, fieldsOf, keyOf, moveField, moveFieldTo, removeField, restoreField, schemaChanges, setProp, typeOf, updateField, type Field } from "./field-builder";
+import { addField, blankField, duplicateField, fieldProblem, fieldsOf, keyOf, moveField, moveFieldTo, removeField, restoreField, schemaChanges, setProp, shows, typeOf, updateField, type Field } from "./field-builder";
 
 const field = (patch: Partial<Field>): Field => ({ ...blankField, ...patch });
 
@@ -211,5 +211,59 @@ describe("lookups and rollups", () => {
     expect(fieldProblem(field({ name: "x", key: "x", type: "lookup", via: "cliente" }), () => false)).toBe("collections.field_lookup_needed");
     expect(fieldProblem(field({ name: "x", key: "x", type: "rollup", ref: "p1", via: "cliente", fn: "sum" }), () => false)).toBe("collections.field_rollup_needed");
     expect(fieldProblem(field({ name: "x", key: "x", type: "rollup", ref: "p1", via: "cliente", fn: "count" }), () => false)).toBeNull();
+  });
+});
+
+describe("form layout and option colors", () => {
+  it("round-trip colors, pattern, today, section, width and condition", () => {
+    let s = addField({ type: "object" }, field({ name: "Status", type: "enum", options: "Aberto, Cancelado", colors: { Aberto: "green", Cancelado: "red", Sumiu: "blue" } }));
+    s = addField(s, field({ name: "Motivo", pattern: "^\\w+$", section: "Encerramento", width: "half", showWhen: { field: "status", op: "eq", value: "Cancelado" } }));
+    s = addField(s, field({ name: "Quando", type: "date", today: true }));
+    const props = s.properties as Record<string, Record<string, unknown>>;
+    expect(props.status["x-colors"]).toEqual({ Aberto: "green", Cancelado: "red" }); // no color for a missing option
+    expect(props.motivo).toMatchObject({ pattern: "^\\w+$", "x-section": "Encerramento", "x-width": "half", "x-show-when": { field: "status", op: "eq", value: "Cancelado" } });
+    expect(props.quando["x-default"]).toBe("today");
+    const [st, mo, qu] = fieldsOf(s).map((r) => r.field);
+    expect(st.colors).toEqual({ Aberto: "green", Cancelado: "red" });
+    expect(mo).toMatchObject({ pattern: "^\\w+$", section: "Encerramento", width: "half", showWhen: { field: "status", op: "eq", value: "Cancelado" } });
+    expect(qu.today).toBe(true);
+  });
+
+  it("check pattern and condition", () => {
+    const ok = field({ name: "x", key: "x" });
+    expect(fieldProblem({ ...ok, pattern: "(" }, () => false)).toBe("collections.field_pattern_invalid");
+    expect(fieldProblem({ ...ok, showWhen: { field: "", op: "filled", value: "" } }, () => false)).toBe("collections.field_show_needed");
+    expect(fieldProblem({ ...ok, showWhen: { field: "s", op: "eq", value: "" } }, () => false)).toBe("collections.field_show_needed");
+    expect(fieldProblem({ ...ok, required: true, showWhen: { field: "s", op: "filled", value: "" } }, () => false)).toBe("collections.field_show_required");
+    expect(fieldProblem({ ...ok, showWhen: { field: "s", op: "filled", value: "" } }, () => false)).toBeNull();
+  });
+
+  it("evaluate a condition", () => {
+    expect(shows(null, {})).toBe(true);
+    expect(shows({ field: "s", op: "eq", value: "Cancelado" }, { s: "Cancelado" })).toBe(true);
+    expect(shows({ field: "s", op: "eq", value: "Cancelado" }, { s: "Aberto" })).toBe(false);
+    expect(shows({ field: "s", op: "neq", value: "Cancelado" }, {})).toBe(true);
+    expect(shows({ field: "s", op: "filled", value: "" }, { s: "" })).toBe(false);
+    expect(shows({ field: "s", op: "empty", value: "" }, {})).toBe(true);
+    expect(shows({ field: "b", op: "eq", value: "true" }, { b: true })).toBe(true);
+    expect(shows({ field: "t", op: "eq", value: "a" }, { t: ["a", "b"] })).toBe(true);
+  });
+
+  it("duplicate a field right after itself, under a free key, not unique", () => {
+    let s = addField({ type: "object" }, field({ name: "Código", unique: true }));
+    s = addField(s, field({ name: "Fim" }));
+    s = duplicateField(s, "codigo", "(cópia)");
+    s = duplicateField(s, "codigo", "(cópia)");
+    const rows = fieldsOf(s);
+    expect(rows.map((r) => r.key)).toEqual(["codigo", "codigo_3", "codigo_2", "fim"]);
+    expect(rows[2].field).toMatchObject({ name: "Código (cópia)", unique: false });
+  });
+
+  it("call a display-only change safe", () => {
+    const before = addField({ type: "object" }, field({ name: "Status", type: "enum", options: "A, B" }));
+    const after = updateField(before, "status", field({ name: "Status", key: "status", type: "enum", options: "A, B", colors: { A: "red" }, section: "Geral" }));
+    expect(schemaChanges(before, after)).toEqual([{ kind: "display", name: "Status", risky: false }]);
+    const tighter = updateField(before, "status", field({ name: "Status", key: "status", type: "enum", options: "A" }));
+    expect(schemaChanges(before, tighter)[0]).toMatchObject({ kind: "rules", risky: true });
   });
 });

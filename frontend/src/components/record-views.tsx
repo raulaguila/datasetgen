@@ -12,6 +12,7 @@ import { records, tools } from "@/lib/api/endpoints";
 import type { Collection, DataRecord } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
+import { OptionDot } from "@/components/option-chip";
 import { andWhere, whereText, type Where } from "@/components/record-rules";
 
 export type Layout = "table" | "board" | "calendar" | "gallery";
@@ -103,7 +104,7 @@ export function BoardView({ save, canEdit, ...p }: Common & { canEdit: boolean; 
             onDragOver={(e) => { if (canEdit) { e.preventDefault(); setOver(key); } }}
             onDragLeave={() => setOver((o) => (o === key ? null : o))}
             onDrop={(e) => { e.preventDefault(); setOver(null); const id = e.dataTransfer.getData("text/record"); if (id) void save(id, p.by.key, value); }}>
-            <h3 className="flex items-center justify-between px-1 text-sm font-medium"><span className="truncate">{label}</span><span className="text-xs text-muted-foreground">{cards.length}</span></h3>
+            <h3 className="flex items-center justify-between gap-2 px-1 text-sm font-medium"><span className="flex min-w-0 items-center gap-1.5"><OptionDot color={typeof value === "string" ? p.by.field.colors[value] : undefined} /><span className="truncate">{label}</span></span><span className="text-xs text-muted-foreground">{cards.length}</span></h3>
             {cards.map((r) => (
               <Card key={r.id} r={r} collection={p.collection} extra={p.extra} show={p.show} draggable={canEdit}
                 onDragStart={(e) => { e.dataTransfer.setData("text/record", r.id); e.dataTransfer.effectAllowed = "move"; }} />

@@ -326,7 +326,7 @@ test("a list of objects with a reference in each item", async ({ page }) => {
 
   // The Fields page reads it as a list of objects with its subfields.
   await page.goto(`/collections/${exemplos}/fields`);
-  await expect(page.getByRole("main")).toContainText("Lista de objetos · 2 subcampos");
+  await expect(page.getByRole("main")).toContainText(/Lista de objetos\s*· 2 subcampos/);
 
   await page.goto(`/records/new?collection=${exemplos}`);
   await page.locator("#rec_titulo").fill("Porta com senha");

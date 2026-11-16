@@ -1,23 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-
-async function addField(page: Page, name: string, opts: { required?: boolean; options?: string; help?: string; type?: string } = {}) {
-  const form = page.getByRole("group", { name: "Adicionar campo" });
-  // The form opens from its button and stays open for the next field.
-  if (!(await form.isVisible())) await page.getByRole("button", { name: "Adicionar campo", exact: true }).click();
-  await form.getByLabel("Nome do campo").fill(name);
-  const type = opts.options ? "Uma opção da lista" : opts.type;
-  if (type) {
-    await form.getByRole("combobox", { name: "Tipo" }).click();
-    await page.getByRole("option", { name: type }).click();
-  }
-  if (opts.options) await form.getByLabel("Opções, separadas por vírgula").fill(opts.options);
-  if (opts.help) {
-    await form.getByText("Mais regras").click();
-    await form.getByLabel("Texto de ajuda").fill(opts.help);
-  }
-  if (opts.required) await form.getByRole("checkbox", { name: "Obrigatório" }).click();
-  await form.getByRole("button", { name: "Adicionar campo" }).click();
-}
+import { addField } from "./helpers";
 
 const fieldsList = (page: Page) => page.getByRole("list", { name: "Campos" });
 
@@ -37,7 +19,7 @@ test("a collection's records follow its fields", async ({ page }) => {
   await addField(page, "Nota", { help: "De 0 a 10" });
   await addField(page, "Categoria", { required: true, options: "gatilho, efeito" });
   await page.getByRole("button", { name: "Subir: Categoria" }).click();
-  await expect(fields.getByRole("listitem")).toHaveText([/^Nome\*/, /^Categoria\*/, /^Nota/]);
+  await expect(fields.getByRole("listitem")).toHaveText([/^NomeObrigatório/, /^CategoriaObrigatório/, /^Nota/]);
 
   // The preview's required fields stay empty: they must not block this save.
   await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
@@ -89,7 +71,7 @@ test("a collection's records follow its fields", async ({ page }) => {
   await expect(page).toHaveURL(/\/fields$/);
   // With records stored, keys stay fixed; the edit happens in the row.
   await page.getByRole("button", { name: "Editar campo: Nota" }).click();
-  const edit = page.getByRole("group", { name: "Editando: Nota" });
+  const edit = page.getByRole("dialog", { name: "Editando: Nota" });
   await expect(edit.getByLabel("Chave")).toBeDisabled();
   await edit.getByRole("checkbox", { name: "Obrigatório" }).click();
   await edit.getByRole("button", { name: "Salvar campo" }).click();
@@ -143,12 +125,8 @@ test("groups hold subfields and free objects take JSON", async ({ page }) => {
   await addField(page, "Nome", { required: true });
   await addField(page, "Endereço", { type: "Grupo de campos" });
   await expect(page.getByRole("list", { name: "Campos", exact: true }).getByRole("listitem").filter({ hasText: "Endereço" }).first()).toContainText("0 subcampos");
-  await page.getByRole("button", { name: "Adicionar subcampo", exact: true }).click();
-  const sub = page.getByRole("group", { name: "Adicionar subcampo: Endereço" });
-  await sub.getByLabel("Nome do campo").fill("Cidade");
-  await sub.getByRole("checkbox", { name: "Obrigatório" }).click();
-  await sub.getByRole("button", { name: "Adicionar subcampo" }).click();
-  await expect(page.getByRole("list", { name: "Subcampos: Endereço" }).getByRole("listitem")).toHaveText([/^Cidade\*/]);
+  await addField(page, "Cidade", { required: true, sub: true });
+  await expect(page.getByRole("list", { name: "Subcampos: Endereço" }).getByRole("listitem")).toHaveText([/^CidadeObrigatório/]);
   // The group folds its subfields away.
   await page.getByRole("button", { name: "Recolher subcampos: Endereço" }).click();
   await expect(page.getByRole("list", { name: "Subcampos: Endereço" })).toHaveCount(0);

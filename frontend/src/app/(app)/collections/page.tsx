@@ -182,7 +182,10 @@ function Row({ c, pinned, onPin, onRemove, onDuplicate }: RowProps) {
         <span className="collection-copy">
           <span className="collection-name">{c.name}</span>
           <span className="collection-details">
-            {c.role && <Badge variant="secondary">{t(`members.role.${c.role}`)}</Badge>}
+            {/* A platform admin reaches every collection as owner without being a member: say so, not "Owner". */}
+            {c.member === false
+              ? <Badge variant="outline" title={t("collections.admin_access_hint")}>{t("collections.admin_access")}</Badge>
+              : c.role && <Badge variant="secondary">{t(`members.role.${c.role}`)}</Badge>}
             {c.description && <span className="collection-description" title={c.description}>{c.description}</span>}
           </span>
         </span>

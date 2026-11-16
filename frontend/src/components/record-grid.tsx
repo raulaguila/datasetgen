@@ -1,5 +1,6 @@
 "use client";
 
+import { OptionDot } from "@/components/option-chip";
 import { useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { useQueryClient } from "@tanstack/react-query";
@@ -111,7 +112,7 @@ export function EditableCell({ row, value, text, recordId, save, className }: {
       <span role="button" tabIndex={0} aria-label={`${label}, ${text}`} title={t("grid.edit_hint")} className={`block min-h-5 truncate rounded px-1 -mx-1 hover:bg-muted ${className ?? ""}`}
         onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => { e.stopPropagation(); start(); }}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === "F2") { e.preventDefault(); e.stopPropagation(); start(); } }}>
-        {text}
+        {row.field.type === "enum" && typeof value === "string" && row.field.colors[value] ? <span className="flex min-w-0 items-center gap-1.5"><OptionDot color={row.field.colors[value]} /><span className="truncate">{text}</span></span> : text}
       </span>
     );
   }

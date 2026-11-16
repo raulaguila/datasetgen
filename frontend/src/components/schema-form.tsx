@@ -1,12 +1,12 @@
 "use client";
 
 import Form, { getDefaultRegistry } from "@rjsf/core";
-import { englishStringTranslator, enumOptionsIndexForValue, enumOptionsValueForIndex, TranslatableString, type WidgetProps, type ArrayFieldItemTemplateProps, type ErrorSchema, type FieldProps, type IconButtonProps, type RJSFSchema, type UiSchema, type ValidatorType } from "@rjsf/utils";
+import { englishStringTranslator, enumOptionsIndexForValue, enumOptionsValueForIndex, TranslatableString, type ObjectFieldTemplateProps, type WidgetProps, type ArrayFieldItemTemplateProps, type ErrorSchema, type FieldProps, type IconButtonProps, type RJSFSchema, type UiSchema, type ValidatorType } from "@rjsf/utils";
 import Link from "next/link";
 import { useMemo, useRef, useState, type Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Copy, FileUp, Loader2, Paperclip, Plus, Search, X } from "lucide-react";
-import { AUTO, FILE, FORMULA, LOOKUP, REF, ROLLUP, fileRefs, isImage, recordTitle } from "@/components/field-builder";
+import { AUTO, DEFAULT_NOW, FILE, FORMULA, LOOKUP, REF, ROLLUP, SECTION, SHOW_WHEN, WIDTH, fileRefs, isImage, recordTitle, shows, type ShowWhen } from "@/components/field-builder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -61,7 +61,29 @@ function ArrayItem({ children, className, buttonsProps, hasToolbar, index, schem
   );
 }
 
+const StockObject = getDefaultRegistry().templates.ObjectFieldTemplate;
+
+/**
+ * An object's fields with the form's own layout: a heading where a field opens
+ * a section (x-section), and a field left out while its condition (x-show-when)
+ * does not hold. Its value stays; it only leaves the screen.
+ */
+function ObjectFields(props: ObjectFieldTemplateProps) {
+  const subs = (props.schema.properties ?? {}) as Record<string, Record<string, unknown>>;
+  const data = props.formData;
+  const shown = props.properties.filter((p) => shows(subs[p.name]?.[SHOW_WHEN] as ShowWhen | undefined, data));
+  const sectionOf = (name: string) => (typeof subs[name]?.[SECTION] === "string" ? (subs[name][SECTION] as string) : "");
+  const properties = shown.flatMap((p, i) => {
+    const title = sectionOf(p.name);
+    const before = shown.slice(0, i).map((x) => sectionOf(x.name)).filter(Boolean).pop() ?? "";
+    if (!title || title === before) return [p];
+    return [{ ...p, name: `${p.name}--section`, content: <h3 key={`${p.name}--section`} className="rjsf-section">{title}</h3> }, p];
+  });
+  return <StockObject {...props} properties={properties} />;
+}
+
 const templates = {
+  ObjectFieldTemplate: ObjectFields,
   ArrayFieldItemTemplate: ArrayItem,
   ButtonTemplates: {
     AddButton,
@@ -394,11 +416,26 @@ export function uiFor(schema: unknown, nested = false): UiSchema {
   if (s.type === "array" && (s as { uniqueItems?: unknown }).uniqueItems === true && Array.isArray((s.items as { enum?: unknown } | undefined)?.enum)) return { ...out, "ui:widget": "checkboxes" };
   for (const [key, sub] of Object.entries(s.properties ?? {})) {
     const ui = uiFor(sub, true);
+    // Half or full row in the two-column form, as the field says.
+    const width = (sub as Record<string, unknown> | null)?.[WIDTH];
+    if (width === "half" || width === "full") ui["ui:classNames"] = `rjsf-${width}`;
     if (Object.keys(ui).length) out[key] = ui;
   }
   const items = uiFor(Array.isArray(s.items) ? null : s.items, true);
   if (Object.keys(items).length) out.items = items;
   return out;
+}
+
+/** The schema with today's date (or now) as the default of each top-level field that asks for it. */
+export function withToday(schema: Record<string, unknown>, now = new Date()): Record<string, unknown> {
+  const props = schema.properties as Record<string, Record<string, unknown>> | undefined;
+  if (!props || !Object.values(props).some((p) => p?.[DEFAULT_NOW] === "today")) return schema;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const day = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return {
+    ...schema,
+    properties: Object.fromEntries(Object.entries(props).map(([k, p]) => [k, p?.[DEFAULT_NOW] !== "today" ? p : { ...p, default: p.format === "date-time" ? now.toISOString() : day }])),
+  };
 }
 
 /**
@@ -428,6 +465,9 @@ export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec",
     const key = BUTTON_KEYS[str];
     return key ? t(key) : englishStringTranslator(str, params);
   }, [t]);
+  // A new record (no data yet) starts "today" fields at the date it is opened.
+  const [fresh] = useState(() => !data || (typeof data === "object" && !Object.keys(data).length));
+  const formSchema = useMemo(() => (fresh ? withToday(schema) : schema), [fresh, schema]);
   // The page has its own save bar; the form never submits by itself.
   const uiSchema = useMemo(() => ({ ...uiFor(schema), "ui:submitButtonOptions": { norender: true } }), [schema]);
   const formContext = useMemo(() => ({ collectionId }), [collectionId]);
@@ -437,7 +477,7 @@ export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec",
     <Form
       ref={formRef}
       className="rjsf"
-      schema={schema as RJSFSchema}
+      schema={formSchema as RJSFSchema}
       uiSchema={uiSchema}
       formData={data}
       validator={validators[locale]}

@@ -1,4 +1,4 @@
-import { expect, type Browser, type Page } from "@playwright/test";
+import { expect, type Browser, type Locator, type Page } from "@playwright/test";
 
 function need(name: string): string {
   const value = process.env[name];
@@ -52,4 +52,24 @@ export async function dropKey(page: Page, keyName: string) {
   const key = keys.find((k) => k.name === keyName);
   expect(key).toBeTruthy();
   expect((await page.request.delete(`/api/proxy/v1/me/keys/${key!.id}`)).status()).toBe(204);
+}
+
+/**
+ * Adds a field through the side panel: the type from the gallery, then the form.
+ * `sub` adds a subfield with the "Adicionar subcampo" button inside `scope`.
+ */
+export async function addField(page: Page, name: string, opts: { required?: boolean; options?: string; help?: string; type?: string; sub?: boolean; scope?: Locator } = {}) {
+  const label = opts.sub ? "Adicionar subcampo" : "Adicionar campo";
+  await (opts.scope ?? page).getByRole("button", { name: label, exact: true }).click();
+  const panel = page.getByRole("dialog");
+  await panel.getByRole("button", { name: opts.options ? "Uma opção da lista" : opts.type ?? "Texto curto", exact: true }).click();
+  await panel.getByLabel("Nome do campo").fill(name);
+  for (const o of (opts.options ?? "").split(",").map((x) => x.trim()).filter(Boolean)) {
+    await panel.getByLabel("Nova opção").fill(o);
+    await panel.getByLabel("Nova opção").press("Enter");
+  }
+  if (opts.help) await panel.getByLabel("Texto de ajuda").fill(opts.help);
+  if (opts.required) await panel.getByRole("checkbox", { name: "Obrigatório" }).click();
+  await panel.getByRole("button", { name: label, exact: true }).click();
+  await expect(panel).toBeHidden();
 }

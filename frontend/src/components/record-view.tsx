@@ -14,6 +14,7 @@ import { tools } from "@/lib/api/endpoints";
 import type { Collection, DataRecord } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
+import { colorOf, optionColor } from "@/components/option-chip";
 
 type S = Record<string, unknown>;
 const obj = (v: unknown): S => (v && typeof v === "object" && !Array.isArray(v) ? (v as S) : {});
@@ -43,10 +44,11 @@ export function isChip(s: S, v: unknown): boolean {
   return typeof v === "string" && v !== "" && s.format !== "uri" && (s["x-unique"] === true || Array.isArray(s.enum));
 }
 
-export function Chip({ children, mono, strong, title }: { children: React.ReactNode; mono?: boolean; strong?: boolean; title?: string }) {
+export function Chip({ children, mono, strong, title, color }: { children: React.ReactNode; mono?: boolean; strong?: boolean; title?: string; /** An option's own color (x-colors). */ color?: string }) {
+  const tint = optionColor(color).chip;
   return (
     <span title={title} className={cn("inline-flex max-w-full items-center truncate rounded-md border px-2 py-0.5 text-xs",
-      strong ? "border-primary/30 bg-primary/10 text-primary" : "bg-muted/50", mono && "font-mono")}>{children}</span>
+      tint || (strong ? "border-primary/30 bg-primary/10 text-primary" : "bg-muted/50"), mono && "font-mono")}>{children}</span>
   );
 }
 
@@ -94,7 +96,7 @@ export function Value({ schema, value }: { schema: S; value: unknown }) {
       return <a href={value} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-full items-center gap-1 text-primary underline-offset-2 hover:underline" title={value}><span className="truncate">{host}</span><ExternalLink className="size-3 shrink-0" /></a>;
     }
     if (schema.format === "email") return <a href={`mailto:${value}`} className="text-primary underline-offset-2 hover:underline">{value}</a>;
-    if (Array.isArray(schema.enum)) return <Chip>{value}</Chip>;
+    if (Array.isArray(schema.enum)) return <Chip color={colorOf(schema, value)}>{value}</Chip>;
     if (!isShort(schema, value)) return looksLikeMarkdown(value) ? <Markdown text={value} links={links} /> : <p className="whitespace-pre-wrap text-sm leading-relaxed break-words">{value}</p>;
     return <span className="break-words">{value}</span>;
   }

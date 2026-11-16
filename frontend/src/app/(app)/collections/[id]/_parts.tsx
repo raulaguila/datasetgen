@@ -5,13 +5,15 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, FileUp, History, RotateCcw } from "lucide-react";
+import { Braces, ChevronRight, Eye, FileUp, History, MoreHorizontal, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { FieldNote, FormSection, FormSections, PageBody, PageHeader, SaveBar, useFormatDate } from "@/components/bits";
 import { CollectionAvatar } from "@/components/collection-avatar";
 import { IconPicker } from "@/components/icon-picker";
 import { EmptyState } from "@/components/empty-state";
-import { FieldsEditor, schemaChanges, type SchemaChange } from "@/components/field-builder";
+import { schemaChanges, type SchemaChange } from "@/components/field-builder";
+import { FieldsEditor, SidePanel } from "@/components/fields-editor";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ListSkeleton } from "@/components/skeletons";
@@ -24,7 +26,6 @@ import { collections, records, tools } from "@/lib/api/endpoints";
 import type { Collection } from "@/lib/api/types";
 import { useMe } from "@/lib/context/me";
 import { errorMessage } from "@/lib/errors";
-import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useUnsavedGuard } from "@/lib/hooks/use-unsaved-guard";
 import { useI18n } from "@/lib/i18n/provider";
 import { plural } from "@/lib/i18n/plural";
@@ -123,19 +124,13 @@ export function CollectionPage({ section, description, countRecords = false, act
  * The schemas the collection had before each change, newest first; one loads
  * into the editor, and saving it is a change like any other.
  */
-function SchemaHistory({ collection, onLoad }: { collection: Collection; onLoad: (schema: Record<string, unknown>) => void }) {
+function SchemaHistory({ collection, enabled, onLoad }: { collection: Collection; enabled: boolean; onLoad: (schema: Record<string, unknown>) => void }) {
   const { t } = useI18n();
   const format = useFormatDate();
-  const [open, setOpen] = useState(false);
-  const list = useQuery({ queryKey: ["schema-versions", collection.id, collection.version], queryFn: ({ signal }) => tools.schemaVersions(collection.id, signal), enabled: open });
+  const list = useQuery({ queryKey: ["schema-versions", collection.id, collection.version], queryFn: ({ signal }) => tools.schemaVersions(collection.id, signal), enabled });
   const items = list.data?.items ?? [];
   return (
-    <details className="group rounded-lg border" onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
-        <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
-        <History className="size-4" aria-hidden />{t("field_history.title")}
-      </summary>
-      <div className="space-y-2 border-t p-3">
+    <div className="space-y-2">
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("field_history.empty")}</p>
         ) : (
@@ -157,8 +152,7 @@ function SchemaHistory({ collection, onLoad }: { collection: Collection; onLoad:
             })}
           </ul>
         )}
-      </div>
-    </details>
+    </div>
   );
 }
 
@@ -201,9 +195,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
   };
   const parsed = useMemo(() => parseSchema(schemaText), [schemaText]);
   const schema = parsed.schema;
-  // The preview rebuilds once typing pauses, not on every key.
-  const previewText = useDebounced(schemaText);
-  const preview = useMemo(() => parseSchema(previewText).schema, [previewText]);
+  const [sheet, setSheet] = useState<"preview" | "history" | "json" | null>(null);
   const [previewData, setPreviewData] = useState<unknown>({});
   const schemaChanged = schemaText !== original;
   const changes = useMemo(() => (collection ? schemaChanges(collection.schema ?? null, schema) : []), [collection, schema]);
@@ -288,7 +280,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
           </FormSection>
         )}
         {parts.includes("fields") && (
-          // No side heading here: the list and the preview need the width.
+          // No side heading here: the list needs the width.
           <section className="space-y-4 border-t pt-8 first:border-t-0 first:pt-0">
             {/* The Fields page says this in its header; the new-collection page needs it here. The save bar says what is unsaved. */}
             {parts.includes("details") && (
@@ -297,10 +289,8 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                 <p className="text-sm text-muted-foreground">{t("collections.fields_desc")}</p>
               </div>
             )}
-            {/* The list stops at a readable width on wide screens; the preview takes the rest. */}
-            {/* Side by side only when the field list keeps room for its names; narrower, the preview goes below. */}
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] 2xl:grid-cols-[minmax(0,48rem)_minmax(24rem,1fr)]">
-              <div className="min-w-0 space-y-4">
+            {/* One column at a readable width: each field opens in a side panel, and so do the preview, the history and the JSON. */}
+            <div className="max-w-[56rem] space-y-4">
                 {!collection && editable && (
                   // A new collection starts from a ready-made set of fields, or from a data file's columns.
                   <div className="space-y-2">
@@ -320,6 +310,22 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                     <p className="text-xs text-muted-foreground" role="status">{fileNote ?? t("collections.template_file_hint")}</p>
                   </div>
                 )}
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Button type="button" variant="outline" size="sm" disabled={!schema} onClick={() => setSheet("preview")}><Eye className="size-4" />{t("collections.preview")}</Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label={t("fields.more")} />}><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {collection && editable && <DropdownMenuItem onClick={() => setSheet("history")}><History className="size-4" />{t("field_history.title")}</DropdownMenuItem>}
+                      <DropdownMenuItem onClick={() => setSheet("json")}><Braces className="size-4" />{t("collections.json_toggle")}</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                {!schema && (
+                  <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
+                    <span>{[t("collections.schema_invalid"), parsed.error].filter(Boolean).join(": ")}</span>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setSheet("json")}><Braces className="size-4" />{t("collections.json_toggle")}</Button>
+                  </div>
+                )}
                 <FieldsEditor
                   schema={schema}
                   original={collection?.schema ?? null}
@@ -328,50 +334,45 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                   onChange={(next) => setSchemaText(pretty(next))}
                 />
                 {changes.length > 0 && (
-                  <div role="status" className={cn("space-y-1.5 rounded-md border px-3 py-2 text-sm", risky ? "border-warn/40 bg-warn/10" : "bg-muted/40")}>
-                    <p className="font-medium">{t("collections.changes_title")}</p>
-                    <ul className="list-inside list-disc space-y-0.5">
+                  // Compact: one line saying how many changes, the list on demand.
+                  <details role="status" className={cn("group rounded-md border px-3 py-2 text-sm", risky ? "border-warn/40 bg-warn/10" : "bg-muted/40")}>
+                    <summary className="flex cursor-pointer list-none items-center gap-2 font-medium [&::-webkit-details-marker]:hidden">
+                      <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
+                      {plural(t("fields.changes_count"), changes.length)}
+                      {risky && <span className="font-normal text-warn">· {t("fields.changes_risky")}</span>}
+                    </summary>
+                    <ul className="mt-1.5 list-inside list-disc space-y-0.5 pl-6">
                       {changes.map((c, i) => <li key={i}>{changeText(c)}</li>)}
                     </ul>
-                    {risky && <p>{plural(t("collections.schema_change_hint"), recordCount)}</p>}
-                  </div>
+                    {risky && <p className="mt-1.5 pl-6">{plural(t("collections.schema_change_hint"), recordCount)}</p>}
+                  </details>
                 )}
-                {collection && editable && (
-                  <SchemaHistory collection={collection} onLoad={(old) => { setSchemaText(pretty(old)); toast.info(t("field_history.loaded")); }} />
-                )}
-                <details className="group rounded-lg border" open={!schema || undefined}>
-                  <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
-                    <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
-                    {t("collections.json_toggle")}
-                  </summary>
-                  <div className="space-y-2 border-t p-3">
-                    <p className="text-xs text-muted-foreground">{t("collections.schema_desc")}</p>
-                    <Textarea
-                      id="c-schema"
-                      aria-label={t("collections.schema")}
-                      aria-invalid={!schema}
-                      aria-describedby="c-schema-note"
-                      spellCheck={false}
-                      rows={Math.min(30, Math.max(10, schemaText.split("\n").length + 1))}
-                      disabled={!editable}
-                      value={schemaText}
-                      onChange={(e) => setSchemaText(e.target.value)}
-                      className="px-3 font-mono text-xs leading-relaxed md:text-xs"
-                    />
-                    <FieldNote id="c-schema-note" error={!schema ? [t("collections.schema_invalid"), parsed.error].filter(Boolean).join(": ") : undefined} />
-                  </div>
-                </details>
               </div>
-              <aside className="min-w-0 space-y-2 xl:sticky xl:top-4 xl:self-start" aria-label={t("collections.preview")}>
-                <div>
-                  <h3 className="text-sm font-semibold">{t("collections.preview")}</h3>
-                  <p className="text-xs text-muted-foreground">{t("collections.preview_desc")}</p>
-                </div>
-                <div className="rounded-lg border bg-muted/30 p-4">
-                  {preview && <SchemaForm key={previewText} schema={preview} data={previewData} onChange={setPreviewData} idPrefix="preview" />}
-                </div>
-              </aside>
-            </div>
+            <SidePanel open={sheet === "preview"} onOpenChange={(o) => !o && setSheet(null)} title={t("collections.preview")} description={t("collections.preview_desc")} wide>
+              {schema && <SchemaForm schema={schema} data={previewData} onChange={setPreviewData} idPrefix="preview" columns={2} />}
+            </SidePanel>
+            {collection && editable && (
+              <SidePanel open={sheet === "history"} onOpenChange={(o) => !o && setSheet(null)} title={t("field_history.title")}>
+                <SchemaHistory collection={collection} enabled={sheet === "history"} onLoad={(old) => { setSchemaText(pretty(old)); setSheet(null); toast.info(t("field_history.loaded")); }} />
+              </SidePanel>
+            )}
+            <SidePanel open={sheet === "json"} onOpenChange={(o) => !o && setSheet(null)} title={t("collections.json_toggle")} description={t("collections.schema_desc")} wide>
+              <div className="space-y-2">
+                <Textarea
+                  id="c-schema"
+                  aria-label={t("collections.schema")}
+                  aria-invalid={!schema}
+                  aria-describedby="c-schema-note"
+                  spellCheck={false}
+                  rows={Math.min(40, Math.max(12, schemaText.split("\n").length + 1))}
+                  disabled={!editable}
+                  value={schemaText}
+                  onChange={(e) => setSchemaText(e.target.value)}
+                  className="px-3 font-mono text-xs leading-relaxed md:text-xs"
+                />
+                <FieldNote id="c-schema-note" error={!schema ? [t("collections.schema_invalid"), parsed.error].filter(Boolean).join(": ") : undefined} />
+              </div>
+            </SidePanel>
           </section>
         )}
         {editable && (dirty || !collection) && (

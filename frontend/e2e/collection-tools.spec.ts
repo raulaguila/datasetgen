@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { dropKey } from "./helpers";
+import { addField, dropKey } from "./helpers";
 
 // CSV import, sort by a field, bulk edit, a saved view, the trash, an API key
 // used through the web address, and the field history.
@@ -90,7 +90,8 @@ test("a collection's tools: CSV, bulk edit, views, trash, API key, field history
   // Records hold notes: removing the field asks first.
   await page.getByRole("dialog").getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByText("Alterações salvas.")).toBeVisible();
-  await page.getByText("Histórico dos campos").click();
+  await page.getByRole("button", { name: "Mais opções dos campos" }).click();
+  await page.getByRole("menuitem", { name: "Histórico dos campos" }).click();
   await expect(page.getByText("Depois: Campo removido: Notas")).toBeVisible();
   await page.getByRole("button", { name: "Carregar no editor" }).click();
   await expect(page.getByRole("button", { name: "Remover campo: Notas" })).toBeVisible();
@@ -110,18 +111,15 @@ test("reference and file fields", async ({ page }) => {
 
   await page.goto("/collections/new");
   await page.locator("#c-name").fill(`links-${Date.now()}`);
-  const form = page.getByRole("group", { name: "Adicionar campo" });
   await page.getByRole("button", { name: "Adicionar campo", exact: true }).click();
-  await form.getByLabel("Nome do campo").fill("Dono");
-  await form.getByRole("combobox", { name: "Tipo" }).click();
-  await page.getByRole("option", { name: "Referência", exact: true }).click();
-  await form.getByRole("combobox", { name: "Coleção referenciada" }).click();
+  const panel = page.getByRole("dialog", { name: "Adicionar campo" });
+  await panel.getByRole("button", { name: "Referência", exact: true }).click();
+  await panel.getByLabel("Nome do campo").fill("Dono");
+  await panel.getByRole("combobox", { name: "Coleção referenciada" }).click();
   await page.getByRole("option", { name: target }).click();
-  await form.getByRole("button", { name: "Adicionar campo" }).click();
-  await form.getByLabel("Nome do campo").fill("Anexo");
-  await form.getByRole("combobox", { name: "Tipo" }).click();
-  await page.getByRole("option", { name: "Arquivo", exact: true }).click();
-  await form.getByRole("button", { name: "Adicionar campo" }).click();
+  await panel.getByRole("button", { name: "Adicionar campo", exact: true }).click();
+  await expect(panel).toBeHidden();
+  await addField(page, "Anexo", { type: "Arquivo" });
   await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
   await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
 

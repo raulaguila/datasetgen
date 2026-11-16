@@ -13,6 +13,7 @@ import { RecordComments } from "@/components/record-comments";
 import { RecordVersions, VersionCompare, useSnapshots } from "@/components/record-history";
 import { RecordLinks } from "@/components/record-links";
 import { Chip, RecordView, isChip } from "@/components/record-view";
+import { colorOf } from "@/components/option-chip";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api/client";
@@ -54,7 +55,7 @@ function RecordReader({ collection, record }: { collection: Collection; record: 
       {chips.length > 0 && (
         <ul className="flex flex-wrap gap-1.5" aria-label={collection.name}>
           {chips.map((k) => (
-            <li key={k}><Chip mono={props[k]["x-unique"] === true} strong={Array.isArray(props[k].enum)} title={typeof props[k].title === "string" ? props[k].title : k}>{String(data[k])}</Chip></li>
+            <li key={k}><Chip mono={props[k]["x-unique"] === true} strong={Array.isArray(props[k].enum)} color={colorOf(props[k], data[k])} title={typeof props[k].title === "string" ? props[k].title : k}>{String(data[k])}</Chip></li>
           ))}
         </ul>
       )}
