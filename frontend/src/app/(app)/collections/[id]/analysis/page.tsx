@@ -4,7 +4,7 @@ import { CollectionDashboard } from "@/components/collection-dashboard";
 import { BUCKETS, FieldStats, ViewConditions, barFields, isDate, isNumeric, useStats, isPlain } from "@/components/collection-stats";
 import { fieldsOf } from "@/components/field-builder";
 import { useNumberFormat } from "@/components/record-groups";
-import { RecordRules, parseWhere, whereText, type Where } from "@/components/record-rules";
+import { RecordRules, parseWhere, whereEmpty, whereText, type Where } from "@/components/record-rules";
 import { ListSkeleton } from "@/components/skeletons";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -34,21 +34,25 @@ function Analysis({ collection }: { collection: Collection }) {
   const buckets = Object.fromEntries(BUCKETS.map((b) => [b, t(`analysis.bucket.${b}` as MessageKey)]));
   return (
     <div className="space-y-8">
-      <CollectionDashboard collection={collection} />
+      {/* One filter for the page: the dashboard and the fields read the same records. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <RecordRules fields={fieldsOf(collection.schema ?? null)} value={where} onChange={(w: Where) => set({ where: whereText(w) })} />
+        <ViewConditions collectionId={collection.id} onPick={(w) => set({ where: whereText(w) })} />
+        <span className="text-xs text-muted-foreground">{t("analysis.filter_hint")}</span>
+        <p className="ml-auto text-sm text-muted-foreground" role="status">
+          {st.isPending ? "…" : t(text ? "analysis.records_matching" : "analysis.records").replace("{n}", num(n))}
+        </p>
+      </div>
+      <CollectionDashboard collection={collection} scope={whereEmpty(where) ? undefined : where} />
       <section className="space-y-4" aria-labelledby="explore-title">
-        <h2 id="explore-title" className="font-heading text-base font-semibold">{t("analysis.explore")}</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <RecordRules fields={fieldsOf(collection.schema ?? null)} value={where} onChange={(w: Where) => set({ where: whereText(w) })} />
-          <ViewConditions collectionId={collection.id} onPick={(w) => set({ where: whereText(w) })} />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="explore-title" className="font-heading text-base font-semibold">{t("analysis.explore")}</h2>
           {dates.length > 0 && (
             <Select value={bucket} items={buckets} onValueChange={(v) => set({ bucket: String(v) })}>
               <SelectTrigger size="sm" aria-label={t("analysis.bucket")}><span className="text-muted-foreground">{t("analysis.bucket")}</span><SelectValue /></SelectTrigger>
               <SelectContent>{BUCKETS.map((b) => <SelectItem key={b} value={b}>{buckets[b]}</SelectItem>)}</SelectContent>
             </Select>
           )}
-          <p className="ml-auto text-sm text-muted-foreground" role="status">
-            {st.isPending ? "…" : t(text ? "analysis.records_matching" : "analysis.records").replace("{n}", num(n))}
-          </p>
         </div>
         {st.isError ? <QueryErrorState error={st.error} onRetry={() => void st.refetch()} /> : st.isPending ? <ListSkeleton rows={4} /> : (
           <>

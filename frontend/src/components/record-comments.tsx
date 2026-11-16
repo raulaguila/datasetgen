@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { FormError, FormSection, FormSections, useFormatDate } from "@/components/bits";
+import { FormError, useFormatDate } from "@/components/bits";
+import { RecordCard } from "@/components/record-view";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { records } from "@/lib/api/endpoints";
@@ -35,8 +36,7 @@ export function RecordComments({ recordId, owner }: { recordId: string; owner: b
   const items = list.data?.items ?? [];
 
   return (
-    <FormSections>
-      <FormSection title={t("comments.title")} description={t("comments.desc")}>
+    <RecordCard id="comments-title" title={t("comments.title")} description={t("comments.desc")}>
         <div className="space-y-4">
           {list.isError && <FormError message={errorMessage(list.error, "error.load_desc", t)} />}
           {items.length > 0 && (
@@ -64,7 +64,6 @@ export function RecordComments({ recordId, owner }: { recordId: string; owner: b
             </Button>
           </form>
         </div>
-      </FormSection>
-    </FormSections>
+    </RecordCard>
   );
 }

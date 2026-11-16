@@ -267,3 +267,16 @@ describe("form layout and option colors", () => {
     expect(schemaChanges(before, tighter)[0]).toMatchObject({ kind: "rules", risky: true });
   });
 });
+
+describe("number format", () => {
+  it("round-trips on number fields only", () => {
+    let s = addField({ type: "object" }, field({ name: "Valor", type: "number", numberFormat: "currency", decimals: "2" }));
+    s = addField(s, field({ name: "Nome", numberFormat: "currency", decimals: "2" }));
+    const props = s.properties as Record<string, Record<string, unknown>>;
+    expect(props.valor).toMatchObject({ "x-format": "currency", "x-decimals": 2 });
+    expect(props.nome["x-format"]).toBeUndefined();
+    expect(fieldsOf(s)[0].field).toMatchObject({ numberFormat: "currency", decimals: "2" });
+    const plain = updateField(s, "valor", field({ name: "Valor", key: "valor", type: "number" }));
+    expect(schemaChanges(s, plain)).toEqual([{ kind: "display", name: "Valor", risky: false }]);
+  });
+});

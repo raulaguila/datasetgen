@@ -12,8 +12,7 @@ import { QueryErrorState } from "@/components/query-error-state";
 import { RecordComments } from "@/components/record-comments";
 import { RecordVersions, VersionCompare, useSnapshots } from "@/components/record-history";
 import { RecordLinks } from "@/components/record-links";
-import { Chip, RecordView, isChip } from "@/components/record-view";
-import { colorOf } from "@/components/option-chip";
+import { RecordView } from "@/components/record-view";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api/client";
@@ -46,19 +45,12 @@ function RecordReader({ collection, record }: { collection: Collection; record: 
   const props = (schema.properties ?? {}) as Record<string, S>;
   const data = (record.data ?? {}) as S;
   const titleKey = Object.keys(props).find((k) => data[k] === recordTitle(collection.schema ?? null, record.data));
-  const chips = Object.keys(props).filter((k) => k !== titleKey && isChip(props[k], data[k]));
-  const skip = new Set([...(titleKey ? [titleKey] : []), ...chips]);
+  // The title is the page's heading; every other field, status included, reads with its label.
+  const skip = new Set(titleKey ? [titleKey] : []);
   const history = pending || items.length > 1;
 
   return (
     <div className="space-y-4">
-      {chips.length > 0 && (
-        <ul className="flex flex-wrap gap-1.5" aria-label={collection.name}>
-          {chips.map((k) => (
-            <li key={k}><Chip mono={props[k]["x-unique"] === true} strong={Array.isArray(props[k].enum)} color={colorOf(props[k], data[k])} title={typeof props[k].title === "string" ? props[k].title : k}>{String(data[k])}</Chip></li>
-          ))}
-        </ul>
-      )}
       {/* With one version there is nothing to compare: the record gets the whole width. */}
       <div className={cn("grid items-start gap-4", history && "lg:grid-cols-[minmax(0,1fr)_17rem]")}>
         <div className="min-w-0 space-y-4">

@@ -4,7 +4,8 @@ import { createContext, useContext } from "react";
 import Link from "next/link";
 import { Check, ExternalLink, FileIcon } from "lucide-react";
 import { useFormatDate } from "@/components/bits";
-import { FILE, REF, fileRefs, isImage } from "@/components/field-builder";
+import { FILE, REF, SECTION, SHOW_WHEN, fileRefs, isImage, shows, type ShowWhen } from "@/components/field-builder";
+import { formatFigure } from "@/components/format-figure";
 import { Markdown, looksLikeMarkdown } from "@/components/markdown";
 import { CodeBlock } from "@/components/secret";
 import { useTextLinks } from "@/components/text-links";
@@ -24,6 +25,14 @@ const titleOf = (s: S, key: string) => (typeof s.title === "string" && s.title ?
 const NAMING = /^(r[oó]tulo|label|t[ií]tulo|title|nome|name)$/i;
 /** Fields holding a code (a key, a class name): their values read in the code face. */
 const CODE = /^(chave|key|classname|c[oó]digo|code|slug)$/i;
+
+/** A number field's own format (x-format, x-decimals), if it has one. */
+export function numberStyle(schema: S | undefined): { format: "number" | "compact" | "currency" | "percent"; decimals?: number } | null {
+  const f = schema?.["x-format"];
+  const d = schema?.["x-decimals"];
+  if (f !== "currency" && f !== "percent" && f !== "compact" && typeof d !== "number") return null;
+  return { format: f === "currency" || f === "percent" || f === "compact" ? f : "number", decimals: typeof d === "number" ? d : undefined };
+}
 
 /** Addresses in the record's text that other records stand for, address -> record id. */
 const Links = createContext<Map<string, string> | undefined>(undefined);
@@ -86,7 +95,11 @@ export function Value({ schema, value }: { schema: S; value: unknown }) {
       ? <span className="inline-flex items-center gap-1"><Check className="size-3.5 text-success" />{t("common.yes")}</span>
       : <span className="text-muted-foreground">{t("common.no")}</span>;
   // Whole numbers are often codes or revisions, where a thousands separator misleads.
-  if (typeof value === "number") return <span className="tabular-nums">{schema.type === "integer" ? String(value) : num(value)}</span>;
+  if (typeof value === "number") {
+    // The field's own format (money, percent…) first; otherwise whole numbers stay bare: they are often codes, where a separator misleads.
+    const style = numberStyle(schema);
+    return <span className="tabular-nums">{style ? formatFigure(value, locale, style.format, style.decimals) : schema.type === "integer" ? String(value) : num(value)}</span>;
+  }
   if (typeof value === "string") {
     if (typeof schema[REF] === "string") return <RefLink target={schema[REF]} id={value} />;
     if (schema.format === "date") return <span>{new Date(`${value}T00:00:00Z`).toLocaleDateString(locale, { dateStyle: "medium", timeZone: "UTC" })}</span>;
@@ -145,17 +158,65 @@ function Group({ schema, value, heading = false }: { schema: S; value: unknown; 
   );
 }
 
+/** A titled card of the record page: a block of fields, the links, the comments. */
+export function RecordCard({ id, title, description, action, children }: { id: string; title: string; description?: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section aria-labelledby={id} className="rounded-xl border bg-card p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 id={id} className="text-sm font-semibold">{title}</h2>
+          {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+        </div>
+        {action}
+      </div>
+      <div className="mt-3">{children}</div>
+    </section>
+  );
+}
+
+/** Fields in form order, split where a field opens a section (x-section); a field out of its condition (x-show-when) is left out, as the form leaves it. */
+export function sectionsOf(props: Record<string, unknown>, keys: string[], data: S): { title: string; keys: string[] }[] {
+  const out: { title: string; keys: string[] }[] = [{ title: "", keys: [] }];
+  for (const k of keys) {
+    const s = obj(props[k]);
+    if (!shows(s[SHOW_WHEN] as ShowWhen | undefined, data)) continue;
+    const title = typeof s[SECTION] === "string" ? (s[SECTION] as string) : "";
+    if (title && title !== out[out.length - 1].title) out.push({ title, keys: [] });
+    out[out.length - 1].keys.push(k);
+  }
+  return out.filter((g) => g.keys.length);
+}
+
 /**
- * A record laid out to be read: short values in a summary grid, then each list,
- * group and long text in a section of its own, in the schema's field order.
- * `skip` names fields the page already shows (its title, the header chips).
+ * A record laid out to be read, section by section as the form has them: short
+ * values in a summary grid, then each list, group and long text in a card of
+ * its own, in the schema's field order. `skip` names fields the page already
+ * shows (its title).
  */
 export function RecordView({ collection, record, skip }: { collection: Collection; record: DataRecord; skip: Set<string> }) {
-  const { t } = useI18n();
   const schema = (collection.schema ?? {}) as S;
   const data = obj(record.data);
   const props = propsOf(schema);
   const keys = [...Object.keys(props), ...Object.keys(data).filter((k) => !(k in props))].filter((k) => !skip.has(k));
+  const sections = sectionsOf(props, keys, data);
+  const links = useTextLinks(record);
+  return (
+    <Links.Provider value={links}>
+    <div className="space-y-6">
+      {sections.map((g, i) => (
+        <div key={`${g.title}-${i}`} className="space-y-3">
+          {g.title && <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{g.title}</h2>}
+          <Fields props={props} keys={g.keys} data={data} />
+        </div>
+      ))}
+    </div>
+    </Links.Provider>
+  );
+}
+
+/** One section's fields: the summary card, then a card per long value. */
+function Fields({ props, keys, data }: { props: S; keys: string[]; data: S }) {
+  const { t } = useI18n();
   const short = keys.filter((k) => isShort(obj(props[k]), data[k]));
   const blocks = keys.filter((k) => !short.includes(k) && !isEmpty(data[k]));
   // Yes/no fields read as one line: the ones that hold, then the ones that do not.
@@ -165,10 +226,8 @@ export function RecordView({ collection, record, skip }: { collection: Collectio
   const unset = short.filter((k) => !flag(k) && isEmpty(data[k]));
   const yes = short.filter((k) => flag(k) && data[k] === true);
   const no = short.filter((k) => flag(k) && data[k] === false);
-  const links = useTextLinks(record);
   return (
-    <Links.Provider value={links}>
-    <div className="space-y-4">
+    <>
       {(plain.length > 0 || yes.length > 0 || no.length > 0 || unset.length > 0) && (
         <section aria-label={t("records.summary")} className="@container rounded-xl border bg-card p-4">
           {plain.length > 0 && (
@@ -176,7 +235,7 @@ export function RecordView({ collection, record, skip }: { collection: Collectio
               {plain.map((k) => (
                 <div key={k} className="min-w-0">
                   <dt className="truncate text-xs text-muted-foreground" title={titleOf(obj(props[k]), k)}>{titleOf(obj(props[k]), k)}</dt>
-                  <dd className="mt-0.5 text-sm"><Value schema={obj(props[k])} value={data[k]} /></dd>
+                  <dd className={cn("mt-0.5 text-sm", obj(props[k])["x-unique"] === true && typeof data[k] === "string" && "font-mono")}><Value schema={obj(props[k])} value={data[k]} /></dd>
                 </div>
               ))}
             </dl>
@@ -197,14 +256,11 @@ export function RecordView({ collection, record, skip }: { collection: Collectio
       {blocks.map((k) => {
         const s = obj(props[k]);
         return (
-          <section key={k} aria-labelledby={`f-${k}`} className="rounded-xl border bg-card p-4">
-            <h2 id={`f-${k}`} className="text-sm font-semibold">{titleOf(s, k)}</h2>
-            {typeof s.description === "string" && s.description && <p className="mt-0.5 text-xs text-muted-foreground">{s.description}</p>}
-            <div className="mt-3"><Value schema={s} value={data[k]} /></div>
-          </section>
+          <RecordCard key={k} id={`f-${k}`} title={titleOf(s, k)} description={typeof s.description === "string" && s.description ? s.description : undefined}>
+            <Value schema={s} value={data[k]} />
+          </RecordCard>
         );
       })}
-    </div>
-    </Links.Provider>
+    </>
   );
 }

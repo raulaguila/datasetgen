@@ -477,6 +477,11 @@ export interface Widget {
   decimals?: number;
   /** How bars and timelines draw: bars, a donut or a table; columns or a line. */
   visual?: "bars" | "donut" | "table" | "columns" | "line";
+  /** Bars: sum or average this number field per value, in place of counting records. */
+  measure?: string;
+  fn?: "sum" | "avg";
+  /** A figure: the last `days` days by a date field, against the days before them. */
+  compare?: { field: string; days: number };
 }
 
 /** What an owner's MCP tool answered when tried before saving. */

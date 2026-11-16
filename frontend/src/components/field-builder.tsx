@@ -40,6 +40,12 @@ export const WIDTH = "x-width";
 export const SHOW_WHEN = "x-show-when";
 /** "today": a new record's date (or date and time) starts as now. */
 export const DEFAULT_NOW = "x-default";
+/** How a number reads (compact, currency, percent) and its digits after the point. */
+export const NUMBER_FORMAT = "x-format";
+export const DECIMALS = "x-decimals";
+export const NUMBER_FORMATS = ["compact", "currency", "percent"] as const;
+/** Fields holding a number a format applies to. */
+export const isNumberField = (f: Pick<Field, "type" | "result">) => f.type === "number" || f.type === "integer" || (f.type === "formula" && (f.result || "number") === "number");
 /** The colors an option may take; record-view and the board draw them. */
 export const OPTION_COLORS = ["gray", "red", "orange", "amber", "green", "teal", "blue", "violet", "pink"] as const;
 export type OptionColor = (typeof OPTION_COLORS)[number];
@@ -106,6 +112,9 @@ export type Field = {
   section: string;
   width: "" | "half" | "full";
   showWhen: ShowWhen | null;
+  /** Number fields: "" plain, or compact, currency, percent; decimals "" for the locale's own. */
+  numberFormat: "" | (typeof NUMBER_FORMATS)[number];
+  decimals: string;
 };
 /** A top-level field: `key` is where its value is stored, `field.name` its label. Advanced ones are edited as JSON. */
 export type FieldRow = { key: string; field: Field; advanced: boolean };
@@ -115,7 +124,7 @@ type Props = Record<string, Record<string, unknown>>;
 
 export const blankField: Field = {
   name: "", key: "", type: "string", required: false, unique: false, private: false, options: "", description: "", placeholder: "", default: "", min: "", max: "",
-  ref: "", via: "", source: "", fn: "", result: "", colors: {}, pattern: "", today: false, section: "", width: "", showWhen: null,
+  ref: "", via: "", source: "", fn: "", result: "", colors: {}, pattern: "", today: false, section: "", width: "", showWhen: null, numberFormat: "", decimals: "",
 };
 /** Short and long text take a pattern; the formats (e-mail, URL) have their own. */
 export const PATTERN_TYPES: readonly FieldType[] = ["string", "text"];
@@ -133,9 +142,9 @@ export function limitKeys(type: FieldType): [string, string] | null {
 }
 
 /** Keywords the builder writes; any other keyword of a property is kept as it was. */
-const RULE_KEYS = ["title", "description", "examples", "default", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", "pattern", UNIQUE, PRIVATE, REF, COLORS, SECTION, WIDTH, SHOW_WHEN, DEFAULT_NOW];
+const RULE_KEYS = ["title", "description", "examples", "default", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", "pattern", UNIQUE, PRIVATE, REF, COLORS, SECTION, WIDTH, SHOW_WHEN, DEFAULT_NOW, NUMBER_FORMAT, DECIMALS];
 /** Keywords that change how the form looks, never which records are valid: saving them is safe. */
-export const DISPLAY_KEYS = ["title", "description", "examples", COLORS, SECTION, WIDTH, SHOW_WHEN, DEFAULT_NOW];
+export const DISPLAY_KEYS = ["title", "description", "examples", COLORS, SECTION, WIDTH, SHOW_WHEN, DEFAULT_NOW, NUMBER_FORMAT, DECIMALS];
 
 /** A storage key from a label: "Nome do Cliente" → "nome_do_cliente". */
 export function keyOf(name: string): string {
@@ -229,6 +238,10 @@ function withRules(base: Record<string, unknown>, f: Field): Record<string, unkn
   if (f.width) out[WIDTH] = f.width;
   if (f.showWhen?.field) out[SHOW_WHEN] = f.showWhen.op === "filled" || f.showWhen.op === "empty" ? { field: f.showWhen.field, op: f.showWhen.op } : { ...f.showWhen };
   if (f.type === "reference" || f.type === "references") out[REF] = f.ref;
+  if (isNumberField(f)) {
+    if (f.numberFormat) out[NUMBER_FORMAT] = f.numberFormat;
+    if (/^[0-6]$/.test(f.decimals)) out[DECIMALS] = Number(f.decimals);
+  }
   // Title first, as people read it in the JSON.
   const { title, ...rest } = out;
   return { title, ...rest };
@@ -327,6 +340,8 @@ export function fieldsOf(schema: Schema | null): FieldRow[] {
         section: typeof p?.[SECTION] === "string" ? p[SECTION] : "",
         width: p?.[WIDTH] === "half" || p?.[WIDTH] === "full" ? p[WIDTH] : "",
         showWhen: showWhenOf(p?.[SHOW_WHEN]),
+        numberFormat: NUMBER_FORMATS.includes(p?.[NUMBER_FORMAT] as (typeof NUMBER_FORMATS)[number]) ? p![NUMBER_FORMAT] as Field["numberFormat"] : "",
+        decimals: typeof p?.[DECIMALS] === "number" ? String(p[DECIMALS]) : "",
       },
     };
   });

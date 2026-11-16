@@ -26,3 +26,7 @@ export function colorOf(schema: Record<string, unknown> | undefined, value: unkn
 export function OptionDot({ color, className }: { color: string | undefined; className?: string }) {
   return color && CLS[color] ? <span className={cn("inline-block size-2 shrink-0 rounded-full", CLS[color].dot, className)} aria-hidden /> : null;
 }
+
+const CSS: Record<string, string> = { gray: "zinc", red: "red", orange: "orange", amber: "amber", green: "emerald", teal: "teal", blue: "sky", violet: "violet", pink: "pink" };
+/** An option's color as a CSS value, for SVG strokes and inline bars; undefined when it has none. */
+export const optionCss = (color: string | undefined) => (color && CSS[color] ? `var(--color-${CSS[color]}-500)` : undefined);

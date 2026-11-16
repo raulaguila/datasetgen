@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type Form from "@rjsf/core";
@@ -7,7 +8,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronLeft, ChevronRight, Columns2, Eye, Rows3 } from "lucide-react";
 import { toast } from "sonner";
-import { DangerZone, FormSection, FormSections, PageBody, PageHeader, SaveBar, useFormatDate } from "@/components/bits";
+import { DangerZone, FormSections, PageBody, PageHeader, SaveBar, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { recordTitle } from "@/components/field-builder";
@@ -115,17 +116,25 @@ function RecordForm({ collection, record, editable, next }: { collection: Collec
         submit(e.shiftKey && !record ? "copy" : undefined);
       }}>
       <FormSections>
-        <FormSection wide={columns === 2} headAbove={columns === 2} title={collection.name} description={[collection.description.trim(), t("records.required_legend")].filter(Boolean).join(" ")}>
-          {/* Below lg the form has room for one column only, so the choice shows from there up. */}
-          <div className="mb-4 hidden justify-end gap-1 lg:flex" role="group" aria-label={t("records.layout")}>
-            {([1, 2] as const).map((n) => (
-              <Button key={n} type="button" size="sm" variant={columns === n ? "secondary" : "ghost"} aria-pressed={columns === n} onClick={() => setColumns(n)}>
-                {n === 1 ? <Rows3 className="size-4" /> : <Columns2 className="size-4" />}{t(n === 1 ? "records.layout_one" : "records.layout_two")}
-              </Button>
-            ))}
+        {/* One header row: what the form is, and how it lays out (from lg up; narrower it has room for one column). */}
+        <section aria-labelledby="record-form-title" className="space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 space-y-1">
+              <h2 id="record-form-title" className="font-heading text-base font-semibold">{t("records.form_title")}</h2>
+              <p className="text-sm text-muted-foreground">{[collection.description.trim(), t("records.required_legend")].filter(Boolean).join(" ")}</p>
+            </div>
+            <div className="hidden gap-1 rounded-lg border p-0.5 lg:flex" role="group" aria-label={t("records.layout")}>
+              {([1, 2] as const).map((n) => (
+                <Button key={n} type="button" size="sm" variant={columns === n ? "secondary" : "ghost"} aria-pressed={columns === n} onClick={() => setColumns(n)}>
+                  {n === 1 ? <Rows3 className="size-4" /> : <Columns2 className="size-4" />}{t(n === 1 ? "records.layout_one" : "records.layout_two")}
+                </Button>
+              ))}
+            </div>
           </div>
-          <SchemaForm schema={collection.schema ?? {}} collectionId={collection.id} data={data} disabled={!editable} onChange={setData} formRef={formRef} liveValidate={checked} issues={issues} columns={columns} />
-        </FormSection>
+          <div className={cn("min-w-0", columns === 1 && "max-w-3xl")}>
+            <SchemaForm schema={collection.schema ?? {}} collectionId={collection.id} data={data} disabled={!editable} onChange={setData} formRef={formRef} liveValidate={checked} issues={issues} columns={columns} />
+          </div>
+        </section>
         {canSubmit && (
           <SaveBar
             footer

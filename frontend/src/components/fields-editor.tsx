@@ -10,7 +10,7 @@ import {
 import { IconAction } from "@/components/bits";
 import {
   AUTO_TYPES, FIELD_TYPES, FORMULA_RESULTS, ITEM_TYPES, LONG_TEXT, OPTION_COLORS, PATTERN_TYPES, ROLLUP_FNS, SHOW_OPS, SUBFIELD_TYPES, UNIQUE_TYPES, VIRTUAL_TYPES,
-  addField, addProp, blankField, canonical, duplicateField, fieldProblem, fieldsOf, isObjectType, keyOf, limitKeys, moveField, moveFieldTo, optionsOf, propOf,
+  addField, addProp, blankField, isNumberField, canonical, duplicateField, fieldProblem, fieldsOf, isObjectType, keyOf, limitKeys, moveField, moveFieldTo, optionsOf, propOf,
   propsOf, removeField, requiredOf, restoreField, setProp, updateField,
   type Field, type FieldRow, type FieldType, type Schema, type ShowWhen,
 } from "@/components/field-builder";
@@ -326,11 +326,14 @@ function DefaultSelect({ id, field, onChange }: { id: string; field: Field; onCh
 
 
 /** A side panel: title on top, the body scrolls, the footer stays in view. */
-export function SidePanel({ open, onOpenChange, title, description, footer, wide, children }: {
-  open: boolean; onOpenChange: (open: boolean) => void; title: string; description?: string; footer?: React.ReactNode; wide?: boolean; children: React.ReactNode;
+export function SidePanel({ open, onOpenChange, title, description, footer, wide, keepOnOutsideClick, children }: {
+  open: boolean; onOpenChange: (open: boolean) => void; title: string; description?: string; footer?: React.ReactNode; wide?: boolean;
+  /** A popover of the panel renders outside it (the conditions): a click there must not close the panel. */
+  keepOnOutsideClick?: boolean;
+  children: React.ReactNode;
 }) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={onOpenChange} disablePointerDismissal={keepOnOutsideClick}>
       <SheetContent side="right" className={cn("gap-0 data-[side=right]:w-full", wide ? "data-[side=right]:sm:max-w-3xl" : "data-[side=right]:sm:max-w-xl")}>
         <SheetHeader className="border-b pr-12">
           <SheetTitle>{title}</SheetTitle>
@@ -404,6 +407,8 @@ function FieldForm({ formId, offered, topLevel, initial, initialKey, keyLocked, 
     : limits?.[0] === "minItems" ? ["collections.field_min_items", "collections.field_max_items"]
     : ["collections.field_min_length", "collections.field_max_length"];
   const isDate = field.type === "date" || field.type === "datetime";
+  const numberFormats = { plain: t("dashboard.format.number"), currency: t("dashboard.format.currency"), percent: t("dashboard.format.percent"), compact: t("dashboard.format.compact") };
+  const decimalItems = { auto: t("dashboard.decimals_auto"), ...Object.fromEntries(["0", "1", "2", "3"].map((d) => [d, d])) };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     // The panel is portaled, but React still bubbles the submit to the collection's form.
@@ -541,6 +546,25 @@ function FieldForm({ formId, offered, topLevel, initial, initialKey, keyLocked, 
               )}
               {field.type === "strings" && <p id={`${id}-default-hint`} className="text-xs text-muted-foreground">{t("collections.field_default_list_hint")}</p>}
             </div>
+          )}
+          {isNumberField(field) && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${id}-format`}>{t("fields.number_format")}</Label>
+                <Select value={field.numberFormat || "plain"} items={numberFormats} onValueChange={(v) => set({ numberFormat: v === "plain" ? "" : (v as Field["numberFormat"]) })}>
+                  <SelectTrigger id={`${id}-format`} className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{Object.entries(numberFormats).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{t("fields.number_format_hint")}</p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${id}-decimals`}>{t("dashboard.decimals")}</Label>
+                <Select value={field.decimals || "auto"} items={decimalItems} onValueChange={(v) => set({ decimals: v === "auto" ? "" : String(v) })}>
+                  <SelectTrigger id={`${id}-decimals`} className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{Object.entries(decimalItems).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </>
           )}
           {topLevel && (
             <>

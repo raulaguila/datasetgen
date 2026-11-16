@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { type FieldRow, recordTitle } from "@/components/field-builder";
+import { fieldFigure } from "@/components/format-figure";
+import { optionCss } from "@/components/option-chip";
 import { groupableOf, useNumberFormat } from "@/components/record-groups";
 import { andWhere, bothWhere, viewWhere, whereText, type Rule, type Where } from "@/components/record-rules";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,6 +14,9 @@ import type { Collection, FieldProfile, StatsBucket, Widget } from "@/lib/api/ty
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
+import { formatFigure } from "@/components/format-figure";
+
+export { formatFigure };
 
 const NUMERIC = ["number", "integer"];
 const DATES = ["date", "datetime"];
@@ -78,17 +84,22 @@ function SliceName({ s, className: extra }: { s: Slice; className?: string }) {
   return s.href ? <Link href={s.href} className={`truncate hover:underline ${className ?? ""}`} title={s.text}>{s.text}</Link> : <span className={`truncate ${className ?? ""}`} title={s.text}>{s.text}</span>;
 }
 
-/** Counts by value, largest first, the tail folded into "others". */
-function Bars({ items, total, label, href }: { items: { key: unknown; count: number }[]; total: number; label: (v: unknown) => string; href?: (key: unknown) => string }) {
-  const num = useNumberFormat();
+/** How a breakdown draws: each value's own color (a list option's), and how its figure reads (a sum's format). */
+type Look = { color?: (key: unknown) => string | undefined; fmt?: (n: number) => string };
+
+/** Counts (or sums) by value, largest first, the tail folded into "others". */
+function Bars({ items, total, label, href, color, fmt }: { items: { key: unknown; count: number }[]; total: number; label: (v: unknown) => string; href?: (key: unknown) => string } & Look) {
+  const plain = useNumberFormat();
+  const num = fmt ?? plain;
   const rows = useSlices(items, total, label, href);
+  const keys = items.slice(0, TOP).map((g) => label(g.key));
   const max = Math.max(1, ...rows.map((g) => g.count));
   return (
     <ul className="space-y-1.5">
       {rows.map((g, i) => (
         <li key={i} className="grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)_auto] items-center gap-2 text-sm" title={`${g.text}: ${num(g.count)}${pctOf(g.count, total)}`}>
           <SliceName s={g} />
-          <span className="h-2 rounded-full bg-primary/60" style={{ width: `${Math.max(2, (g.count / max) * 100)}%` }} aria-hidden />
+          <span className="h-2 rounded-full bg-primary/60" style={{ width: `${Math.max(2, (g.count / max) * 100)}%`, background: color?.(items[keys.indexOf(g.text)]?.key) }} aria-hidden />
           <span className="text-xs tabular-nums text-muted-foreground">{num(g.count)}{pctOf(g.count, total)}</span>
         </li>
       ))}
@@ -97,8 +108,9 @@ function Bars({ items, total, label, href }: { items: { key: unknown; count: num
 }
 
 /** Shares of the whole as a ring, each value in its fixed series hue, named in the legend beside it. */
-function Donut({ items, total, label, href }: { items: { key: unknown; count: number }[]; total: number; label: (v: unknown) => string; href?: (key: unknown) => string }) {
-  const num = useNumberFormat();
+function Donut({ items, total, label, href, color: own, fmt }: { items: { key: unknown; count: number }[]; total: number; label: (v: unknown) => string; href?: (key: unknown) => string } & Look) {
+  const plain = useNumberFormat();
+  const num = fmt ?? plain;
   const rows = useSlices(items, total, label, href);
   const sum = Math.max(1, rows.reduce((n, g) => n + g.count, 0));
   const r = 40;
@@ -106,7 +118,9 @@ function Donut({ items, total, label, href }: { items: { key: unknown; count: nu
   const gap = rows.length > 1 ? 1.2 : 0; // the surface between slices
   // "Others" is the folded tail: neutral, never a ninth hue.
   const named = Math.min(items.length, TOP);
-  const color = (i: number) => (i < named ? `var(--series-${i + 1})` : "var(--muted-foreground)");
+  // A list option keeps its own color; the others take the series hues in order.
+  const keyOf = (g: Slice) => items.find((x) => label(x.key) === g.text)?.key;
+  const color = (i: number) => (i < named ? own?.(keyOf(rows[i])) ?? `var(--series-${i + 1})` : "var(--muted-foreground)");
   // Where each slice starts along the ring: the counts before it.
   const starts = rows.map((_, i) => rows.slice(0, i).reduce((n, g) => n + (g.count / sum) * c, 0));
   return (
@@ -135,16 +149,17 @@ function Donut({ items, total, label, href }: { items: { key: unknown; count: nu
 }
 
 /** The same counts as rows of a table. */
-function CountTable({ items, total, label, href, head }: { items: { key: unknown; count: number }[]; total: number; label: (v: unknown) => string; href?: (key: unknown) => string; head: string }) {
+function CountTable({ items, total, label, href, head, fmt, measure }: { items: { key: unknown; count: number }[]; total: number; label: (v: unknown) => string; href?: (key: unknown) => string; head: string; measure?: string } & Look) {
   const { t } = useI18n();
-  const num = useNumberFormat();
+  const plain = useNumberFormat();
+  const num = fmt ?? plain;
   const rows = useSlices(items, total, label, href);
   return (
     <table className="w-full text-sm">
-      <thead><tr className="text-left text-xs text-muted-foreground"><th className="py-1 font-medium">{head}</th><th className="py-1 text-right font-medium">{t("dashboard.kind.count")}</th><th className="py-1 text-right font-medium">%</th></tr></thead>
+      <thead><tr className="text-left text-xs text-muted-foreground"><th className="py-1 font-medium">{head}</th><th className="py-1 text-right font-medium">{measure ?? t("dashboard.kind.count")}</th>{total > 0 && <th className="py-1 text-right font-medium">%</th>}</tr></thead>
       <tbody className="divide-y">
         {rows.map((g, i) => (
-          <tr key={i}><td className="max-w-0 py-1.5"><SliceName s={g} className="block" /></td><td className="py-1.5 text-right tabular-nums">{num(g.count)}</td><td className="py-1.5 text-right tabular-nums text-muted-foreground">{percent(g.count, total)}</td></tr>
+          <tr key={i}><td className="max-w-0 py-1.5"><SliceName s={g} className="block" /></td><td className="py-1.5 text-right tabular-nums">{num(g.count)}</td>{total > 0 && <td className="py-1.5 text-right tabular-nums text-muted-foreground">{percent(g.count, total)}</td>}</tr>
         ))}
       </tbody>
     </table>
@@ -168,10 +183,11 @@ export function fillSeries(points: { at: string; count: number }[], bucket: Stat
   return out.slice(-MAX_BARS);
 }
 
-/** Records per bucket as columns, oldest on the left. */
+/** Records per bucket as columns, oldest on the left; the top of the scale on the left edge, the pointed bucket's figure in the caption. */
 function Series({ points, bucket, line = false }: { points: { at: string; count: number }[]; bucket: StatsBucket; line?: boolean }) {
   const { t, locale } = useI18n();
   const num = useNumberFormat();
+  const [hover, setHover] = useState<number | null>(null);
   const all = fillSeries(points, bucket);
   const max = Math.max(1, ...all.map((p) => p.count));
   const opts: Intl.DateTimeFormatOptions = bucket === "year" ? { year: "numeric", timeZone: "UTC" } : bucket === "month" ? { month: "short", year: "numeric", timeZone: "UTC" } : { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" };
@@ -180,25 +196,38 @@ function Series({ points, bucket, line = false }: { points: { at: string; count:
   if (!all.length) return null;
   // Past a few dozen buckets columns get thinner than a pixel and push the card wide: a line fits any count.
   const asLine = line || all.length > 60;
+  const pointed = hover !== null ? all[hover] : null;
+  const label = `${title}: ${all.map((p) => `${fmt(p.at)} ${num(p.count)}`).join(", ")}`;
   return (
     <figure className="space-y-1">
-      <figcaption className="text-xs text-muted-foreground">{title}</figcaption>
-      {asLine ? (
-        // A 2px line over the buckets; each bucket's column is its hover target.
-        <div className="relative h-24" role="img" aria-label={`${title}: ${all.map((p) => `${fmt(p.at)} ${num(p.count)}`).join(", ")}`}>
-          <svg viewBox={`0 0 ${Math.max(1, all.length - 1)} 100`} preserveAspectRatio="none" className="absolute inset-0 size-full overflow-visible">
-            <polyline fill="none" stroke="var(--primary)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" points={all.map((p, i) => `${i},${100 - (p.count / max) * 96}`).join(" ")} />
-          </svg>
-          <div className="absolute inset-0 flex">{all.map((p) => <div key={p.at} className="flex-1 hover:bg-primary/10" title={`${fmt(p.at)}: ${num(p.count)}`} />)}</div>
+      <figcaption className="flex justify-between gap-2 text-xs text-muted-foreground">
+        <span>{title}</span>
+        {/* The pointed bucket reads here, at once, not in a slow native tooltip. */}
+        <span className="tabular-nums text-foreground" aria-live="polite">{pointed ? `${fmt(pointed.at)}: ${num(pointed.count)}` : ""}</span>
+      </figcaption>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
+        {/* The scale: its top and zero, with a faint line at the top. */}
+        <div className="flex h-24 flex-col justify-between text-right text-[0.6875rem] leading-none tabular-nums text-muted-foreground" aria-hidden><span>{num(max)}</span><span>0</span></div>
+        <div className="relative h-24 border-t border-dashed border-border" role="img" aria-label={label} onMouseLeave={() => setHover(null)}>
+          {asLine ? (
+            <>
+              <svg viewBox={`0 0 ${Math.max(1, all.length - 1)} 100`} preserveAspectRatio="none" className="absolute inset-0 size-full overflow-visible">
+                <polyline fill="none" stroke="var(--primary)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" points={all.map((p, i) => `${i},${100 - (p.count / max) * 100}`).join(" ")} />
+              </svg>
+              <div className="absolute inset-0 flex">{all.map((p, i) => <div key={p.at} className={cn("flex-1", hover === i && "bg-primary/10")} onMouseEnter={() => setHover(i)} />)}</div>
+            </>
+          ) : (
+            <div className="flex h-full items-end gap-px">
+              {all.map((p, i) => (
+                <div key={p.at} onMouseEnter={() => setHover(i)} className="flex h-full min-w-px flex-1 items-end">
+                  <div className={cn("w-full rounded-t-sm", hover === i ? "bg-primary" : "bg-primary/60")} style={{ height: p.count ? `${Math.max(3, (p.count / max) * 100)}%` : 0 }} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="flex h-24 items-end gap-px" role="img" aria-label={`${title}: ${all.map((p) => `${fmt(p.at)} ${num(p.count)}`).join(", ")}`}>
-          {all.map((p) => (
-            <div key={p.at} title={`${fmt(p.at)}: ${num(p.count)}`} className="min-w-px flex-1 rounded-t-sm bg-primary/60 hover:bg-primary" style={{ height: p.count ? `${Math.max(3, (p.count / max) * 100)}%` : 0 }} />
-          ))}
-        </div>
-      )}
-      <div className="flex justify-between text-xs tabular-nums text-muted-foreground">
+      </div>
+      <div className="flex justify-between pl-8 text-xs tabular-nums text-muted-foreground">
         <span>{fmt(all[0].at)}</span>
         {all.length > 1 && <span>{fmt(all[all.length - 1].at)}</span>}
       </div>
@@ -241,6 +270,7 @@ export function FieldStats({ row, profile, total, bucket }: { row: FieldRow; pro
   const date = (v?: string) => (v ? new Date(`${v}T00:00:00`).toLocaleDateString(locale, { dateStyle: "medium" }) : "—");
   const top = profile?.top ?? [];
   const distinct = profile?.distinct ?? 0;
+  const fig = (v: number) => fieldFigure(row.field, v, locale, num);
   return (
     <section aria-label={row.field.name} className="@container space-y-3 rounded-xl border bg-card p-4">
       {/* The type always sits under the name, so every card's header reads the same. */}
@@ -256,9 +286,9 @@ export function FieldStats({ row, profile, total, bucket }: { row: FieldRow; pro
         <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary/70" style={{ width: `${pct}%` }} /></div>
       </div>
       {profile?.sum !== undefined && (
-        <Figures items={[[t("analysis.min"), num(profile.min ?? 0)], [t("analysis.max"), num(profile.max ?? 0)], [t("analysis.avg"), num(profile.avg ?? 0)],
+        <Figures items={[[t("analysis.min"), fig(profile.min ?? 0)], [t("analysis.max"), fig(profile.max ?? 0)], [t("analysis.avg"), fig(profile.avg ?? 0)],
           // A sum of codes or revisions means nothing.
-          ...(mostlyDistinct(distinct, n) ? [] : [[t("analysis.sum"), num(profile.sum)] as [string, string]])]} />
+          ...(mostlyDistinct(distinct, n) ? [] : [[t("analysis.sum"), fig(profile.sum)] as [string, string]])]} />
       )}
       {profile?.first && (
         <>
@@ -274,7 +304,7 @@ export function FieldStats({ row, profile, total, bucket }: { row: FieldRow; pro
       ) : (
         <>
           <p className="text-xs text-muted-foreground">{t("analysis.distinct").replace("{n}", num(distinct))}</p>
-          <Bars items={top} total={total} label={label} />
+          <Bars items={top} total={total} label={label} color={(k) => optionCss(typeof k === "string" ? row.field.colors[k] : undefined)} />
         </>
       ))}
     </section>
@@ -295,17 +325,6 @@ export function ViewConditions({ collectionId, onPick }: { collectionId: string;
   );
 }
 
-/** A widget's number the way its format reads it. */
-export function formatFigure(v: number, locale: string, format: Widget["format"] = "number", decimals?: number): string {
-  const fixed = decimals === undefined ? {} : { minimumFractionDigits: decimals, maximumFractionDigits: decimals };
-  if (format === "compact") return new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: decimals ?? 1 }).format(v);
-  // shortcut: the money follows the language (BRL / USD), fine while each install bills in one currency.
-  if (format === "currency") return new Intl.NumberFormat(locale, { style: "currency", currency: locale === "pt-BR" ? "BRL" : "USD", ...fixed }).format(v);
-  // The stored number is already the percentage (12.5 → 12,5%).
-  if (format === "percent") return `${new Intl.NumberFormat(locale, { maximumFractionDigits: decimals ?? 1, ...fixed }).format(v)}%`;
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: decimals ?? 2, ...fixed }).format(v);
-}
-
 /** The records list filtered to `where`: where a widget's figure or bar leads. */
 export const recordsHref = (collectionId: string, where: Where) => {
   const text = whereText(where);
@@ -315,43 +334,93 @@ export const recordsHref = (collectionId: string, where: Where) => {
 /** The rule picking one value of a breakdown: empty values have their own. */
 const valueRule = (field: string, key: unknown): Rule => (key === null || key === undefined || key === "" ? { field, op: "empty" } : { field, op: "eq", value: key });
 
+/** The day `days` before today, as a date field stores it. */
+const daysAgo = (days: number, now = new Date()) => {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+/** A widget's period and the one before it, as conditions on its date field. */
+export function periods(c: { field: string; days: number }, now = new Date()): [Rule[], Rule[]] {
+  const since = daysAgo(c.days - 1, now);
+  const before = daysAgo(2 * c.days - 1, now);
+  return [[{ field: c.field, op: "gte", value: since }], [{ field: c.field, op: "gte", value: before }, { field: c.field, op: "lt", value: since }]];
+}
+/** How much a figure moved against the period before, in whole percent; null when there is nothing to compare with. */
+export const change = (now: number | undefined, before: number | undefined) => (now === undefined || before === undefined || before === 0 ? null : Math.round(((now - before) / Math.abs(before)) * 100));
+
 /**
  * One dashboard widget, drawn from the records it selects in one request. `scope`
- * is the dashboard's own filter, joined to the widget's conditions.
+ * is the page's filter, joined to the widget's conditions; `head` sits beside the
+ * title (the edit menu).
  */
-export function WidgetView({ collection, widget, rows, scope }: { collection: Collection; widget: Widget; rows: FieldRow[]; scope?: Where }) {
+export function WidgetView({ collection, widget, rows, scope, head }: { collection: Collection; widget: Widget; rows: FieldRow[]; scope?: Where; head?: React.ReactNode }) {
   const { t, locale } = useI18n();
+  const num = useNumberFormat();
   const label = useValueText();
   const joined = scope ? bothWhere(asWhere(widget.where), scope) : asWhere(widget.where);
-  const where = joined ?? asWhere(widget.where);
+  const base = joined ?? asWhere(widget.where);
   const field = rows.find((r) => r.key === widget.field);
   const figure = widget.kind === "sum" || widget.kind === "avg" || widget.kind === "min" || widget.kind === "max";
+  const numeric = figure || widget.kind === "count";
+  const compare = numeric && widget.compare && rows.some((r) => r.key === widget.compare!.field) ? widget.compare : undefined;
+  const [current, previous] = compare ? periods(compare) : [[], []];
+  const where = compare ? andWhere(base, current) : base;
   const needsField = widget.kind !== "count" && widget.kind !== "list";
   const bucket = widget.bucket ?? "month";
+  const measure = widget.kind === "bars" && widget.measure ? rows.find((r) => r.key === widget.measure) : undefined;
+  const on = !!joined && widget.kind !== "list" && (!needsField || !!field);
   const st = useStats(collection.id, where, {
     numbers: figure && field ? [field] : [],
-    values: widget.kind === "bars" && field ? [field] : [],
+    values: widget.kind === "bars" && field && !measure ? [field] : [],
     dates: widget.kind === "timeline" && field ? [field] : [],
     bucket,
-  }, !!joined && widget.kind !== "list" && (!needsField || !!field));
+  }, on && !measure);
+  const before = useStats(collection.id, andWhere(base, previous), { numbers: figure && field ? [field] : [] }, on && !!compare);
   const text = whereText(where) || undefined;
+  // A sum or average per value: the grouped totals, as the list's groups read them.
+  const grouped = useQuery({
+    queryKey: ["records", collection.id, "widget-groups", widget.field, widget.measure, text],
+    queryFn: ({ signal }) => records.aggregate({ collection_id: collection.id, where: text, group: field!.key, sum: measure!.key }, signal),
+    enabled: on && !!measure && !!field,
+  });
   const list = useQuery({
     queryKey: ["records", collection.id, "widget", widget.id, text],
     queryFn: ({ signal }) => records.list({ collection_id: collection.id, page: 1, limit: 5, sort: "updated_at", order: "desc", where: text }, signal),
     enabled: !!joined && widget.kind === "list",
   });
   const p = field ? st.data?.fields[field.key] : undefined;
-  const figureValue = figure ? p?.[widget.kind as "sum" | "avg" | "min" | "max"] : undefined;
-  const shown = (v: number) => formatFigure(v, locale, widget.format, widget.decimals);
-  const value = widget.kind === "count" ? (st.data ? shown(st.data.total) : "—") : figureValue !== undefined ? shown(figureValue) : "—";
+  const pick = (d?: typeof st.data) => (widget.kind === "count" ? d?.total : figure && field ? d?.fields[field.key]?.[widget.kind as "sum" | "avg" | "min" | "max"] ?? undefined : undefined);
+  const figureValue = pick(st.data);
+  // A widget's own format wins; otherwise a sum reads as its field does (money, percent…).
+  const own = widget.format !== undefined || widget.decimals !== undefined;
+  const shown = (v: number, f?: FieldRow) => (own || !f ? formatFigure(v, locale, widget.format, widget.decimals) : fieldFigure(f.field, v, locale, num));
+  const value = figureValue !== undefined ? shown(figureValue, widget.kind === "count" ? undefined : field) : "—";
+  const moved = compare ? change(figureValue, pick(before.data)) : null;
   // Drill-down: the figure opens the records it counts; a bar, the records of its value.
   const all = recordsHref(collection.id, figure && field ? andWhere(where, [{ field: field.key, op: "not_empty" }]) : where);
   const byValue = field ? (key: unknown) => recordsHref(collection.id, andWhere(where, [valueRule(field.key, key)])) : undefined;
-  const none = <p className="text-sm text-muted-foreground">{st.isPending ? "…" : t("dashboard.no_records")}</p>;
+  const pending = measure ? grouped.isPending : st.isPending;
+  const none = <p className="text-sm text-muted-foreground">{pending ? "…" : t("dashboard.no_records")}</p>;
   const total = st.data?.total ?? 0;
+  const color = (k: unknown) => optionCss(typeof k === "string" ? field?.field.colors[k] : undefined);
+  // Per value: the sum or average of the measure, largest first.
+  const fn = widget.fn ?? "sum";
+  // Values whose records hold no number for the measure have nothing to sum: they stay out.
+  const measured = (grouped.data?.items ?? []).filter((g) => (measure?.key ?? "") in g.sums).map((g) => ({ key: g.key, count: (fn === "avg" ? g.avgs : g.sums)[measure!.key] })).sort((a, b) => b.count - a.count);
+  // Shares of a sum add up; averages do not, so they show no share and no "others".
+  const measuredTotal = fn === "sum" ? measured.reduce((n, g) => n + g.count, 0) : 0;
+  const breakdown = measure ? measured : p?.top ?? [];
+  const breakdownTotal = measure ? measuredTotal : total;
+  const fmt = measure ? (n: number) => shown(n, measure) : undefined;
   return (
     <section aria-label={widget.title} className="flex h-full min-w-0 flex-col gap-2 rounded-xl border bg-card p-4">
-      <h3 className="text-xs font-medium text-muted-foreground">{widget.title}</h3>
+      <div className="flex min-h-6 items-start justify-between gap-2">
+        <h3 className="min-w-0 text-xs font-medium text-muted-foreground">
+          {widget.title}
+          {compare && <span className="font-normal"> · {t("dashboard.last_days").replace("{n}", String(compare.days))}</span>}
+        </h3>
+        {head}
+      </div>
       {!joined ? <p className="text-sm text-muted-foreground">{t("dashboard.filter_conflict")}</p>
         : needsField && !field ? <p className="text-sm text-muted-foreground">{t("dashboard.field_gone")}</p>
         : widget.kind === "list" ? (
@@ -363,14 +432,22 @@ export function WidgetView({ collection, widget, rows, scope }: { collection: Co
             </ul>
           ) : <p className="text-sm text-muted-foreground">{list.isPending ? "…" : t("dashboard.no_records")}</p>
         ) : widget.kind === "bars" ? (
-          !p?.top?.length ? none
-            : widget.visual === "donut" ? <Donut items={p.top} total={total} label={label} href={byValue} />
-            : widget.visual === "table" ? <CountTable items={p.top} total={total} label={label} href={byValue} head={field?.field.name ?? ""} />
-            : <Bars items={p.top} total={total} label={label} href={byValue} />
+          !breakdown.length ? none
+            : widget.visual === "donut" ? <Donut items={breakdown} total={breakdownTotal} label={label} href={byValue} color={color} fmt={fmt} />
+            : widget.visual === "table" ? <CountTable items={breakdown} total={breakdownTotal} label={label} href={byValue} head={field?.field.name ?? ""} fmt={fmt} measure={measure ? `${t(`dashboard.fn.${fn}` as MessageKey)}: ${measure.field.name}` : undefined} />
+            : <Bars items={breakdown} total={breakdownTotal} label={label} href={byValue} color={color} fmt={fmt} />
         ) : widget.kind === "timeline" ? (
           p?.series?.length ? <Series points={p.series} bucket={bucket} line={widget.visual === "line"} /> : none
         ) : (
-          <Link href={all} className="w-fit font-heading text-3xl font-semibold tabular-nums hover:underline" title={t("dashboard.open_records")}>{st.isPending ? "…" : value}</Link>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <Link href={all} className="w-fit font-heading text-3xl font-semibold tabular-nums hover:underline" title={t("dashboard.open_records")}>{st.isPending ? "…" : value}</Link>
+            {moved !== null && (
+              <span className={cn("text-xs font-medium tabular-nums", moved > 0 ? "text-success" : moved < 0 ? "text-destructive" : "text-muted-foreground")}
+                title={t("dashboard.vs_before").replace("{n}", String(compare!.days))}>
+                {moved > 0 ? "▲" : moved < 0 ? "▼" : "="} {Math.abs(moved)}% <span className="font-normal text-muted-foreground">{t("dashboard.vs_before").replace("{n}", String(compare!.days))}</span>
+              </span>
+            )}
+          </div>
         )}
     </section>
   );

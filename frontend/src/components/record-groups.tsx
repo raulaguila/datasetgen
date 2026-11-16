@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { type FieldRow } from "@/components/field-builder";
+import { fieldFigure } from "@/components/format-figure";
 import { records } from "@/lib/api/endpoints";
 import { useI18n } from "@/lib/i18n/provider";
 
@@ -28,7 +29,7 @@ export function RecordGroups({ selection, group, fields, label, onPick }: {
   label: (key: unknown) => string;
   onPick: (key: unknown) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const num = useNumberFormat();
   const numeric = numericOf(fields);
   const q = useQuery({
@@ -50,7 +51,7 @@ export function RecordGroups({ selection, group, fields, label, onPick }: {
               <span className="h-2 rounded-full bg-primary/60 max-sm:hidden" style={{ width: `${(g.count / max) * 100}%` }} aria-hidden />
               <span className="whitespace-nowrap text-xs text-muted-foreground">
                 {g.count}
-                {numeric.filter((f) => g.sums[f.key] !== undefined).map((f) => ` · ${f.field.name} ${num(g.sums[f.key])}`)}
+                {numeric.filter((f) => g.sums[f.key] !== undefined).map((f) => ` · ${f.field.name} ${fieldFigure(f.field, g.sums[f.key], locale, num)}`)}
               </span>
             </button>
           </li>

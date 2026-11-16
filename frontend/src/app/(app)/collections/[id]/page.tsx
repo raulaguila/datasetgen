@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { OptionDot } from "@/components/option-chip";
+import { fieldFigure } from "@/components/format-figure";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { keepPreviousData, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -76,7 +77,7 @@ function useRefLabels(columns: FieldRow[], items: DataRecord[], schema: Record<s
 const NO_GROUP = "\u0000none";
 
 function RecordList({ collection }: { collection: Collection }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const router = useRouter();
   const client = useQueryClient();
   const ago = useRelativeTime();
@@ -121,7 +122,7 @@ function RecordList({ collection }: { collection: Collection }) {
   const num = useNumberFormat();
   const show = (v: unknown, c?: FieldRow) => {
     if (v === undefined || v === null || v === "") return "—";
-    if (typeof v === "number") return num(v);
+    if (typeof v === "number") return fieldFigure(c?.field, v, locale, num);
     if (typeof v === "boolean") return t(v ? "common.yes" : "common.no");
     if (c?.field.type === "reference" && typeof v === "string") return refLabels.get(v) ?? v.slice(0, 8);
     // A link reads by its path: the host repeats on every row and pushes the part that differs out of view.

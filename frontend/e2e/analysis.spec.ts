@@ -40,26 +40,49 @@ test("field analysis and a dashboard", async ({ page }) => {
   await page.goto(`/collections/${id}/analysis`);
   const board = page.getByRole("region", { name: "Painel" });
   await board.getByRole("button", { name: /Monte o painel/ }).click();
-  let dialog = page.getByRole("dialog", { name: "Adicionar widget" });
-  await dialog.getByRole("button", { name: "Condições" }).click();
+  // A side panel: the kind from the gallery, then its form with a live preview.
+  let panel = page.getByRole("dialog", { name: "Adicionar widget" });
+  await panel.getByRole("button", { name: "Contagem", exact: true }).click();
+  await panel.getByRole("button", { name: "Condições" }).click();
   const rules = page.getByRole("dialog", { name: "Condições" });
   await rules.getByRole("combobox", { name: "Campo da condição 1" }).click();
   await page.getByRole("option", { name: "Tipo" }).click();
   await rules.getByRole("combobox", { name: "Valor 1" }).click();
   await page.getByRole("option", { name: "gatilho" }).click();
   await rules.getByRole("button", { name: "Aplicar" }).click();
-  await dialog.getByLabel("Título").fill("Gatilhos");
-  await dialog.getByRole("button", { name: "Adicionar widget" }).click();
+  await panel.getByLabel("Título").fill("Gatilhos");
+  await expect(panel.getByRole("region", { name: "Prévia" }).getByRole("region", { name: "Gatilhos" })).toContainText("2");
+  await panel.getByRole("button", { name: "Adicionar widget" }).click();
+  await expect(panel).toBeHidden();
   await board.getByRole("button", { name: "Adicionar widget" }).click();
-  dialog = page.getByRole("dialog", { name: "Adicionar widget" });
-  await dialog.getByLabel("Tipo").click();
-  await page.getByRole("option", { name: "Gráfico de barras" }).click();
-  await dialog.getByLabel("Campo").click();
+  panel = page.getByRole("dialog", { name: "Adicionar widget" });
+  await panel.getByRole("button", { name: "Gráfico de barras", exact: true }).click();
+  await panel.getByLabel("Agrupar por").click();
   await page.getByRole("option", { name: "Tipo" }).click();
-  await dialog.getByRole("button", { name: "Adicionar widget" }).click();
+  await panel.getByRole("button", { name: "Adicionar widget" }).click();
+  // A sum per value: the price of each kind.
+  await board.getByRole("button", { name: "Adicionar widget" }).click();
+  await panel.getByRole("button", { name: "Gráfico de barras", exact: true }).click();
+  await panel.getByLabel("Agrupar por").click();
+  await page.getByRole("option", { name: "Tipo" }).click();
+  await panel.getByLabel("Medida").click();
+  await page.getByRole("option", { name: "Soma: Preço" }).click();
+  await panel.getByRole("button", { name: "Adicionar widget" }).click();
   await board.getByRole("button", { name: "Salvar" }).click();
   await expect(board.getByRole("region", { name: "Gatilhos" })).toContainText("2");
   await expect(board.getByRole("region", { name: "Gráfico de barras: Tipo" })).toContainText("efeito");
+  await expect(board.getByRole("region", { name: "Soma: Preço × Tipo" })).toContainText("gatilho40");
+  // One filter for the page: it narrows the dashboard and the fields alike.
+  await page.getByRole("button", { name: "Condições" }).first().click();
+  const pageRules = page.getByRole("dialog", { name: "Condições" });
+  await pageRules.getByRole("combobox", { name: "Campo da condição 1" }).click();
+  await page.getByRole("option", { name: "Tipo" }).click();
+  await pageRules.getByRole("combobox", { name: "Valor 1" }).click();
+  await page.getByRole("option", { name: "efeito" }).click();
+  await pageRules.getByRole("button", { name: "Aplicar" }).click();
+  await expect(page.getByRole("status").first()).toHaveText(/^1 registros? nas condições/);
+  await expect(board.getByRole("region", { name: "Gráfico de barras: Tipo" })).not.toContainText("gatilho");
+  await page.goto(`/collections/${id}/analysis`);
   // Saved: a reload keeps it.
   await page.reload();
   await expect(board.getByRole("region", { name: "Gatilhos" })).toContainText("2");

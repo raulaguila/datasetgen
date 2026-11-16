@@ -289,8 +289,8 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                 <p className="text-sm text-muted-foreground">{t("collections.fields_desc")}</p>
               </div>
             )}
-            {/* One column at a readable width: each field opens in a side panel, and so do the preview, the history and the JSON. */}
-            <div className="max-w-[56rem] space-y-4">
+            {/* One column, the card's full width as on every other page: each field opens in a side panel, and so do the preview, the history and the JSON. */}
+            <div className="space-y-4">
                 {!collection && editable && (
                   // A new collection starts from a ready-made set of fields, or from a data file's columns.
                   <div className="space-y-2">

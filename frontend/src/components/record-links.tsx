@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { FormSection, FormSections } from "@/components/bits";
+import { RecordCard } from "@/components/record-view";
 import { fieldsOf, recordTitle } from "@/components/field-builder";
 import { records } from "@/lib/api/endpoints";
 import { useI18n } from "@/lib/i18n/provider";
@@ -18,8 +18,7 @@ export function RecordLinks({ recordId }: { recordId: string }) {
   const items = links.data?.items ?? [];
   if (!items.length) return null;
   return (
-    <FormSections>
-      <FormSection title={t("links.title")} description={t("links.desc")}>
+    <RecordCard id="links-title" title={t("links.title")} description={t("links.desc")}>
         <div className="space-y-4">
           {items.map((l) => {
             let field = fieldsOf(l.schema).find((f) => f.key === l.field)?.field.name ?? l.field;
@@ -48,7 +47,6 @@ export function RecordLinks({ recordId }: { recordId: string }) {
             );
           })}
         </div>
-      </FormSection>
-    </FormSections>
+    </RecordCard>
   );
 }
