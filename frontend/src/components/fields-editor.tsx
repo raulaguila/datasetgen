@@ -10,7 +10,7 @@ import {
 import { IconAction } from "@/components/bits";
 import {
   AUTO_TYPES, FIELD_TYPES, FORMULA_RESULTS, ITEM_TYPES, LONG_TEXT, OPTION_COLORS, PATTERN_TYPES, ROLLUP_FNS, SHOW_OPS, SUBFIELD_TYPES, UNIQUE_TYPES, VIRTUAL_TYPES,
-  addField, addProp, blankField, isNumberField, canonical, duplicateField, fieldProblem, fieldsOf, isObjectType, keyOf, limitKeys, moveField, moveFieldTo, optionsOf, propOf,
+  addField, addProp, blankField, typeOf, typesKeepingValues, isNumberField, canonical, duplicateField, fieldProblem, fieldsOf, isObjectType, keyOf, limitKeys, moveField, moveFieldTo, optionsOf, propOf,
   propsOf, removeField, requiredOf, restoreField, setProp, updateField,
   type Field, type FieldRow, type FieldType, type Schema, type ShowWhen,
 } from "@/components/field-builder";
@@ -378,7 +378,7 @@ function FormulaHelp({ siblings, self, onInsert }: { siblings: FieldRow[]; self:
 }
 
 /** The panel that writes one field: basics, what its type needs, rules, display, advanced, then a preview. */
-function FieldForm({ formId, offered, topLevel, initial, initialKey, keyLocked, taken, siblings, onSubmit }: {
+function FieldForm({ formId, offered, topLevel, initial, initialKey, keyLocked, typeLocked, taken, siblings, onSubmit }: {
   formId: string;
   offered: readonly FieldType[];
   /** Top-level fields may be unique, private, conditional and placed in sections. */
@@ -386,6 +386,8 @@ function FieldForm({ formId, offered, topLevel, initial, initialKey, keyLocked, 
   initial: Field;
   initialKey?: string;
   keyLocked?: boolean;
+  /** The records hold values: only types that accept them are offered. */
+  typeLocked?: boolean;
   taken: (key: string) => boolean;
   siblings: FieldRow[];
   onSubmit: (f: Field) => void;
@@ -440,6 +442,7 @@ function FieldForm({ formId, offered, topLevel, initial, initialKey, keyLocked, 
           </div>
         </div>
         <p className="text-xs text-muted-foreground">{t(`collections.type_hint.${field.type}`)}</p>
+        {typeLocked && <p className="text-xs text-muted-foreground">{t("fields.type_locked")}</p>}
         {!AUTO_TYPES.includes(field.type) && (
           <label className="flex w-fit items-center gap-2 text-sm">
             <Checkbox checked={field.required} disabled={!!field.showWhen} onCheckedChange={(on) => set({ required: on === true })} />
@@ -836,7 +839,10 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
             onSubmit={(f) => { onChange(addField(schema, f)); setPanel(null); }} />
         )}
         {editing && (
-          <FieldForm key={editing.key} formId={formId} offered={offered} topLevel={topLevel} initial={editing.field} initialKey={editing.key}
+          <FieldForm key={editing.key} formId={formId} topLevel={topLevel} initial={editing.field} initialKey={editing.key}
+            // A field whose records hold values keeps a type that still accepts them.
+            offered={keysLocked && editing.key in saved ? typesKeepingValues(typeOf(saved[editing.key]) ?? editing.field.type, offered) : offered}
+            typeLocked={keysLocked && editing.key in saved}
             keyLocked={keysLocked && editing.key in saved} taken={(k) => k !== editing.key && keys.has(k)} siblings={rows}
             onSubmit={(f) => { onChange(updateField(schema, editing.key, f)); setPanel(null); }} />
         )}

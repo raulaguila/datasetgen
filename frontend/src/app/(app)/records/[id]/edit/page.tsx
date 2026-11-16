@@ -48,6 +48,10 @@ function RecordForm({ collection, record, editable, next }: { collection: Collec
   const dirty = JSON.stringify(data) !== JSON.stringify(record?.data ?? {});
   useUnsavedGuard(editable && dirty, t("roles.leave_unsaved"));
   const back = `/collections/${collection.id}`;
+  // Values of fields since removed: the form does not show them and saving keeps them; quality lists them.
+  const props = (collection.schema?.properties ?? {}) as Record<string, unknown>;
+  const leftovers = collection.schema?.additionalProperties === undefined && data && typeof data === "object" ? Object.keys(data).filter((k) => !(k in props)) : [];
+  const dropLeftovers = () => setData(Object.fromEntries(Object.entries(data as Record<string, unknown>).filter(([k]) => k in props)));
   const canSubmit = editable && (dirty || !record);
   // A new record starts typing in its first field.
   useEffect(() => {
@@ -131,6 +135,12 @@ function RecordForm({ collection, record, editable, next }: { collection: Collec
               ))}
             </div>
           </div>
+          {leftovers.length > 0 && (
+            <div role="note" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-sm">
+              <p className="min-w-0">{t("records.leftovers").replace("{fields}", leftovers.join(", "))}</p>
+              {editable && <Button type="button" size="sm" variant="outline" onClick={dropLeftovers}>{t("records.leftovers_drop")}</Button>}
+            </div>
+          )}
           <div className={cn("min-w-0", columns === 1 && "max-w-3xl")}>
             <SchemaForm schema={collection.schema ?? {}} collectionId={collection.id} data={data} disabled={!editable} onChange={setData} formRef={formRef} liveValidate={checked} issues={issues} columns={columns} />
           </div>

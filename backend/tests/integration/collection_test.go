@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres"
 	auditrepo "github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/audit"
 	collectionrepo "github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/collection"
 	recordrepo "github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/record"
@@ -279,7 +280,7 @@ func runQuality(ctx context.Context, t *testing.T, collections *collection.Servi
 		t.Fatalf("start quality: %+v, %v", st, err)
 	}
 	payload, _ := json.Marshal(map[string]string{"id": id})
-	if err := collection.Jobs(collections.Repo, collections.Records)[collection.JobQuality](context.Background(), payload); err != nil {
+	if err := collection.Jobs(collections.Repo, collections.Records, postgres.NewStore(testDB).Tools())[collection.JobQuality](context.Background(), payload); err != nil {
 		t.Fatal(err)
 	}
 	st, err = collections.Quality(ctx, id)
@@ -565,7 +566,7 @@ func TestFixRestartsTheQualityCheck(t *testing.T) {
 	run := func(tok string) {
 		t.Helper()
 		payload, _ := json.Marshal(map[string]string{"id": c.ID, "token": tok})
-		if err := collection.Jobs(collections.Repo, collections.Records)[collection.JobQuality](context.Background(), payload); err != nil {
+		if err := collection.Jobs(collections.Repo, collections.Records, postgres.NewStore(testDB).Tools())[collection.JobQuality](context.Background(), payload); err != nil {
 			t.Fatal(err)
 		}
 	}

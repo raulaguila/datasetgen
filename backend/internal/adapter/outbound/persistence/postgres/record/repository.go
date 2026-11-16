@@ -493,6 +493,23 @@ func (r *Repository) Scan(ctx context.Context, collectionID, afterID string, lim
 	return out, nil
 }
 
+func (r *Repository) WithoutNumber(ctx context.Context, collectionID, key string, limit int) ([]domain.Record, error) {
+	var rows []row
+	// idx_app_record_collection serves the order; the filter reads the rows it walks.
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT id, data::text AS data FROM app.record
+		WHERE collection_id = ? AND jsonb_typeof(data) = 'object' AND jsonb_typeof(data -> ?) IS DISTINCT FROM 'number'
+		ORDER BY created_at, id LIMIT ?`, collectionID, key, limit).Find(&rows).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "record")
+	}
+	out := make([]domain.Record, 0, len(rows))
+	for _, m := range rows {
+		out = append(out, domain.Record{ID: m.ID.String(), Data: json.RawMessage(m.Data)})
+	}
+	return out, nil
+}
+
 func (r *Repository) Keys(ctx context.Context, collectionID string, limit int) ([]string, error) {
 	var keys []string
 	err := r.db.WithContext(ctx).Raw(`

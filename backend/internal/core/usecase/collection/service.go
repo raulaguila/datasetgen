@@ -210,6 +210,12 @@ func (s *Service) Update(ctx context.Context, cmd input.UpdateCollectionCommand)
 				return err
 			}
 		}
+		// Records written before a new number or formula get its value in the background.
+		if before != nil && schema.ComputedChanged(before, patch.Schema) {
+			if err := policy.EnqueueJob(ctx, uow, policy.JobFillComputed, map[string]string{"id": cmd.ID}); err != nil {
+				return err
+			}
+		}
 		changes["name"] = updated.Name // the audit log labels the record by name
 		return policy.Audit(ctx, uow, "collection.update", updated.ID, changes)
 	})

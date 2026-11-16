@@ -20,13 +20,9 @@ func fill(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionID s
 	if len(autos) == 0 && len(formulas) == 0 && len(virtual) == 0 {
 		return nil
 	}
-	parsed := make(map[string]*schema.Formula, len(formulas))
-	for k, spec := range formulas {
-		f, err := schema.ParseFormula(spec.Expr)
-		if err != nil {
-			return err // Compile refused it already
-		}
-		parsed[k] = f
+	parsed, err := parseFormulas(formulas)
+	if err != nil {
+		return err
 	}
 	now := time.Now()
 	var who json.RawMessage
@@ -72,17 +68,7 @@ func fill(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionID s
 				doc[a.Key] = who
 			}
 		}
-		for k, f := range parsed {
-			v, ok := f.Eval(doc, now)
-			if x, isNum := v.(float64); isNum {
-				v = math.Round(x*1e9) / 1e9 // drop float noise such as 0.30000000000000004
-			}
-			if ok && kindOf(v) == formulas[k].Type {
-				doc[k], _ = json.Marshal(v)
-			} else {
-				delete(doc, k) // no value, or one the field's type cannot hold
-			}
-		}
+		applyFormulas(doc, parsed, formulas, now)
 		out, err := json.Marshal(doc)
 		if err != nil {
 			return err
@@ -92,15 +78,31 @@ func fill(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionID s
 	return nil
 }
 
-// kindOf names a formula value's JSON type.
-func kindOf(v any) string {
-	switch v.(type) {
-	case float64:
-		return "number"
-	case string:
-		return "string"
-	case bool:
-		return "boolean"
+// parseFormulas parses each formula of the schema; Compile refused bad ones already.
+func parseFormulas(specs map[string]schema.FormulaSpec) (map[string]*schema.Formula, error) {
+	parsed := make(map[string]*schema.Formula, len(specs))
+	for k, spec := range specs {
+		f, err := schema.ParseFormula(spec.Expr)
+		if err != nil {
+			return nil, err
+		}
+		parsed[k] = f
 	}
-	return ""
+	return parsed, nil
+}
+
+// applyFormulas writes each formula's value into doc, or leaves the key out
+// when there is none or the field cannot hold it.
+func applyFormulas(doc map[string]json.RawMessage, parsed map[string]*schema.Formula, specs map[string]schema.FormulaSpec, now time.Time) {
+	for k, f := range parsed {
+		v, ok := f.Eval(doc, now)
+		if x, isNum := v.(float64); isNum {
+			v = math.Round(x*1e9) / 1e9 // drop float noise such as 0.30000000000000004
+		}
+		if ok && specs[k].Holds(v) {
+			doc[k], _ = json.Marshal(v)
+		} else {
+			delete(doc, k)
+		}
+	}
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addField, blankField, duplicateField, fieldProblem, fieldsOf, keyOf, moveField, moveFieldTo, removeField, restoreField, schemaChanges, setProp, shows, typeOf, updateField, type Field } from "./field-builder";
+import { FIELD_TYPES, addField, blankField, typesKeepingValues, duplicateField, fieldProblem, fieldsOf, keyOf, moveField, moveFieldTo, removeField, restoreField, schemaChanges, setProp, shows, typeOf, updateField, type Field } from "./field-builder";
 
 const field = (patch: Partial<Field>): Field => ({ ...blankField, ...patch });
 
@@ -278,5 +278,19 @@ describe("number format", () => {
     expect(fieldsOf(s)[0].field).toMatchObject({ numberFormat: "currency", decimals: "2" });
     const plain = updateField(s, "valor", field({ name: "Valor", key: "valor", type: "number" }));
     expect(schemaChanges(s, plain)).toEqual([{ kind: "display", name: "Valor", risky: false }]);
+  });
+});
+
+describe("fields with saved values", () => {
+  it("offer only types that accept what the records hold", () => {
+    expect(typesKeepingValues("integer", FIELD_TYPES)).toEqual(["number", "integer"]);
+    expect(typesKeepingValues("number", FIELD_TYPES)).toEqual(["number"]);
+    expect(typesKeepingValues("enum", FIELD_TYPES)).toEqual(["string", "text", "enum"]);
+    expect(typesKeepingValues("lookup", FIELD_TYPES)).toEqual([...FIELD_TYPES]);
+  });
+  it("count a new default or a private field as safe", () => {
+    const s = addField({ type: "object" }, field({ name: "Nome" }));
+    const changed = updateField(s, "nome", field({ name: "Nome", key: "nome", default: "x", private: true }));
+    expect(schemaChanges(s, changed)).toEqual([{ kind: "display", name: "Nome", risky: false }]);
   });
 });

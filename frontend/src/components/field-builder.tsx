@@ -15,6 +15,25 @@ export const FORMULA_RESULTS = ["number", "text", "boolean", "date"] as const;
 export const SUBFIELD_TYPES = FIELD_TYPES.filter((t) => t !== "group" && t !== "objects" && t !== "reference" && t !== "references" && t !== "file" && t !== "files" && !AUTO_TYPES.includes(t));
 /** A list of objects' items may also point at a record: the server checks a reference subfield of each item. */
 export const ITEM_TYPES: readonly FieldType[] = [...SUBFIELD_TYPES, "reference"];
+/**
+ * The types a field holding saved values may turn into: each one accepts every
+ * value the old type stored. Lookups and rollups store nothing, so they may become anything.
+ */
+const KEEPS_VALUES: Partial<Record<FieldType, readonly FieldType[]>> = {
+  string: ["text"], text: ["string"],
+  integer: ["number"],
+  enum: ["string", "text"],
+  date: ["string", "text"], datetime: ["string", "text"], email: ["string", "text"], url: ["string", "text"],
+  reference: ["string"],
+  autonumber: ["integer", "number"],
+  created_by: ["string", "text"], updated_by: ["string", "text"],
+  group: ["json"],
+};
+export function typesKeepingValues(from: FieldType, offered: readonly FieldType[]): FieldType[] {
+  if (VIRTUAL_TYPES.includes(from)) return [...offered];
+  const ok = [from, ...(KEEPS_VALUES[from] ?? [])];
+  return offered.filter((t) => ok.includes(t));
+}
 /** Plain values the server can compare across records: these can be marked unique. */
 export const UNIQUE_TYPES: readonly FieldType[] = ["string", "number", "integer", "enum", "date", "datetime", "email", "url"];
 /** The keyword the server reads (schema.UniqueKeyword): no two records share the value. */
@@ -143,8 +162,11 @@ export function limitKeys(type: FieldType): [string, string] | null {
 
 /** Keywords the builder writes; any other keyword of a property is kept as it was. */
 const RULE_KEYS = ["title", "description", "examples", "default", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", "pattern", UNIQUE, PRIVATE, REF, COLORS, SECTION, WIDTH, SHOW_WHEN, DEFAULT_NOW, NUMBER_FORMAT, DECIMALS];
-/** Keywords that change how the form looks, never which records are valid: saving them is safe. */
-export const DISPLAY_KEYS = ["title", "description", "examples", COLORS, SECTION, WIDTH, SHOW_WHEN, DEFAULT_NOW, NUMBER_FORMAT, DECIMALS];
+/**
+ * Keywords that never change which records are valid, so saving them is safe:
+ * how the form looks, a new record's default, and whether share links show the field.
+ */
+export const DISPLAY_KEYS = ["default", PRIVATE, "title", "description", "examples", COLORS, SECTION, WIDTH, SHOW_WHEN, DEFAULT_NOW, NUMBER_FORMAT, DECIMALS];
 
 /** A storage key from a label: "Nome do Cliente" → "nome_do_cliente". */
 export function keyOf(name: string): string {

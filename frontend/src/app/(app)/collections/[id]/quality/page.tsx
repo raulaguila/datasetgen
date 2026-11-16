@@ -248,8 +248,11 @@ function Quality({ collection }: { collection: Collection }) {
     return `${name} › ${fieldsOf(group ?? null).find((r) => r.key === sub)?.field.name ?? sub}`;
   };
   const issue = (keyword: string, message: string) => {
+    // The rules without a line of their own read as the record form says them.
     const text = t(`quality.issue.${keyword}` as MessageKey);
-    return text.startsWith("quality.issue.") ? message : text;
+    if (!text.startsWith("quality.issue.")) return text;
+    const rule = t(`schema.error.${keyword}` as MessageKey);
+    return rule.startsWith("schema.error.") ? message : rule.replace(/\.$/, "");
   };
   const preview = (id: string, data: Record<string, unknown>) => recordTitle(collection.schema ?? null, data) ?? `${t("records.record")} ${id.slice(0, 8)}`;
 

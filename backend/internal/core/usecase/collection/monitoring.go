@@ -94,14 +94,14 @@ func queueQuality(ctx context.Context, uow output.UnitOfWork, id string, force b
 }
 
 // Jobs returns the collection module's job handlers, registered with the job worker.
-func Jobs(repo output.CollectionRepository, records output.RecordRepository) map[string]policy.JobHandler {
+func Jobs(repo output.CollectionRepository, records output.RecordRepository, tools output.ToolsRepository) map[string]policy.JobHandler {
 	return map[string]policy.JobHandler{
 		JobQuality: func(ctx context.Context, payload []byte) error {
 			var job qualityJob
 			if err := json.Unmarshal(payload, &job); err != nil {
 				return policy.PermanentJobError(err)
 			}
-			run := checkRecords(ctx, repo, records, job.ID)
+			run := checkRecords(ctx, repo, records, tools, job.ID)
 			if err := repo.FinishQuality(ctx, job.ID, job.Token, run); err != nil {
 				return err // retried: the check runs again
 			}
@@ -112,7 +112,7 @@ func Jobs(repo output.CollectionRepository, records output.RecordRepository) map
 
 // checkRecords walks the records by id (idx_app_record_collection_key) in
 // batches; a failure is stored in the run rather than retried.
-func checkRecords(ctx context.Context, repo output.CollectionRepository, records output.RecordRepository, id string) domain.QualityRun {
+func checkRecords(ctx context.Context, repo output.CollectionRepository, records output.RecordRepository, tools output.ToolsRepository, id string) domain.QualityRun {
 	run := domain.QualityRun{Status: domain.QualityDone}
 	fail := func(err error) domain.QualityRun {
 		return domain.QualityRun{Status: domain.QualityFailed, Error: err.Error()}
@@ -138,7 +138,16 @@ func checkRecords(ctx context.Context, repo output.CollectionRepository, records
 		if err != nil {
 			return fail(err)
 		}
-		for _, r := range batch {
+		docs := make([][]byte, len(batch))
+		for i, r := range batch {
+			docs[i] = r.Data
+		}
+		// A reference or file whose record or file is gone: saving the record would refuse it.
+		missing, err := policy.MissingLinks(ctx, tools, c.Schema, id, docs)
+		if err != nil {
+			return fail(err)
+		}
+		for n, r := range batch {
 			issues, err := schema.Check(compiled, r.Data)
 			if err != nil {
 				return fail(err)
@@ -146,6 +155,7 @@ func checkRecords(ctx context.Context, repo output.CollectionRepository, records
 			if leftovers != nil {
 				issues = append(issues, leftovers(r.Data)...)
 			}
+			issues = append(issues, missing[n]...)
 			if len(issues) > 0 {
 				run.InvalidCount++
 				run.InvalidIDs = append(run.InvalidIDs, r.ID)

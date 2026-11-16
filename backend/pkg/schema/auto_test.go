@@ -67,7 +67,56 @@ func TestAutoKeys(t *testing.T) {
 	if got := AutoKeys(raw); len(got) != 2 || got[0] != (AutoField{"by", AutoCreatedBy}) || got[1] != (AutoField{"n", AutoNumber}) {
 		t.Fatalf("auto: %+v", got)
 	}
-	if got := Formulas(raw); got["t"] != (FormulaSpec{"n * 2", "number"}) || len(got) != 1 {
+	if got := Formulas(raw); got["t"] != (FormulaSpec{Expr: "n * 2", Type: "number"}) || len(got) != 1 {
 		t.Fatalf("formulas: %v", got)
+	}
+}
+
+func TestFormulaHolds(t *testing.T) {
+	date := FormulaSpec{Type: "string", Format: "date"}
+	cases := []struct {
+		f    FormulaSpec
+		v    any
+		want bool
+	}{
+		{date, "2026-01-02", true},
+		{date, "texto", false},
+		{date, 3.0, false},
+		{FormulaSpec{Type: "string"}, "texto", true},
+		{FormulaSpec{Type: "number"}, 3.0, true},
+		{FormulaSpec{Type: "number"}, "3", false},
+		{FormulaSpec{Type: "boolean"}, true, true},
+		{FormulaSpec{Type: "boolean"}, nil, false},
+	}
+	for _, c := range cases {
+		if got := c.f.Holds(c.v); got != c.want {
+			t.Errorf("%+v holds %v: got %v, want %v", c.f, c.v, got, c.want)
+		}
+	}
+}
+
+func TestComputedChanged(t *testing.T) {
+	plain := []byte(`{"properties":{"a":{"type":"number"}}}`)
+	num := []byte(`{"properties":{"a":{"type":"number"},"n":{"type":"integer","x-auto":"number"}}}`)
+	f1 := []byte(`{"properties":{"a":{"type":"number"},"t":{"type":"number","x-formula":"a * 2"}}}`)
+	f2 := []byte(`{"properties":{"a":{"type":"number"},"t":{"type":"number","x-formula":"a * 3"}}}`)
+	by := []byte(`{"properties":{"a":{"type":"number"},"b":{"type":"string","x-auto":"created_by"}}}`)
+	cases := []struct {
+		name          string
+		before, after []byte
+		want          bool
+	}{
+		{"new number", plain, num, true},
+		{"same number", num, num, false},
+		{"new formula", plain, f1, true},
+		{"changed formula", f1, f2, true},
+		{"same formula", f1, f1, false},
+		{"removed formula", f1, plain, false},
+		{"who made it", plain, by, false},
+	}
+	for _, c := range cases {
+		if got := ComputedChanged(c.before, c.after); got != c.want {
+			t.Errorf("%s: got %v", c.name, got)
+		}
 	}
 }

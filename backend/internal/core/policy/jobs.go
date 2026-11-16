@@ -9,6 +9,10 @@ import (
 	"github.com/raulaguila/dataset/internal/core/port/output"
 )
 
+// JobFillComputed fills the server computed fields (auto numbers, formulas)
+// of a collection's records written before those fields existed or changed.
+const JobFillComputed = "record.fill"
+
 // JobHandler runs one background job of a kind. An error retries it with backoff
 // until the job's max_attempts; wrap it with PermanentJobError to stop at once.
 // A handler may run more than once for one job (a lease can run out mid-run),

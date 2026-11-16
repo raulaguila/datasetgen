@@ -16,6 +16,7 @@ import type { FileRef, SchemaIssue } from "@/lib/api/types";
 import { errorMessage } from "@/lib/errors";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { searchTerm } from "@/lib/utils";
+import { ApiError } from "@/lib/api/client";
 import { useI18n } from "@/lib/i18n/provider";
 import { LOCALES, messages, type Locale, type MessageKey } from "@/lib/i18n/messages";
 import { schemaValidator, type Translate } from "@/lib/schema-validator";
@@ -171,7 +172,10 @@ const named = (id: string) => ({ id, "aria-labelledby": `${id}__label ${id}` });
 export function useRecordLabel(collectionId: string | undefined, recordId: string | undefined) {
   const target = useQuery({ queryKey: ["collections", "detail", collectionId], queryFn: () => collections.get(collectionId!), enabled: !!collectionId && !!recordId });
   const rec = useQuery({ queryKey: ["records", "one", recordId], queryFn: () => records.get(recordId!), enabled: !!recordId, retry: false });
+  const { t } = useI18n();
   if (!recordId) return undefined;
+  // The record was deleted: saving keeps refusing the id until it is cleared or changed.
+  if (rec.error instanceof ApiError && rec.error.code === "NOT_FOUND") return t("schema.ref_gone").replace("{id}", recordId.slice(0, 8));
   return (rec.data && recordTitle(target.data?.schema ?? null, rec.data.data)) ?? recordId.slice(0, 8);
 }
 

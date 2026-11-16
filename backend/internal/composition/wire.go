@@ -76,7 +76,8 @@ func NewJobs(cfg *config.Environment, res *infra.Resources, log *logger.Logger) 
 	integrations := NewIntegrations(cfg, res)
 	maps.Copy(handlers, integrations.Jobs())
 	store := postgres.NewStore(res.PostgresDB)
-	maps.Copy(handlers, collection.Jobs(store.Collections(), store.Records()))
+	maps.Copy(handlers, collection.Jobs(store.Collections(), store.Records(), store.Tools()))
+	maps.Copy(handlers, record.Jobs(store))
 	files := &tools.Service{Store: store, Tx: store, Files: NewFiles(cfg.Storage)}
 	return &jobs.Worker{
 		Repo:     job.NewRepository(res.PostgresDB),

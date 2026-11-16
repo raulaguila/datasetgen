@@ -33,6 +33,9 @@ type RecordRepository interface {
 	// Scan returns up to limit records of the collection after afterID (by id),
 	// with id, full data and updated_at only.
 	Scan(ctx context.Context, collectionID, afterID string, limit int) ([]domain.Record, error)
+	// WithoutNumber returns up to limit records of the collection whose data is
+	// an object without a number under key, oldest first, with id and data only.
+	WithoutNumber(ctx context.Context, collectionID, key string, limit int) ([]domain.Record, error)
 	// Keys lists the top-level keys the collection's records hold, sorted, up to limit.
 	Keys(ctx context.Context, collectionID string, limit int) ([]string, error)
 	// CreateMany inserts one record per JSON text; the caller has validated them.
