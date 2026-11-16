@@ -23,7 +23,7 @@ import { roleAllows } from "@/lib/permissions";
 
 type Access = "none" | "read" | "write";
 /** The key being made (no id) or changed: its name and each collection's access. */
-/** days: how long a new key lasts, "0" for no end; a saved key keeps its end. */
+/** days: how long the key lasts from now, "0" for no end; "keep" leaves a saved key's end as it is. */
 type Draft = { id?: string; name: string; access: Record<string, Access>; days: string };
 
 const KEYS = ["me", "keys"] as const;
@@ -32,7 +32,7 @@ const draftOf = (k?: ApiKey): Draft => ({
   id: k?.id,
   name: k?.name ?? "",
   access: Object.fromEntries((k?.scopes ?? []).map((s) => [s.collection_id, s.can_write ? "write" : "read"])),
-  days: "90",
+  days: k ? "keep" : "90",
 });
 
 const DAYS = ["30", "90", "365", "0"];
@@ -42,18 +42,22 @@ const scopesOf = (d: Draft): KeyScope[] =>
 
 /** The member's own API keys: each reaches the collections picked, read only or read and write.
  * onCreated gets a new key's secret, shown this once, so the page can fill its examples with it. */
-export function ApiKeysCard({ onCreated }: { onCreated?: (secret: string) => void } = {}) {
+export function ApiKeysCard({ onCreated, prefill }: { onCreated?: (secret: string) => void; prefill?: string | null } = {}) {
   const { t } = useI18n();
   const client = useQueryClient();
   const format = useFormatDate();
   const list = useQuery({ queryKey: KEYS, queryFn: account.keys });
   const cols = useQuery({ queryKey: ["collections", "options"], queryFn: ({ signal }) => collections.options(signal), staleTime: 30_000 });
   const mine = (cols.data?.items ?? []).filter((c) => c.member !== false);
-  const [draft, setDraft] = useState<Draft | null>(null);
+  // A link from a collection's Integrations opens a new key that reads it.
+  const [draft, setDraft] = useState<Draft | null>(() => (prefill ? { ...draftOf(), access: { [prefill]: "read" } } : null));
+  const [filter, setFilter] = useState("");
   const [secret, setSecret] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<ApiKey | null>(null);
   const save = useMutation({
-    mutationFn: (d: Draft) => (d.id ? account.updateKey(d.id, d.name.trim(), scopesOf(d)) : account.createKey(d.name.trim(), scopesOf(d), Number(d.days))),
+    mutationFn: (d: Draft) => (d.id
+      ? account.updateKey(d.id, d.name.trim(), scopesOf(d), d.days === "keep" ? undefined : Number(d.days))
+      : account.createKey(d.name.trim(), scopesOf(d), Number(d.days))),
     onSuccess: (k: ApiKey & { secret?: string }) => {
       if (k.secret) {
         setSecret(k.secret);
@@ -67,12 +71,18 @@ export function ApiKeysCard({ onCreated }: { onCreated?: (secret: string) => voi
   const items = list.data?.items ?? [];
   const accessName: Record<Access, string> = { none: t("keys.access_none"), read: t("integrations.read_only"), write: t("integrations.read_write") };
   const picked = draft ? scopesOf(draft).length : 0;
-  const daysName: Record<string, string> = Object.fromEntries(DAYS.map((d) => [d, d === "0" ? t("keys.expires_never") : t("keys.expires_days").replace("{n}", d)]));
+  const daysName: Record<string, string> = {
+    keep: t("keys.renew_keep"),
+    ...Object.fromEntries(DAYS.map((d) => [d, d === "0" ? t("keys.expires_never") : t("keys.expires_days").replace("{n}", d)])),
+  };
+  const shown = filter.trim() ? mine.filter((c) => c.name.toLowerCase().includes(filter.trim().toLowerCase())) : mine;
+  const setAll = (a: Access) => draft && setDraft({ ...draft, access: { ...draft.access, ...Object.fromEntries(shown.map((c) => [c.id, a])) } });
 
   return (
     <FormSection id="keys" title={t("keys.title")} description={t("keys.desc")}>
       <div className="space-y-3">
         {secret && <Secret value={secret} onClose={() => setSecret(null)} />}
+        {secret && onCreated && <a href="#mcp" className="inline-block text-sm font-medium text-primary underline-offset-2 hover:underline">{t("keys.next_step")} ↓</a>}
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
           <EmptyState compact title={t("integrations.keys_empty")} />
         ) : (
@@ -110,24 +120,31 @@ export function ApiKeysCard({ onCreated }: { onCreated?: (secret: string) => voi
               <Label htmlFor="key-name">{t("integrations.key_name")}</Label>
               <Input id="key-name" maxLength={80} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} autoFocus />
             </div>
-            {!draft.id && (
-              <div className="flex flex-col gap-1.5">
-                <Label id="key-days">{t("keys.expires")}</Label>
-                <Select value={draft.days} items={daysName} onValueChange={(v) => setDraft({ ...draft, days: v as string })}>
-                  <SelectTrigger className="w-56" aria-labelledby="key-days"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {DAYS.map((d) => <SelectItem key={d} value={d}>{daysName[d]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">{t("keys.expires_hint")}</p>
-              </div>
-            )}
+            <div className="flex flex-col gap-1.5">
+              <Label id="key-days">{t("keys.expires")}</Label>
+              <Select value={draft.days} items={daysName} onValueChange={(v) => setDraft({ ...draft, days: v as string })}>
+                <SelectTrigger className="w-56" aria-labelledby="key-days"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {draft.id && <SelectItem value="keep">{daysName.keep}</SelectItem>}
+                  {DAYS.map((d) => <SelectItem key={d} value={d}>{daysName[d]}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{t(draft.id ? "keys.renew_hint" : "keys.expires_hint")}</p>
+            </div>
             <fieldset className="space-y-1.5">
               <legend className="text-sm font-medium">{t("keys.collections")}</legend>
               <p className="text-xs text-muted-foreground">{t("keys.collections_hint")}</p>
               {cols.isPending ? <ListSkeleton rows={2} /> : cols.isError ? <QueryErrorState error={cols.error} onRetry={() => void cols.refetch()} /> : (
+                <>
+                <div className="flex flex-wrap items-center gap-2">
+                  {mine.length > 8 && (
+                    <Input type="search" aria-label={t("keys.search")} placeholder={t("keys.search")} className="h-8 w-56 max-w-full" value={filter} onChange={(e) => setFilter(e.target.value)} />
+                  )}
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setAll("read")}>{t("keys.all_read")}</Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setAll("none")}>{t("keys.clear")}</Button>
+                </div>
                 <ul className="max-h-80 divide-y overflow-auto rounded-md border">
-                  {mine.map((c) => {
+                  {shown.map((c) => {
                     const value = draft.access[c.id] ?? "none";
                     const label = `key-access-${c.id}`;
                     return (
@@ -139,13 +156,16 @@ export function ApiKeysCard({ onCreated }: { onCreated?: (secret: string) => voi
                             <SelectItem value="none">{accessName.none}</SelectItem>
                             <SelectItem value="read">{accessName.read}</SelectItem>
                             {/* Writing needs the editor role; a key never goes past its maker. */}
-                            <SelectItem value="write" disabled={!roleAllows(c.role, "editor")}>{accessName.write}</SelectItem>
+                            <SelectItem value="write" disabled={!roleAllows(c.role, "editor")}>
+                              {roleAllows(c.role, "editor") ? accessName.write : `${accessName.write} (${t("keys.needs_editor")})`}
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </li>
                     );
                   })}
                 </ul>
+                </>
               )}
             </fieldset>
             <FormError message={save.isError ? errorMessage(save.error, "common.save_failed", t) : null} />

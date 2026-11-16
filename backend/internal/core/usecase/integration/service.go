@@ -130,16 +130,25 @@ func keyAudit(ctx context.Context, uow output.UnitOfWork, action, name, prefix s
 	return policy.Audit(ctx, uow, action, sc.CollectionID, map[string]any{"collection_id": sc.CollectionID, "key": name, "prefix": prefix, "write": sc.CanWrite})
 }
 
+// expiryOf is the end of a key that lasts days from now; 0 means no end.
+func expiryOf(days int, field string) (*time.Time, error) {
+	if days < 0 || days > maxKeyDays {
+		return nil, apperror.New(apperror.CodeInvalidInput, "a key lasts 1 to 365 days, or 0 for no end").WithField(field)
+	}
+	if days == 0 {
+		return nil, nil
+	}
+	return pointer.Of(time.Now().Add(time.Duration(days) * 24 * time.Hour)), nil
+}
+
 func (s *Service) CreateMyKey(ctx context.Context, name string, scopes []domain.KeyScope, expiresInDays int) (*input.NewKey, error) {
 	name, scopes, err := keyInput(ctx, name, scopes)
 	if err != nil {
 		return nil, err
 	}
-	var expires *time.Time
-	if expiresInDays < 0 || expiresInDays > maxKeyDays {
-		return nil, apperror.New(apperror.CodeInvalidInput, "a key lasts 1 to 365 days, or 0 for no end").WithField("expires_in_days")
-	} else if expiresInDays > 0 {
-		expires = pointer.Of(time.Now().Add(time.Duration(expiresInDays) * 24 * time.Hour))
+	expires, err := expiryOf(expiresInDays, "expires_in_days")
+	if err != nil {
+		return nil, err
 	}
 	random, err := tokenhash.RandomURLSafe()
 	if err != nil {
@@ -176,14 +185,21 @@ func (s *Service) CreateMyKey(ctx context.Context, name string, scopes []domain.
 }
 
 // UpdateMyKey renames a key and sets its collections; each collection it gains,
-// loses or changes access to logs the change.
-func (s *Service) UpdateMyKey(ctx context.Context, id, name string, scopes []domain.KeyScope) (*domain.APIKey, error) {
+// loses or changes access to logs the change. renewDays, when set, gives the key
+// a new end counted from now (0: no end), which also brings an expired key back.
+func (s *Service) UpdateMyKey(ctx context.Context, id, name string, scopes []domain.KeyScope, renewDays *int) (*domain.APIKey, error) {
 	if err := validate.ID(id); err != nil {
 		return nil, err
 	}
 	name, scopes, err := keyInput(ctx, name, scopes)
 	if err != nil {
 		return nil, err
+	}
+	var expires *time.Time
+	if renewDays != nil {
+		if expires, err = expiryOf(*renewDays, "renew_days"); err != nil {
+			return nil, err
+		}
 	}
 	actor := reqctx.Actor(ctx)
 	var out *domain.APIKey
@@ -208,6 +224,11 @@ func (s *Service) UpdateMyKey(ctx context.Context, id, name string, scopes []dom
 		}
 		if err := uow.Integrations().UpdateKey(ctx, id, name, scopes); err != nil {
 			return err
+		}
+		if renewDays != nil {
+			if err := uow.Integrations().SetKeyExpiry(ctx, id, expires); err != nil {
+				return err
+			}
 		}
 		after := map[string]bool{}
 		for _, sc := range changed {

@@ -73,7 +73,7 @@ test("a collection's tools: CSV, bulk edit, views, trash, API key, field history
   await page.getByRole("option", { name: "Só leitura" }).click();
   await page.getByRole("button", { name: "Criar chave" }).click();
   const secret = await page.locator("code").filter({ hasText: /^dsk_/ }).innerText();
-  await page.goto(`${records}/integrations`);
+  await page.goto(`${records}/integrations#keys`);
   await expect(page.getByText(`leitura-${name}`)).toBeVisible(); // the owner sees the key that reaches it
   const res = await page.request.get(`/api/proxy/v1/records?collection_id=${collectionId}&page=1&limit=10`, { headers: { Authorization: `Bearer ${secret}`, Cookie: "" } });
   expect(res.status()).toBe(200);

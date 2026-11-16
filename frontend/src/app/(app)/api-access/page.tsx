@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Tabs } from "@base-ui/react/tabs";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2, PlugZap } from "lucide-react";
@@ -179,18 +180,28 @@ function RestCard() {
 
 export default function ApiAccessPage() {
   const { t } = useI18n();
-  // A key's secret shows once: while this page stays open, the examples use it.
-  const [secret, setSecret] = useState<string | null>(null);
   return (
     <>
       <PageHeader title={t("nav.api_access")} description={t("api_access.subtitle")} />
       <PageBody>
-        <FormSections>
-          <ApiKeysCard onCreated={setSecret} />
-          <McpConnectCard secret={secret} />
-          <RestCard />
-        </FormSections>
+        <Suspense>
+          <ApiAccess />
+        </Suspense>
       </PageBody>
     </>
+  );
+}
+
+function ApiAccess() {
+  // A key's secret shows once: while this page stays open, the examples use it.
+  const [secret, setSecret] = useState<string | null>(null);
+  // ?collection=<id> (from a collection's Integrations) opens a new key for it.
+  const prefill = useSearchParams().get("collection");
+  return (
+    <FormSections>
+      <ApiKeysCard onCreated={setSecret} prefill={prefill} />
+      <McpConnectCard secret={secret} />
+      <RestCard />
+    </FormSections>
   );
 }

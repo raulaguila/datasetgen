@@ -15,7 +15,7 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
     expect(res.status()).toBe(201);
   }
 
-  await page.goto(`${records}/integrations`);
+  await page.goto(`${records}/integrations#mcp`);
   await page.getByRole("button", { name: "Nova tool" }).click();
   const form = page.getByRole("form", { name: "Nova tool" });
   await form.getByLabel("Nome da tool").fill("nota_por_titulo");
@@ -33,14 +33,16 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
   await expect(page.getByRole("list", { name: "Tools do assistente (MCP)" }).getByText("nota_por_titulo")).toBeVisible();
   await expect(page.getByText("(titulo)")).toBeVisible();
 
-  await page.goto("/api-access");
+  // The collection's Keys tab opens a new key that already reads it.
+  await page.goto(`${records}/integrations#keys`);
+  await page.getByRole("link", { name: "Nova chave para esta coleção" }).click();
+  await expect(page).toHaveURL(/\/api-access\?collection=/);
   await expect(page.getByRole("heading", { name: "Conectar um assistente de IA (MCP)" })).toBeVisible();
   await expect(page.locator("pre").filter({ hasText: /^http:\/\/localhost:\d+\/api\/proxy\/v1\/mcp$/ })).toBeVisible();
-  await page.getByRole("button", { name: "Nova chave" }).click();
+  await expect(page.getByRole("combobox", { name, exact: true })).toContainText("Só leitura");
   await page.getByLabel("Nome da chave").fill(`assistente-${name}`);
-  await page.getByRole("combobox", { name, exact: true }).click();
-  await page.getByRole("option", { name: "Só leitura" }).click();
   await page.getByRole("button", { name: "Criar chave" }).click();
+  await expect(page.getByRole("link", { name: /Agora conecte um assistente/ })).toBeVisible();
   const secret = await page.locator("code").filter({ hasText: /^dsk_/ }).innerText();
   // The examples carry the new key, and the page's own test reaches the collection.
   await expect(page.locator("pre").filter({ hasText: "claude mcp add" })).toContainText(secret);
@@ -63,7 +65,7 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
   expect(call.result.structuredContent.records[0].data).toEqual({ notes: "nota Beta" });
 
   // The owner sees what the assistant did.
-  await page.goto(`${records}/integrations`);
+  await page.goto(`${records}/integrations#mcp`);
   const activity = page.getByRole("list", { name: "Atividade dos assistentes" });
   await expect(activity.getByText("nota_por_titulo")).toBeVisible();
   await expect(activity.getByText(`chave assistente-${name}`, { exact: false }).first()).toBeVisible();

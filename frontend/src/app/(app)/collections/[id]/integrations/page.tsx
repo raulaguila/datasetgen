@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+import { Tabs } from "@base-ui/react/tabs";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Link2, Plug, Send, Trash2, Webhook as WebhookIcon } from "lucide-react";
+import { ExternalLink, KeyRound, Link2, Plug, Send, Trash2, Webhook as WebhookIcon } from "lucide-react";
 import { toast } from "sonner";
 import { FormError, FormSection, FormSections, IconAction, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -57,10 +58,7 @@ function Keys({ collection }: { collection: Collection }) {
             ))}
           </ul>
         )}
-        <p className="text-sm text-muted-foreground">
-          {t("integrations.keys_profile")}{" "}
-          <Link href="/api-access" className="text-primary underline-offset-2 hover:underline">{t("integrations.keys_profile_link")}</Link>
-        </p>
+        <Link href={`/api-access?collection=${collection.id}`} className={buttonVariants({ variant: "outline" })}><KeyRound className="size-4" />{t("integrations.key_new_here")}</Link>
       </div>
       <ConfirmDialog
         open={!!revoking}
@@ -186,10 +184,13 @@ function Webhooks({ collection }: { collection: Collection }) {
   const [secret, setSecret] = useState<string | null>(null);
   const [removing, setRemoving] = useState<{ id: string; url: string } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const close = () => { setAdding(false); setUrl(""); setEvents([...WEBHOOK_EVENTS]); };
   const create = useMutation({
     mutationFn: () => tools.createWebhook(collection.id, url.trim(), events),
-    onSuccess: (w) => { setSecret(w.secret); setUrl(""); setEvents([...WEBHOOK_EVENTS]); void client.invalidateQueries({ queryKey: key }); },
+    onSuccess: (w) => { setSecret(w.secret); close(); void client.invalidateQueries({ queryKey: key }); },
   });
+  const eventName = (e: WebhookEvent) => t(`webhook.event.${e}`);
   const test = useMutation({
     mutationFn: (hookId: string) => tools.testWebhook(collection.id, hookId),
     onSuccess: (w) => {
@@ -214,9 +215,9 @@ function Webhooks({ collection }: { collection: Collection }) {
               return (
                 <li key={w.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
                   <div className="min-w-48 flex-1">
-                    <p className="truncate font-mono text-sm">{w.url}</p>
+                    <p className="flex min-w-0 items-center gap-2 text-sm"><span className="truncate font-mono">{w.url}</span>{failed && <Badge variant="destructive">{t("integrations.hook_failing")}</Badge>}</p>
                     <p className="text-xs text-muted-foreground">
-                      {w.events.join(", ")}
+                      {w.events.map(eventName).join(", ")}
                       {w.last_at && (
                         <span className={failed ? "text-destructive" : undefined}>
                           {` · ${format(w.last_at)}: ${failed ? w.last_error : `HTTP ${w.last_status}`}`}
@@ -233,22 +234,29 @@ function Webhooks({ collection }: { collection: Collection }) {
             })}
           </ul>
         )}
-        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (url.trim() && events.length) create.mutate(); }}>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="hook-url">{t("integrations.hook_url")}</Label>
-            <Input id="hook-url" type="url" inputMode="url" placeholder="https://" maxLength={2000} value={url} onChange={(e) => setUrl(e.target.value)} />
-          </div>
-          <fieldset className="flex flex-wrap gap-x-4 gap-y-2">
-            <legend className="mb-1.5 text-sm font-medium">{t("integrations.events")}</legend>
-            {WEBHOOK_EVENTS.map((e) => (
-              <label key={e} className="flex items-center gap-2 font-mono text-xs">
-                <Checkbox checked={events.includes(e)} onCheckedChange={(on) => toggle(e, on === true)} />{e}
-              </label>
-            ))}
-          </fieldset>
-          <Button type="submit" disabled={!url.trim() || !events.length || create.isPending}><WebhookIcon className="size-4" />{t("integrations.create_hook")}</Button>
-          <FormError message={create.isError ? errorMessage(create.error, "common.save_failed", t) : null} />
-        </form>
+        {adding ? (
+          <form className="space-y-3 rounded-md border p-3" aria-label={t("integrations.hook_new")} onSubmit={(e) => { e.preventDefault(); if (url.trim() && events.length) create.mutate(); }}>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="hook-url">{t("integrations.hook_url")}</Label>
+              <Input id="hook-url" type="url" inputMode="url" placeholder="https://" maxLength={2000} value={url} onChange={(e) => setUrl(e.target.value)} autoFocus />
+            </div>
+            <fieldset className="flex flex-wrap gap-x-4 gap-y-2">
+              <legend className="mb-1.5 text-sm font-medium">{t("integrations.events")}</legend>
+              {WEBHOOK_EVENTS.map((e) => (
+                <label key={e} className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={events.includes(e)} onCheckedChange={(on) => toggle(e, on === true)} />{eventName(e)}
+                </label>
+              ))}
+            </fieldset>
+            <FormError message={create.isError ? errorMessage(create.error, "common.save_failed", t) : null} />
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={!url.trim() || !events.length || create.isPending}><WebhookIcon className="size-4" />{t("integrations.create_hook")}</Button>
+              <Button type="button" variant="ghost" onClick={() => { create.reset(); close(); }}>{t("common.cancel")}</Button>
+            </div>
+          </form>
+        ) : (
+          <Button variant="outline" onClick={() => setAdding(true)}><WebhookIcon className="size-4" />{t("integrations.hook_new")}</Button>
+        )}
         <details className="text-sm">
           <summary className="cursor-pointer font-medium">{t("integrations.docs_signature")}</summary>
           <div className="mt-2 space-y-1.5">
@@ -277,25 +285,44 @@ const ok = crypto.timingSafeEqual(Buffer.from(v1), Buffer.from(expected)) && Dat
   );
 }
 
+const TABS = [["shares", "share.title"], ["keys", "integrations.tab_keys"], ["mcp", "integrations.tab_mcp"], ["webhooks", "integrations.webhooks"]] as const;
+type Tab = (typeof TABS)[number][0];
+
+const onHash = (cb: () => void) => { window.addEventListener("hashchange", cb); return () => window.removeEventListener("hashchange", cb); };
+
+/** One tab per kind of integration; the address hash (#keys) opens a tab directly. */
+function IntegrationTabs({ collection }: { collection: Collection }) {
+  const { t } = useI18n();
+  const hash = useSyncExternalStore(onHash, () => window.location.hash.slice(1), () => "");
+  const tab: Tab = TABS.some(([id]) => id === hash) ? (hash as Tab) : "shares";
+  const pick = (v: Tab) => {
+    history.replaceState(null, "", `#${v}`);
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  };
+  return (
+    <Tabs.Root value={tab} onValueChange={(v) => pick(v as Tab)}>
+      <Tabs.List aria-label={t("integrations.sections")} className="mb-6 flex gap-1 overflow-x-auto border-b">
+        {TABS.map(([id, key]) => (
+          <Tabs.Tab key={id} value={id} className="-mb-px shrink-0 whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[active]:border-primary data-[active]:font-medium data-[active]:text-foreground">
+            {t(key)}
+          </Tabs.Tab>
+        ))}
+      </Tabs.List>
+      <Tabs.Panel value="shares" className="outline-none"><FormSections><Shares collection={collection} /></FormSections></Tabs.Panel>
+      <Tabs.Panel value="keys" className="outline-none"><FormSections><Keys collection={collection} /></FormSections></Tabs.Panel>
+      <Tabs.Panel value="mcp" className="outline-none"><FormSections><McpTools collection={collection} /><McpActivity collection={collection} /></FormSections></Tabs.Panel>
+      <Tabs.Panel value="webhooks" className="outline-none"><FormSections><Webhooks collection={collection} /></FormSections></Tabs.Panel>
+    </Tabs.Root>
+  );
+}
+
 export default function CollectionIntegrationsPage() {
   const { t } = useI18n();
   return (
     <CollectionPage section="collections.tab.integrations" description="integrations.subtitle">
       {(collection) => roleAllows(collection.role, "owner") ? (
         <>
-          {/* Jump links: the page holds five sections. */}
-          <nav aria-label={t("integrations.sections")} className="mb-4 flex flex-wrap gap-2">
-            {([["shares", "share.title"], ["keys", "integrations.keys"], ["mcp-tools", "mcp_tools.title"], ["mcp-activity", "mcp_activity.title"], ["webhooks", "integrations.webhooks"]] as const).map(([id, key]) => (
-              <a key={id} href={`#${id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>{t(key)}</a>
-            ))}
-          </nav>
-          <FormSections>
-            <Shares collection={collection} />
-            <Keys collection={collection} />
-            <McpTools collection={collection} />
-            <McpActivity collection={collection} />
-            <Webhooks collection={collection} />
-          </FormSections>
+          <IntegrationTabs collection={collection} />
         </>
       ) : <EmptyState icon={Plug} title={t("error.forbidden")} description={t("integrations.owners_only")} />}
     </CollectionPage>

@@ -151,6 +151,10 @@ func (r *Repository) UpdateKey(ctx context.Context, id, name string, scopes []do
 		list, name, id, id, id).Error, "api key")
 }
 
+func (r *Repository) SetKeyExpiry(ctx context.Context, id string, expires *time.Time) error {
+	return shared.WrapError(r.db.WithContext(ctx).Exec(`UPDATE app.api_key SET expires_at = ? WHERE id = ?`, expires, id).Error, "api key")
+}
+
 func (r *Repository) DeleteKey(ctx context.Context, id string) error {
 	res := r.db.WithContext(ctx).Exec(`DELETE FROM app.api_key WHERE id = ? AND share IS NULL`, id)
 	if res.Error == nil && res.RowsAffected == 0 {

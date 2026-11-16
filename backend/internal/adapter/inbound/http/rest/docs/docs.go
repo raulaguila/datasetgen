@@ -8119,6 +8119,11 @@ const docTemplate = `{
                     "type": "string",
                     "example": "Assistente"
                 },
+                "renew_days": {
+                    "description": "RenewDays, on update only, gives the key a new end that many days from now (0: no end); absent keeps it.",
+                    "type": "integer",
+                    "example": 90
+                },
                 "scopes": {
                     "type": "array",
                     "items": {

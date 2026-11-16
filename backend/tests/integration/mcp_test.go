@@ -129,7 +129,7 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if _, failed := call("create_record", map[string]any{"collection_id": a, "data": map[string]any{"nome": "x"}}); !failed {
 		t.Fatal("a read key created a record")
 	}
-	writer, err := keys.UpdateMyKey(owner, key.Key.ID, "Assistente", []domain.KeyScope{{CollectionID: a, CanWrite: true}})
+	writer, err := keys.UpdateMyKey(owner, key.Key.ID, "Assistente", []domain.KeyScope{{CollectionID: a, CanWrite: true}}, nil)
 	if err != nil || !writer.Scopes[0].CanWrite {
 		t.Fatalf("update key: %+v, %v", writer, err)
 	}

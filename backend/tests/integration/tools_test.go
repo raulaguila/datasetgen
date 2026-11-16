@@ -15,6 +15,7 @@ import (
 	"github.com/raulaguila/dataset/internal/core/usecase/integration"
 	"github.com/raulaguila/dataset/internal/core/usecase/tools"
 	"github.com/raulaguila/dataset/pkg/apperror"
+	"github.com/raulaguila/dataset/pkg/pointer"
 	"github.com/raulaguila/dataset/pkg/reqctx"
 )
 
@@ -103,7 +104,7 @@ func TestAPIKeysReachTheirCollections(t *testing.T) {
 	if mine, err := keys.MyKeys(owner); err != nil || len(mine) != 2 || len(mine[0].Scopes) != 2 {
 		t.Fatalf("my keys: %+v, %v", mine, err)
 	}
-	wantCode(t, ignore(keys.UpdateMyKey(viewer, write.Key.ID, "Minha", []domain.KeyScope{{CollectionID: a}})), apperror.CodeNotFound)
+	wantCode(t, ignore(keys.UpdateMyKey(viewer, write.Key.ID, "Minha", []domain.KeyScope{{CollectionID: a}}, nil)), apperror.CodeNotFound)
 	wantCode(t, keys.DeleteMyKey(viewer, read.Key.ID), apperror.CodeNotFound)
 
 	// Removing a member takes the collection out of their keys: coming back does not revive them.
@@ -123,7 +124,7 @@ func TestAPIKeysReachTheirCollections(t *testing.T) {
 	}
 
 	// Changing a key's collections takes effect at once.
-	k, err := keys.UpdateMyKey(owner, write.Key.ID, "Escrita B", []domain.KeyScope{{CollectionID: b, CanWrite: true}, {CollectionID: other}})
+	k, err := keys.UpdateMyKey(owner, write.Key.ID, "Escrita B", []domain.KeyScope{{CollectionID: b, CanWrite: true}, {CollectionID: other}}, nil)
 	if err != nil || len(k.Scopes) != 2 || k.Name != "Escrita B" {
 		t.Fatalf("update: %+v, %v", k, err)
 	}
@@ -164,6 +165,23 @@ func TestAPIKeysReachTheirCollections(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantCode(t, ignore(keys.AuthenticateKey(context.Background(), brief.Secret)), apperror.CodeUnauthorized)
+
+	// Renewing brings an expired key back; no renewal keeps the end; 0 removes it.
+	scope := []domain.KeyScope{{CollectionID: a}}
+	wantCode(t, ignore(keys.UpdateMyKey(owner, brief.Key.ID, "Breve", scope, pointer.Of(400))), apperror.CodeInvalidInput)
+	renewed, err := keys.UpdateMyKey(owner, brief.Key.ID, "Breve", scope, pointer.Of(90))
+	if err != nil || renewed.ExpiresAt == nil || time.Until(*renewed.ExpiresAt) < 89*24*time.Hour {
+		t.Fatalf("renew: %+v %v", renewed, err)
+	}
+	if _, err := keys.AuthenticateKey(context.Background(), brief.Secret); err != nil {
+		t.Fatalf("a renewed key does not work: %v", err)
+	}
+	if kept, err := keys.UpdateMyKey(owner, brief.Key.ID, "Breve", scope, nil); err != nil || kept.ExpiresAt == nil || !kept.ExpiresAt.Equal(*renewed.ExpiresAt) {
+		t.Fatalf("update without renewal changed the end: %+v %v", kept, err)
+	}
+	if open, err := keys.UpdateMyKey(owner, brief.Key.ID, "Breve", scope, pointer.Of(0)); err != nil || open.ExpiresAt != nil {
+		t.Fatalf("renew with no end: %+v %v", open, err)
+	}
 }
 
 // Record changes queue one delivery per hook that asked for the event.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -244,7 +245,10 @@ export function McpTools({ collection }: { collection: Collection }) {
           </ul>
         )}
         {editing === "new" ? <ToolForm collection={collection} onDone={() => setEditing(null)} /> : (
-          <Button variant="outline" disabled={items.length >= 20} onClick={() => setEditing("new")}><Plus className="size-4" />{t("mcp_tools.new")}</Button>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Button variant="outline" disabled={items.length >= 20} onClick={() => setEditing("new")}><Plus className="size-4" />{t("mcp_tools.new")}</Button>
+            <Link href="/api-access#mcp" className="text-sm text-primary underline-offset-2 hover:underline">{t("mcp_tools.connect_link")}</Link>
+          </div>
         )}
       </div>
       <ConfirmDialog

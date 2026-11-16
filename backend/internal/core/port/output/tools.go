@@ -20,6 +20,8 @@ type IntegrationRepository interface {
 	CreateKey(ctx context.Context, k *domain.APIKey, hash []byte) error // with k.ExpiresAt
 	// UpdateKey renames a key and sets its collections to exactly scopes.
 	UpdateKey(ctx context.Context, id, name string, scopes []domain.KeyScope) error
+	// SetKeyExpiry sets when a key stops working; nil never.
+	SetKeyExpiry(ctx context.Context, id string, expires *time.Time) error
 	DeleteKey(ctx context.Context, id string) error
 	// DropScope takes a collection out of a key and says which key it was, for the audit log.
 	DropScope(ctx context.Context, collectionID, keyID string) (domain.DeletedKey, error)

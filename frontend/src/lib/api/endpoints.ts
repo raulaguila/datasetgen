@@ -66,7 +66,8 @@ export const account = {
   keys: () => apiFetch<{ items: ApiKey[] }>("/v1/me/keys"),
   createKey: (name: string, scopes: KeyScope[], expiresInDays = 0) =>
     apiFetch<ApiKey & { secret: string }>("/v1/me/keys", { method: "POST", json: { name, scopes, expires_in_days: expiresInDays } }),
-  updateKey: (keyId: string, name: string, scopes: KeyScope[]) => apiFetch<ApiKey>(`/v1/me/keys/${id(keyId)}`, { method: "PUT", json: { name, scopes } }),
+  // renewDays: undefined keeps the end; 0 removes it; 1-365 counts from now.
+  updateKey: (keyId: string, name: string, scopes: KeyScope[], renewDays?: number) => apiFetch<ApiKey>(`/v1/me/keys/${id(keyId)}`, { method: "PUT", json: { name, scopes, renew_days: renewDays } }),
   deleteKey: (keyId: string) => apiFetch<void>(`/v1/me/keys/${id(keyId)}`, { method: "DELETE" }),
   mfa: () => apiFetch<{ enabled: boolean; recovery_left: number }>("/v1/me/mfa"),
   setupMFA: () => apiFetch<{ secret: string; uri: string }>("/v1/me/mfa/setup", { method: "POST" }),

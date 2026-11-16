@@ -163,6 +163,8 @@ type keyBodyDTO struct {
 	Scopes []scopeDTO `json:"scopes"`
 	// ExpiresInDays (1-365) ends the key that many days after it is made; 0 or absent never ends. Ignored on update.
 	ExpiresInDays int `json:"expires_in_days,omitempty" example:"90"`
+	// RenewDays, on update only, gives the key a new end that many days from now (0: no end); absent keeps it.
+	RenewDays *int `json:"renew_days,omitempty" example:"90"`
 }
 
 func (b keyBodyDTO) scopes() []domain.KeyScope {
@@ -233,7 +235,7 @@ func (h *Handler) UpdateMyKey(c fiber.Ctx) error {
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	k, err := h.integrations.UpdateMyKey(c.Context(), c.Params("keyId"), body.Name, body.scopes())
+	k, err := h.integrations.UpdateMyKey(c.Context(), c.Params("keyId"), body.Name, body.scopes(), body.RenewDays)
 	if err != nil {
 		return fail(c, err)
 	}

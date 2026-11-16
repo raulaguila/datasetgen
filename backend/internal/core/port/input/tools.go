@@ -27,7 +27,8 @@ type IntegrationService interface {
 	MyKeys(ctx context.Context) ([]domain.APIKey, error)
 	// expiresInDays (1-365) makes the key stop working then; 0 never expires.
 	CreateMyKey(ctx context.Context, name string, scopes []domain.KeyScope, expiresInDays int) (*NewKey, error)
-	UpdateMyKey(ctx context.Context, id, name string, scopes []domain.KeyScope) (*domain.APIKey, error)
+	// renewDays nil keeps the key's end; 0 removes it; 1-365 sets it that many days from now.
+	UpdateMyKey(ctx context.Context, id, name string, scopes []domain.KeyScope, renewDays *int) (*domain.APIKey, error)
 	DeleteMyKey(ctx context.Context, id string) error
 	// Keys lists the keys that reach a collection; DeleteKey takes the collection out of one (owners).
 	Keys(ctx context.Context, collectionID string) ([]domain.APIKey, error)
