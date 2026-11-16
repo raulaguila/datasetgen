@@ -55,13 +55,6 @@ type User struct {
 	UpdatedAt time.Time
 }
 
-// UserCounts sizes the user list: everyone it shows, and those waiting on an action.
-type UserCounts struct {
-	Total   int64
-	Pending int64
-	Locked  int64
-}
-
 // UserFilter narrows a user list; empty fields filter nothing.
 type UserFilter struct {
 	Page   Page

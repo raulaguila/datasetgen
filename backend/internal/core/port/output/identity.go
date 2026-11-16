@@ -29,8 +29,6 @@ type UserRepository interface {
 	Enable(ctx context.Context, id string) error
 	// List pages through the users without a protected role.
 	List(ctx context.Context, filter domain.UserFilter) ([]domain.User, int64, error)
-	// Counts sizes the same list by status in one pass.
-	Counts(ctx context.Context) (domain.UserCounts, error)
 }
 
 // CredentialRepository persists usr.usr_credential.

@@ -78,6 +78,13 @@ services:
       - ${BACKUP_DIR:-backup_volume}:/backups
       - files_volume:/files:ro
       - ./backup.sh:/backup.sh:ro
+    # Unhealthy once the last verified backup is over 26 h old: a failing backup shows in docker ps.
+    healthcheck:
+      test: [ "CMD-SHELL", "find /backups/.last-ok -mmin -1560 | grep -q ." ]
+      interval: 1h
+      timeout: 10s
+      retries: 1
+      start_period: 2h
     networks:
       - dataset_network
     depends_on:

@@ -30,7 +30,6 @@ import type {
   Session,
   SortOrder,
   User,
-  UserCounts,
   CollectionOption,
   UserDetails,
   UserStatus,
@@ -86,7 +85,6 @@ export const notifications = {
 export const users = {
   list: (p: { page: number; limit: number; search?: string; status?: UserStatus | ""; role_id?: string; sort?: string; order?: SortOrder }, signal?: AbortSignal) =>
     apiFetch<Paged<User>>(`/v1/users${query(p)}`, { signal }),
-  counts: () => apiFetch<UserCounts>("/v1/users/counts"),
   invite: (name: string, email: string) => apiFetch<InviteResult>("/v1/users", { method: "POST", json: { name, email } }),
   /** A new activation email for a pending account; the old link stops working. */
   reinvite: (userId: string) => apiFetch<InviteResult>(`/v1/users/${id(userId)}/invite`, { method: "POST" }),

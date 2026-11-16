@@ -10,7 +10,6 @@ import (
 // stay out of reach here, as protected roles do.
 type UserService interface {
 	List(ctx context.Context, filter domain.UserFilter) ([]domain.User, int64, error)
-	Counts(ctx context.Context) (domain.UserCounts, error)
 	Get(ctx context.Context, id string) (*domain.UserDetails, error)
 	// DisableMany blocks users and ends their sessions; EnableMany lifts the
 	// block. Both change every listed user or none. actorID is who asks.

@@ -6227,48 +6227,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/users/counts": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Users"
-                ],
-                "summary": "Count the listed users, in total and waiting on an action",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/user.countsDTO"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            }
-        },
         "/v1/users/disable": {
             "post": {
                 "security": [
@@ -8573,20 +8531,6 @@ const docTemplate = `{
                 },
                 "recent_failures": {
                     "description": "inside the login email window",
-                    "type": "integer"
-                }
-            }
-        },
-        "user.countsDTO": {
-            "type": "object",
-            "properties": {
-                "locked": {
-                    "type": "integer"
-                },
-                "pending": {
-                    "type": "integer"
-                },
-                "total": {
                     "type": "integer"
                 }
             }

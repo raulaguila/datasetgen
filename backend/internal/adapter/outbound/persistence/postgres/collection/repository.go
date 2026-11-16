@@ -295,8 +295,15 @@ func (r *Repository) SetMemberRole(ctx context.Context, id, userID string, role 
 	return memberChanged(res)
 }
 
+// RemoveMember also drops the collection from the member's API keys: a key
+// that kept it would reach the collection again if the person came back.
 func (r *Repository) RemoveMember(ctx context.Context, id, userID string) error {
-	return memberChanged(r.db.WithContext(ctx).Exec(`DELETE FROM app.collection_member WHERE collection_id = ? AND user_id = ?`, id, userID))
+	return memberChanged(r.db.WithContext(ctx).Exec(`
+		WITH scopes AS (
+			DELETE FROM app.api_key_collection s USING app.api_key k
+			WHERE s.collection_id = ? AND k.id = s.key_id AND k.created_by = ?
+		)
+		DELETE FROM app.collection_member WHERE collection_id = ? AND user_id = ?`, id, userID, id, userID))
 }
 
 func (r *Repository) HasMembership(ctx context.Context, userID string) (bool, error) {

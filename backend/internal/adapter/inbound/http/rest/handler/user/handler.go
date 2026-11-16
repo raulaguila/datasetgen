@@ -34,7 +34,6 @@ func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
 	read := middleware.Require(authz, domain.ResourceUsers, domain.ActionRead)
 	update := middleware.Require(authz, domain.ResourceUsers, domain.ActionUpdate)
 	r.Get("/", read, h.List)
-	r.Get("/counts", read, h.Counts)
 	r.Post("/", middleware.Require(authz, domain.ResourceUsers, domain.ActionCreate), h.Invite)
 	r.Post("/:id/invite", update, h.Reinvite)
 	// The link signs in as the account, roles included; only who may grant roles may hold it.
@@ -117,28 +116,6 @@ func (h *Handler) List(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{"items": out, "pagination": mapper.Pagination(filter.Page, total)})
 }
 
-type countsDTO struct {
-	Total   int64 `json:"total"`
-	Pending int64 `json:"pending"`
-	Locked  int64 `json:"locked"`
-}
-
-// @Summary Count the listed users, in total and waiting on an action
-// @Tags Users
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} countsDTO
-// @Failure 401 {object} mapper.errorBody
-// @Failure 403 {object} mapper.errorBody
-// @Failure 429 {object} mapper.errorBody
-// @Router /v1/users/counts [get]
-func (h *Handler) Counts(c fiber.Ctx) error {
-	n, err := h.svc.Counts(c.Context())
-	if err != nil {
-		return mapper.WriteError(c, err)
-	}
-	return c.JSON(countsDTO{Total: n.Total, Pending: n.Pending, Locked: n.Locked})
-}
 
 // @Summary Get a user with their roles
 // @Tags Users

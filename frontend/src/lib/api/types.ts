@@ -97,12 +97,6 @@ export interface CollectionOption {
   member: boolean;
 }
 
-export interface UserCounts {
-  total: number;
-  pending: number;
-  locked: number;
-}
-
 export interface UserDetails extends User {
   roles: { id: string; name: string }[];
   access?: {

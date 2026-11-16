@@ -9,7 +9,7 @@ import { clearSessionCookie, readSession, unauthorized, writeSessionCookie, type
 
 export const dynamic = "force-dynamic";
 
-const MAX_BODY = 1028 * 1024; // the backend refuses more: an attached file (1 MB) is its largest body
+const MAX_BODY = 8 * 1024 * 1024 + 4096; // the backend's limit (maxBodyBytes): an attached file (8 MB) is its largest body
 const TOKEN_PATHS = /^v1\/auth\/(login|refresh|logout|register|activate|password-reset)(\/|$)/;
 // The download headers keep an attached file from running as a page on this origin.
 const PASSTHROUGH = ["content-type", "content-disposition", "retry-after", "x-request-id", "x-content-type-options", "content-security-policy", "cache-control"];
@@ -43,18 +43,26 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
   if (body && body.byteLength > MAX_BODY) return NextResponse.json({ code: "INVALID_INPUT", message: "request body too large" }, { status: 413 });
 
   const headers = forwardHeaders(req);
-  const send = (token: string | undefined) =>
-    fetch(target, {
-      method: req.method,
-      headers: {
-        ...headers,
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-        ...(body ? { "content-type": req.headers.get("content-type") ?? "application/json" } : {}),
-      },
-      body,
-      cache: "no-store",
-      signal: AbortSignal.any([req.signal, AbortSignal.timeout(30_000)]),
-    });
+  // 30 s for the answer to start; the body (an export stream) runs on the backend's own limit.
+  const send = async (token: string | undefined) => {
+    const late = new AbortController();
+    const timer = setTimeout(() => late.abort(new DOMException("upstream timed out", "TimeoutError")), 30_000);
+    try {
+      return await fetch(target, {
+        method: req.method,
+        headers: {
+          ...headers,
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+          ...(body ? { "content-type": req.headers.get("content-type") ?? "application/json" } : {}),
+        },
+        body,
+        cache: "no-store",
+        signal: AbortSignal.any([req.signal, late.signal]),
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
 
   let rotated: Session | null = null;
   let upstream: Response;

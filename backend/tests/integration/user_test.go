@@ -69,18 +69,7 @@ func TestListFiltersAndHidesProtectedUsers(t *testing.T) {
 		t.Fatalf("a wildcard matched: %v", found)
 	}
 
-	// Counts sizes the same list: the protected boss stays out.
-	counts, err := svc.Counts(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for status, got := range map[string]int64{"": counts.Total, domain.UserStatusPending: counts.Pending, domain.UserStatusLocked: counts.Locked} {
-		if _, want, err := svc.List(ctx, domain.UserFilter{Page: domain.NewPage(1, 1), Status: status}); err != nil || got != want {
-			t.Fatalf("count %q = %d, list total %d (%v)", status, got, want, err)
-		}
-	}
-
-	_, _, err = svc.List(ctx, domain.UserFilter{Page: domain.NewPage(1, 10), Status: "expired"})
+	_, _, err := svc.List(ctx, domain.UserFilter{Page: domain.NewPage(1, 10), Status: "expired"})
 	wantCode(t, err, apperror.CodeInvalidInput)
 	_, _, err = svc.List(ctx, domain.UserFilter{Page: domain.NewPage(1, 10), Search: "a\x00b"})
 	wantCode(t, err, apperror.CodeInvalidInput)

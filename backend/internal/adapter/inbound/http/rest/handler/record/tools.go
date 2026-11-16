@@ -187,6 +187,10 @@ func (h *Handler) Export(c fiber.Ctx) error {
 		write = writeCSV
 		c.Set(fiber.HeaderContentType, "text/csv; charset=utf-8")
 	}
+	// The server's write timeout covers a whole response; the stream gets the export's own.
+	if err := c.RequestCtx().SetWriteDeadline(time.Now().Add(exportTimeout)); err != nil {
+		slog.Warn("record export keeps the server write timeout", "error", err)
+	}
 	// The status is sent before the first record: a failure past it cuts the file short.
 	return c.SendStreamWriter(func(w *bufio.Writer) {
 		defer cancel()

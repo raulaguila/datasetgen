@@ -104,6 +104,22 @@ func TestAPIKeysReachTheirCollections(t *testing.T) {
 	wantCode(t, ignore(keys.UpdateMyKey(viewer, write.Key.ID, "Minha", []domain.KeyScope{{CollectionID: a}})), apperror.CodeNotFound)
 	wantCode(t, keys.DeleteMyKey(viewer, read.Key.ID), apperror.CodeNotFound)
 
+	// Removing a member takes the collection out of their keys: coming back does not revive them.
+	viewerKey, err := keys.CreateMyKey(viewer, "Volta", []domain.KeyScope{{CollectionID: a}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := collections.RemoveMember(owner, a, e.userID(t, viewerAddr)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := collections.AddMember(owner, input.AddMemberCommand{CollectionID: a, Email: viewerAddr, Role: domain.RoleViewer}); err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore2(records.List(as(viewerKey.Secret), domain.RecordFilter{CollectionID: a})), apperror.CodeNotFound)
+	if list, err := keys.Keys(owner, a); err != nil || len(list) != 2 {
+		t.Fatalf("keys after removal: %+v, %v", list, err)
+	}
+
 	// Changing a key's collections takes effect at once.
 	k, err := keys.UpdateMyKey(owner, write.Key.ID, "Escrita B", []domain.KeyScope{{CollectionID: b, CanWrite: true}, {CollectionID: other}})
 	if err != nil || len(k.Scopes) != 2 || k.Name != "Escrita B" {

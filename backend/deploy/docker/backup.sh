@@ -52,6 +52,7 @@ once() {
 	mv "$DIR/files-$stamp.part" "$DIR/files-$stamp.tar.gz"
 	verify || { echo "backup $stamp FAILED: verify"; return 1; }
 	find "$DIR" -type f -mtime +"$BACKUP_KEEP_DAYS" -delete
+	touch "$DIR/.last-ok" # the container's healthcheck reads its age
 	echo "backup $stamp done"
 }
 

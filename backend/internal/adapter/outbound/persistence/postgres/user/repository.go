@@ -147,18 +147,6 @@ func (r *Repository) List(ctx context.Context, filter domain.UserFilter) ([]doma
 	return out, total, nil
 }
 
-func (r *Repository) Counts(ctx context.Context) (domain.UserCounts, error) {
-	var out struct{ Total, Pending, Locked int64 }
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT count(*) AS total, count(*) FILTER (WHERE u.status = ?) AS pending, count(*) FILTER (WHERE u.status = ?) AS locked
-		FROM usr.usr_user u WHERE `+shared.Unprotected,
-		domain.UserStatusPending, domain.UserStatusLocked).Scan(&out).Error
-	if err != nil {
-		return domain.UserCounts{}, shared.WrapError(err, "user")
-	}
-	return domain.UserCounts{Total: out.Total, Pending: out.Pending, Locked: out.Locked}, nil
-}
-
 func (r *Repository) Enable(ctx context.Context, id string) error {
 	err := r.db.WithContext(ctx).Exec(`
 		UPDATE usr.usr_user u

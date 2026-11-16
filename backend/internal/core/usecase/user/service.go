@@ -40,10 +40,6 @@ func New(uow output.IdentityStore, tx output.TxManager, clock output.Clock, fail
 	return &Service{UOW: uow, Tx: tx, Clock: clock, FailureWindow: failureWindow}
 }
 
-func (s *Service) Counts(ctx context.Context) (domain.UserCounts, error) {
-	return s.UOW.Users().Counts(ctx)
-}
-
 func (s *Service) List(ctx context.Context, filter domain.UserFilter) ([]domain.User, int64, error) {
 	filter.Search = strings.TrimSpace(filter.Search)
 	if err := validate.Search(filter.Search, maxSearchBytes); err != nil {
