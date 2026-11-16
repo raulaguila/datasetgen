@@ -653,9 +653,13 @@ func (r *Repository) LockUnique(ctx context.Context, collectionID string) error 
 
 func (r *Repository) MaxNumber(ctx context.Context, collectionID, key string) (int64, error) {
 	var n struct{ N int64 }
-	err := r.db.WithContext(ctx).Table("app.record").
-		Select("coalesce(max(floor((data ->> ?)::numeric)), 0)::bigint AS n", key).
-		Where("collection_id = ? AND jsonb_typeof(data -> ?) = 'number'", collectionID, key).Take(&n).Error
+	// Trashed records count: a restore must not meet its number taken by a newer record.
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT coalesce(max(floor((data ->> ?)::numeric)), 0)::bigint AS n FROM (
+			SELECT data FROM app.record WHERE collection_id = ? AND jsonb_typeof(data -> ?) = 'number'
+			UNION ALL
+			SELECT data FROM app.record_trash WHERE collection_id = ? AND jsonb_typeof(data -> ?) = 'number'
+		) held`, key, collectionID, key, collectionID, key).Take(&n).Error
 	if err != nil {
 		return 0, shared.WrapError(err, "record")
 	}

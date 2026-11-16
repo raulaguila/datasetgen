@@ -63,10 +63,14 @@ func (s *Service) TrashedRecords(ctx context.Context, collectionID string) ([]do
 }
 
 // RestoreRecords puts records back as they were; a unique value taken since refuses them all.
-func (s *Service) RestoreRecords(ctx context.Context, collectionID string, ids []string) (int, error) {
+// Values, for a single record, give its unique fields new values on the way back.
+func (s *Service) RestoreRecords(ctx context.Context, collectionID string, ids []string, values map[string]json.RawMessage) (int, error) {
 	ids, err := checkIDs(ids, false)
 	if err != nil {
 		return 0, err
+	}
+	if len(values) > 0 && len(ids) != 1 {
+		return 0, apperror.New(apperror.CodeInvalidInput, "values restore one record at a time").WithField("values")
 	}
 	var n int
 	err = s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
@@ -80,6 +84,11 @@ func (s *Service) RestoreRecords(ctx context.Context, collectionID string, ids [
 		back, err := uow.Tools().RestoreRecords(ctx, collectionID, ids)
 		if err != nil {
 			return err
+		}
+		if len(values) > 0 {
+			if back, err = renew(ctx, uow, raw, ids[0], back[ids[0]], values); err != nil {
+				return err
+			}
 		}
 		if keys := schema.UniqueKeys(raw); len(keys) > 0 {
 			if err := uow.Records().LockUnique(ctx, collectionID); err != nil {
@@ -108,6 +117,50 @@ func (s *Service) RestoreRecords(ctx context.Context, collectionID string, ids [
 		return nil
 	})
 	return n, err
+}
+
+// renew gives a restored record new values for its unique fields, checked
+// against the schema, and saves them as an edit.
+func renew(ctx context.Context, uow output.UnitOfWork, raw []byte, id string, data json.RawMessage, values map[string]json.RawMessage) (map[string]json.RawMessage, error) {
+	unique := schema.UniqueKeys(raw)
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(data, &doc); err != nil || doc == nil {
+		return nil, apperror.New(apperror.CodeInvalidInput, "the record holds no fields to change").WithField("values")
+	}
+	for k, v := range values {
+		if !slices.Contains(unique, k) {
+			return nil, apperror.New(apperror.CodeInvalidInput, "only unique fields take a new value: "+k).WithField("values")
+		}
+		doc[k] = v
+	}
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return nil, err
+	}
+	compiled, err := schema.Compile(raw)
+	if err != nil {
+		return nil, err
+	}
+	issues, err := schema.Check(compiled, out)
+	if err != nil {
+		return nil, err
+	}
+	// Only the new values must pass: the rest is restored as it was, as any restore.
+	bad := slices.DeleteFunc(issues, func(i schema.Issue) bool {
+		for k := range values {
+			if i.Path == "/"+k || strings.HasPrefix(i.Path, "/"+k+"/") {
+				return false
+			}
+		}
+		return true
+	})
+	if len(bad) > 0 {
+		return nil, apperror.New(apperror.CodeValidationFailed, "the new values do not fit their fields").WithField("values").WithDetails("issues", bad)
+	}
+	if _, err := uow.Records().Update(ctx, id, out, nil); err != nil {
+		return nil, err
+	}
+	return map[string]json.RawMessage{id: out}, nil
 }
 
 func (s *Service) PurgeRecords(ctx context.Context, collectionID string, ids []string) (int64, error) {

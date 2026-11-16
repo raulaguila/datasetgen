@@ -140,3 +140,27 @@ test("reference and file fields", async ({ page }) => {
   expect(res.headers()["content-disposition"]).toContain("attachment");
   expect(await res.text()).toBe("olá");
 });
+
+// A unique value another record took after the delete: the restore asks for a new one.
+test("a restore picks a new unique value", async ({ page }) => {
+  await page.goto("/");
+  const post = (path: string, data: unknown) => page.request.post(`/api/proxy/v1${path}`, { data });
+  const schema = { type: "object", properties: { cod: { type: "string", title: "Código", "x-unique": true } } };
+  const id = (await (await post("/collections", { name: `unico-${Date.now()}`, schema })).json()).id as string;
+  const old = (await (await post("/records", { collection_id: id, data: { cod: "A1" } })).json()).id as string;
+  expect((await post("/records/delete", { ids: [old] })).ok()).toBeTruthy();
+  expect((await post("/records", { collection_id: id, data: { cod: "A1" } })).ok()).toBeTruthy();
+
+  await page.goto(`/collections/${id}/trash`);
+  await page.getByRole("row").filter({ hasText: "A1" }).getByRole("button", { name: "Restaurar" }).click();
+  const dialog = page.getByRole("dialog", { name: "Esse valor já está em uso" });
+  await expect(dialog.getByLabel("Código")).toHaveValue("A1");
+  await dialog.getByRole("button", { name: "Restaurar" }).click();
+  await expect(dialog.getByText("Esse valor também já está em uso. Escolha outro.")).toBeVisible();
+  await dialog.getByLabel("Código").fill("A2");
+  await dialog.getByRole("button", { name: "Restaurar" }).click();
+  await expect(page.getByText("1 registro restaurado")).toBeVisible();
+  await page.goto(`/collections/${id}`);
+  await expect(page.getByRole("row").filter({ hasText: "A2" })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "A1" })).toBeVisible();
+});

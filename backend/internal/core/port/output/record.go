@@ -66,7 +66,7 @@ type RecordRepository interface {
 	// Comment reads one comment's record and author (NotFound when gone).
 	Comment(ctx context.Context, id string) (*domain.RecordComment, error)
 	DeleteComment(ctx context.Context, id string) error
-	// MaxNumber is the largest number the collection's records hold under key, 0 when none.
+	// MaxNumber is the largest number the collection's records, trashed ones included, hold under key, 0 when none.
 	MaxNumber(ctx context.Context, collectionID, key string) (int64, error)
 	// Matching finds, per value (by index), the record of the collection whose key holds it.
 	Matching(ctx context.Context, collectionID, key string, values []json.RawMessage) (map[int]domain.Record, error)

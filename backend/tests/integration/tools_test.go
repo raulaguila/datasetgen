@@ -248,11 +248,16 @@ func TestTrashKeepsRecordsAndCollections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantCode(t, ignore(box.RestoreRecords(owner, c.ID, []string{r.ID})), apperror.CodeConflict)
+	wantCode(t, ignore(box.RestoreRecords(owner, c.ID, []string{r.ID}, nil)), apperror.CodeConflict)
+	// New values: only unique fields, one record, fitting the field and still free.
+	wantCode(t, ignore(box.RestoreRecords(owner, c.ID, []string{r.ID}, map[string]json.RawMessage{"outro": json.RawMessage(`"x"`)})), apperror.CodeInvalidInput)
+	wantCode(t, ignore(box.RestoreRecords(owner, c.ID, []string{r.ID, taker.ID}, map[string]json.RawMessage{"cod": json.RawMessage(`"x"`)})), apperror.CodeInvalidInput)
+	wantCode(t, ignore(box.RestoreRecords(owner, c.ID, []string{r.ID}, map[string]json.RawMessage{"cod": json.RawMessage(`5`)})), apperror.CodeValidationFailed)
+	wantCode(t, ignore(box.RestoreRecords(owner, c.ID, []string{r.ID}, map[string]json.RawMessage{"cod": json.RawMessage(`"b"`)})), apperror.CodeConflict)
 	if err := records.DeleteMany(owner, []string{taker.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := box.RestoreRecords(owner, c.ID, []string{r.ID}); err != nil || n != 1 {
+	if n, err := box.RestoreRecords(owner, c.ID, []string{r.ID}, nil); err != nil || n != 1 {
 		t.Fatalf("restore: %d, %v", n, err)
 	}
 	if got, err := records.Get(owner, r.ID); err != nil || got.Version != 2 {
@@ -263,6 +268,26 @@ func TestTrashKeepsRecordsAndCollections(t *testing.T) {
 	}
 	if n, err := box.PurgeRecords(owner, c.ID, nil); err != nil || n != 1 { // the taker
 		t.Fatalf("purge: %d, %v", n, err)
+	}
+	// Taken again, it comes back with a new value instead.
+	if err := records.DeleteMany(owner, []string{r.ID}); err != nil {
+		t.Fatal(err)
+	}
+	taker, err = records.Create(owner, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{"cod":"b"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := box.RestoreRecords(owner, c.ID, []string{r.ID}, map[string]json.RawMessage{"cod": json.RawMessage(`"c"`)}); err != nil || n != 1 {
+		t.Fatalf("restore with a new value: %d, %v", n, err)
+	}
+	if got, err := records.Get(owner, r.ID); err != nil || string(got.Data) != `{"cod": "c"}` || got.Version != 3 {
+		t.Fatalf("renewed: %+v, %v", got, err)
+	}
+	if err := records.DeleteMany(owner, []string{taker.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := box.PurgeRecords(owner, c.ID, nil); err != nil {
+		t.Fatal(err)
 	}
 
 	// A collection comes back with its records; purged, it is gone.
@@ -854,6 +879,16 @@ func TestAutoFieldsAndUpsert(t *testing.T) {
 	_ = json.Unmarshal(b.Data, &doc)
 	if doc["n"] != float64(2) || doc["total"] != nil {
 		t.Fatalf("second: %v", doc)
+	}
+	// The highest number in the trash stays taken: the next record does not reuse it.
+	if err := records.DeleteMany(owner, []string{b.ID}); err != nil {
+		t.Fatal(err)
+	}
+	b2, _ := records.Create(owner, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{"sku":"B2"}`)})
+	doc = nil
+	_ = json.Unmarshal(b2.Data, &doc)
+	if doc["n"] != float64(3) {
+		t.Fatalf("after trash: %v", doc)
 	}
 	// Upsert by sku: A gets a new qtd (its other fields stay), C is new.
 	res, err := records.Import(owner, input.ImportRecordsCommand{CollectionID: c.ID, UpsertKey: "sku", Records: []json.RawMessage{json.RawMessage(`{"sku":"A","qtd":10}`), json.RawMessage(`{"sku":"C","preco":3,"qtd":1}`)}})

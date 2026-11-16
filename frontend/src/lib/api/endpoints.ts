@@ -220,7 +220,8 @@ export const tools = {
   mcpCalls: (collectionId: string) => apiFetch<{ items: McpCall[] }>(`${col(collectionId)}/mcp-calls`),
   runAutomation: (collectionId: string, autoId: string) => apiFetch<Automation>(`${col(collectionId)}/automations/${id(autoId)}/run`, { method: "POST" }),
   trash: (collectionId: string, signal?: AbortSignal) => apiFetch<{ items: TrashedRecord[]; retention_days: number }>(`${col(collectionId)}/trash`, { signal }),
-  restoreRecords: (collectionId: string, ids: string[]) => apiFetch<{ count: number }>(`${col(collectionId)}/trash/restore`, { method: "POST", json: { ids } }),
+  /** Values, for one record, give its unique fields new values on the way back. */
+  restoreRecords: (collectionId: string, ids: string[], values?: Record<string, unknown>) => apiFetch<{ count: number }>(`${col(collectionId)}/trash/restore`, { method: "POST", json: values ? { ids, values } : { ids } }),
   purgeRecords: (collectionId: string, ids: string[]) => apiFetch<{ count: number }>(`${col(collectionId)}/trash/purge`, { method: "POST", json: { ids } }),
   trashedCollections: () => apiFetch<{ items: TrashedCollection[]; retention_days: number }>("/v1/collections/trash"),
   restoreCollection: (collectionId: string) => apiFetch<void>(`/v1/collections/trash/${id(collectionId)}/restore`, { method: "POST" }),

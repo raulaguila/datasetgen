@@ -124,7 +124,9 @@ type AutomationInput struct {
 // ToolsService runs the trash, field history, saved views and attached files.
 type ToolsService interface {
 	TrashedRecords(ctx context.Context, collectionID string) ([]domain.TrashedRecord, error)
-	RestoreRecords(ctx context.Context, collectionID string, ids []string) (int, error)
+	// RestoreRecords puts trashed records back. Values, for one record only, replace
+	// its unique fields' values first, so a value another record took since does not block it.
+	RestoreRecords(ctx context.Context, collectionID string, ids []string, values map[string]json.RawMessage) (int, error)
 	// PurgeRecords empties the given trashed records, or the whole trash with none (owners).
 	PurgeRecords(ctx context.Context, collectionID string, ids []string) (int64, error)
 

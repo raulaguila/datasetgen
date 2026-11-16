@@ -469,6 +469,11 @@ type idsDTO struct {
 	IDs []string `json:"ids"`
 }
 
+type restoreDTO struct {
+	IDs    []string                   `json:"ids"`
+	Values map[string]json.RawMessage `json:"values,omitempty"`
+}
+
 type trashedRecordDTO struct {
 	ID            string          `json:"id"`
 	Data          json.RawMessage `json:"data" swaggertype:"object"`
@@ -505,16 +510,16 @@ type countDTO struct {
 // @Accept json
 // @Produce json
 // @Param id path string true "Collection ID"
-// @Param body body idsDTO true "Record ids (1 to 100)"
+// @Param body body restoreDTO true "Record ids (1 to 100); values, for one record, give its unique fields new values"
 // @Security BearerAuth
 // @Success 200 {object} countDTO
 // @Router /v1/collections/{id}/trash/restore [post]
 func (h *Handler) RestoreRecords(c fiber.Ctx) error {
-	var body idsDTO
+	var body restoreDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	n, err := h.tools.RestoreRecords(c.Context(), c.Params("id"), body.IDs)
+	n, err := h.tools.RestoreRecords(c.Context(), c.Params("id"), body.IDs, body.Values)
 	if err != nil {
 		return fail(c, err)
 	}
