@@ -56,7 +56,7 @@ func TestEveryTokenRouteChecksTheSession(t *testing.T) {
 		}
 		checked++
 	}
-	if checked < 20 {
+	if checked < 10 { // users and audit routes
 		t.Fatalf("only %d routes checked", checked)
 	}
 }

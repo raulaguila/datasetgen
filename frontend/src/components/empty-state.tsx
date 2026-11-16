@@ -1,20 +1,26 @@
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** Canonical empty list: icon + title + one sentence + optional CTA. */
+/** Canonical empty list: icon + title + one sentence + optional CTA. compact is
+ * the one-line form for a list inside a form section. */
 export function EmptyState({
   icon: Icon,
   title,
   description,
   action,
+  compact = false,
   className,
 }: {
   icon?: LucideIcon;
   title: string;
   description?: string;
   action?: React.ReactNode;
+  compact?: boolean;
   className?: string;
 }) {
+  if (compact) {
+    return <p role="status" className={cn("rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground", className)}>{title}</p>;
+  }
   return (
     <div
       role="status"

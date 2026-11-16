@@ -33,7 +33,6 @@ import (
 	"github.com/raulaguila/dataset/internal/core/usecase/jobs"
 	"github.com/raulaguila/dataset/internal/core/usecase/mailer"
 	"github.com/raulaguila/dataset/internal/core/usecase/record"
-	rolesvc "github.com/raulaguila/dataset/internal/core/usecase/role"
 	"github.com/raulaguila/dataset/internal/core/usecase/tools"
 	usersvc "github.com/raulaguila/dataset/internal/core/usecase/user"
 	"github.com/raulaguila/dataset/internal/infra"
@@ -166,8 +165,6 @@ func NewApplication(cfg *config.Environment, res *infra.Resources, log *logger.L
 	return &input.Application{
 		Health:       health.New(pgHealth),
 		Authorizer:   authorizer,
-		Resources:    authorizer,
-		Roles:        rolesvc.New(store, store, permReader),
 		Users:        usersvc.New(store, store, output.RealClock{}, cfg.Auth.LoginAttemptEmailWindow),
 		Auth:         authSvc,
 		Account:      account.New(store, permReader, output.RealClock{}, NewFiles(cfg.Storage)),

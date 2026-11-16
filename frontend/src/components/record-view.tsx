@@ -6,6 +6,7 @@ import { Check, ExternalLink, FileIcon } from "lucide-react";
 import { useFormatDate } from "@/components/bits";
 import { FILE, REF, fileRefs, isImage } from "@/components/field-builder";
 import { Markdown, looksLikeMarkdown } from "@/components/markdown";
+import { CodeBlock } from "@/components/secret";
 import { useTextLinks } from "@/components/text-links";
 import { useNumberFormat } from "@/components/record-groups";
 import { useRecordLabel } from "@/components/schema-form";
@@ -114,7 +115,7 @@ export function Value({ schema, value }: { schema: S; value: unknown }) {
   }
   if (schema[FILE] === true) return <Files value={value} />;
   if (Object.keys(propsOf(schema)).length) return <Group schema={schema} value={value} />;
-  return <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs">{JSON.stringify(value, null, 2)}</pre>;
+  return <CodeBlock copy={false}>{JSON.stringify(value, null, 2)}</CodeBlock>;
 }
 
 /** An object's fields as label and value; with `heading`, its first short text names it instead. */

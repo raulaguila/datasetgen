@@ -9,11 +9,10 @@ import { FormError, FormSection, FormSections, IconAction, useFormatDate } from 
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock, CopyButton, Secret } from "@/components/secret";
 import { EmptyState } from "@/components/empty-state";
-import { fieldsOf } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ListSkeleton } from "@/components/skeletons";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,10 +34,10 @@ function Keys({ collection }: { collection: Collection }) {
   const [revoking, setRevoking] = useState<{ id: string; name: string } | null>(null);
   const items = list.data?.items ?? [];
   return (
-    <FormSection title={t("integrations.keys")} description={t("integrations.keys_desc")}>
+    <FormSection id="keys" title={t("integrations.keys")} description={t("integrations.keys_desc")}>
       <div className="space-y-3">
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
-          <p className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">{t("integrations.keys_empty")}</p>
+          <EmptyState compact title={t("integrations.keys_empty")} />
         ) : (
           <ul className="divide-y rounded-md border">
             {items.map((k) => (
@@ -96,10 +95,10 @@ function Shares({ collection }: { collection: Collection }) {
   const urlOf = (s: ShareLink) => `${window.location.origin}/${s.kind === "form" ? "f" : "s"}/${s.token}`;
   const kindName = (k: ShareLink["kind"]) => t(k === "form" ? "share.form" : "share.view");
   return (
-    <FormSection title={t("share.title")} description={`${t("share.desc")} ${t("share.private_note")}`}>
+    <FormSection id="shares" title={t("share.title")} description={`${t("share.desc")} ${t("share.private_note")}`}>
       <div className="space-y-3">
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
-          <p className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">{t("share.empty")}</p>
+          <EmptyState compact title={t("share.empty")} />
         ) : (
           <ul className="divide-y rounded-md border" aria-label={t("share.title")}>
             {items.map((s) => (
@@ -203,11 +202,11 @@ function Webhooks({ collection }: { collection: Collection }) {
   const items = list.data?.items ?? [];
   const toggle = (e: WebhookEvent, on: boolean) => setEvents((cur) => (on ? [...cur, e] : cur.filter((x) => x !== e)));
   return (
-    <FormSection title={t("integrations.webhooks")} description={t("integrations.webhooks_desc")}>
+    <FormSection id="webhooks" title={t("integrations.webhooks")} description={t("integrations.webhooks_desc")}>
       <div className="space-y-3">
         {secret && <Secret value={secret} onClose={() => setSecret(null)} />}
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
-          <p className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">{t("integrations.webhooks_empty")}</p>
+          <EmptyState compact title={t("integrations.webhooks_empty")} />
         ) : (
           <ul className="divide-y rounded-md border">
             {items.map((w) => {
@@ -250,6 +249,16 @@ function Webhooks({ collection }: { collection: Collection }) {
           <Button type="submit" disabled={!url.trim() || !events.length || create.isPending}><WebhookIcon className="size-4" />{t("integrations.create_hook")}</Button>
           <FormError message={create.isError ? errorMessage(create.error, "common.save_failed", t) : null} />
         </form>
+        <details className="text-sm">
+          <summary className="cursor-pointer font-medium">{t("integrations.docs_signature")}</summary>
+          <div className="mt-2 space-y-1.5">
+            <p className="text-muted-foreground">{t("integrations.docs_signature_desc")}</p>
+            <CodeBlock>{`// Node.js
+const [t, v1] = req.headers["x-dataset-signature"].split(",").map((p) => p.split("=")[1]);
+const expected = crypto.createHmac("sha256", process.env.DATASET_WEBHOOK_SECRET).update(\`\${t}.\${rawBody}\`).digest("hex");
+const ok = crypto.timingSafeEqual(Buffer.from(v1), Buffer.from(expected)) && Date.now() / 1000 - Number(t) < 300;`}</CodeBlock>
+          </div>
+        </details>
       </div>
       <ConfirmDialog
         open={!!removing}
@@ -268,65 +277,26 @@ function Webhooks({ collection }: { collection: Collection }) {
   );
 }
 
-/** How a program reads and writes this collection, with examples built from its fields. */
-function Docs({ collection }: { collection: Collection }) {
-  const { t } = useI18n();
-  // The web address answers the API too: the proxy passes API keys through.
-  // Drawn only after the collection loads in the browser, so window is there.
-  const base = typeof window === "undefined" ? "/api/proxy" : `${window.location.origin}/api/proxy`;
-  const example = Object.fromEntries(fieldsOf(collection.schema ?? null).filter((r) => !r.advanced).slice(0, 3).map((r) => [
-    r.key,
-    r.field.type === "number" || r.field.type === "integer" ? 1 : r.field.type === "boolean" ? true : r.field.type === "strings" ? ["a"] : r.field.type === "enum" ? r.field.options.split(",")[0]?.trim() ?? "" : r.field.type === "date" ? "2026-01-31" : "…",
-  ]));
-  const auth = `-H "Authorization: Bearer $DATASET_KEY"`;
-  return (
-    <FormSection title={t("integrations.docs")} description={t("integrations.docs_desc")} wide>
-      <div className="space-y-4 text-sm">
-        <p>{t("integrations.docs_base")} <code className="font-mono text-xs">{base}</code></p>
-        <div className="space-y-1.5">
-          <h3 className="font-medium">{t("integrations.docs_list")}</h3>
-          <CodeBlock>{`curl ${auth} \\\n  "${base}/v1/records?collection_id=${collection.id}&page=1&limit=50&sort=updated_at&order=desc"`}</CodeBlock>
-          <p className="text-xs text-muted-foreground">{t("integrations.docs_list_hint")}</p>
-        </div>
-        <div className="space-y-1.5">
-          <h3 className="font-medium">{t("integrations.docs_create")}</h3>
-          <CodeBlock>{`curl ${auth} -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ collection_id: collection.id, data: example })}' \\\n  "${base}/v1/records"`}</CodeBlock>
-        </div>
-        <div className="space-y-1.5">
-          <h3 className="font-medium">{t("integrations.docs_update")}</h3>
-          <CodeBlock>{`curl ${auth} -X PATCH -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ data: example, version: 1 })}' \\\n  "${base}/v1/records/<record-id>"`}</CodeBlock>
-          <p className="text-xs text-muted-foreground">{t("integrations.docs_update_hint")}</p>
-        </div>
-        <div className="space-y-1.5">
-          <h3 className="font-medium">{t("integrations.docs_delete")}</h3>
-          <CodeBlock>{`curl ${auth} -H "Content-Type: application/json" \\\n  -d '{"ids":["<record-id>"]}' "${base}/v1/records/delete"`}</CodeBlock>
-        </div>
-        <div className="space-y-1.5">
-          <h3 className="font-medium">{t("integrations.docs_signature")}</h3>
-          <p className="text-muted-foreground">{t("integrations.docs_signature_desc")}</p>
-          <CodeBlock>{`// Node.js
-const [t, v1] = req.headers["x-dataset-signature"].split(",").map((p) => p.split("=")[1]);
-const expected = crypto.createHmac("sha256", process.env.DATASET_WEBHOOK_SECRET).update(\`\${t}.\${rawBody}\`).digest("hex");
-const ok = crypto.timingSafeEqual(Buffer.from(v1), Buffer.from(expected)) && Date.now() / 1000 - Number(t) < 300;`}</CodeBlock>
-        </div>
-      </div>
-    </FormSection>
-  );
-}
-
 export default function CollectionIntegrationsPage() {
   const { t } = useI18n();
   return (
     <CollectionPage section="collections.tab.integrations" description="integrations.subtitle">
       {(collection) => roleAllows(collection.role, "owner") ? (
-        <FormSections>
-          <Shares collection={collection} />
-          <Keys collection={collection} />
-          <McpTools collection={collection} />
-          <McpActivity collection={collection} />
-          <Webhooks collection={collection} />
-          <Docs collection={collection} />
-        </FormSections>
+        <>
+          {/* Jump links: the page holds five sections. */}
+          <nav aria-label={t("integrations.sections")} className="mb-4 flex flex-wrap gap-2">
+            {([["shares", "share.title"], ["keys", "integrations.keys"], ["mcp-tools", "mcp_tools.title"], ["mcp-activity", "mcp_activity.title"], ["webhooks", "integrations.webhooks"]] as const).map(([id, key]) => (
+              <a key={id} href={`#${id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>{t(key)}</a>
+            ))}
+          </nav>
+          <FormSections>
+            <Shares collection={collection} />
+            <Keys collection={collection} />
+            <McpTools collection={collection} />
+            <McpActivity collection={collection} />
+            <Webhooks collection={collection} />
+          </FormSections>
+        </>
       ) : <EmptyState icon={Plug} title={t("error.forbidden")} description={t("integrations.owners_only")} />}
     </CollectionPage>
   );

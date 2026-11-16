@@ -13,11 +13,9 @@ import (
 	collectionhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/collection"
 	healthhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/health"
 	notificationhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/notification"
-	permissionhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/permission"
 	preferencehttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/preference"
 	publichttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/public"
 	recordhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/record"
-	rolehttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/role"
 	sessionhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/session"
 	toolshttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/tools"
 	usershttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/user"
@@ -99,12 +97,8 @@ func New(cfg *config.Environment, app *input.Application, hits middleware.Hits, 
 	tools := toolshttp.New(app.Integrations, app.Tools, app.Records)
 	tools.MeRoutes(me.Group("/keys"))
 
-	permissionhttp.New(app.Resources).Routes(v1.Group("/permissions", token), app.Authorizer)
-	roles := rolehttp.New(app.Roles)
-	roles.Routes(v1.Group("/roles", token), app.Authorizer)
 	users := v1.Group("/users", token)
 	usershttp.New(app.Users, app.Auth).Routes(users, app.Authorizer)
-	roles.UserRoutes(users, app.Authorizer)
 	// Collections and records check the caller's role per collection, so they need the full session check.
 	// Records and files also take an API key, capped to its collections (policy.CollectionRole).
 	collections := v1.Group("/collections", bearer)

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/provider";
-import { copyText } from "@/lib/utils";
+import { cn, copyText } from "@/lib/utils";
 
 export function CopyButton({ text }: { text: string }) {
   const { t } = useI18n();
@@ -32,11 +32,11 @@ export function Secret({ value, onClose }: { value: string; onClose: () => void 
 }
 
 /** A copyable code sample. */
-export function CodeBlock({ children }: { children: string }) {
+export function CodeBlock({ children, copy = true, className }: { children: string; copy?: boolean; className?: string }) {
   return (
     <div className="relative">
-      <pre className="overflow-x-auto rounded-md border bg-muted/40 p-3 pr-24 font-mono text-xs leading-relaxed">{children}</pre>
-      <div className="absolute right-2 top-2"><CopyButton text={children} /></div>
+      <pre className={cn("overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed", copy && "pr-24", className)}>{children}</pre>
+      {copy && <div className="absolute right-2 top-2"><CopyButton text={children} /></div>}
     </div>
   );
 }

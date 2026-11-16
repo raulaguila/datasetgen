@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
+import { CodeBlock } from "@/components/secret";
 
 /**
  * The Markdown that long text fields carry (headings, lists, quotes, code, tables,
@@ -101,7 +102,7 @@ export function Markdown({ text, links }: { text: string; links?: Map<string, st
             const size = b.level <= 2 ? "text-base" : "text-sm";
             return <p key={i} role="heading" aria-level={b.level + 2} className={`${size} pt-1 font-semibold`}>{inline(b.text, links)}</p>;
           }
-          case "code": return <pre key={i} className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs leading-relaxed">{b.text}</pre>;
+          case "code": return <CodeBlock key={i}>{b.text}</CodeBlock>;
           case "quote": return <blockquote key={i} className="border-l-2 pl-3 text-muted-foreground">{lineBreaks(b.text, links)}</blockquote>;
           case "list": {
             const Tag = b.ordered ? "ol" : "ul";

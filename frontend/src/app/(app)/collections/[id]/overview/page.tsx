@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, ChevronRight, Circle, Plus } from "lucide-react";
 import { avatarStyle, initials, useRelativeTime } from "@/components/bits";
-import { CollectionDashboard } from "@/components/collection-dashboard";
 import { recordTitle } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ListSkeleton } from "@/components/skeletons";
@@ -165,8 +164,6 @@ function Overview({ collection }: { collection: Collection }) {
           </>
         )}
       </Card>
-
-      <CollectionDashboard collection={collection} />
 
       <div className={cn("grid gap-6", side && "lg:grid-cols-2")}>
         <Card className="gap-0 overflow-hidden p-0">

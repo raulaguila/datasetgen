@@ -27,6 +27,7 @@ test("two-step login asks for a code after the password", async ({ page, browser
 
   await user.goto("/profile");
   await user.getByRole("button", { name: "Ativar login em duas etapas" }).click();
+  await expect(user.getByRole("img", { name: "QR code para o app autenticador" })).toBeVisible();
   const secret = await user.locator("code").first().innerText();
   await user.getByLabel("Código de verificação").fill(totp(secret));
   await user.getByRole("button", { name: "Confirmar e ativar" }).click();

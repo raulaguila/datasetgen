@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const api = (page: Page, path: string, data: unknown) => page.request.post(`/api/proxy${path}`, { data });
 
-// The Analysis page measures each field; the overview's dashboard holds the widgets owners pick.
+// The Analysis page holds the dashboard owners build and measures each field.
 test("field analysis and a dashboard", async ({ page }) => {
   await page.goto("/");
   const schema = {
@@ -37,7 +37,7 @@ test("field analysis and a dashboard", async ({ page }) => {
   await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/analysis.png` : "test-results/analysis.png", fullPage: true });
 
   // The dashboard: a count of one kind and a chart by kind.
-  await page.goto(`/collections/${id}/overview`);
+  await page.goto(`/collections/${id}/analysis`);
   const board = page.getByRole("region", { name: "Painel" });
   await board.getByRole("button", { name: /Monte o painel/ }).click();
   let dialog = page.getByRole("dialog", { name: "Adicionar widget" });

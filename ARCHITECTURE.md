@@ -6,7 +6,7 @@
 
 The Go service lives in `backend/` (its own `go.mod`, `Makefile`, config and Docker files) and the Next.js app in `frontend/`; paths such as `cmd/backend` or `config/.env` below are relative to `backend/`.
 
-**Confirmed.** Dataset runs as two long-lived processes plus Postgres: `cmd/backend` serves Fiber HTTP (health, auth, sessions, preferences, notifications, permissions, roles, users, collections and records); `cmd/mailer` claims `sys.outbox` rows under a 10-minute lease (`SKIP LOCKED`), opens the sealed token and sends SMTP. `cmd/admin` handles operator actions. `frontend/` is a Next.js BFF: it keeps the tokens in a signed httpOnly cookie, forwards API calls with the bearer and sends the client IP as `X-Real-IP`, which the backend accepts only from the web container's fixed address (`API_TRUSTED_PROXIES`). Composition wires use cases to Postgres. Product constraints live in `PRODUCT.md`; surface briefs in `.keel/surfaces/`.
+**Confirmed.** Dataset runs as two long-lived processes plus Postgres: `cmd/backend` serves Fiber HTTP (health, auth, sessions, preferences, notifications, users, audit, collections and records); `cmd/mailer` claims `sys.outbox` rows under a 10-minute lease (`SKIP LOCKED`), opens the sealed token and sends SMTP. `cmd/admin` handles operator actions. `frontend/` is a Next.js BFF: it keeps the tokens in a signed httpOnly cookie, forwards API calls with the bearer and sends the client IP as `X-Real-IP`, which the backend accepts only from the web container's fixed address (`API_TRUSTED_PROXIES`). Composition wires use cases to Postgres. Product constraints live in `PRODUCT.md`; surface briefs in `.keel/surfaces/`.
 
 ## Boundaries
 
@@ -32,7 +32,7 @@ core/domain → stdlib only
 
 **Sacred (product + ADR):** JWT must not carry permission claims; authz loads live from the DB on each check. Plaintext passwords / refresh JTIs / email tokens must not be stored.
 
-**Authorization (confirmed):** Authorizer is applied on `/v1/permissions`, `/v1/roles`, `/v1/users` and `/v1/audit`; own-account routes live under `/v1/me`, use Bearer and queries scoped to the authenticated user; `/v1/auth` keeps only the token and sign-up flows. Roles are managed at runtime under `/v1/roles`. Protected roles (`is_superuser` or a `*` grant) cannot be changed there and `GET /v1/roles` does not list them: full access changes only through `cmd/admin`, and the API never grants `*`. Holding `roles:update` lets someone change any unprotected role, including their own. Users with a protected role get the same treatment under `/v1/users`: not listed, 403 by id, changed only through `cmd/admin`. Nobody disables their own account. Enable puts an account back to `active`, or `pending` if it never set a password; sessions do not come back.
+**Authorization (confirmed):** Authorizer is applied on `/v1/users` and `/v1/audit`; own-account routes live under `/v1/me`, use Bearer and queries scoped to the authenticated user; `/v1/auth` keeps only the token and sign-up flows. Platform roles (`usr.role`, its permissions and members) have no HTTP routes: the default `user` role covers every account, and `cmd/admin` promotes or demotes a platform admin (`is_superuser` or a `*` grant); the API never grants `*`. Collection access is per collection (below). Users with a protected role get the same treatment under `/v1/users`: not listed, 403 by id, changed only through `cmd/admin`. Nobody disables their own account. Enable puts an account back to `active`, or `pending` if it never set a password; sessions do not come back.
 
 **Collection membership (confirmed):** collections and records are not governed by RBAC but by `app.collection_member` (fixed roles: `owner` changes fields, settings and members; `editor` writes records; `viewer` reads). RBAC keeps only `collections:create`, which the default `user` role holds (migration `000012`), so every account may start collections. Activating an account that belongs to no collection (a self sign-up, or an invite from the users screen) creates a starter collection it owns, named in the account's language with a required title and notes (`policy.GiveStarterCollection`, `domain.StarterCollection`), in the activation transaction; someone invited into a collection starts there instead. `/v1/collections` and `/v1/records` run behind Bearer and the use cases call `policy.CollectionRole` per request: a non-member gets 404 (existence does not leak), a member with too small a role 403. A platform admin (enabled `is_superuser` role or a `*` grant) sees every collection as owner. The creator becomes owner in the create transaction; a collection keeps at least one owner (member changes take a per-collection advisory lock). `POST /v1/collections/{id}/members` adds an account by email or, when none exists, invites it (`auth.Invite`, pending account) and adds it at once; the invite and the membership are two transactions (marked `shortcut:`). Collection names are no longer unique across the instance, so a hidden collection neither blocks nor reveals a name.
 
@@ -120,15 +120,6 @@ Every query reads only what its caller uses. A hot path pays for each extra colu
 | GET/PUT | `/v1/me/preferences` (Bearer) |
 | GET | `/v1/me/notifications`, `/v1/me/notifications/count` (Bearer) |
 | PUT | `/v1/me/notifications/read`, body `{"ids": [...]}` (1 to 100, all or none) or no body for every one (Bearer) |
-| GET | `/v1/permissions/resources` (`roles:read`); each resource lists the `actions` its routes check, and `PUT /v1/roles/:id/permissions` refuses any other (audit is read-only, users have no delete) |
-| GET/POST | `/v1/roles`, `search`, `sort` (`name`, `created_at`), `order` and pagination (`roles:read`, `roles:create`) |
-| GET | `/v1/roles/:id` (`roles:read`) |
-| POST | `/v1/roles/delete`, body `{"ids": [...]}` (1 to 100), all or none; roles without members, not default (`roles:delete`) |
-| PATCH | `/v1/roles/:id`; `is_default` marks or unmarks a default role; several may be default (`roles:update`) |
-| PUT | `/v1/roles/:id/permissions`, full map in one transaction (`roles:update`) |
-| GET | `/v1/roles/:id/members`, `search` and pagination (`roles:read`) |
-| PUT/DELETE | `/v1/roles/:id/members/:user_id` (`roles:update`) |
-| PUT | `/v1/users/:id/roles` (`roles:update`; replaces every role of the user) |
 | GET | `/v1/users`, `search`, `status`, `role_id`, `sort` (`name`, `email`, `status`, `created_at`), `order` and pagination (`users:read`) |
 | POST | `/v1/users`, invite: creates a pending account and sends the activation email; a taken email is 409 (`users:create`) |
 | POST | `/v1/users/:id/invite`, sends a pending account a new activation email and ends the old link; 409 once activated, 429 inside the email cooldown (`users:update`) |
@@ -173,7 +164,7 @@ Every query reads only what its caller uses. A hot path pays for each extra colu
 
 **Own-account routes:** the user id comes from the verified token, never from the request, and every query filters by it. Another user's session or notification answers `404`.
 
-**Pagination / idempotency:** `GET /v1/users`, `GET /v1/roles` and `GET /v1/me/notifications` return `{items, pagination{page,limit,total_items,total_pages}}`; limit defaults to 20, up to 100. Users and roles also take `sort` (allowlist) and `order`. Register is idempotent on email: an unactivated account gets a fresh token, any other answers as new and sends nothing. Outbox rows are append-only inserts (no idempotency key column today).
+**Pagination / idempotency:** `GET /v1/users` and `GET /v1/me/notifications` return `{items, pagination{page,limit,total_items,total_pages}}`; limit defaults to 20, up to 100. Users also take `sort` (allowlist) and `order`. Register is idempotent on email: an unactivated account gets a fresh token, any other answers as new and sends nothing. Outbox rows are append-only inserts (no idempotency key column today).
 
 **Contracts (authz on wire):** Bearer middleware (`/v1/me`, logout) calls `input.Authenticator`, which validates the access JWT + live session. Resource groups use `Token`, which validates the JWT alone; their `Require(resource, action)` calls Authorizer, which checks the live session and the permission in one query (fail closed).
 

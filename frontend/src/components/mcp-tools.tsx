@@ -8,8 +8,10 @@ import { FormError, FormSection, IconAction, useFormatDate } from "@/components/
 import { ViewConditions } from "@/components/collection-stats";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { fieldsOf, type FieldRow } from "@/components/field-builder";
+import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
 import { RecordRules, type Where } from "@/components/record-rules";
+import { CodeBlock } from "@/components/secret";
 import { ListSkeleton } from "@/components/skeletons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -189,7 +191,7 @@ function ToolForm({ collection, initial, onDone }: { collection: Collection; ini
           <div className="space-y-1.5" role="status">
             <p className="text-sm">{t("mcp_tools.try_total").replace("{n}", String(tryRun.data.total))}</p>
             {tryRun.data.records.length > 0 && (
-              <pre className="max-h-64 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs">{JSON.stringify(tryRun.data.records.slice(0, 5).map((r) => r.data), null, 2)}</pre>
+              <CodeBlock copy={false} className="max-h-64 overflow-auto">{JSON.stringify(tryRun.data.records.slice(0, 5).map((r) => r.data), null, 2)}</CodeBlock>
             )}
           </div>
         )}
@@ -219,10 +221,10 @@ export function McpTools({ collection }: { collection: Collection }) {
   });
   const items = list.data?.items ?? [];
   return (
-    <FormSection title={t("mcp_tools.title")} description={t("mcp_tools.desc_section")}>
+    <FormSection id="mcp-tools" title={t("mcp_tools.title")} description={t("mcp_tools.desc_section")}>
       <div className="space-y-3">
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 && editing !== "new" ? (
-          <p className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">{t("mcp_tools.empty")}</p>
+          <EmptyState compact title={t("mcp_tools.empty")} />
         ) : (
           <ul className="divide-y rounded-md border" aria-label={t("mcp_tools.title")}>
             {items.map((x) => editing !== "new" && editing?.id === x.id ? (
@@ -271,7 +273,7 @@ export function McpActivity({ collection }: { collection: Collection }) {
   return (
     <FormSection id="mcp-activity" title={t("mcp_activity.title")} description={t("mcp_activity.desc")}>
       {list.isPending ? <ListSkeleton rows={2} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
-        <p className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">{t("mcp_activity.empty")}</p>
+        <EmptyState compact title={t("mcp_activity.empty")} />
       ) : (
         <ul className="max-h-96 divide-y overflow-auto rounded-md border" aria-label={t("mcp_activity.title")}>
           {items.map((c, i) => (

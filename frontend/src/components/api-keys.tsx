@@ -6,6 +6,7 @@ import { KeyRound, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { FormError, FormSection, IconAction, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Secret } from "@/components/secret";
 import { ListSkeleton } from "@/components/skeletons";
@@ -73,7 +74,7 @@ export function ApiKeysCard({ onCreated }: { onCreated?: (secret: string) => voi
       <div className="space-y-3">
         {secret && <Secret value={secret} onClose={() => setSecret(null)} />}
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
-          <p className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">{t("integrations.keys_empty")}</p>
+          <EmptyState compact title={t("integrations.keys_empty")} />
         ) : (
           <ul className="divide-y rounded-md border">
             {items.map((k) => (

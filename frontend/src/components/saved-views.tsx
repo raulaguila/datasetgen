@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { FormError, IconAction } from "@/components/bits";
+import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -53,7 +54,7 @@ export function SavedViews({ collectionId, canShare, onApply }: { collectionId: 
           <DialogDescription>{t("views.desc")}</DialogDescription>
         </DialogHeader>
         {items.length === 0 ? (
-          <p className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">{list.isPending ? t("views.loading") : t("views.empty")}</p>
+          <EmptyState compact title={list.isPending ? t("views.loading") : t("views.empty")} />
         ) : (
           <ul className="max-h-64 divide-y overflow-auto rounded-md border">
             {items.map((v) => (

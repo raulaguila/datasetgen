@@ -4,8 +4,6 @@ package input
 type Application struct {
 	Health       HealthChecker
 	Authorizer   Authorizer
-	Resources    ResourceCatalog
-	Roles        RoleService
 	Users        UserService
 	Auth         AuthService
 	Account      AccountService

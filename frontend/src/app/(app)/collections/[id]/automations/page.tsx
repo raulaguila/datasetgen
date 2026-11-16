@@ -294,7 +294,7 @@ function Automations({ collection }: { collection: Collection }) {
     <FormSection title={t("automations.title")} description={t("automations.desc")}>
       <div className="space-y-3">
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 && editing !== "new" ? (
-          <p className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">{t("automations.empty")}</p>
+          <EmptyState compact title={t("automations.empty")} />
         ) : (
           <ul className="divide-y rounded-md border" aria-label={t("automations.title")}>
             {items.map((a) => editing !== "new" && editing?.id === a.id ? (

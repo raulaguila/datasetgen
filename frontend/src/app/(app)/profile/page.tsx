@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { Loader2, Monitor, Smartphone } from "lucide-react";
 import { toast } from "sonner";
+import QRCode from "qrcode";
 import { FieldNote, FormError, FormSection, FormSections, PageBody, SaveBar, PageHeader, initials, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PasswordInput } from "@/components/password-input";
@@ -218,6 +219,20 @@ function PasswordCard() {
 
 const MFA_KEY = ["mfa"] as const;
 
+/** The otpauth address as a QR code, drawn here so the secret never leaves the page. */
+function OtpQr({ uri, label }: { uri: string; label: string }) {
+  const { size, data } = QRCode.create(uri, { errorCorrectionLevel: "M" }).modules;
+  let d = "";
+  for (let i = 0; i < data.length; i++) if (data[i]) d += `M${(i % size) + 4} ${Math.floor(i / size) + 4}h1v1h-1z`;
+  // White quiet zone and black modules in both themes: authenticator apps need the contrast.
+  return (
+    <svg role="img" aria-label={label} viewBox={`0 0 ${size + 8} ${size + 8}`} className="mb-3 size-48 rounded-md" shapeRendering="crispEdges">
+      <rect width="100%" height="100%" fill="#fff" />
+      <path d={d} fill="#000" />
+    </svg>
+  );
+}
+
 /** Two-step login: setup shows the secret, a code turns it on, the recovery codes show once. */
 function TwoStepCard() {
   const { t } = useI18n();
@@ -282,6 +297,7 @@ function TwoStepCard() {
       <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); enable.mutate(); }}>
         <p className="text-sm text-muted-foreground">{t("profile.mfa_scan")}</p>
         <div className="space-y-1 rounded-lg border p-4">
+          <OtpQr uri={setup.uri} label={t("profile.mfa_qr")} />
           <div className="text-xs text-muted-foreground">{t("profile.mfa_secret")}</div>
           <code className="block break-all font-mono text-sm">{setup.secret.match(/.{1,4}/g)?.join(" ")}</code>
           <a href={setup.uri} className="text-xs text-primary hover:underline">{t("profile.mfa_open_app")}</a>

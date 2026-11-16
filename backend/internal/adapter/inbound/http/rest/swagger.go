@@ -40,9 +40,7 @@ import (
 //	@tag.name			Notifications
 //	@tag.description	Security notices for the current user
 //	@tag.name			Users
-//	@tag.description	Accounts of other people, their roles and sessions. Users with a protected role stay out of reach
-//	@tag.name			Roles
-//	@tag.description	Roles, their permissions and members, and the resources they may be granted. Protected roles cannot be changed
+//	@tag.description	Accounts of other people and their sessions. Platform admins stay out of reach; the admin CLI promotes one
 //	@tag.name			Audit
 //	@tag.description	Log of administrative changes
 //	@tag.name			Collections
@@ -63,7 +61,7 @@ import (
 //	@tag.description	Actions run when records change or daily; owners
 //	@tag.name			MCP
 //	@tag.description	Model Context Protocol for AI assistants with an API key, the tools owners publish for it and what assistants did
-//	@x-tagGroups		[{"name":"System","tags":["Health"]},{"name":"Authentication","tags":["Auth","Registration","Password reset"]},{"name":"Account","tags":["Profile","Sessions","Preferences","Notifications"]},{"name":"Administration","tags":["Users","Roles","Audit"]},{"name":"Data","tags":["Collections","Records","Trash"]},{"name":"Integrations","tags":["API keys","Share links","Public","Webhooks","Automations","MCP"]}]
+//	@x-tagGroups		[{"name":"System","tags":["Health"]},{"name":"Authentication","tags":["Auth","Registration","Password reset"]},{"name":"Account","tags":["Profile","Sessions","Preferences","Notifications"]},{"name":"Administration","tags":["Users","Audit"]},{"name":"Data","tags":["Collections","Records","Trash"]},{"name":"Integrations","tags":["API keys","Share links","Public","Webhooks","Automations","MCP"]}]
 
 var (
 	//go:embed docs/swagger.css

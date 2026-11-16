@@ -1,5 +1,6 @@
 "use client";
 
+import { CollectionDashboard } from "@/components/collection-dashboard";
 import { BUCKETS, FieldStats, ViewConditions, barFields, isDate, isNumeric, useStats, isPlain } from "@/components/collection-stats";
 import { fieldsOf } from "@/components/field-builder";
 import { useNumberFormat } from "@/components/record-groups";
@@ -14,7 +15,8 @@ import { useI18n } from "@/lib/i18n/provider";
 import { CollectionPage } from "../_parts";
 
 /**
- * The collection's fields measured over its records, like a schema browser:
+ * The collection's dashboard (widgets owners pick), then its fields measured
+ * over its records, like a schema browser:
  * how full each one is, its numbers, dates over time or common values, all in
  * one request. Conditions narrow the records, as on the list.
  */
@@ -31,31 +33,35 @@ function Analysis({ collection }: { collection: Collection }) {
   const n = st.data?.total ?? 0;
   const buckets = Object.fromEntries(BUCKETS.map((b) => [b, t(`analysis.bucket.${b}` as MessageKey)]));
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <RecordRules fields={fieldsOf(collection.schema ?? null)} value={where} onChange={(w: Where) => set({ where: whereText(w) })} />
-        <ViewConditions collectionId={collection.id} onPick={(w) => set({ where: whereText(w) })} />
-        {dates.length > 0 && (
-          <Select value={bucket} items={buckets} onValueChange={(v) => set({ bucket: String(v) })}>
-            <SelectTrigger size="sm" aria-label={t("analysis.bucket")}><span className="text-muted-foreground">{t("analysis.bucket")}</span><SelectValue /></SelectTrigger>
-            <SelectContent>{BUCKETS.map((b) => <SelectItem key={b} value={b}>{buckets[b]}</SelectItem>)}</SelectContent>
-          </Select>
+    <div className="space-y-8">
+      <CollectionDashboard collection={collection} />
+      <section className="space-y-4" aria-labelledby="explore-title">
+        <h2 id="explore-title" className="font-heading text-base font-semibold">{t("analysis.explore")}</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <RecordRules fields={fieldsOf(collection.schema ?? null)} value={where} onChange={(w: Where) => set({ where: whereText(w) })} />
+          <ViewConditions collectionId={collection.id} onPick={(w) => set({ where: whereText(w) })} />
+          {dates.length > 0 && (
+            <Select value={bucket} items={buckets} onValueChange={(v) => set({ bucket: String(v) })}>
+              <SelectTrigger size="sm" aria-label={t("analysis.bucket")}><span className="text-muted-foreground">{t("analysis.bucket")}</span><SelectValue /></SelectTrigger>
+              <SelectContent>{BUCKETS.map((b) => <SelectItem key={b} value={b}>{buckets[b]}</SelectItem>)}</SelectContent>
+            </Select>
+          )}
+          <p className="ml-auto text-sm text-muted-foreground" role="status">
+            {st.isPending ? "…" : t(text ? "analysis.records_matching" : "analysis.records").replace("{n}", num(n))}
+          </p>
+        </div>
+        {st.isError ? <QueryErrorState error={st.error} onRetry={() => void st.refetch()} /> : st.isPending ? <ListSkeleton rows={4} /> : (
+          <>
+            {/* Fields with figures or bars first; those with only a fill rate share smaller cards after them. */}
+            <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+              {rows.filter((r) => !isPlain(st.data.fields[r.key])).map((r) => <FieldStats key={r.key} row={r} profile={st.data.fields[r.key]} total={n} bucket={bucket} />)}
+            </div>
+            <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+              {rows.filter((r) => isPlain(st.data.fields[r.key])).map((r) => <FieldStats key={r.key} row={r} profile={st.data.fields[r.key]} total={n} bucket={bucket} />)}
+            </div>
+          </>
         )}
-        <p className="ml-auto text-sm text-muted-foreground" role="status">
-          {st.isPending ? "…" : t(text ? "analysis.records_matching" : "analysis.records").replace("{n}", num(n))}
-        </p>
-      </div>
-      {st.isError ? <QueryErrorState error={st.error} onRetry={() => void st.refetch()} /> : st.isPending ? <ListSkeleton rows={4} /> : (
-        <>
-          {/* Fields with figures or bars first; those with only a fill rate share smaller cards after them. */}
-          <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-            {rows.filter((r) => !isPlain(st.data.fields[r.key])).map((r) => <FieldStats key={r.key} row={r} profile={st.data.fields[r.key]} total={n} bucket={bucket} />)}
-          </div>
-          <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-            {rows.filter((r) => isPlain(st.data.fields[r.key])).map((r) => <FieldStats key={r.key} row={r} profile={st.data.fields[r.key]} total={n} bucket={bucket} />)}
-          </div>
-        </>
-      )}
+      </section>
     </div>
   );
 }

@@ -1,11 +1,16 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Loader2, PlugZap } from "lucide-react";
 import { FormError, FormSection, FormSections, PageBody, PageHeader } from "@/components/bits";
 import { ApiKeysCard } from "@/components/api-keys";
+import { QueryErrorState } from "@/components/query-error-state";
+import { RestExamples, useOrigin } from "@/components/rest-examples";
 import { CodeBlock } from "@/components/secret";
+import { ListSkeleton } from "@/components/skeletons";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { collections } from "@/lib/api/endpoints";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,9 +45,7 @@ async function reachOf(key: string): Promise<Reach> {
 /** How to plug an AI assistant into /v1/mcp; a key just made fills the examples. */
 function McpConnectCard({ secret }: { secret: string | null }) {
   const { t } = useI18n();
-  // The origin is known only in the browser; the server render shows the path alone.
-  const origin = useSyncExternalStore(() => () => {}, () => window.location.origin, () => "");
-  const url = `${origin}${MCP_PATH}`;
+  const url = `${useOrigin()}${MCP_PATH}`;
   const key = secret ?? t("mcp_connect.key_placeholder");
   const claudeCode = `claude mcp add --transport http dataset \\\n  ${url} \\\n  --header "Authorization: Bearer ${key}"`;
   const generic = JSON.stringify({ mcpServers: { dataset: { url, headers: { Authorization: `Bearer ${key}` } } } }, null, 2);
@@ -116,6 +119,34 @@ function McpConnectCard({ secret }: { secret: string | null }) {
   );
 }
 
+/** REST examples built from a collection the member picks. */
+function RestCard() {
+  const { t } = useI18n();
+  const cols = useQuery({ queryKey: ["collections", "options"], queryFn: ({ signal }) => collections.options(signal), staleTime: 30_000 });
+  const mine = (cols.data?.items ?? []).filter((c) => c.member !== false);
+  const [picked, setPicked] = useState<string | null>(null);
+  const id = picked ?? mine[0]?.id ?? null;
+  const collection = useQuery({ queryKey: ["collections", id], queryFn: () => collections.get(id!), enabled: !!id });
+  const names = Object.fromEntries(mine.map((c) => [c.id, c.name]));
+  return (
+    <FormSection id="rest" title={t("integrations.docs")} description={t("integrations.docs_desc")} wide>
+      <div className="space-y-4">
+        {cols.isPending ? <ListSkeleton rows={1} /> : cols.isError ? <QueryErrorState error={cols.error} onRetry={() => void cols.refetch()} /> : !id ? (
+          <p className="text-sm text-muted-foreground">{t("keys.no_collections")}</p>
+        ) : (
+          <>
+            <Select value={id} items={names} onValueChange={(v) => setPicked(String(v))}>
+              <SelectTrigger className="w-72 max-w-full" aria-label={t("integrations.docs_collection")}><span className="text-muted-foreground">{t("integrations.docs_collection")}</span><SelectValue /></SelectTrigger>
+              <SelectContent>{mine.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+            </Select>
+            {collection.data ? <RestExamples collection={collection.data} /> : collection.isError ? <QueryErrorState error={collection.error} onRetry={() => void collection.refetch()} /> : <ListSkeleton rows={3} />}
+          </>
+        )}
+      </div>
+    </FormSection>
+  );
+}
+
 export default function ApiAccessPage() {
   const { t } = useI18n();
   // A key's secret shows once: while this page stays open, the examples use it.
@@ -127,6 +158,7 @@ export default function ApiAccessPage() {
         <FormSections>
           <ApiKeysCard onCreated={setSecret} />
           <McpConnectCard secret={secret} />
+          <RestCard />
         </FormSections>
       </PageBody>
     </>
