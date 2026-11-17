@@ -231,7 +231,7 @@ type MCPToolParam struct {
 var MCPToolOps = []string{"eq", "neq", "contains", "gt", "gte", "lt", "lte", "in", "has"}
 
 // MCPBuiltinTools are the server's own tool names, which an owner's tool cannot take.
-var MCPBuiltinTools = []string{"workspace_overview", "list_collections", "get_collection", "search_records", "get_record", "related_records",
+var MCPBuiltinTools = []string{"workspace_overview", "get_collection", "search_records", "get_record", "related_records",
 	"collection_stats", "create_record", "update_record", "delete_records",
 	"aggregate_records", "field_values", "get_records", "record_history", "list_views", "list_trash", "update_records", "restore_records"}
 

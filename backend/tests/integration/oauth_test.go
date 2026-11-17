@@ -99,7 +99,7 @@ func TestOAuthGivesAnAssistantAKey(t *testing.T) {
 	if err != nil || len(mine) != 1 || mine[0].Name != "ChatGPT" || mine[0].ExpiresAt == nil {
 		t.Fatalf("keys: %+v %v", mine, err)
 	}
-	req := httptest.NewRequest("POST", "/v1/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_collections","arguments":{}}}`))
+	req := httptest.NewRequest("POST", "/v1/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"workspace_overview","arguments":{}}}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("Authorization", "Bearer "+secret)

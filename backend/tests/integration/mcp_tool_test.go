@@ -117,7 +117,7 @@ func TestOwnersPublishMCPTools(t *testing.T) {
 
 	all := listed()
 	i := slices.IndexFunc(all, func(x any) bool { return x.(map[string]any)["name"] == "produtos_caros" })
-	if len(all) != 19 || i < 0 {
+	if len(all) != 18 || i < 0 {
 		t.Fatalf("tools: %v", all)
 	}
 	sch := all[i].(map[string]any)["inputSchema"].(map[string]any)
@@ -188,7 +188,7 @@ func TestOwnersPublishMCPTools(t *testing.T) {
 	if _, err := integ.UpdateMCPTool(owner, c.ID, made.ID, tool); err != nil {
 		t.Fatal(err)
 	}
-	if n := len(listed()); n != 18 {
+	if n := len(listed()); n != 17 {
 		t.Fatalf("disabled tool still listed: %d", n)
 	}
 	if err := integ.DeleteMCPTool(owner, c.ID, made.ID); err != nil {

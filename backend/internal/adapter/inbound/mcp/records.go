@@ -21,7 +21,7 @@ const maxBulk = 100
 // addRecordTools adds the tools that sum up, trace and change many records at once.
 func (t tools) addRecordTools(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{Name: "aggregate_records", Description: "Count the matching records and sum, average, min and max up to 5 number fields, " +
-		"in total or per value of one field (group_by), biggest groups first, at most 100 groups. Use it instead of reading records to add them up.",
+		"in total or per value of one field (group_by), biggest groups first, at most 100 groups. Use it to count or add up records instead of reading them; for a collection's activity over time, collection_stats.",
 		Annotations: readOnly}, t.aggregateRecords)
 	mcp.AddTool(s, &mcp.Tool{Name: "field_values", Description: "Every value one field holds over the matching records, commonest first, with how many records hold each " +
 		"(null: records without it), a page at a time; also how many records fill the field and how many values differ. " +
@@ -49,13 +49,16 @@ func (t tools) addRecordTools(s *mcp.Server) {
 
 type aggregateIn struct {
 	filterIn
-	GroupBy string   `json:"group_by,omitempty" jsonschema:"a top-level field: one row per value of it; left out for one total row"`
-	Numbers []string `json:"numbers,omitempty" jsonschema:"up to 5 number fields to sum, average, min and max"`
+	GroupBy string   `json:"group_by,omitempty" jsonschema:"a field key: one row per value of it; left out for one total row"`
+	Numbers []string `json:"numbers,omitempty" jsonschema:"up to 5 keys of number fields to sum, average, min and max"`
 }
 
 func (t tools) aggregateRecords(ctx context.Context, _ *mcp.CallToolRequest, in aggregateIn) (*mcp.CallToolResult, any, error) {
 	filter, err := in.filter()
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := t.checkFields(ctx, in.CollectionID, filter.Where, fieldUse{"group_by", one(in.GroupBy)}, fieldUse{"numbers", in.Numbers}); err != nil {
 		return nil, nil, err
 	}
 	groups, err := t.app.Records.Aggregate(ctx, filter, in.GroupBy, in.Numbers)
@@ -78,7 +81,7 @@ func (t tools) aggregateRecords(ctx context.Context, _ *mcp.CallToolRequest, in 
 
 type fieldValuesIn struct {
 	filterIn
-	Field string `json:"field" jsonschema:"a top-level field"`
+	Field string `json:"field" jsonschema:"a field key from workspace_overview"`
 	Page  int    `json:"page,omitempty" jsonschema:"page number, from 1"`
 	Limit int    `json:"limit,omitempty" jsonschema:"values per page, 1 to 100 (default 20)"`
 }
@@ -97,6 +100,9 @@ func (t tools) fieldValues(ctx context.Context, _ *mcp.CallToolRequest, in field
 	}
 	page := max(in.Page, 1)
 	q := domain.StatsQuery{Filled: []string{in.Field}, Values: []string{in.Field}, Top: limit, Skip: (page - 1) * limit}
+	if err := t.checkFields(ctx, in.CollectionID, filter.Where, fieldUse{"field", one(in.Field)}); err != nil {
+		return nil, nil, err
+	}
 	st, err := t.app.Records.Stats(ctx, filter, q)
 	if err != nil {
 		return nil, nil, err
@@ -114,7 +120,7 @@ func (t tools) fieldValues(ctx context.Context, _ *mcp.CallToolRequest, in field
 }
 
 type idsIn struct {
-	CollectionID string   `json:"collection_id" jsonschema:"the collection's id, from list_collections"`
+	CollectionID string   `json:"collection_id" jsonschema:"the collection's id, from workspace_overview"`
 	RecordIDs    []string `json:"record_ids" jsonschema:"record ids of that collection"`
 }
 
@@ -126,6 +132,9 @@ type getRecordsIn struct {
 func (t tools) getRecords(ctx context.Context, _ *mcp.CallToolRequest, in getRecordsIn) (*mcp.CallToolResult, any, error) {
 	if len(in.RecordIDs) == 0 || len(in.RecordIDs) > maxRecords {
 		return nil, nil, apperror.New(apperror.CodeInvalidInput, "record_ids must hold 1 to 50 ids").WithField("record_ids")
+	}
+	if err := t.checkFields(ctx, in.CollectionID, nil, fieldUse{"fields", in.Fields}); err != nil {
+		return nil, nil, err
 	}
 	items, _, err := t.app.Records.List(ctx, domain.RecordFilter{CollectionID: in.CollectionID, IDs: in.RecordIDs, Page: domain.NewPage(1, maxRecords)})
 	if err != nil {
@@ -246,6 +255,9 @@ func (t tools) listTrash(ctx context.Context, _ *mcp.CallToolRequest, in trashIn
 	if err := in.check(); err != nil {
 		return nil, nil, err
 	}
+	if err := t.checkFields(ctx, in.CollectionID, nil, fieldUse{"fields", in.Fields}); err != nil {
+		return nil, nil, err
+	}
 	items, err := t.app.Tools.TrashedRecords(ctx, in.CollectionID)
 	if err != nil {
 		return nil, nil, err
@@ -261,7 +273,7 @@ func (t tools) listTrash(ctx context.Context, _ *mcp.CallToolRequest, in trashIn
 
 type updateManyIn struct {
 	filterIn
-	Set    map[string]any `json:"set" jsonschema:"the top-level fields to set on every matching record and their values; null removes the field"`
+	Set    map[string]any `json:"set" jsonschema:"field keys to set on every matching record and their values; null removes the field"`
 	DryRun bool           `json:"dry_run,omitempty" jsonschema:"count the matching records and show a few, changing nothing"`
 }
 
@@ -283,6 +295,9 @@ func (t tools) updateRecords(ctx context.Context, _ *mcp.CallToolRequest, in upd
 	}
 	if filter.Where.Empty() && in.Search == "" { // a slip must not rewrite a whole collection
 		return nil, nil, apperror.New(apperror.CodeInvalidInput, "give search or rules to pick the records").WithField("rules")
+	}
+	if err := t.checkFields(ctx, in.CollectionID, filter.Where); err != nil {
+		return nil, nil, err
 	}
 	filter.Page = domain.NewPage(1, maxBulk)
 	items, total, err := t.app.Records.List(ctx, filter)

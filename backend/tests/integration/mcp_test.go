@@ -23,7 +23,7 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	owner := reqctx.WithActor(context.Background(), e.userID(t, e.activeUser(t)))
 	mk := func(name string) string {
 		c, err := collections.Create(owner, input.CreateCollectionCommand{Name: name, Schema: json.RawMessage(
-			`{"type":"object","properties":{"nome":{"type":"string"},"preco":{"type":"number"}}}`)})
+			`{"type":"object","properties":{"nome":{"type":"string","title":"Nome do item"},"preco":{"type":"number"},"cor":{"enum":["Azul","Laranja"]}}}`)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -41,7 +41,7 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 		}
 		*row.id = r.ID
 	}
-	// The picker list (and list_collections) carries the caller's role.
+	// The picker list (and workspace_overview) carries the caller's role.
 	opts, err := collections.Options(owner)
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	post("", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 401)
 	post("dsk_nope", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 401)
 	list := post(key.Secret, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 200)
-	if tools, _ := list["result"].(map[string]any)["tools"].([]any); len(tools) != 18 {
+	if tools, _ := list["result"].(map[string]any)["tools"].([]any); len(tools) != 17 {
 		t.Fatalf("tools: %v", list)
 	}
 
@@ -128,7 +128,7 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 		t.Fatalf("overview Pedidos: %v", ped)
 	}
 	ref, _ := prod["referenced_by"].([]any)
-	if prod["records"].(float64) != 2 || prod["access"] != "read" || len(prod["fields"].([]any)) != 2 || len(ref) != 1 ||
+	if prod["records"].(float64) != 2 || prod["access"] != "read" || len(prod["fields"].([]any)) != 3 || len(ref) != 1 ||
 		ref[0].(map[string]any)["collection"] != "Pedidos" || ref[0].(map[string]any)["field"] != "produto" {
 		t.Fatalf("overview Produtos: %v", prod)
 	}
@@ -137,9 +137,32 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 		t.Fatalf("overview, one collection: %v", got)
 	}
 
-	got, _ := call("list_collections", map[string]any{})
+	got, _ := call("workspace_overview", map[string]any{})
 	if cols := got["collections"].([]any); len(cols) != 1 || cols[0].(map[string]any)["id"] != a || cols[0].(map[string]any)["access"] != "read" {
 		t.Fatalf("collections: %v", got)
+	}
+	// A field or option the collection lacks fails with what to send, instead of matching nothing.
+	errText := func(got map[string]any) string { b, _ := json.Marshal(got["error"]); return string(b) }
+	got, failed := call("search_records", map[string]any{"collection_id": a, "rules": []any{map[string]any{"field": "Nome do Item", "op": "eq", "value": "lapis"}}})
+	if !failed || !strings.Contains(errText(got), `use its key \"nome\"`) || !strings.Contains(errText(got), "preco") {
+		t.Fatalf("unknown rule field: %v", got)
+	}
+	got, failed = call("search_records", map[string]any{"collection_id": a, "rules": []any{map[string]any{"field": "cor", "op": "in", "value": []string{"Azul", "laranja"}}}})
+	if !failed || !strings.Contains(errText(got), `use \"Laranja\"`) {
+		t.Fatalf("wrong option: %v", got)
+	}
+	for tool, args := range map[string]map[string]any{
+		"aggregate_records": {"collection_id": a, "group_by": "Cor"},
+		"field_values":      {"collection_id": a, "field": "price"},
+		"get_records":       {"collection_id": a, "record_ids": []string{cheap}, "fields": []string{"x"}},
+		"search_records":    {"collection_id": a, "sort": "data.x"},
+	} {
+		if got, failed := call(tool, args); !failed {
+			t.Fatalf("%s took an unknown field: %v", tool, got)
+		}
+	}
+	if got, failed := call("search_records", map[string]any{"collection_id": a, "rules": []any{map[string]any{"field": "cor", "op": "eq", "value": "Azul"}, map[string]any{"field": "$created_at", "op": "not_empty"}}}); failed || got["total"].(float64) != 0 {
+		t.Fatalf("valid rules refused: %v", got)
 	}
 	if got, failed := call("get_collection", map[string]any{"collection_id": a}); failed || got["schema"] == nil {
 		t.Fatalf("get_collection: %v", got)
@@ -222,7 +245,7 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if err != nil || !writer.Scopes[0].CanWrite {
 		t.Fatalf("update key: %+v, %v", writer, err)
 	}
-	got, failed := call("create_record", map[string]any{"collection_id": a, "data": map[string]any{"nome": "borracha", "preco": 1}})
+	got, failed = call("create_record", map[string]any{"collection_id": a, "data": map[string]any{"nome": "borracha", "preco": 1}})
 	if failed || got["id"] == nil {
 		t.Fatalf("create_record: %v", got)
 	}
@@ -311,7 +334,7 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if out := plain("POST", "/v1/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 200); out["result"] == nil {
 		t.Fatalf("JSON-only accept: %v", out)
 	}
-	if tools, _ := plain("GET", "/v1/mcp/tools", "", 200)["tools"].([]any); len(tools) != 18 {
+	if tools, _ := plain("GET", "/v1/mcp/tools", "", 200)["tools"].([]any); len(tools) != 17 {
 		t.Fatal("GET /v1/mcp/tools: want 9 tools")
 	}
 	if got, _ := plain("POST", "/v1/mcp/tools/get_collection", `{"collection_id":"`+a+`"}`, 200)["structuredContent"].(map[string]any); got["schema"] == nil {
@@ -320,7 +343,7 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if out := plain("POST", "/v1/mcp/tools/get_collection", `{"collection_id":"`+hidden+`"}`, 200); out["isError"] != true {
 		t.Fatalf("shortcut reached a collection outside the key: %v", out)
 	}
-	if out := plain("POST", "/v1/mcp/tools/list_collections", `[`, 400); out["code"] != "INVALID_INPUT" {
+	if out := plain("POST", "/v1/mcp/tools/workspace_overview", `[`, 400); out["code"] != "INVALID_INPUT" {
 		t.Fatalf("bad body: %v", out)
 	}
 	plain("POST", "/v1/mcp/tools/no_such_tool", `{}`, 400)

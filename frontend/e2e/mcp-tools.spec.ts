@@ -49,7 +49,7 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
   await expect(page.locator("pre").filter({ hasText: "claude mcp add" })).toContainText(secret);
   await expect(page.getByText(/vence em/).first()).toBeVisible();
   await page.getByRole("form", { name: "Testar conexão" }).getByRole("button", { name: "Testar" }).click();
-  await expect(page.getByText(/^Conectado: 19 tools, 1 coleção/)).toBeVisible();
+  await expect(page.getByText(/^Conectado: 18 tools, 1 coleção/)).toBeVisible();
   const reached = page.getByRole("list", { name: "Tools que a chave alcança" });
   await expect(reached.getByText("nota_por_titulo")).toBeVisible();
   // Any tool runs from the page with the key: a form from its schema, the collection already picked.

@@ -48,7 +48,7 @@ test("an assistant gets a key through OAuth", async ({ page, playwright, baseURL
   const { access_token: secret } = await token.json();
   const call = await anon.post("/api/proxy/v1/mcp", {
     headers: { Authorization: `Bearer ${secret}`, Accept: "application/json, text/event-stream" },
-    data: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "list_collections", arguments: {} } },
+    data: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "workspace_overview", arguments: {} } },
   });
   expect((await call.json()).result.structuredContent.collections.map((c: { id: string }) => c.id)).toEqual([collectionId]);
   await anon.dispose();
