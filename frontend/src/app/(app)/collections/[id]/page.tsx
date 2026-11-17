@@ -153,6 +153,10 @@ function RecordList({ collection }: { collection: Collection }) {
     enabled: layout === "table" && filtered,
     staleTime: 30_000,
   });
+  const outOf = layout === "table" && filtered && list.data && all.data
+    ? t("rules.filtered").replace("{n}", list.data.pagination.total_items.toLocaleString()).replace("{total}", all.data.pagination.total_items.toLocaleString())
+    : null;
+  const [bar, setBar] = useState<HTMLDivElement | null>(null);
   const scope = { collection_id: collection.id, search: q || undefined, where: whereText };
   // Picking a group filters the list to its value (or to empty).
   const pickGroup = (key: unknown) => {
@@ -228,7 +232,7 @@ function RecordList({ collection }: { collection: Collection }) {
           <Input type="search" aria-label={t("common.search")} placeholder={t("records.search")} className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); set({ q: e.target.value.trim(), page: 1 }); }} />
         </div>
         <div className="toolbar-tools flex flex-wrap items-center gap-2 max-sm:w-full max-sm:justify-between sm:contents">
-          <RecordRules collectionId={collection.id} fields={rows} value={where} onChange={setWhere} count={{ search: q || undefined }} saveView />
+          <RecordRules collectionId={collection.id} fields={rows} value={where} onChange={setWhere} count={{ search: q || undefined }} saveView bar={bar} summary={outOf} />
           {layout === "table" && <ColumnPicker fields={rows} value={columns} onChange={(keys) => set({ cols: keys.join(",") })} />}
           <div className="hidden items-center gap-2 lg:flex">{viewControls}</div>
           <Sheet>
@@ -265,12 +269,10 @@ function RecordList({ collection }: { collection: Collection }) {
           </div>
         </div>
         {search.trim() !== "" && !searchTerm(search) && <p className="basis-full text-xs text-muted-foreground" role="status">{t("common.search_min")}</p>}
-        {layout === "table" && filtered && list.data && all.data && (
-          <p className="basis-full text-xs text-muted-foreground" role="status">
-            {t("rules.filtered").replace("{n}", list.data.pagination.total_items.toLocaleString()).replace("{total}", all.data.pagination.total_items.toLocaleString())}
-          </p>
-        )}
+        {layout === "table" && q && !whereText && outOf && <p className="basis-full text-xs text-muted-foreground" role="status">{outOf}</p>}
       </div>
+      {/* The applied conditions, a row of their own below the toolbar. */}
+      <div ref={setBar} className="empty:hidden" />
       {canEdit && <RecordImportDialog collectionId={collection.id} schema={collection.schema} open={importing} onOpenChange={setImporting} />}
       {groupRow && <RecordGroups selection={scope} group={groupRow} fields={rows} label={(k) => show(k, groupRow)} onPick={pickGroup} />}
       {layout !== "table" && by ? (
@@ -337,7 +339,7 @@ function RecordList({ collection }: { collection: Collection }) {
           </Table>
           {/* One page of the smallest size needs no paging controls, only the total. */}
           {page === 1 && list.data.pagination.total_items <= Math.min(limit, 10) ? (
-            <p className="border-t px-4 py-2.5 text-xs text-muted-foreground">{t(list.data.pagination.total_items === 1 ? "nav.record_one" : "nav.record_many").replace("{n}", String(list.data.pagination.total_items))}</p>
+            outOf ? null : <p className="border-t px-4 py-2.5 text-xs text-muted-foreground">{t(list.data.pagination.total_items === 1 ? "nav.record_one" : "nav.record_many").replace("{n}", String(list.data.pagination.total_items))}</p>
           ) : (
             <TablePagination page={page} pageSize={limit} totalItems={list.data.pagination.total_items} onPageChange={(n) => set({ page: n })} onPageSizeChange={(n) => set({ limit: n, page: 1 })} />
           )}

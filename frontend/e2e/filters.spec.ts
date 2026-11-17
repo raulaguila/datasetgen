@@ -40,6 +40,14 @@ test("richer conditions and the cell filter", async ({ page }) => {
   await rules.getByRole("button", { name: "Aplicar" }).click();
   await expect(page.locator("tbody tr")).toHaveCount(1);
   await expect(page.getByRole("list", { name: "Condições ativas" })).toContainText("Vencimento antes de hoje");
+  // A chip edits its own rule in place.
+  await page.getByRole("button", { name: "Editar condição: Vencimento antes de hoje" }).click();
+  const quick = page.getByRole("dialog", { name: "Editar condição" });
+  await quick.getByRole("combobox", { name: "Operador da condição 1" }).click();
+  await page.getByRole("option", { name: "depois de", exact: true }).click();
+  await quick.getByRole("button", { name: /^Aplicar/ }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(2);
+  await expect(page.getByRole("list", { name: "Condições ativas" })).toContainText("Vencimento depois de hoje");
   await page.getByRole("button", { name: /^Remover condição/ }).click();
 
   // Due in the next 7 days.
@@ -61,13 +69,13 @@ test("richer conditions and the cell filter", async ({ page }) => {
   await rules.getByRole("button", { name: "Ana Prado" }).click();
   await rules.getByRole("button", { name: "Aplicar" }).click();
   await expect(page.locator("tbody tr")).toHaveCount(2);
-  await expect(page.getByRole("list", { name: "Condições ativas" })).toContainText("Cliente é Ana Prado");
+  await expect(page.getByRole("list", { name: "Condições ativas" })).toContainText("Cliente = Ana Prado");
   await page.getByRole("button", { name: /^Remover condição/ }).click();
 
   // Status is none of two options, toggled.
   await page.getByRole("button", { name: "Condições" }).click();
   await pick("Campo da condição 1", "Status");
-  await pick("Operador da condição 1", "não é nenhum de");
+  await pick("Operador da condição 1", "nenhum de");
   await rules.getByRole("button", { name: "aberto" }).click();
   await rules.getByRole("button", { name: "pago" }).click();
   await rules.getByRole("button", { name: "Aplicar" }).click();
@@ -78,14 +86,14 @@ test("richer conditions and the cell filter", async ({ page }) => {
 
   // Written as text: a record by name, an option and a relative date, read into the rows.
   await page.getByRole("button", { name: "Condições" }).click();
-  await rules.getByRole("radio", { name: "Texto" }).click();
+  await rules.getByRole("button", { name: "Editar como texto" }).click();
   const box = rules.getByRole("textbox", { name: "Condições em texto" });
   await box.fill("status = fechado");
   await expect(rules.getByRole("alert")).toContainText("fechado não é opção de Status");
   await box.fill("status = pago");
   await expect(rules.getByRole("button", { name: "Aplicar · 1 registro" })).toBeVisible();
   await box.fill('cliente = "Ana Prado" e (status = atrasado ou vencimento nos próximos 7 dias)');
-  await rules.getByRole("radio", { name: "Visual" }).click();
+  await rules.getByRole("button", { name: "Editar visualmente" }).click();
   await expect(rules.getByRole("combobox", { name: "Campo da condição 1" })).toHaveText("Cliente");
   await expect(rules.getByRole("region", { name: "Grupo 2" })).toBeVisible();
   await rules.getByRole("button", { name: /^Aplicar/ }).click();
@@ -93,23 +101,21 @@ test("richer conditions and the cell filter", async ({ page }) => {
   await expect(page.getByRole("status").filter({ hasText: "2 de 3 registros" })).toBeVisible();
   // Back as text, the record by its name.
   await page.getByRole("button", { name: "Condições" }).click();
-  await rules.getByRole("radio", { name: "Texto" }).click();
+  await rules.getByRole("button", { name: "Editar como texto" }).click();
   await expect(box).toHaveValue('Cliente = "Ana Prado" e (Status = "atrasado" ou Vencimento nos próximos 7 dias)');
   // Leaving with edits asks first.
   await box.fill("status = pago");
   await page.keyboard.press("Escape");
   await rules.getByRole("button", { name: "Descartar" }).click();
   await expect(rules).toBeHidden();
-  await page.getByRole("button", { name: /^Remover grupo/ }).click();
-  await expect(page.getByRole("button", { name: /^Remover condição/ })).toHaveCount(1);
-  await page.getByRole("button", { name: /^Remover condição/ }).click();
+  await page.getByRole("button", { name: "Limpar filtro avançado" }).click();
   await expect(page.locator("tbody tr")).toHaveCount(3);
 
   // Right-click a cell: hide its value.
   await page.getByRole("row").filter({ hasText: "Gás" }).locator("td[data-label=Status]").click({ button: "right" });
   await page.getByRole("menuitem", { name: "Ocultar este valor" }).click();
   await expect(page.locator("tbody tr")).toHaveCount(2);
-  await expect(page.getByRole("list", { name: "Condições ativas" })).toContainText("Status não é pago");
+  await expect(page.getByRole("list", { name: "Condições ativas" })).toContainText("Status ≠ pago");
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.getByRole("button", { name: "Condições" }).click();
   await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/filters.png` : "test-results/filters.png" });

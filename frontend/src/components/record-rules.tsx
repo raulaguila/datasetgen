@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { Popover } from "@base-ui/react/popover";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { Bookmark, Check, ChevronDown, Code, Copy, Filter, FilterX, Group, Loader2, MoreHorizontal, MousePointerClick, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { Bookmark, Check, ChevronDown, Code, Copy, Filter, FilterX, Group, Loader2, MoreHorizontal, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { IconAction } from "@/components/bits";
 import { recordTitle, type FieldRow } from "@/components/field-builder";
@@ -51,29 +52,33 @@ function RefName({ target, id }: { target: string; id: string }) {
   return <>{useRecordLabel(target, id) ?? id.slice(0, 8)}</>;
 }
 
-/** What a rule says, as text with record names. */
-function RuleText({ entry, rule, t }: { entry: Entry | undefined; rule: Rule; t: Translate }) {
-  const kind = entry?.kind ?? "text";
-  const d = toDraft(rule, kind);
-  const name = entry?.name ?? rule.field;
-  const op = opLabel(d.op, kind, t);
-  if (!needsValue(d.op)) return <>{name} {op}</>;
-  if (d.op === "last_days" || d.op === "next_days") return <>{name} {op} {d.raw} {t("rules.days")}</>;
-  const one = (raw: string) => (kind === "date" ? dateText(raw, t) : kind === "boolean" ? t(raw === "true" ? "common.yes" : "common.no") : kind === "ref" || kind === "refs" ? <RefName target={entry?.target ?? ""} id={raw} /> : raw);
-  if (d.op === "between") return <>{name} {op} {one(d.raw)} {t("rules.and")} {one(d.raw2)}</>;
-  if (d.list.length) return <>{name} {op} {d.list.map((v, i) => <span key={v}>{i > 0 && ", "}{one(v)}</span>)}</>;
-  return <>{name} {op} {one(d.raw)}</>;
-}
-
 function opLabel(op: EditOp, kind: Kind, t: Translate): string {
   return kind === "date" && ["eq", "neq", "lt", "gt", "lte", "gte"].includes(op) ? t(`rules.op_date.${op}` as MessageKey) : t(`rules.op.${op}` as MessageKey);
 }
 
-/** Plain text of a rule, for the chip's remove button. */
+const SYMBOL: Partial<Record<EditOp, string>> = { eq: "=", neq: "≠", gt: ">", gte: "≥", lt: "<", lte: "≤" };
+/** The operator as a chip shows it: a symbol where one reads at a glance (dates and lists keep words). */
+const opShort = (op: EditOp, kind: Kind, t: Translate) => (!["date", "strings", "refs"].includes(kind) && SYMBOL[op]) || opLabel(op, kind, t);
+
+/** A rule's value as a chip shows it, with record names; null when the operator takes none. */
+function RuleValue({ entry, rule, t }: { entry: Entry | undefined; rule: Rule; t: Translate }) {
+  const kind = entry?.kind ?? "text";
+  const d = toDraft(rule, kind);
+  if (!needsValue(d.op)) return null;
+  if (d.op === "last_days" || d.op === "next_days") return <>{d.raw} {t("rules.days")}</>;
+  const one = (raw: string) => (kind === "date" ? dateText(raw, t) : kind === "boolean" ? t(raw === "true" ? "common.yes" : "common.no") : kind === "ref" || kind === "refs" ? <RefName target={entry?.target ?? ""} id={raw} /> : raw);
+  if (d.op === "between") return <>{one(d.raw)} {t("rules.and")} {one(d.raw2)}</>;
+  if (d.list.length) return <>{d.list.map((v, i) => <span key={v}>{i > 0 && ", "}{one(v)}</span>)}</>;
+  return <>{one(d.raw)}</>;
+}
+
+/** Plain text of a rule, for the chip's buttons. */
 function ruleWords(entry: Entry | undefined, rule: Rule, t: Translate): string {
-  const d = toDraft(rule, entry?.kind ?? "text");
-  const value = !needsValue(d.op) ? "" : d.list.length ? d.list.join(", ") : d.op === "between" ? `${d.raw} – ${d.raw2}` : d.raw;
-  return `${entry?.name ?? rule.field} ${opLabel(d.op, entry?.kind ?? "text", t)} ${value}`.trim();
+  const kind = entry?.kind ?? "text";
+  const d = toDraft(rule, kind);
+  const one = (raw: string) => (kind === "date" ? dateText(raw, t) : kind === "boolean" ? t(raw === "true" ? "common.yes" : "common.no") : raw);
+  const value = !needsValue(d.op) ? "" : d.op === "last_days" || d.op === "next_days" ? `${d.raw} ${t("rules.days")}` : d.list.length ? d.list.map(one).join(", ") : d.op === "between" ? `${one(d.raw)} – ${one(d.raw2)}` : one(d.raw);
+  return `${entry?.name ?? rule.field} ${opShort(d.op, kind, t)} ${value}`.trim();
 }
 
 /** A date: a fixed day, or today give or take days, so a saved view keeps up. */
@@ -260,17 +265,24 @@ async function resolveNames(client: QueryClient, w: Where, refs: RefName[], entr
 /**
  * A "Conditions" button: rules that compare fields (greater than, contains,
  * empty…), joined by AND or OR, and groups of rules for mixes such as
- * (A and B) or (C and D), edited row by row or written as text. Applied rules
- * show as chips that open the editor on themselves. With the collection's id,
- * text values offer the field's commonest values; with `count` the apply
- * button tells how many records the edited rules keep, and `saveView` lets
- * them be kept as a saved view.
+ * (A and B) or (C and D), edited row by row or written as text.
+ *
+ * Applied rules show in a bar of their own (in `bar`, an element below the
+ * toolbar, or right after the button): plain AND rules as one chip each, edited
+ * in place from the chip; a mix of OR and groups as one summary chip that opens
+ * the editor. With the collection's id, text values offer the field's
+ * commonest values; with `count` the apply buttons tell how many records the
+ * edited rules keep, and `saveView` lets them be kept as a saved view.
  */
-export function RecordRules({ fields: all, value, onChange, collectionId, count, saveView }: {
+export function RecordRules({ fields: all, value, onChange, collectionId, count, saveView, bar, summary }: {
   fields: FieldRow[]; value: Where; onChange: (w: Where) => void; collectionId?: string;
   /** The list's search, for counting what the edited rules keep. */
   count?: { search?: string };
   saveView?: boolean;
+  /** Where the applied rules show; without it, right after the button. */
+  bar?: HTMLElement | null;
+  /** Shown at the end of the bar, such as "2 of 40 records". */
+  summary?: React.ReactNode;
 }) {
   const { t, locale } = useI18n();
   const lang: Lang = locale === "en-US" ? "en" : "pt";
@@ -286,15 +298,17 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
   const [refError, setRefError] = useState<TextError | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
-  const [focus, setFocus] = useState(0);
   const [viewName, setViewName] = useState<string | null>(null);
-  const popup = useRef<HTMLDivElement>(null);
+  // One rule edited from its chip: its place in value.rules (-1: a new one) and the chip it hangs from.
+  const [quick, setQuick] = useState<{ at: number; rule: DraftRule; anchor: Element } | null>(null);
   const textBox = useRef<HTMLTextAreaElement>(null);
   const entryOf = (key: string) => entries.find((f) => f.key === key);
   const kindOfKey = (key: string): Kind => entryOf(key)?.kind ?? "text";
   const joinWord = (any: boolean) => t(any ? "rules.or" : "rules.and");
   const groups = (value.groups ?? []).filter((g) => g.rules.length);
   const applied = value.rules.length + groups.reduce((n, g) => n + g.rules.length, 0);
+  // Plain AND rules are edited chip by chip; OR and groups need the editor.
+  const simple = !groups.length && (!value.any || value.rules.length <= 1);
   const blank = (): DraftRule => ({ field: entries[0].key, op: opsFor(entries[0].kind)[0], raw: "", raw2: "", list: [] });
   const draftOf = (r: Rule) => toDraft(r, kindOfKey(r.field));
 
@@ -314,17 +328,23 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
     const many = done.filter((g) => g.rules.length > 1);
     return many.length ? { any: d.any, rules: loose, groups: many } : { any: d.any, rules: loose };
   };
+  /** The filter with the chip's rule put in (or left out while incomplete). */
+  const quickWhere = (q: NonNullable<typeof quick>): Where => {
+    const r = fromDraft(q.rule, kindOfKey(q.rule.field));
+    const rules = q.at < 0 ? [...value.rules, ...(r ? [r] : [])] : value.rules.flatMap((x, i) => (i !== q.at ? [x] : r ? [r] : []));
+    return { any: false, rules };
+  };
 
   const parsed = open && mode === "text" ? parseRuleText(text, entries) : null;
   const textError = parsed && "error" in parsed ? parsed.error : refError;
   // Rules still holding names to look up are not counted until applied.
-  const pending: Where | null = !open ? null : mode === "visual" ? whereOf(draft) : parsed && "where" in parsed && !parsed.refNames.length ? parsed.where : null;
+  const pending: Where | null = quick ? quickWhere(quick) : !open ? null : mode === "visual" ? whereOf(draft) : parsed && "where" in parsed && !parsed.refNames.length ? parsed.where : null;
   const dirty = (mode === "text" && text !== textBase) || whereText(whereOf(draft)) !== whereText(value);
   const counted = useDebounced(pending ? whereText(pending) : null, 250);
   const live = useQuery({
     queryKey: ["records", collectionId, "count", counted, count?.search],
     queryFn: ({ signal }) => records.list({ collection_id: collectionId!, page: 1, limit: 1, search: count?.search || undefined, where: counted || undefined }, signal),
-    enabled: open && !!count && !!collectionId && counted !== null,
+    enabled: (open || !!quick) && !!count && !!collectionId && counted !== null,
     placeholderData: keepPreviousData, staleTime: 30_000,
   });
   const create = useMutation({
@@ -339,16 +359,10 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
     onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
   });
 
-  // The chip clicked: its field picker takes the focus once the editor shows.
-  useEffect(() => {
-    if (!open || !focus) return;
-    const id = requestAnimationFrame(() => (popup.current?.querySelector(`[aria-label="${t("rules.field")} ${focus}"]`) as HTMLElement | null)?.focus());
-    return () => cancelAnimationFrame(id);
-  }, [open, focus, t]);
-
-  const show = (at = 0) => {
+  const show = () => {
+    setQuick(null);
     setDraft(draftFrom(value)); setMode("visual"); setText(""); setTextBase(""); setRefError(null);
-    setConfirm(false); setViewName(null); setFocus(at); setOpen(true);
+    setConfirm(false); setViewName(null); setOpen(true);
   };
   const finish = () => { setOpen(false); setConfirm(false); };
   // Clicking outside or Escape with edits not applied asks first.
@@ -392,20 +406,25 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
     finish();
   };
 
-  const setGroup = (gi: number, patch: (g: DraftGroup) => DraftGroup) => setDraft((d) => ({ ...d, groups: d.groups.map((g, j) => (j === gi ? patch(g) : g)) }));
-  const setRule = (gi: number, i: number, patch: Partial<DraftRule>) =>
-    setGroup(gi, (g) => ({ ...g, rules: g.rules.map((r, j) => {
-      if (j !== i) return r;
-      const next = { ...r, ...patch };
-      // A new field starts empty, keeping the operator only when it still fits.
-      if (patch.field && patch.field !== r.field) {
-        const ops = opsFor(kindOfKey(patch.field));
-        Object.assign(next, { raw: "", raw2: "", list: [], op: ops.includes(next.op) ? next.op : ops[0] });
-      }
-      // A day count and a date do not share a value.
-      if (patch.op && (["last_days", "next_days"].includes(patch.op) !== ["last_days", "next_days"].includes(r.op))) Object.assign(next, { raw: "", raw2: "" });
-      return next;
-    }) }));
+  /** A rule with some parts changed: a new field starts empty, keeping the operator only when it still fits. */
+  const patched = (r: DraftRule, patch: Partial<DraftRule>): DraftRule => {
+    const next = { ...r, ...patch };
+    if (patch.field && patch.field !== r.field) {
+      const ops = opsFor(kindOfKey(patch.field));
+      Object.assign(next, { raw: "", raw2: "", list: [], op: ops.includes(next.op) ? next.op : ops[0] });
+    }
+    // A day count and a date do not share a value.
+    if (patch.op && (["last_days", "next_days"].includes(patch.op) !== ["last_days", "next_days"].includes(r.op))) Object.assign(next, { raw: "", raw2: "" });
+    return next;
+  };
+  // A group left empty goes, unless it is the only one.
+  const setGroup = (gi: number, patch: (g: DraftGroup) => DraftGroup) =>
+    setDraft((d) => {
+      const gs = d.groups.map((g, j) => (j === gi ? patch(g) : g));
+      const kept = gs.filter((g) => g.rules.length);
+      return { ...d, groups: kept.length ? kept : [gs[0]] };
+    });
+  const setRule = (gi: number, i: number, patch: Partial<DraftRule>) => setGroup(gi, (g) => ({ ...g, rules: g.rules.map((r, j) => (j === i ? patched(r, patch) : r)) }));
   const total = draft.groups.reduce((n, g) => n + g.rules.length, 0);
   const grouped = draft.groups.length > 1;
   const duplicate = (gi: number, i: number) => setGroup(gi, (g) => ({ ...g, rules: [...g.rules.slice(0, i + 1), { ...g.rules[i], list: [...g.rules[i].list] }, ...g.rules.slice(i + 1)] }));
@@ -421,25 +440,29 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
     else gs.splice(at, 1, { ...g, rules: g.rules.filter((_, j) => j !== i) }, fresh);
     return { ...top, groups: gs };
   });
+  // A loose rule: in the one group while there are no groups, else a group of one.
+  const addRule = () => setDraft((d) => (d.groups.length > 1 ? { ...d, groups: [...d.groups, { any: false, rules: [blank()] }] } : { ...d, groups: [{ ...d.groups[0], rules: [...d.groups[0].rules, blank()] }] }));
+  const addGroup = () => setDraft((d) => {
+    // The rules so far stay one bracket (or one rule); the new group joins them by OR.
+    const first = d.groups.length === 1 ? [d.groups[0]] : d.groups;
+    return { any: d.groups.length === 1 ? true : d.any, groups: [...first, { any: false, rules: [blank(), blank()] }] };
+  });
 
   if (entries.length === 0) return null;
 
-  const joinSelect = (any: boolean, label: string, onPick: (any: boolean) => void) => (
-    <Select value={any ? "or" : "and"} items={{ and: t("rules.and"), or: t("rules.or") }} onValueChange={(v) => onPick(v === "or")}>
-      <SelectTrigger className="w-full" aria-label={label}><SelectValue /></SelectTrigger>
-      <SelectContent><SelectItem value="and">{t("rules.and")}</SelectItem><SelectItem value="or">{t("rules.or")}</SelectItem></SelectContent>
-    </Select>
+  /** The join between two items as a word that switches AND and OR on a click. */
+  const joinToggle = (any: boolean, label: string, onPick: (any: boolean) => void) => (
+    <button type="button" aria-label={`${label}: ${joinWord(any)}`} title={t("rules.join_switch")}
+      className="h-[var(--control-h)] rounded-md px-1.5 text-left text-sm font-medium text-primary underline decoration-dotted underline-offset-4 hover:bg-primary/10"
+      onClick={() => onPick(!any)}>{joinWord(any)}</button>
   );
-  /** "Where" before the first, the join picker before the second, the join's word after. */
+  /** "Where" before the first item; the join word after it. */
   const connector = (i: number, any: boolean, label: string, onPick: (any: boolean) => void) =>
-    i === 0 ? <span className="block py-1.5 text-sm text-muted-foreground">{t("rules.where")}</span>
-    : i === 1 ? joinSelect(any, label, onPick)
-    : <span className="block py-1.5 pl-2.5 text-sm text-muted-foreground">{joinWord(any)}</span>;
-  const valueOf = (gi: number, r: DraftRule, i: number, n: number) => {
+    i === 0 ? <span className="block py-1.5 text-sm text-muted-foreground">{t("rules.where")}</span> : joinToggle(any, label, onPick);
+  const valueOf = (r: DraftRule, n: number, set: (patch: Partial<DraftRule>) => void) => {
     const entry = entryOf(r.field);
     if (!entry || !needsValue(r.op)) return <span />;
     const label = String(n);
-    const set = (patch: Partial<DraftRule>) => setRule(gi, i, patch);
     const kind = entry.kind;
     if (r.op === "last_days" || r.op === "next_days")
       return <div className="flex items-center gap-1.5"><Input type="number" min={0} inputMode="numeric" aria-label={`${t("rules.value")} ${label}`} value={r.raw} onChange={(e) => set({ raw: e.target.value })} /><span className="text-sm text-muted-foreground">{t("rules.days")}</span></div>;
@@ -470,13 +493,13 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
     }
     return <TextValue collectionId={collectionId} entry={entry} raw={r.raw} label={label} onChange={(raw) => set({ raw })} />;
   };
-  const opSelect = (gi: number, r: DraftRule, i: number, n: number) => {
+  const opSelect = (r: DraftRule, n: number, set: (patch: Partial<DraftRule>) => void) => {
     const kind = kindOfKey(r.field);
     const ops = opsFor(kind);
     const items = Object.fromEntries(ops.map((o) => [o, opLabel(o, kind, t)]));
     const item = (o: EditOp) => <SelectItem key={o} value={o}>{items[o]}</SelectItem>;
     return (
-      <Select value={r.op} items={items} onValueChange={(v) => setRule(gi, i, { op: v as EditOp })}>
+      <Select value={r.op} items={items} onValueChange={(v) => set({ op: v as EditOp })}>
         <SelectTrigger className="w-full" aria-label={`${t("rules.op_label")} ${n}`}><SelectValue /></SelectTrigger>
         <SelectContent>
           {kind === "date"
@@ -492,12 +515,15 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
       </Select>
     );
   };
-  const ruleRow = (gi: number, g: DraftGroup, r: DraftRule, i: number, n: number) => {
+  const fieldPicker = (r: DraftRule, n: number, set: (patch: Partial<DraftRule>) => void) =>
+    <FieldPicker entries={entries} value={r.field} label={`${t("rules.field")} ${n}`} onPick={(key) => set({ field: key })} />;
+  const COLS = "grid-cols-[3rem_minmax(0,1fr)_9.5rem_minmax(0,1.3fr)_4rem]";
+  /** One rule: where/join, field, operator, value, and its actions on hover. */
+  const ruleRow = (gi: number, r: DraftRule, i: number, n: number, join: React.ReactNode, cols = COLS) => {
     const name = entryOf(r.field)?.name ?? r.field;
-    const join = connector(i, g.any, `${t("rules.join").replace(":", "")} ${n}`, (any) => setGroup(gi, (x) => ({ ...x, any })));
-    const field = <FieldPicker entries={entries} value={r.field} label={`${t("rules.field")} ${n}`} onPick={(key) => setRule(gi, i, { field: key })} />;
+    const set = (patch: Partial<DraftRule>) => setRule(gi, i, patch);
     const actions = (
-      <div className="flex">
+      <div className="flex justify-end opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 max-sm:opacity-100">
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label={`${t("rules.more")}: ${name}`} />}><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -505,18 +531,18 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
             <DropdownMenuItem disabled={total >= MAX_RULES || draft.groups.length >= MAX_GROUPS} onClick={() => toGroup(gi, i)}><Group />{t("rules.to_group")}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <IconAction label={t("rules.remove")} target={name} onClick={() => setGroup(gi, (x) => ({ ...x, rules: x.rules.filter((_, j) => j !== i) }))}><Trash2 className="size-4" /></IconAction>
+        <IconAction label={t("rules.remove")} target={name} onClick={() => setGroup(gi, (x) => ({ ...x, rules: x.rules.filter((_, j) => j !== i) }))}><X className="size-4" /></IconAction>
       </div>
     );
     if (phone) return (
-      <li key={i} className="space-y-1.5 rounded-lg border bg-card p-2">
-        <div className="flex items-center gap-2"><div className="w-24">{join}</div><span className="flex-1" />{actions}</div>
-        {field}{opSelect(gi, r, i, n)}{valueOf(gi, r, i, n)}
+      <li key={`${gi}-${i}`} className="group/row space-y-1.5 border-b pb-3 last:border-b-0">
+        <div className="flex items-center gap-2">{join}<span className="flex-1" />{actions}</div>
+        {fieldPicker(r, n, set)}{opSelect(r, n, set)}{valueOf(r, n, set)}
       </li>
     );
     return (
-      <li key={i} className="grid grid-cols-[4.5rem_minmax(0,1fr)_10rem_minmax(0,1.3fr)_auto] items-start gap-1.5">
-        {join}{field}{opSelect(gi, r, i, n)}{valueOf(gi, r, i, n)}{actions}
+      <li key={`${gi}-${i}`} className={cn("group/row grid items-start gap-1.5", cols)}>
+        {join}{fieldPicker(r, n, set)}{opSelect(r, n, set)}{valueOf(r, n, set)}{actions}
       </li>
     );
   };
@@ -529,21 +555,34 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
     setText(next); setCursor(at); setRefError(null);
     requestAnimationFrame(() => { textBox.current?.focus(); textBox.current?.setSelectionRange(at, at); });
   };
-  const n0 = live.data?.pagination.total_items;
+  const counter = (on: boolean) => count && on && live.data !== undefined && <span className="font-normal opacity-80">· {plural(live.data.pagination.total_items, t)}</span>;
   // Rules are numbered across the groups, so each control keeps a distinct name.
   let n = 0;
+  const rows = grouped ? (
+    draft.groups.map((g, gi) => {
+      const top = connector(gi, draft.any, t("rules.join_groups").replace(":", ""), (any) => setDraft((d) => ({ ...d, any })));
+      if (g.rules.length === 1) return ruleRow(gi, g.rules[0], 0, ++n, top);
+      return (
+        <li key={`g${gi}`} className={cn("gap-1.5", !phone && "grid grid-cols-[3rem_minmax(0,1fr)] items-start")}>
+          {top}
+          <section aria-label={t("rules.group").replace("{n}", String(gi + 1))} className="space-y-2 border-l-2 border-primary/30 pl-3 max-sm:mt-1.5">
+            <ul className="space-y-2">
+              {g.rules.map((r, i) => ruleRow(gi, r, i, ++n, connector(i, g.any, `${t("rules.join").replace(":", "")} ${n}`, (any) => setGroup(gi, (x) => ({ ...x, any }))),
+                "grid-cols-[2.75rem_minmax(0,1fr)_8.5rem_minmax(0,1.2fr)_4rem]"))}
+            </ul>
+            <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" disabled={total >= MAX_RULES} onClick={() => setGroup(gi, (x) => ({ ...x, rules: [...x.rules, blank()] }))}>
+              <Plus className="size-3.5" />{t("rules.add_in_group")}
+            </Button>
+          </section>
+        </li>
+      );
+    })
+  ) : (
+    draft.groups[0]?.rules.map((r, i) => ruleRow(0, r, i, ++n, connector(i, draft.groups[0].any, `${t("rules.join").replace(":", "")} ${n}`, (any) => setGroup(0, (x) => ({ ...x, any })))))
+  );
   const editor = (
     // React carries submit up through the portal: stop it before an outer form (a widget, an automation) takes it.
     <form className="flex min-h-0 flex-1 flex-col gap-3" onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); void apply(); }}>
-      <div role="radiogroup" aria-label={t("rules.mode")} className="inline-flex self-start rounded-lg border p-0.5">
-        {(["visual", "text"] as const).map((m) => (
-          <button key={m} type="button" role="radio" aria-checked={mode === m} disabled={busy}
-            className={cn("rounded-md px-2.5 py-1 text-xs font-medium", mode === m ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")}
-            onClick={() => void toMode(m)}>
-            {m === "visual" ? <SlidersHorizontal className="mr-1 inline size-3.5" aria-hidden /> : <Code className="mr-1 inline size-3.5" aria-hidden />}{t(`rules.${m}`)}
-          </button>
-        ))}
-      </div>
       {mode === "text" ? (
         <div className="space-y-2">
           <Textarea ref={textBox} aria-label={t("rules.text_label")} rows={phone ? 6 : 3} spellCheck={false} className="font-mono text-sm" value={text}
@@ -566,33 +605,7 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
             : <p id="rules-text-help" className="text-xs text-muted-foreground">{t("rules.text_hint")}</p>}
         </div>
       ) : (
-        <div className={cn("min-h-0 space-y-2 overflow-y-auto", !phone && "max-h-96")}>
-          {draft.groups.map((g, gi) => {
-            const rows = <ul className="space-y-2">{g.rules.map((r, i) => ruleRow(gi, g, r, i, ++n))}</ul>;
-            const add = (
-              <Button type="button" variant="ghost" size="sm" disabled={total >= MAX_RULES} onClick={() => setGroup(gi, (x) => ({ ...x, rules: [...x.rules, blank()] }))}>
-                <Plus className="size-4" />{t("rules.add")}
-              </Button>
-            );
-            if (!grouped) return <div key={gi} className="space-y-2">{rows}{add}</div>;
-            return (
-              <div key={gi} className={cn("gap-1.5", !phone && "grid grid-cols-[4.5rem_minmax(0,1fr)] items-start")}>
-                <div className={cn(phone && "mb-1.5 w-24")}>{connector(gi, draft.any, t("rules.join_groups").replace(":", ""), (any) => setDraft((d) => ({ ...d, any })))}</div>
-                <section aria-label={t("rules.group").replace("{n}", String(gi + 1))} className="space-y-2 rounded-lg border bg-muted/30 p-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-muted-foreground">{t("rules.group").replace("{n}", String(gi + 1))}</span>
-                    <IconAction label={t("rules.remove_group")} target={String(gi + 1)} onClick={() => setDraft((d) => ({ ...d, groups: d.groups.filter((_, j) => j !== gi) }))}><Trash2 className="size-4" /></IconAction>
-                  </div>
-                  {rows}{add}
-                </section>
-              </div>
-            );
-          })}
-          <Button type="button" variant="outline" size="sm" disabled={total >= MAX_RULES || draft.groups.length >= MAX_GROUPS}
-            onClick={() => setDraft((d) => ({ any: d.groups.length === 1 ? true : d.any, groups: [...d.groups, { any: false, rules: [blank()] }] }))}>
-            <Plus className="size-4" />{t("rules.add_group")}
-          </Button>
-        </div>
+        <ul className={cn("min-h-0 space-y-2 overflow-y-auto", !phone && "max-h-[26rem] pr-1")}>{rows}</ul>
       )}
       {confirm ? (
         <div role="alertdialog" aria-label={t("rules.discard_q")} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-sm">
@@ -610,14 +623,23 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
           <Button type="button" disabled={!viewName.trim() || !pending || create.isPending} onClick={() => pending && create.mutate({ name: viewName.trim(), where: pending })}>{t("common.save")}</Button>
         </div>
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
-          <div className="flex gap-1">
-            <Button type="button" variant="ghost" onClick={() => { onChange({ any: false, rules: [] }); finish(); }}>{t("filters.clear")}</Button>
-            {saveView && collectionId && <Button type="button" variant="ghost" disabled={!pending} onClick={() => setViewName("")}><Bookmark className="size-4" />{t("rules.save_view")}</Button>}
-          </div>
-          <Button type="submit" className="ml-auto" disabled={busy || (mode === "text" && !!parsed && "error" in parsed)}>
-            {busy && <Loader2 className="size-4 animate-spin" />}{t("filters.apply")}
-            {count && n0 !== undefined && <span className="font-normal opacity-80">· {plural(n0, t)}</span>}
+        <div className="flex flex-wrap items-center gap-1 border-t pt-3">
+          {mode === "visual" && (
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="sm" disabled={total >= MAX_RULES} />}><Plus className="size-4" />{t("rules.add_menu")}<ChevronDown className="size-3.5 opacity-60" /></DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={addRule}><SlidersHorizontal />{t("rules.add_rule")}</DropdownMenuItem>
+                <DropdownMenuItem disabled={total + 2 > MAX_RULES || draft.groups.length >= MAX_GROUPS} onClick={addGroup}><Group />{t("rules.add_group_item")}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" disabled={busy} onClick={() => void toMode(mode === "visual" ? "text" : "visual")}>
+            {mode === "visual" ? <><Code className="size-4" />{t("rules.as_text")}</> : <><SlidersHorizontal className="size-4" />{t("rules.as_visual")}</>}
+          </Button>
+          <span className="flex-1" />
+          {saveView && collectionId && <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" disabled={!pending} onClick={() => setViewName("")}><Bookmark className="size-4" />{t("rules.save_view")}</Button>}
+          <Button type="submit" size="sm" className="ml-auto" disabled={busy || (mode === "text" && !!parsed && "error" in parsed)}>
+            {busy && <Loader2 className="size-4 animate-spin" />}{t("filters.apply")}{counter(open)}
           </Button>
         </div>
       )}
@@ -625,50 +647,81 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
   );
   const trigger = <><SlidersHorizontal className="size-4" />{t("rules.title")}{applied > 0 && <span className="rounded-full bg-primary/15 px-1.5 text-xs text-primary">{applied}</span>}</>;
 
-  // Chips: one per rule, groups bracketed, each opening the editor on itself.
-  let c = 0;
-  const chip = (r: Rule, onRemove: () => void) => {
-    const at = ++c;
-    const words = ruleWords(entryOf(r.field), r, t);
+  const editQuick = (at: number, anchor: Element) => setQuick({ at, anchor, rule: at < 0 ? blank() : draftOf(value.rules[at]) });
+  const applyQuick = () => { if (quick) onChange(quickWhere(quick)); setQuick(null); };
+  const qn = quick ? (quick.at < 0 ? value.rules.length + 1 : quick.at + 1) : 0;
+  const setQuickRule = (patch: Partial<DraftRule>) => setQuick((q) => (q ? { ...q, rule: patched(q.rule, patch) } : q));
+  const quickEditor = quick && (
+    <Popover.Root open onOpenChange={(o) => { if (!o) setQuick(null); }}>
+      <Popover.Portal>
+        <Popover.Positioner anchor={quick.anchor} sideOffset={6} align="start" collisionPadding={16} className="z-50">
+          <Popover.Popup aria-label={t("rules.edit")} className="w-80 max-w-[calc(100vw-32px)] rounded-lg bg-popover p-3 text-popover-foreground shadow-md ring-1 ring-foreground/10">
+            <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); applyQuick(); }}>
+              {fieldPicker(quick.rule, qn, setQuickRule)}
+              {opSelect(quick.rule, qn, setQuickRule)}
+              {valueOf(quick.rule, qn, setQuickRule)}
+              <div className="flex items-center gap-1 border-t pt-2">
+                {quick.at >= 0 && <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { onChange({ any: false, rules: value.rules.filter((_, i) => i !== quick.at) }); setQuick(null); }}><Trash2 className="size-4" />{t("rules.remove_short")}</Button>}
+                <span className="flex-1" />
+                <Button type="submit" size="sm" disabled={!fromDraft(quick.rule, kindOfKey(quick.rule.field))}>{t("filters.apply")}{counter(true)}</Button>
+              </div>
+            </form>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+
+  /** A rule as a chip: field, operator, value; a click edits it. */
+  const chip = (r: Rule, at: number, onRemove: () => void) => {
+    const entry = entryOf(r.field);
+    const words = ruleWords(entry, r, t);
+    const d = toDraft(r, entry?.kind ?? "text");
+    const value = <RuleValue entry={entry} rule={r} t={t} />;
     return (
-      <li key={`c${at}`} className="flex items-center rounded-full border bg-muted/40 text-xs">
-        <button type="button" className="rounded-l-full py-1 pl-2.5 pr-1 text-left hover:underline" aria-label={`${t("rules.edit")}: ${words}`} onClick={() => show(at)}>
-          <RuleText entry={entryOf(r.field)} rule={r} t={t} />
+      <li key={`c${at}`} className="flex h-7 items-center overflow-hidden rounded-full border bg-card text-xs shadow-xs">
+        <button type="button" className="flex h-full items-center hover:bg-muted/60" aria-label={`${t("rules.edit")}: ${words}`} onClick={(e) => editQuick(at, e.currentTarget.parentElement!)}>
+          <span className="pl-2.5 pr-1.5 text-muted-foreground">{entry?.name ?? r.field}</span>{" "}
+          <span className="border-x px-1.5 text-muted-foreground">{opShort(d.op, entry?.kind ?? "text", t)}</span>{" "}
+          {needsValue(d.op) && <span className="max-w-48 truncate px-1.5 font-medium">{value}</span>}
         </button>
-        <button type="button" className="grid size-6 place-items-center rounded-full hover:bg-accent" aria-label={`${t("rules.remove")}: ${words}`} onClick={onRemove}><X className="size-3" /></button>
+        <button type="button" className="grid h-full w-6 place-items-center text-muted-foreground hover:bg-muted/60 hover:text-foreground" aria-label={`${t("rules.remove")}: ${words}`} onClick={onRemove}><X className="size-3" /></button>
       </li>
     );
   };
-  const join = (any: boolean, k: string) => <li key={k} aria-hidden className="text-xs text-muted-foreground">{joinWord(any)}</li>;
-  const parts = [
-    ...value.rules.map((r, i) => chip(r, () => onChange({ ...value, rules: value.rules.filter((_, j) => j !== i) }))),
-    ...groups.map((g, gi) => {
-      const drop = () => onChange({ ...value, groups: groups.filter((_, j) => j !== gi) });
-      if (g.rules.length === 1) return chip(g.rules[0], drop);
-      const words = g.rules.map((r) => ruleWords(entryOf(r.field), r, t)).join(` ${joinWord(g.any)} `);
-      return (
-        <li key={`g${gi}`} className="flex flex-wrap items-center gap-1 rounded-2xl border border-dashed py-0.5 pl-1 pr-0.5">
-          <ul className="flex flex-wrap items-center gap-1">
-            {g.rules.flatMap((r, i) => [
-              ...(i > 0 ? [join(g.any, `gj${gi}-${i}`)] : []),
-              chip(r, () => onChange({ ...value, groups: groups.map((x, j) => (j === gi ? { ...x, rules: x.rules.filter((_, k) => k !== i) } : x)) })),
-            ])}
-          </ul>
-          <button type="button" className="grid size-6 place-items-center rounded-full hover:bg-accent" aria-label={`${t("rules.remove_group")}: ${words}`} onClick={drop}><X className="size-3" /></button>
-        </li>
-      );
-    }),
-  ];
+  const chips = applied > 0 && (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <ul className="flex flex-wrap items-center gap-1.5" aria-label={t("rules.active")}>
+        {simple
+          ? value.rules.map((r, i) => chip(r, i, () => onChange({ ...value, rules: value.rules.filter((_, j) => j !== i) })))
+          : (
+            <li className="flex h-7 items-center overflow-hidden rounded-full border border-primary/30 bg-primary/5 text-xs">
+              <button type="button" className="flex h-full items-center gap-1.5 pl-2.5 pr-1.5 hover:bg-primary/10" aria-label={`${t("rules.advanced")}: ${applied}`} onClick={show}>
+                <Group className="size-3.5 text-primary" aria-hidden /><span className="font-medium">{t("rules.advanced")}</span>{" "}
+                <span className="text-muted-foreground">· {t(applied === 1 ? "rules.count_one" : "rules.count_many").replace("{n}", String(applied))}</span>
+              </button>
+              <button type="button" className="grid h-full w-6 place-items-center text-muted-foreground hover:bg-primary/10" aria-label={`${t("rules.remove_all")}`} onClick={() => onChange({ any: false, rules: [] })}><X className="size-3" /></button>
+            </li>
+          )}
+      </ul>
+      {value.rules.length < MAX_RULES && (
+        <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={(e) => (simple ? editQuick(-1, e.currentTarget) : show())}>
+          <Plus className="size-3.5" />{t("rules.add_filter")}
+        </Button>
+      )}
+      <span className="flex-1" />
+      {summary && <span className="text-xs text-muted-foreground" role="status">{summary}</span>}
+      {simple && value.rules.length > 1 && <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => onChange({ any: false, rules: [] })}>{t("filters.clear")}</Button>}
+    </div>
+  );
   return (
     <>
       {phone ? (
         <Sheet open={open} onOpenChange={onOpenChange}>
           <Button variant="outline" onClick={() => show()}>{trigger}</Button>
           <SheetContent side="bottom" className="h-[92dvh] gap-3 rounded-t-xl p-4" showCloseButton={false}>
-            <div ref={popup} className="flex min-h-0 flex-1 flex-col gap-3">
-              <SheetTitle>{t("rules.title")}</SheetTitle>
-              {editor}
-            </div>
+            <SheetTitle>{t("rules.title")}</SheetTitle>
+            {editor}
           </SheetContent>
         </Sheet>
       ) : (
@@ -676,18 +729,15 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
           <Popover.Trigger render={<Button variant="outline" />}>{trigger}</Popover.Trigger>
           <Popover.Portal>
             <Popover.Positioner sideOffset={4} align="start" collisionPadding={16} className="z-50">
-              <Popover.Popup ref={popup} aria-label={t("rules.title")} className="flex w-[42rem] max-w-[calc(100vw-32px)] flex-col rounded-lg bg-popover p-3 text-popover-foreground shadow-md ring-1 ring-foreground/10">
+              <Popover.Popup aria-label={t("rules.title")} className="flex w-[44rem] max-w-[calc(100vw-32px)] flex-col rounded-xl bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-foreground/10">
                 {editor}
               </Popover.Popup>
             </Popover.Positioner>
           </Popover.Portal>
         </Popover.Root>
       )}
-      {applied > 0 && (
-        <ul className="flex basis-full flex-wrap items-center gap-1.5" aria-label={t("rules.active")}>
-          {parts.flatMap((p, i) => (i > 0 ? [join(value.any, `j${i}`), p] : [p]))}
-        </ul>
-      )}
+      {quickEditor}
+      {chips && (bar ? createPortal(chips, bar) : <div className="basis-full">{chips}</div>)}
     </>
   );
 }
@@ -700,19 +750,18 @@ function errorText(e: TextError, t: Translate): string {
 
 const HINT_KEY = "dataset.cell-filter-hint";
 
-/** Once per browser: right-clicking a cell filters by it. */
+/** Once per browser, a short note: right-clicking a cell filters by it. */
 export function CellFilterHint() {
   const { t } = useI18n();
-  const [dismissed, setDismissed] = useState(false);
-  const stored = useSyncExternalStore(() => () => {}, () => { try { return localStorage.getItem(HINT_KEY) === "1"; } catch { return true; } }, () => true);
-  if (stored || dismissed) return null;
-  const dismiss = () => { try { localStorage.setItem(HINT_KEY, "1"); } catch { /* private mode: shows again next time */ } setDismissed(true); };
-  return (
-    <p role="note" className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-      <MousePointerClick className="size-4 shrink-0" aria-hidden /><span className="flex-1">{t("rules.hint_cell")}</span>
-      <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={dismiss}>{t("rules.hint_ok")}</Button>
-    </p>
-  );
+  useEffect(() => {
+    try { if (localStorage.getItem(HINT_KEY) === "1") return; } catch { return; }
+    const id = setTimeout(() => {
+      try { localStorage.setItem(HINT_KEY, "1"); } catch { /* shows again next time */ }
+      toast(t("rules.hint_cell"), { duration: 8000 });
+    }, 800);
+    return () => clearTimeout(id);
+  }, [t]);
+  return null;
 }
 
 /** The quick rules a cell offers: keep or drop its value (or its emptiness). */
