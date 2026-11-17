@@ -43,13 +43,17 @@ func newServer(ctx context.Context, app *input.Application, version string) *mcp
 	s := mcp.NewServer(&mcp.Implementation{Name: "dataset", Version: version}, &mcp.ServerOptions{
 		Instructions: "Read the collections this API key reaches. Start with workspace_overview: every collection, " +
 			"its description, record count and fields, and how the collections reference each other, in one call. " +
-			"Read a collection's full JSON Schema with get_collection when needed, then find records with search_records. " +
+			"An option field lists its values there: filter on them with eq or in. To learn what a text field holds, " +
+			"page through its values with field_values, then filter with those exact values. " +
+			"Read a collection's full JSON Schema with get_collection when needed, then find records with search_records; " +
+			"add up records with aggregate_records instead of reading them all. " +
 			"Tools other than the built-in ones were made by the collections' owners for common questions: prefer them when they fit.",
 	})
 	t := tools{app}
 	mcp.AddTool(s, &mcp.Tool{Name: "workspace_overview", Description: "Start here. Every collection this API key reaches in one call: " +
 		"id, name, description, access, records and records in the trash, the newest record change, its fields " +
-		"(key, name, type, required, unique, options, the collection a reference points at, formulas, lookups and rollups) " +
+		"(key, name, type, required, unique, options, the collection a reference points at, formulas, lookups, rollups, " +
+		"and the subfields of groups and lists described the same way) " +
 		"and the fields of other collections that reference it.",
 		Annotations: readOnly}, t.workspaceOverview)
 	mcp.AddTool(s, &mcp.Tool{Name: "list_collections", Description: "The collections this API key reaches, with the access it has to each (read or write).",

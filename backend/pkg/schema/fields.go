@@ -23,7 +23,7 @@ type Field struct {
 	Result      string   `json:"result,omitempty"`    // what a formula gives: number, text, date or boolean
 	Lookup      *Lookup  `json:"lookup,omitempty"`    // the reference and the field it shows
 	Rollup      *Rollup  `json:"rollup,omitempty"`    // the collection, reference, function and field it sums up
-	Subfields   []string `json:"subfields,omitempty"` // a group's or a list's subfield keys
+	Subfields   []Field  `json:"subfields,omitempty"` // a group's fields, or the fields of each item of a list
 }
 
 // Fields lists the top-level fields in the schema's order.
@@ -117,16 +117,16 @@ func describe(f *Field, p map[string]any) {
 		f.Type = typ
 	case "array":
 		items, _ := p["items"].(map[string]any)
-		if sub, ok := items["properties"].(map[string]any); ok {
-			f.Type, f.Subfields = "list", sortedKeys(sub)
+		if _, ok := items["properties"].(map[string]any); ok {
+			f.Type, f.Subfields = "list", subfields(items)
 		} else if it, _ := items["type"].(string); it == "string" {
 			f.Type = "text_list"
 		} else {
 			f.Type = "other"
 		}
 	case "object":
-		if sub, ok := p["properties"].(map[string]any); ok {
-			f.Type, f.Subfields = "group", sortedKeys(sub)
+		if _, ok := p["properties"].(map[string]any); ok {
+			f.Type, f.Subfields = "group", subfields(p)
 		} else {
 			f.Type = "json"
 		}
@@ -135,11 +135,8 @@ func describe(f *Field, p map[string]any) {
 	}
 }
 
-func sortedKeys(m map[string]any) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	return keys
+// subfields describes an object schema's own fields, in key order (the map lost the schema's order).
+func subfields(obj map[string]any) []Field {
+	raw, _ := json.Marshal(obj)
+	return Fields(raw)
 }

@@ -23,8 +23,9 @@ func (t tools) addRecordTools(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{Name: "aggregate_records", Description: "Count the matching records and sum, average, min and max up to 5 number fields, " +
 		"in total or per value of one field (group_by), biggest groups first, at most 100 groups. Use it instead of reading records to add them up.",
 		Annotations: readOnly}, t.aggregateRecords)
-	mcp.AddTool(s, &mcp.Tool{Name: "field_values", Description: "The commonest values of one field over the matching records, with how many records hold each, " +
-		"how many fill the field and how many values differ.",
+	mcp.AddTool(s, &mcp.Tool{Name: "field_values", Description: "Every value one field holds over the matching records, commonest first, with how many records hold each " +
+		"(null: records without it), a page at a time; also how many records fill the field and how many values differ. " +
+		"Read it to learn what a text field holds before filtering on it with eq or in.",
 		Annotations: readOnly}, t.fieldValues)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_records", Description: "Up to 50 records of one collection by id in one call; ids not found come back in missing.",
 		Annotations: readOnly}, t.getRecords)
@@ -78,6 +79,8 @@ func (t tools) aggregateRecords(ctx context.Context, _ *mcp.CallToolRequest, in 
 type fieldValuesIn struct {
 	filterIn
 	Field string `json:"field" jsonschema:"a top-level field"`
+	Page  int    `json:"page,omitempty" jsonschema:"page number, from 1"`
+	Limit int    `json:"limit,omitempty" jsonschema:"values per page, 1 to 100 (default 20)"`
 }
 
 func (t tools) fieldValues(ctx context.Context, _ *mcp.CallToolRequest, in fieldValuesIn) (*mcp.CallToolResult, any, error) {
@@ -88,19 +91,26 @@ func (t tools) fieldValues(ctx context.Context, _ *mcp.CallToolRequest, in field
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := t.app.Records.Stats(ctx, filter, domain.StatsQuery{Filled: []string{in.Field}, Values: []string{in.Field}})
+	limit := in.Limit
+	if limit == 0 {
+		limit = 20
+	}
+	page := max(in.Page, 1)
+	q := domain.StatsQuery{Filled: []string{in.Field}, Values: []string{in.Field}, Top: limit, Skip: (page - 1) * limit}
+	st, err := t.app.Records.Stats(ctx, filter, q)
 	if err != nil {
 		return nil, nil, err
 	}
-	out := map[string]any{"records": st.Total, "filled": int64(0), "distinct": int64(0), "top": []any{}}
+	values := []map[string]any{}
+	var filled, distinct int64
 	if f := st.Fields[in.Field]; f != nil {
-		top := make([]map[string]any, len(f.Top))
-		for i, g := range f.Top {
-			top[i] = map[string]any{"value": g.Key, "count": g.Count}
+		for _, g := range f.Top {
+			values = append(values, map[string]any{"value": g.Key, "count": g.Count})
 		}
-		out["filled"], out["distinct"], out["top"] = f.Filled, f.Distinct, top
+		filled, distinct = f.Filled, f.Distinct
 	}
-	return nil, out, nil
+	return nil, map[string]any{"records": st.Total, "filled": filled, "distinct": distinct, "page": page,
+		"values": values, "more": int64(q.Skip+len(values)) < distinct}, nil
 }
 
 type idsIn struct {

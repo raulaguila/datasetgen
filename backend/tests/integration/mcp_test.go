@@ -172,8 +172,21 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if got, failed := call("aggregate_records", map[string]any{"collection_id": hidden}); !failed {
 		t.Fatalf("aggregate_records outside the key: %v", got)
 	}
-	if got, _ = call("field_values", map[string]any{"collection_id": a, "field": "nome"}); got["distinct"].(float64) != 2 || got["filled"].(float64) != 2 || len(got["top"].([]any)) != 2 {
+	if got, _ = call("field_values", map[string]any{"collection_id": a, "field": "nome"}); got["distinct"].(float64) != 2 || got["filled"].(float64) != 2 || len(got["values"].([]any)) != 2 || got["more"] != false {
 		t.Fatalf("field_values: %v", got)
+	}
+	// One value a page: the second page holds the other one; past the end, none, still with the distinct count.
+	first, _ := call("field_values", map[string]any{"collection_id": a, "field": "nome", "limit": 1})
+	second, _ := call("field_values", map[string]any{"collection_id": a, "field": "nome", "limit": 1, "page": 2})
+	if first["more"] != true || second["more"] != false || len(second["values"].([]any)) != 1 ||
+		first["values"].([]any)[0].(map[string]any)["value"] == second["values"].([]any)[0].(map[string]any)["value"] {
+		t.Fatalf("field_values pages: %v / %v", first, second)
+	}
+	if got, _ = call("field_values", map[string]any{"collection_id": a, "field": "nome", "limit": 1, "page": 5}); len(got["values"].([]any)) != 0 || got["distinct"].(float64) != 2 {
+		t.Fatalf("field_values past the end: %v", got)
+	}
+	if _, failed := call("field_values", map[string]any{"collection_id": a, "field": "nome", "limit": 500}); !failed {
+		t.Fatal("field_values took 500 a page")
 	}
 	got, _ = call("get_records", map[string]any{"collection_id": a, "record_ids": []string{cheap, dear, safe}})
 	if len(got["records"].([]any)) != 2 || len(got["missing"].([]any)) != 1 || got["missing"].([]any)[0] != safe {
@@ -256,7 +269,7 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if got, failed := call("update_records", map[string]any{"collection_id": a, "rules": caros, "set": map[string]any{"nome": "caro"}}); failed || got["updated"].(float64) != 2 {
 		t.Fatalf("update_records: %v", got)
 	}
-	if got, _ = call("field_values", map[string]any{"collection_id": a, "field": "nome", "search": "caro"}); got["top"].([]any)[0].(map[string]any)["count"].(float64) != 2 {
+	if got, _ = call("field_values", map[string]any{"collection_id": a, "field": "nome", "search": "caro"}); got["values"].([]any)[0].(map[string]any)["count"].(float64) != 2 {
 		t.Fatalf("after update_records: %v", got)
 	}
 

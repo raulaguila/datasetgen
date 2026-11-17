@@ -113,6 +113,9 @@ type StatsQuery struct {
 	Dates   []string // first, last and a count per Bucket
 	Values  []string // the commonest values and how many differ
 	Bucket  string   // day, week, month or year
+	// Top and Skip page the values, commonest first: Top of them after the
+	// first Skip. Zero Top lists the default few.
+	Top, Skip int
 }
 
 // StatsBuckets are the spans a date series counts by.

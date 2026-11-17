@@ -287,9 +287,6 @@ func (r *Repository) Aggregate(ctx context.Context, filter domain.RecordFilter, 
 // filledSQL is true when a field holds a value: not missing, null, "" or [].
 const filledSQL = `coalesce(data -> ?::text, 'null') NOT IN ('null'::jsonb, '""'::jsonb, '[]'::jsonb)`
 
-// statsTop is how many common values a field's profile lists.
-const statsTop = 8
-
 // Stats reads the profile in up to three queries: one row of counts and
 // ranges, the commonest values of every value field, and the date series.
 // shortcut: each scans the filter's rows, fine to ~100 000 records per collection, like Aggregate.
@@ -349,7 +346,7 @@ func (r *Repository) Stats(ctx context.Context, filter domain.RecordFilter, q do
 			Joins("CROSS JOIN jsonb_array_elements_text(?::jsonb) AS k(f)", jsonList(q.Values)).
 			Select("f, (data -> f)::text AS k, count(*) AS n, row_number() OVER (PARTITION BY f ORDER BY count(*) DESC, (data -> f)::text) AS rn, count(*) OVER (PARTITION BY f) AS d").
 			Group("f, k")
-		rows, err := r.db.WithContext(ctx).Table("(?) AS t", inner).Select("f, k, n, d").Where("rn <= ?", statsTop).Order("f, rn").Rows()
+		rows, err := r.db.WithContext(ctx).Table("(?) AS t", inner).Select("f, k, n, d, rn").Where("rn = 1 OR rn > ? AND rn <= ?", q.Skip, q.Skip+q.Top).Order("f, rn").Rows()
 		if err != nil {
 			return nil, shared.WrapError(err, "record")
 		}
@@ -357,16 +354,20 @@ func (r *Repository) Stats(ctx context.Context, filter domain.RecordFilter, q do
 		for rows.Next() {
 			var f string
 			var k *string
-			var n, d int64
-			if err := rows.Scan(&f, &k, &n, &d); err != nil {
+			var n, d, rn int64
+			if err := rows.Scan(&f, &k, &n, &d, &rn); err != nil {
 				return nil, shared.WrapError(err, "record")
+			}
+			s := field(f)
+			s.Distinct = d
+			if rn <= int64(q.Skip) { // the first value only tells the distinct count of a later page
+				continue
 			}
 			g := domain.RecordGroup{Count: n}
 			if k != nil {
 				g.Key = json.RawMessage(*k)
 			}
-			s := field(f)
-			s.Distinct, s.Top = d, append(s.Top, g)
+			s.Top = append(s.Top, g)
 		}
 		if err := rows.Err(); err != nil {
 			return nil, shared.WrapError(err, "record")

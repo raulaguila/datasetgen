@@ -484,6 +484,9 @@ const (
 	maxWhereGroups  = 10
 	maxAggregateNum = 5
 	maxStatsFields  = 60 // per part of a stats query
+	statsTop        = 8  // values a profile lists by default
+	maxValuesPage   = 100
+	maxValuesSkip   = 100_000
 )
 
 // checkWhere refuses unknown operators, odd field names and values too large
@@ -610,6 +613,12 @@ func (s *Service) Stats(ctx context.Context, filter domain.RecordFilter, q domai
 	bad := func(msg string) error { return apperror.New(apperror.CodeInvalidInput, msg).WithField("fields") }
 	if q.Bucket == "" {
 		q.Bucket = "month"
+	}
+	if q.Top == 0 {
+		q.Top = statsTop
+	}
+	if q.Top < 1 || q.Top > maxValuesPage || q.Skip < 0 || q.Skip > maxValuesSkip {
+		return nil, apperror.New(apperror.CodeInvalidInput, "values come 1 to 100 at a time, from the first 100 000").WithField("limit")
 	}
 	if !slices.Contains(domain.StatsBuckets, q.Bucket) {
 		return nil, apperror.New(apperror.CodeInvalidInput, "bucket is day, week, month or year").WithField("bucket")
