@@ -778,6 +778,35 @@ func jsonList(ids []string) string {
 	return string(b)
 }
 
+func (r *Repository) ClaimImportBatch(ctx context.Context, collectionID, key string) (*output.ImportBatch, error) {
+	res := r.db.WithContext(ctx).Exec(`INSERT INTO app.import_batch (collection_id, batch_key) VALUES (?, ?) ON CONFLICT DO NOTHING`, collectionID, key)
+	if res.Error != nil {
+		return nil, shared.WrapError(res.Error, "import batch")
+	}
+	if res.RowsAffected == 1 {
+		return nil, nil
+	}
+	var prev output.ImportBatch
+	err := r.db.WithContext(ctx).Raw(`SELECT created, updated FROM app.import_batch WHERE collection_id = ? AND batch_key = ?`, collectionID, key).Row().Scan(&prev.Created, &prev.Updated)
+	if err != nil {
+		return nil, shared.WrapError(err, "import batch")
+	}
+	return &prev, nil
+}
+
+func (r *Repository) FinishImportBatch(ctx context.Context, collectionID, key string, created, updated int64) error {
+	q := `UPDATE app.import_batch SET created = ?, updated = ?, saved_at = now() WHERE collection_id = ? AND batch_key = ?`
+	args := []any{created, updated, collectionID, key}
+	if created == 0 && updated == 0 { // nothing saved: a later try of the same key must run
+		q, args = `DELETE FROM app.import_batch WHERE collection_id = ? AND batch_key = ?`, []any{collectionID, key}
+	}
+	return shared.WrapError(r.db.WithContext(ctx).Exec(q, args...).Error, "import batch")
+}
+
+func (r *Repository) PruneImportBatches(ctx context.Context, before time.Time) error {
+	return shared.WrapError(r.db.WithContext(ctx).Exec(`DELETE FROM app.import_batch WHERE saved_at < ?`, before).Error, "import batch")
+}
+
 func (r *Repository) LockUnique(ctx context.Context, collectionID string) error {
 	err := r.db.WithContext(ctx).Exec("SELECT pg_advisory_xact_lock(hashtextextended('record-unique:' || ?, 0))", collectionID).Error
 	return shared.WrapError(err, "record")

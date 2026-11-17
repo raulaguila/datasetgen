@@ -91,6 +91,8 @@ type importDTO struct {
 	SkipInvalid  bool              `json:"skip_invalid"`
 	// UpsertKey, a unique field: a record already holding a row's value is updated (its other fields stay).
 	UpsertKey string `json:"upsert_key,omitempty"`
+	// BatchKey, chosen per batch (up to 100 characters), makes a retry safe: a key saved before returns that result and saves nothing again.
+	BatchKey string `json:"batch_key,omitempty"`
 }
 
 type importResultDTO struct {
@@ -98,6 +100,8 @@ type importResultDTO struct {
 	Updated int64            `json:"updated"`
 	Invalid int              `json:"invalid"`
 	Errors  []importErrorDTO `json:"errors"`
+	// Replayed: this batch_key was saved before; created and updated are from that save.
+	Replayed bool `json:"replayed,omitempty"`
 }
 
 type importErrorDTO struct {
@@ -114,7 +118,7 @@ type issueDTO struct {
 }
 
 // @Summary Check a batch of records against the schema and add them; editors and owners
-// @Description Up to 1000 records within the body limit; clients send a large file in batches. With dry_run nothing is written. With invalid records and no skip_invalid, none are written. With upsert_key (a unique field) a row whose value a record already holds updates that record.
+// @Description Up to 5000 records within the body limit; clients send a large file in batches. With dry_run nothing is written. With invalid records and no skip_invalid, none are written. With upsert_key (a unique field) a row whose value a record already holds updates that record.
 // @Tags Records
 // @Accept json
 // @Produce json
@@ -134,12 +138,12 @@ func (h *Handler) Import(c fiber.Ctx) error {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
 	res, err := h.svc.Import(c.Context(), input.ImportRecordsCommand{
-		CollectionID: body.CollectionID, Records: body.Records, DryRun: body.DryRun, SkipInvalid: body.SkipInvalid, UpsertKey: body.UpsertKey,
+		CollectionID: body.CollectionID, Records: body.Records, DryRun: body.DryRun, SkipInvalid: body.SkipInvalid, UpsertKey: body.UpsertKey, BatchKey: body.BatchKey,
 	})
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
-	out := importResultDTO{Created: res.Created, Updated: res.Updated, Invalid: res.Invalid, Errors: make([]importErrorDTO, 0, len(res.Errors))}
+	out := importResultDTO{Created: res.Created, Updated: res.Updated, Invalid: res.Invalid, Replayed: res.Replayed, Errors: make([]importErrorDTO, 0, len(res.Errors))}
 	for _, e := range res.Errors {
 		issues := make([]issueDTO, 0, len(e.Issues))
 		for _, i := range e.Issues {

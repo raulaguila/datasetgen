@@ -5680,7 +5680,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Up to 1000 records within the body limit; clients send a large file in batches. With dry_run nothing is written. With invalid records and no skip_invalid, none are written. With upsert_key (a unique field) a row whose value a record already holds updates that record.",
+                "description": "Up to 5000 records within the body limit; clients send a large file in batches. With dry_run nothing is written. With invalid records and no skip_invalid, none are written. With upsert_key (a unique field) a row whose value a record already holds updates that record.",
                 "consumes": [
                     "application/json"
                 ],

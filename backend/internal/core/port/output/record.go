@@ -66,10 +66,24 @@ type RecordRepository interface {
 	// Comment reads one comment's record and author (NotFound when gone).
 	Comment(ctx context.Context, id string) (*domain.RecordComment, error)
 	DeleteComment(ctx context.Context, id string) error
+	// ClaimImportBatch marks an import batch key as being saved, until the
+	// transaction ends. When the key was saved before it returns that batch's
+	// counts (a retry); a claim racing another waits for it to commit.
+	ClaimImportBatch(ctx context.Context, collectionID, key string) (prev *ImportBatch, err error)
+	// FinishImportBatch stores the claimed batch's counts, or drops the claim when it saved nothing.
+	FinishImportBatch(ctx context.Context, collectionID, key string, created, updated int64) error
+	// PruneImportBatches drops batch keys saved before a time.
+	PruneImportBatches(ctx context.Context, before time.Time) error
 	// MaxNumber is the largest number the collection's records, trashed ones included, hold under key, 0 when none.
 	MaxNumber(ctx context.Context, collectionID, key string) (int64, error)
 	// Matching finds, per value (by index), the record of the collection whose key holds it.
 	Matching(ctx context.Context, collectionID, key string, values []json.RawMessage) (map[int]domain.Record, error)
 	// DuplicatedKeys returns the listed keys that two or more records share a value of.
 	DuplicatedKeys(ctx context.Context, collectionID string, keys []string) ([]string, error)
+}
+
+// ImportBatch is what a saved import batch wrote.
+type ImportBatch struct {
+	Created int64
+	Updated int64
 }

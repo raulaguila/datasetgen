@@ -10,9 +10,10 @@ export interface ParsedFile {
   errors: { line: number; message: "parse" | "too_large" }[];
 }
 
-// The API body limit is about 100 KB: batches stay under it with room for the envelope.
-export const BATCH_BYTES = 80_000;
-export const BATCH_RECORDS = 1000;
+// The API takes up to 5000 records in an 8 MB body: batches stay well under both.
+// Fewer, larger batches keep a big file under the per-minute request limit.
+export const BATCH_BYTES = 4_000_000;
+export const BATCH_RECORDS = 5000;
 
 /** Reads JSON Lines (one record per line) or one JSON array of records. */
 export function parseImport(text: string): ParsedFile {

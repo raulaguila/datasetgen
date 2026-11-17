@@ -158,7 +158,7 @@ export const records = {
   restore: (recordId: string, version: number, current_version?: number) =>
     apiFetch<DataRecord>(`/v1/records/${id(recordId)}/restore`, { method: "POST", json: { version, current_version } }),
   /** One batch of a file import; dry_run only checks. */
-  importBatch: (body: { collection_id: string; records: unknown[]; dry_run?: boolean; skip_invalid?: boolean; upsert_key?: string }) =>
+  importBatch: (body: { collection_id: string; records: unknown[]; dry_run?: boolean; skip_invalid?: boolean; upsert_key?: string; batch_key?: string }) =>
     apiFetch<ImportResult>("/v1/records/import", { method: "POST", json: body }),
   export: (collection_id: string, format: "jsonl" | "csv", valid: boolean) =>
     apiDownload(`/v1/records/export${query({ collection_id, format, valid: valid || undefined })}`, `records.${format}`),

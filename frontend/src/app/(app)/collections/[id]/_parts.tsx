@@ -35,7 +35,8 @@ import { useCrumb } from "@/lib/store/crumb";
 import { useUIStore } from "@/lib/store/ui";
 import { cn } from "@/lib/utils";
 import { TEMPLATE_IDS, templateFields, type TemplateId } from "@/lib/collection-templates";
-import { schemaFromFile, templateSchema } from "@/lib/infer-schema";
+import { templateSchema } from "@/lib/infer-schema";
+import { Cancelled, inferSchema } from "@/lib/import-client";
 import { collectionName, description as descriptionRule, ready } from "@/lib/validation";
 
 /** The fields a new collection starts with, named in the user's language. */
@@ -185,8 +186,20 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
     setFileNote(null);
     setSchemaText(pretty(id === "basic" ? starter(t) : templateSchema(templateFields(locale, id))));
   };
+  // Read in the import worker: a large file keeps the page answering, with its progress shown.
+  const reading = useRef<AbortController | null>(null);
   const pickFile = async (file: File) => {
-    const next = schemaFromFile(file.name, await file.text());
+    reading.current?.abort();
+    const ctl = (reading.current = new AbortController());
+    const shown = (read: number) => setFileNote(t("collections.template_file_reading").replace("{file}", file.name).replace("{pct}", String(file.size ? Math.min(100, Math.round((read / file.size) * 100)) : 0)));
+    shown(0);
+    let next: Record<string, unknown> | null;
+    try {
+      next = await inferSchema(file, shown, ctl.signal);
+    } catch (err) {
+      if (err instanceof Cancelled) return;
+      return setFileNote(err instanceof Error && err.message.startsWith("xlsx:") ? t("import.bad_xlsx") : t("collections.template_file_empty"));
+    }
     if (!next) return setFileNote(t("collections.template_file_empty"));
     setTemplate("file");
     setSchemaText(pretty(next));
@@ -303,7 +316,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                       <Button type="button" size="sm" variant={template === "file" ? "secondary" : "outline"} role="radio" aria-checked={template === "file"} onClick={() => fileInput.current?.click()}>
                         <FileUp className="size-4" />{t("collections.template.file")}
                       </Button>
-                      <input ref={fileInput} type="file" accept=".json,.jsonl,.ndjson,.csv,application/json,text/csv" className="hidden" aria-label={t("collections.template.file")}
+                      <input ref={fileInput} type="file" accept=".json,.jsonl,.ndjson,.csv,.xlsx,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" aria-label={t("collections.template.file")}
                         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void pickFile(f); }} />
                     </div>
                     <p className="text-xs text-muted-foreground" role="status">{fileNote ?? t("collections.template_file_hint")}</p>

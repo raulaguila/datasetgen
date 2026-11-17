@@ -506,6 +506,33 @@ func TestUniqueFieldsHold(t *testing.T) {
 		t.Fatalf("import: %+v, %v", res, err)
 	}
 
+	// A batch key makes a retry safe: the second send answers with the first result and saves nothing.
+	keyed := input.ImportRecordsCommand{CollectionID: c.ID, Records: []json.RawMessage{json.RawMessage(`{"codigo":"k1"}`), json.RawMessage(`{"codigo":"k2"}`)}, BatchKey: "f1:0"}
+	first, err := records.Import(ctx, keyed)
+	if err != nil || first.Created != 2 || first.Replayed {
+		t.Fatalf("keyed import: %+v, %v", first, err)
+	}
+	again, err := records.Import(ctx, keyed)
+	if err != nil || again.Created != 2 || !again.Replayed {
+		t.Fatalf("retried import: %+v, %v", again, err)
+	}
+	// A dry run neither claims nor answers a key, and a batch that saved nothing leaves its key free.
+	if res, err := records.Import(ctx, input.ImportRecordsCommand{CollectionID: c.ID, Records: keyed.Records, BatchKey: "f1:1", DryRun: true}); err != nil || res.Replayed {
+		t.Fatalf("dry run: %+v, %v", res, err)
+	}
+	bad := input.ImportRecordsCommand{CollectionID: c.ID, Records: []json.RawMessage{json.RawMessage(`{"codigo":"k1"}`)}, BatchKey: "f1:2"}
+	if res, err := records.Import(ctx, bad); err != nil || res.Created != 0 || res.Invalid != 1 {
+		t.Fatalf("invalid keyed batch: %+v, %v", res, err)
+	}
+	bad.Records = []json.RawMessage{json.RawMessage(`{"codigo":"k3"}`)}
+	if res, err := records.Import(ctx, bad); err != nil || res.Created != 1 || res.Replayed {
+		t.Fatalf("fixed keyed batch: %+v, %v", res, err)
+	}
+	wantCode(t, ignore(records.Import(ctx, input.ImportRecordsCommand{CollectionID: c.ID, Records: keyed.Records, BatchKey: strings.Repeat("x", 101)})), apperror.CodeInvalidInput)
+	if n, err := exported(records, ctx, c.ID, false); err != nil || n != 7 {
+		t.Fatalf("records after keyed imports: %d, %v", n, err)
+	}
+
 	// Filling one value into many records would repeat it.
 	wantCode(t, ignore(collections.Fix(ctx, c.ID, domain.RecordFix{Op: domain.FixSetDefault, Field: "codigo", Value: json.RawMessage(`"z"`)})), apperror.CodeInvalidInput)
 

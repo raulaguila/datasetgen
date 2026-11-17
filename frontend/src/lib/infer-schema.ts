@@ -1,34 +1,97 @@
 import { addField, blankField, fieldsOf, keyOf, propOf, propsOf, type Field, type FieldType } from "@/components/field-builder";
-import { parseImport, type ParsedFile } from "@/lib/import-file";
+import { parseImport, type ParsedFile, type ParsedRecord } from "@/lib/import-file";
+
+/**
+ * Our export writes ' before a cell starting with = + - @ tab or CR, so a
+ * spreadsheet does not run it as a formula (mapper.CSVCell); reading it back drops that '.
+ * shortcut: a value really written as '-x comes back as -x; rare enough to accept.
+ */
+const unguard = (cell: string) => (/^'[=+\-@\t\r]/.test(cell) ? cell.slice(1) : cell);
+
+/**
+ * Splits CSV text into rows of cells, fed in pieces of any size: quoted cells may
+ * hold commas, quotes ("") and line breaks. The separator is whichever of , and ;
+ * the header line uses more. Rows with no filled cell are dropped.
+ */
+export class CsvReader {
+  private row: string[] = [];
+  private cell = "";
+  private quoted = false;
+  private pendingQuote = false; // a " closing a quoted cell, unless the next char is another "
+  private pendingCR = false;
+  private sep: string | null = null;
+  private head = "";
+  private started = false;
+
+  /** Rows completed by this piece of text. */
+  push(text: string): string[][] {
+    if (!this.started) {
+      text = text.replace(/^\uFEFF/, "");
+      this.started = text.length > 0;
+    }
+    if (this.sep === null) {
+      this.head += text;
+      const nl = this.head.search(/\r|\n/);
+      if (nl < 0) return [];
+      const line = this.head.slice(0, nl);
+      this.sep = (line.match(/;/g)?.length ?? 0) > (line.match(/,/g)?.length ?? 0) ? ";" : ",";
+      text = this.head;
+      this.head = "";
+    }
+    return this.scan(text);
+  }
+
+  /** The last row, once the text has ended. */
+  end(): string[][] {
+    const out = this.sep === null ? ((this.sep = this.head.includes(";") && !this.head.includes(",") ? ";" : ","), this.scan(this.head)) : [];
+    this.pendingQuote = false;
+    this.row.push(this.cell);
+    this.cell = "";
+    if (this.row.some((v) => v !== "")) out.push(this.row.map(unguard));
+    this.row = [];
+    return out;
+  }
+
+  private scan(text: string): string[][] {
+    const out: string[][] = [];
+    const sep = this.sep!;
+    let start = 0; // plain runs are copied in one slice, not char by char
+    const flush = (i: number) => { if (i > start) this.cell += text.slice(start, i); };
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (this.pendingCR) {
+        this.pendingCR = false;
+        if (c === "\n") { start = i + 1; continue; }
+      }
+      if (this.pendingQuote) {
+        this.pendingQuote = false;
+        if (c === '"') { this.cell += '"'; start = i + 1; continue; } // "" inside quotes
+        this.quoted = false;
+      }
+      if (this.quoted) {
+        if (c === '"') { flush(i); this.pendingQuote = true; start = i + 1; }
+        continue;
+      }
+      if (c === '"') { flush(i); this.quoted = true; start = i + 1; }
+      else if (c === sep) { flush(i); this.row.push(this.cell); this.cell = ""; start = i + 1; }
+      else if (c === "\n" || c === "\r") {
+        flush(i);
+        this.row.push(this.cell); this.cell = "";
+        if (this.row.some((v) => v !== "")) out.push(this.row.map(unguard));
+        this.row = [];
+        if (c === "\r") this.pendingCR = true;
+        start = i + 1;
+      }
+    }
+    flush(text.length);
+    return out;
+  }
+}
 
 /** Splits CSV text into rows of cells: quoted cells may hold commas, quotes ("") and line breaks. */
 export function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = "";
-  let quoted = false;
-  const body = text.replace(/^﻿/, "");
-  // The separator is whichever of , and ; the header line uses more.
-  const header = body.split(/\r?\n/, 1)[0] ?? "";
-  const sep = (header.match(/;/g)?.length ?? 0) > (header.match(/,/g)?.length ?? 0) ? ";" : ",";
-  for (let i = 0; i < body.length; i++) {
-    const c = body[i];
-    if (quoted) {
-      if (c === '"' && body[i + 1] === '"') { cell += '"'; i++; }
-      else if (c === '"') quoted = false;
-      else cell += c;
-    } else if (c === '"') quoted = true;
-    else if (c === sep) { row.push(cell); cell = ""; }
-    else if (c === "\n" || c === "\r") {
-      if (c === "\r" && body[i + 1] === "\n") i++;
-      row.push(cell); cell = "";
-      if (row.some((v) => v !== "")) rows.push(row);
-      row = [];
-    } else cell += c;
-  }
-  row.push(cell);
-  if (row.some((v) => v !== "")) rows.push(row);
-  return rows;
+  const reader = new CsvReader();
+  return [...reader.push(text), ...reader.end()];
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -37,72 +100,151 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const URL_RE = /^https?:\/\/\S+$/;
 
 /** CSV exports store objects and lists as JSON inside a quoted cell. */
-function structuredCell(cell: string): unknown {
+export function structuredCell(cell: string): unknown {
   if (/^\s*[\[{]/.test(cell)) {
     try { return JSON.parse(cell); } catch { /* Ordinary text stays text. */ }
   }
   return cell;
 }
 
-/** The narrowest builder type every sample fits; text read from CSV is matched by its look. */
-function typeOfValues(values: unknown[], fromText: boolean): FieldType {
-  const present = values.filter((v) => v !== null && v !== undefined && v !== "");
-  if (!present.length) return "string";
-  const all = (test: (v: unknown) => boolean) => present.every(test);
-  const str = (re: RegExp) => (v: unknown) => typeof v === "string" && re.test(v);
-  if (all((v) => typeof v === "boolean" || (fromText && typeof v === "string" && /^(true|false)$/i.test(v)))) return "boolean";
-  const num = (v: unknown) => (typeof v === "number" ? v : fromText && typeof v === "string" && /^-?\d+([.,]\d+)?$/.test(v) ? Number(v.replace(",", ".")) : NaN);
-  if (all((v) => Number.isFinite(num(v)))) return all((v) => Number.isInteger(num(v))) ? "integer" : "number";
-  if (all(str(DATE))) return "date";
-  if (all(str(DATETIME))) return "datetime";
-  if (all(str(EMAIL))) return "email";
-  if (all(str(URL_RE))) return "url";
-  if (all((v) => typeof v === "string") && present.some((v) => (v as string).length >= 200 || (v as string).includes("\n"))) return "text";
-  return "string";
+/** What a run of scalar values (all one JS type) has looked like so far. */
+class Scalars {
+  n = 0;
+  bool = true;
+  num = true;
+  int = true;
+  date = true;
+  datetime = true;
+  email = true;
+  url = true;
+  str = true;
+  long = false;
+  constructor(private fromText: boolean) {}
+
+  add(v: unknown) {
+    if (v === "") return;
+    this.n++;
+    const s = typeof v === "string" ? v : null;
+    if (this.bool) this.bool = typeof v === "boolean" || (this.fromText && s !== null && /^(true|false)$/i.test(s));
+    if (this.num) {
+      const n = typeof v === "number" ? v : this.fromText && s !== null && /^-?\d+([.,]\d+)?$/.test(s) ? Number(s.replace(",", ".")) : NaN;
+      this.num = Number.isFinite(n);
+      if (this.num && this.int) this.int = Number.isInteger(n);
+    }
+    if (this.date) this.date = s !== null && DATE.test(s);
+    if (this.datetime) this.datetime = s !== null && DATETIME.test(s);
+    if (this.email) this.email = s !== null && EMAIL.test(s);
+    if (this.url) this.url = s !== null && URL_RE.test(s);
+    if (this.str) this.str = s !== null;
+    if (!this.long && s !== null) this.long = s.length >= 200 || s.includes("\n");
+  }
+
+  /** The narrowest builder type every value fits; text read from CSV is matched by its look. */
+  type(): FieldType {
+    if (!this.n) return "string";
+    if (this.bool) return "boolean";
+    if (this.num) return this.int ? "integer" : "number";
+    if (this.date) return "date";
+    if (this.datetime) return "datetime";
+    if (this.email) return "email";
+    if (this.url) return "url";
+    if (this.str && this.long) return "text";
+    return "string";
+  }
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+type Kind = "object" | "array" | "string" | "number" | "boolean" | "bigint" | "symbol" | "undefined" | "function";
 
-/** Infer each subfield from every imported object, including optional keys. */
-function inferredProperties(records: Record<string, unknown>[], fromText: boolean): Record<string, Record<string, unknown>> {
-  const keys = [...new Set(records.flatMap(Object.keys))].filter(Boolean);
-  return Object.fromEntries(keys.map((key) => [key, inferredProperty(records.map((r) => r[key]), fromText, key)]));
-}
+/**
+ * Everything seen at one place of the records (a field, a subfield, a list's items),
+ * folded one value at a time, so a file of any size is read once and kept as a summary.
+ */
+class Shape {
+  private nulls = false;
+  private readonly kinds = new Map<Kind, Scalars | Map<string, Shape> | { items: Shape | null }>();
+  /** root: the records themselves, whose fields keep fromText (CSV cells); deeper JSON has native types. */
+  constructor(private readonly fromText: boolean, private readonly root = false) {}
 
-/** JSON inside a CSV cell already has native types: do not coerce its strings. */
-function inferredProperty(values: unknown[], fromText: boolean, title?: string): Record<string, unknown> {
-  const present = values.filter((v) => v !== undefined && (!fromText || v !== ""));
-  const nonNull = present.filter((v) => v !== null);
-  const label = title === undefined ? {} : { title };
-  let property: Record<string, unknown>;
-  if (nonNull.length && nonNull.every(isObject)) {
-    const properties = inferredProperties(nonNull, false);
-    property = { ...label, type: "object", ...(Object.keys(properties).length ? { properties } : {}) };
-  } else if (nonNull.length && nonNull.every(Array.isArray)) {
-    const items = nonNull.flat();
-    property = { ...label, type: "array", ...(items.length ? { items: inferredProperty(items, false) } : {}) };
-  } else if (nonNull.length && new Set(nonNull.map((v) => Array.isArray(v) ? "array" : typeof v)).size > 1) {
-    const groups = new Map<string, unknown[]>();
-    for (const v of nonNull) {
-      const kind = Array.isArray(v) ? "array" : typeof v;
-      const group = groups.get(kind);
-      if (group) group.push(v);
-      else groups.set(kind, [v]);
+  add(v: unknown) {
+    if (v === undefined || (this.fromText && v === "")) return;
+    if (v === null) { this.nulls = true; return; }
+    const kind = (Array.isArray(v) ? "array" : typeof v) as Kind;
+    let acc = this.kinds.get(kind);
+    if (kind === "object") {
+      // JSON inside a CSV cell already has native types: its strings are not coerced.
+      const fields = (acc ?? new Map<string, Shape>()) as Map<string, Shape>;
+      for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+        if (!k) continue;
+        let f = fields.get(k);
+        if (!f) fields.set(k, (f = new Shape(this.root && this.fromText)));
+        f.add(x);
+      }
+      acc = fields;
+    } else if (kind === "array") {
+      const list = (acc ?? { items: null }) as { items: Shape | null };
+      for (const x of v as unknown[]) (list.items ??= new Shape(false)).add(x);
+      acc = list;
+    } else {
+      acc ??= new Scalars(this.fromText);
+      (acc as Scalars).add(v);
     }
-    property = { ...label, anyOf: [...groups.values()].map((group) => inferredProperty(group, fromText)) };
-  } else {
-    const type = typeOfValues(nonNull, fromText);
-    property = propOf({ ...blankField, name: title ?? "", type });
-    if (title === undefined) delete property.title;
+    this.kinds.set(kind, acc);
   }
-  // A null inside an object or list is a value, not an absent CSV cell.
-  if (present.includes(null)) {
-    if (!nonNull.length) return { ...label, type: "null" };
-    if (typeof property.type === "string") property.type = [property.type, "null"];
-    else (property.anyOf as Record<string, unknown>[]).push({ type: "null" });
+
+  /** The JSON Schema property for what was seen; title names a top-level field. */
+  property(title?: string): Record<string, unknown> {
+    const label = title === undefined ? {} : { title };
+    const parts = [...this.kinds.entries()].map(([kind, acc]) => this.part(kind, acc));
+    let property: Record<string, unknown>;
+    if (parts.length > 1) property = { ...label, anyOf: parts };
+    else if (parts.length === 1 && "type" in parts[0] && (parts[0].type === "object" || parts[0].type === "array")) property = { ...label, ...parts[0] };
+    else {
+      const type = parts.length ? ([...this.kinds.values()][0] as Scalars).type() : "string";
+      property = propOf({ ...blankField, name: title ?? "", type });
+      if (title === undefined) delete property.title;
+    }
+    // A null inside an object or list is a value, not an absent CSV cell.
+    if (this.nulls) {
+      // Only nulls seen: text that also takes null, so later records can fill it.
+      if (typeof property.type === "string") property.type = [property.type, "null"];
+      else (property.anyOf as Record<string, unknown>[]).push({ type: "null" });
+    }
+    return property;
   }
-  return property;
+
+  private part(kind: Kind, acc: Scalars | Map<string, Shape> | { items: Shape | null }): Record<string, unknown> {
+    if (kind === "object") {
+      const properties = Object.fromEntries([...(acc as Map<string, Shape>)].map(([k, f]) => [k, f.property(k)]));
+      return { type: "object", ...(Object.keys(properties).length ? { properties } : {}) };
+    }
+    if (kind === "array") {
+      const items = (acc as { items: Shape | null }).items;
+      return { type: "array", ...(items ? { items: items.property() } : {}) };
+    }
+    const p = propOf({ ...blankField, name: "", type: (acc as Scalars).type() });
+    delete p.title;
+    return p;
+  }
 }
+
+/** Fields guessed from records fed one at a time: keys stay as the file writes them. */
+export class SchemaInferrer {
+  private readonly root: Shape;
+  constructor(fromText: boolean) { this.root = new Shape(fromText, true); }
+  /** A record (CSV rows arrive as objects of their cells). */
+  add(record: unknown) { if (isObject(record)) this.root.add(record); }
+  /** Keys known without a value (a CSV header with no rows). */
+  keys(keys: string[]) { this.root.add(Object.fromEntries(keys.map((k) => [k, undefined]))); }
+  schema(): Record<string, unknown> | null {
+    const p = this.root.property();
+    const properties = (p.properties ?? {}) as Record<string, unknown>;
+    return Object.keys(properties).length ? { type: "object", properties } : null;
+  }
+}
+
+/** A CSV row as a record of its cells, for the inferrer. */
+export const csvRow = (header: string[], row: string[]) => Object.fromEntries(header.map((h, i) => [h.trim(), structuredCell(row[i] ?? "")]));
 
 /**
  * Fields guessed from a data file: JSON (one array or JSON Lines) or CSV with a
@@ -110,19 +252,17 @@ function inferredProperty(values: unknown[], fromText: boolean, title?: string):
  * Null when nothing there reads as records.
  */
 export function schemaFromFile(name: string, text: string): Record<string, unknown> | null {
-  let records: Record<string, unknown>[];
-  let fromText = false;
   if (/\.csv$/i.test(name)) {
     const [header, ...rows] = parseCsv(text);
     if (!header?.length) return null;
-    records = rows.map((r) => Object.fromEntries(header.map((h, i) => [h.trim(), structuredCell(r[i] ?? "")])));
-    if (!records.length) records = [Object.fromEntries(header.map((h) => [h.trim(), ""]))];
-    fromText = true;
-  } else {
-    records = parseImport(text).records.map((r) => r.data).filter(isObject);
+    const inf = new SchemaInferrer(true);
+    inf.keys(header.map((h) => h.trim()));
+    for (const r of rows) inf.add(csvRow(header, r));
+    return inf.schema();
   }
-  const properties = inferredProperties(records, fromText);
-  return Object.keys(properties).length ? { type: "object", properties } : null;
+  const inf = new SchemaInferrer(false);
+  for (const r of parseImport(text).records) inf.add(r.data);
+  return inf.schema();
 }
 
 /** Ready-made field sets; names come from the caller's language, keys from the names. */
@@ -188,12 +328,10 @@ function storageTypes(property: unknown, root: unknown, seen = new Set<unknown>(
 }
 
 /**
- * Records from table rows (CSV or a sheet) whose first row is the header;
- * columns maps each column to a field key ("" skips it), guessed when absent.
- * Empty cells are left out.
+ * Turns table rows (CSV or a sheet) into records: columns maps each column to a
+ * field key ("" skips it), guessed from the header when absent. Empty cells are left out.
  */
-export function tableRecords(rows: string[][], schema: Record<string, unknown> | null, columns?: string[]): ParsedFile {
-  const [header = [], ...body] = rows;
+export function rowReader(header: string[], schema: Record<string, unknown> | null, columns?: string[]): (row: string[], line: number) => ParsedRecord {
   const keys = columns ?? guessColumns(header, schema);
   const props = propsOf(schema ?? {});
   const types = new Map(fieldsOf(schema).map((r) => {
@@ -210,13 +348,17 @@ export function tableRecords(rows: string[][], schema: Record<string, unknown> |
     }
     return [r.key, { type, nullable: storage.includes("null") }];
   }));
-  return {
-    errors: [],
-    records: body.map((row, i) => ({
-      line: i + 2,
-      data: Object.fromEntries(keys.flatMap((k, j) => (row[j] === undefined || row[j] === "" || !k ? [] : [[k, cellValue(row[j], types.get(k)?.type, types.get(k)?.nullable)]]))),
-    })),
-  };
+  return (row, line) => ({
+    line,
+    data: Object.fromEntries(keys.flatMap((k, j) => (row[j] === undefined || row[j] === "" || !k ? [] : [[k, cellValue(row[j], types.get(k)?.type, types.get(k)?.nullable)]]))),
+  });
+}
+
+/** Records from table rows whose first row is the header; see rowReader. */
+export function tableRecords(rows: string[][], schema: Record<string, unknown> | null, columns?: string[]): ParsedFile {
+  const [header = [], ...body] = rows;
+  const read = rowReader(header, schema, columns);
+  return { errors: [], records: body.map((row, i) => read(row, i + 2)) };
 }
 
 /** Records from a CSV with a header line, as the export writes it. */

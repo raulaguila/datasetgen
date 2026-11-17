@@ -185,6 +185,8 @@ export interface ImportResult {
   invalid: number;
   /** index is the record's position in that batch. */
   errors: { index: number; issues: SchemaIssue[] }[];
+  /** The batch_key was saved before: created and updated are that save's, nothing was saved again. */
+  replayed?: boolean;
 }
 
 export type MemberRole = "owner" | "editor" | "viewer";

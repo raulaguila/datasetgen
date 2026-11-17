@@ -47,6 +47,8 @@ type RecordService interface {
 	Export(ctx context.Context, collectionID string, validOnly bool) (*Export, error)
 	// BulkUpdate sets the same values in several records of one collection (editors).
 	BulkUpdate(ctx context.Context, cmd BulkUpdateCommand) (int, error)
+	// PruneImportBatches drops import batch keys older than a week (the job worker).
+	PruneImportBatches(ctx context.Context) error
 }
 
 type RestoreRecordCommand struct {
@@ -63,6 +65,9 @@ type ImportRecordsCommand struct {
 	// UpsertKey, a unique field, updates the record already holding a row's
 	// value (its other fields stay) instead of adding one.
 	UpsertKey string
+	// BatchKey, chosen by the client per batch, makes a retry safe: a key saved
+	// before returns that result (Replayed) and saves nothing again. Kept a week.
+	BatchKey string
 }
 
 type ImportResult struct {
@@ -70,6 +75,8 @@ type ImportResult struct {
 	Updated int64
 	Invalid int
 	Errors  []ImportError // the first 100
+	// Replayed: the batch key was saved before; Created and Updated are that save's.
+	Replayed bool
 }
 
 // ImportError names an invalid record by its index in the request.

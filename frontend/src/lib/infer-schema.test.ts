@@ -28,6 +28,16 @@ describe("schemaFromFile", () => {
     expect(schema.properties).toMatchObject({ grupo: { properties: { interno: { properties: { codigo: { type: "string" } } } } }, numeros: { items: { type: "number" } }, bools: { items: { type: "boolean" } } });
   });
 
+  it("keeps a field that is null in every record open to values", () => {
+    const records = [{ nome: "a", obs: null, grupo: { x: null } }, { nome: "b", obs: null, grupo: { x: null } }];
+    const schema = schemaFromFile("x.json", JSON.stringify(records))!;
+    const props = schema.properties as Record<string, Record<string, unknown>>;
+    expect(props.obs.type).toEqual(["string", "null"]);
+    const validator = new Validator(schema, "2020-12", false);
+    expect(records.every((r) => validator.validate(r).valid)).toBe(true);
+    expect(validator.validate({ nome: "c", obs: "texto", grupo: { x: "y" } }).valid).toBe(true);
+  });
+
   it.each(["csv", "json", "jsonl"])("discovers object fields and list item fields in %s", (format) => {
     const records = [
       { grupo: { nome: "Ana", codigo: "001", ativo: false, notas: ["a", "b"] }, itens: [] },
@@ -105,6 +115,12 @@ it("builds a template from labels", () => {
 });
 
 describe("csvRecords", () => {
+  it("reads back the formula guard our export puts before = + - @", () => {
+    const schema = { type: "object", properties: { n: { type: "integer" }, tel: { type: "string" }, f: { type: "string" } } };
+    const parsed = csvRecords("\uFEFFn,tel,f\n'-5,'+55 11 9999,'=1+1\n", schema);
+    expect(parsed.records[0].data).toEqual({ n: -5, tel: "+55 11 9999", f: "=1+1" });
+  });
+
   it.each([
     { type: ["object", "null"], properties: { qtd: { type: "integer" } } },
     { anyOf: [{ type: "object" }, { type: "null" }] },
