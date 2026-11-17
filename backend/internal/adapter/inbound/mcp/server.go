@@ -19,6 +19,7 @@ import (
 	"github.com/raulaguila/dataset/pkg/apperror"
 	"github.com/raulaguila/dataset/pkg/pointer"
 	"github.com/raulaguila/dataset/pkg/reqctx"
+	"github.com/raulaguila/dataset/pkg/schema"
 )
 
 const maxRecords = 50 // per search_records call: enough to read, small enough for a model's context
@@ -40,11 +41,17 @@ func Handler(app *input.Application, version string) http.Handler {
 
 func newServer(ctx context.Context, app *input.Application, version string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "dataset", Version: version}, &mcp.ServerOptions{
-		Instructions: "Read the collections this API key reaches. Start with list_collections, " +
-			"read a collection's fields with get_collection, then find records with search_records. " +
+		Instructions: "Read the collections this API key reaches. Start with workspace_overview: every collection, " +
+			"its description, record count and fields, and how the collections reference each other, in one call. " +
+			"Read a collection's full JSON Schema with get_collection when needed, then find records with search_records. " +
 			"Tools other than the built-in ones were made by the collections' owners for common questions: prefer them when they fit.",
 	})
 	t := tools{app}
+	mcp.AddTool(s, &mcp.Tool{Name: "workspace_overview", Description: "Start here. Every collection this API key reaches in one call: " +
+		"id, name, description, access, records and records in the trash, the newest record change, its fields " +
+		"(key, name, type, required, unique, options, the collection a reference points at, formulas, lookups and rollups) " +
+		"and the fields of other collections that reference it.",
+		Annotations: readOnly}, t.workspaceOverview)
 	mcp.AddTool(s, &mcp.Tool{Name: "list_collections", Description: "The collections this API key reaches, with the access it has to each (read or write).",
 		Annotations: readOnly}, t.listCollections)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_collection", Description: "A collection's name, description and the JSON Schema its records follow: read it to learn the field names before searching.",
@@ -119,6 +126,73 @@ func (t tools) listCollections(ctx context.Context, _ *mcp.CallToolRequest, _ an
 	for _, c := range all {
 		if canWrite, ok := key.Scopes[c.ID]; ok {
 			items = append(items, collectionItem{ID: c.ID, Name: c.Name, Access: access(canWrite)})
+		}
+	}
+	return nil, map[string]any{"collections": items}, nil
+}
+
+// overviewField is a field with the name of the collection a reference points at,
+// left out when the key does not reach it.
+type overviewField struct {
+	schema.Field
+	TargetName string `json:"target_name,omitempty"`
+}
+
+// inbound is a field of another collection that points at this one.
+type inbound struct {
+	CollectionID string `json:"collection_id"`
+	Collection   string `json:"collection"`
+	Field        string `json:"field"`
+	Many         bool   `json:"many,omitempty"` // a list of references
+}
+
+type overviewItem struct {
+	ID               string          `json:"id"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description,omitempty"`
+	Access           string          `json:"access"` // read or write
+	Role             string          `json:"role"`   // the key maker's role: viewer, editor or owner
+	Records          int64           `json:"records"`
+	InTrash          int64           `json:"in_trash"`
+	LastRecordChange *time.Time      `json:"last_record_change,omitempty"`
+	SchemaChangedAt  time.Time       `json:"schema_changed_at"`
+	Fields           []overviewField `json:"fields"`
+	ReferencedBy     []inbound       `json:"referenced_by,omitempty"`
+}
+
+func (t tools) workspaceOverview(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	key, _ := reqctx.Key(ctx)
+	ids := make([]string, 0, len(key.Scopes))
+	for id := range key.Scopes {
+		ids = append(ids, id)
+	}
+	cs, err := t.app.Collections.Overview(ctx, ids)
+	if err != nil {
+		return nil, nil, err
+	}
+	names := make(map[string]string, len(cs))
+	for _, c := range cs {
+		names[c.ID] = c.Name
+	}
+	items := make([]overviewItem, 0, len(cs))
+	at := make(map[string]int, len(cs))
+	for _, c := range cs {
+		fields := []overviewField{}
+		for _, f := range schema.Fields(c.Schema) {
+			fields = append(fields, overviewField{Field: f, TargetName: names[f.Target]})
+		}
+		at[c.ID] = len(items)
+		items = append(items, overviewItem{
+			ID: c.ID, Name: c.Name, Description: c.Description, Access: access(key.Scopes[c.ID]), Role: string(c.Role),
+			Records: c.RecordCount, InTrash: c.TrashCount, LastRecordChange: c.LastRecordChange, SchemaChangedAt: c.UpdatedAt, Fields: fields,
+		})
+	}
+	// Who points at whom, among the reachable collections only.
+	for _, c := range items {
+		for _, f := range c.Fields {
+			if i, ok := at[f.Target]; ok && (f.Type == "reference" || f.Type == "references") {
+				items[i].ReferencedBy = append(items[i].ReferencedBy, inbound{CollectionID: c.ID, Collection: c.Name, Field: f.Key, Many: f.Type == "references"})
+			}
 		}
 	}
 	return nil, map[string]any{"collections": items}, nil

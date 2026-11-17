@@ -98,8 +98,43 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	post("", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 401)
 	post("dsk_nope", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 401)
 	list := post(key.Secret, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 200)
-	if tools, _ := list["result"].(map[string]any)["tools"].([]any); len(tools) != 9 {
+	if tools, _ := list["result"].(map[string]any)["tools"].([]any); len(tools) != 10 {
 		t.Fatalf("tools: %v", list)
+	}
+
+	// The overview: counts and fields of the key's collections only, and who references whom.
+	orders, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Pedidos", Description: "Vendas", Schema: json.RawMessage(
+		`{"type":"object","required":["produto"],"properties":{"produto":{"type":"string","format":"uuid","x-ref":"` + a + `","title":"Produto"},"status":{"enum":["novo","pago"]}}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := records.Create(owner, input.CreateRecordCommand{CollectionID: orders.ID, Data: json.RawMessage(`{"produto":"` + cheap + `","status":"novo"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	both, err := keys.CreateMyKey(owner, "Visão geral", []domain.KeyScope{{CollectionID: a}, {CollectionID: orders.ID, CanWrite: true}}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ov := post(both.Secret, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"workspace_overview","arguments":{}}}`, 200)
+	cols, _ := ov["result"].(map[string]any)["structuredContent"].(map[string]any)["collections"].([]any)
+	if len(cols) != 2 {
+		t.Fatalf("overview: %v", ov)
+	}
+	ped, prod := cols[0].(map[string]any), cols[1].(map[string]any) // by name: Pedidos, Produtos
+	field := ped["fields"].([]any)[0].(map[string]any)
+	if ped["name"] != "Pedidos" || ped["description"] != "Vendas" || ped["access"] != "write" || ped["records"].(float64) != 1 || ped["role"] != "owner" ||
+		field["type"] != "reference" || field["target"] != a || field["target_name"] != "Produtos" || field["required"] != true ||
+		ped["fields"].([]any)[1].(map[string]any)["options"] == nil {
+		t.Fatalf("overview Pedidos: %v", ped)
+	}
+	ref, _ := prod["referenced_by"].([]any)
+	if prod["records"].(float64) != 2 || prod["access"] != "read" || len(prod["fields"].([]any)) != 2 || len(ref) != 1 ||
+		ref[0].(map[string]any)["collection"] != "Pedidos" || ref[0].(map[string]any)["field"] != "produto" {
+		t.Fatalf("overview Produtos: %v", prod)
+	}
+	// The first key reaches one collection: the other two stay out, Pedidos' reference with them.
+	if got, _ := call("workspace_overview", map[string]any{}); len(got["collections"].([]any)) != 1 || got["collections"].([]any)[0].(map[string]any)["referenced_by"] != nil {
+		t.Fatalf("overview, one collection: %v", got)
 	}
 
 	got, _ := call("list_collections", map[string]any{})
@@ -188,7 +223,7 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if out := plain("POST", "/v1/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 200); out["result"] == nil {
 		t.Fatalf("JSON-only accept: %v", out)
 	}
-	if tools, _ := plain("GET", "/v1/mcp/tools", "", 200)["tools"].([]any); len(tools) != 9 {
+	if tools, _ := plain("GET", "/v1/mcp/tools", "", 200)["tools"].([]any); len(tools) != 10 {
 		t.Fatal("GET /v1/mcp/tools: want 9 tools")
 	}
 	if got, _ := plain("POST", "/v1/mcp/tools/get_collection", `{"collection_id":"`+a+`"}`, 200)["structuredContent"].(map[string]any); got["schema"] == nil {

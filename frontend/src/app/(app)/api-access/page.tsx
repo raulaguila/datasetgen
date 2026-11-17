@@ -61,7 +61,7 @@ function McpConnectCard({ secret }: { secret: string | null }) {
     // Read tools only: with require_approval "never", a write tool would let the model change or delete records unasked.
     tools: [{
       type: "mcp", server_label: "dataset", server_url: url, headers: { Authorization: `Bearer ${key}` },
-      allowed_tools: ["list_collections", "get_collection", "search_records", "get_record", "related_records", "collection_stats"],
+      allowed_tools: ["workspace_overview", "list_collections", "get_collection", "search_records", "get_record", "related_records", "collection_stats"],
       require_approval: "never",
     }],
     input: t("mcp_connect.openai_prompt"),

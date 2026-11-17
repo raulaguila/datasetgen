@@ -8,6 +8,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
+
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/policy"
 	"github.com/raulaguila/dataset/internal/core/port/input"
@@ -74,6 +76,25 @@ func (s *Service) Options(ctx context.Context) ([]domain.Collection, error) {
 		return nil, apperror.New(apperror.CodeUnauthorized, "unauthenticated")
 	}
 	return s.Repo.ListOptions(ctx, actor, optionsCap)
+}
+
+// maxOverview matches the collections an API key may reach.
+const maxOverview = 50
+
+func (s *Service) Overview(ctx context.Context, ids []string) ([]domain.Collection, error) {
+	actor := reqctx.Actor(ctx)
+	if actor == "" {
+		return nil, apperror.New(apperror.CodeUnauthorized, "unauthenticated")
+	}
+	if len(ids) > maxOverview {
+		return nil, apperror.New(apperror.CodeInvalidInput, "at most 50 collections")
+	}
+	for _, id := range ids {
+		if _, err := uuid.Parse(id); err != nil {
+			return nil, apperror.New(apperror.CodeInvalidInput, "invalid collection id")
+		}
+	}
+	return s.Repo.Overview(ctx, actor, ids)
 }
 
 func (s *Service) Get(ctx context.Context, id string) (*domain.Collection, error) {

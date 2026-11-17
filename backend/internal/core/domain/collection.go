@@ -31,12 +31,15 @@ type Collection struct {
 	// Filled by List with Details only.
 	MemberCount  int64
 	FieldCount   int64
-	LastActivity time.Time  // the newest change to the collection or one of its records
-	Role         MemberRole // the caller's role; filled by List and Get
-	Member       bool       // the caller is a member (a platform admin may not be); filled by List
-	Version      int
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	LastActivity time.Time // the newest change to the collection or one of its records
+	// Filled by Overview only.
+	TrashCount       int64
+	LastRecordChange *time.Time // the newest record change; nil without records
+	Role             MemberRole // the caller's role; filled by List and Get
+	Member           bool       // the caller is a member (a platform admin may not be); filled by List
+	Version          int
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // CollectionPatch holds the fields of an update; nil keeps the stored value.

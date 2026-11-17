@@ -66,6 +66,9 @@ type DuplicateCollectionCommand struct {
 type CollectionService interface {
 	List(ctx context.Context, filter domain.CollectionFilter) ([]domain.Collection, int64, error)
 	Options(ctx context.Context) ([]domain.Collection, error)
+	// Overview describes the listed collections the caller can see (at most 50; others are left out):
+	// schema, role, record and trash counts and the newest record change.
+	Overview(ctx context.Context, ids []string) ([]domain.Collection, error)
 	Get(ctx context.Context, id string) (*domain.Collection, error)
 	Create(ctx context.Context, cmd CreateCollectionCommand) (*domain.Collection, error)
 	Update(ctx context.Context, cmd UpdateCollectionCommand) (*domain.Collection, error)

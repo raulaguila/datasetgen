@@ -12,6 +12,9 @@ import (
 type CollectionRepository interface {
 	// List returns one page, with record counts, and the count of all matches.
 	List(ctx context.Context, filter domain.CollectionFilter) ([]domain.Collection, int64, error)
+	// Overview returns the listed collections userID can see, by name: schema, role,
+	// record and trash counts and the newest record change.
+	Overview(ctx context.Context, userID string, ids []string) ([]domain.Collection, error)
 	// ListOptions returns the collections userID can see: id, name, role and membership.
 	ListOptions(ctx context.Context, userID string, limit int) ([]domain.Collection, error)
 	// Access is userID's role in the collection: owner for a platform admin

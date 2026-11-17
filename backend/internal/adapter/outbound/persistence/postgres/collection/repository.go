@@ -117,6 +117,37 @@ func listDetails(on bool) string {
 		GREATEST(c.updated_at, (SELECT max(rl.updated_at) FROM app.record rl WHERE rl.collection_id = c.id)) AS last_activity`
 }
 
+// Overview reads the counts with one subquery each per collection, all on the
+// (collection_id, ...) indexes; ids holds at most 50 (the service checks).
+func (r *Repository) Overview(ctx context.Context, userID string, ids []string) ([]domain.Collection, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var rows []struct {
+		Row              row        `gorm:"embedded"` // named: GORM leaves an unexported embedded type unset
+		TrashCount       int64      `gorm:"column:trash_count"`
+		LastRecordChange *time.Time `gorm:"column:last_record_change"`
+	}
+	err := visible(r.db.WithContext(ctx).Table("app.collection c"), userID).
+		Select(`c.id, c.name, c.description, c.schema::text AS schema, c.updated_at,
+			CASE WHEN `+platformAdmin+` THEN 'owner' ELSE m.role END AS role,
+			(SELECT count(*) FROM app.record rc WHERE rc.collection_id = c.id) AS record_count,
+			(SELECT count(*) FROM app.record_trash t WHERE t.collection_id = c.id) AS trash_count,
+			(SELECT max(rl.updated_at) FROM app.record rl WHERE rl.collection_id = c.id) AS last_record_change`, userID).
+		Where("c.id IN ?", ids).
+		Order("c.name, c.id").Find(&rows).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "collection")
+	}
+	out := make([]domain.Collection, 0, len(rows))
+	for _, m := range rows {
+		c := m.Row.toDomain()
+		c.TrashCount, c.LastRecordChange = m.TrashCount, m.LastRecordChange
+		out = append(out, c)
+	}
+	return out, nil
+}
+
 func (r *Repository) ListOptions(ctx context.Context, userID string, limit int) ([]domain.Collection, error) {
 	var rows []row
 	err := visible(r.db.WithContext(ctx).Table("app.collection c"), userID).
