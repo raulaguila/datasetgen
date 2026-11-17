@@ -230,7 +230,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
       setError(null);
       client.setQueryData(["collections", "detail", saved.id], saved);
       void client.invalidateQueries({ queryKey: ["collections"] });
-      toast.success(t("common.saved"), wasRisky ? { action: { label: t("collections.check_quality"), onClick: () => router.push(`/collections/${saved.id}/quality`) } } : undefined);
+      toast.success(t(collection ? "common.saved" : "collections.created"), wasRisky ? { action: { label: t("collections.check_quality"), onClick: () => router.push(`/collections/${saved.id}/quality`) } } : undefined);
       if (!collection) router.replace(`/collections/${saved.id}`);
       else setVersion(saved.version);
     },

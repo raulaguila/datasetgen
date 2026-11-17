@@ -105,7 +105,8 @@ export function Value({ schema, value }: { schema: S; value: unknown }) {
     if (schema.format === "date") return <span>{new Date(`${value}T00:00:00Z`).toLocaleDateString(locale, { dateStyle: "medium", timeZone: "UTC" })}</span>;
     if (schema.format === "date-time") return <span>{formatDate(value)}</span>;
     if (schema.format === "uri" && /^https?:\/\//.test(value)) {
-      const host = (() => { try { return new URL(value).host; } catch { return value; } })();
+      // Host and path, so two pages of one site read apart; the full address is in the title.
+      const host = (() => { try { const u = new URL(value); return (u.host + u.pathname).replace(/\/$/, ""); } catch { return value; } })();
       return <a href={value} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-full items-center gap-1 text-primary underline-offset-2 hover:underline" title={value}><span className="truncate">{host}</span><ExternalLink className="size-3 shrink-0" /></a>;
     }
     if (schema.format === "email") return <a href={`mailto:${value}`} className="text-primary underline-offset-2 hover:underline">{value}</a>;

@@ -54,12 +54,15 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
     staleTime: 30_000,
   });
   const pinned = useUIStore((s) => s.pinned);
-  // Pinned first, each part in the API's order (by name).
-  const all = list.data?.items ?? [];
-  const items = [...all.filter((c) => pinned.includes(c.id)), ...all.filter((c) => !pinned.includes(c.id))];
   const storedId = useUIStore((s) => s.collectionId);
   // A collection page names its collection; a record page leaves it to the store.
   const activeId = collectionInPath(pathname) ?? storedId;
+  // The open collection keeps its menu even when it is past the first 100.
+  const missing = !!activeId && list.isSuccess && !list.data.items.some((c) => c.id === activeId);
+  const extra = useQuery({ queryKey: ["collections", "detail", activeId], queryFn: () => collections.get(activeId!), enabled: missing, retry: false });
+  // Pinned first, each part in the API's order (by name).
+  const all = [...(list.data?.items ?? []), ...(missing && extra.data ? [extra.data] : [])];
+  const items = [...all.filter((c) => pinned.includes(c.id)), ...all.filter((c) => !pinned.includes(c.id))];
   const active = items.find((c) => c.id === activeId);
   const base = active ? `/collections/${active.id}` : "";
   const allowed = (s: CollectionSection) => !s.need || roleAllows(active?.role, s.need);

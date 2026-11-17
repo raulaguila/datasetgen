@@ -778,6 +778,20 @@ func jsonList(ids []string) string {
 	return string(b)
 }
 
+func (r *Repository) Oversized(ctx context.Context, docs []json.RawMessage) ([]int, error) {
+	parts := make([]string, len(docs))
+	for i, d := range docs {
+		parts[i] = string(d)
+	}
+	// pg_column_size of each element is what chk_app_record_data_size measures on insert.
+	var out []int
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT (n - 1)::int FROM jsonb_array_elements(?::jsonb) WITH ORDINALITY AS t(d, n)
+		WHERE pg_column_size(d) > ? ORDER BY n`,
+		"["+strings.Join(parts, ",")+"]", domain.RecordMaxBytes).Scan(&out).Error
+	return out, shared.WrapError(err, "record")
+}
+
 func (r *Repository) ClaimImportBatch(ctx context.Context, collectionID, key string) (*output.ImportBatch, error) {
 	res := r.db.WithContext(ctx).Exec(`INSERT INTO app.import_batch (collection_id, batch_key) VALUES (?, ?) ON CONFLICT DO NOTHING`, collectionID, key)
 	if res.Error != nil {

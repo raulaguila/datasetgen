@@ -126,9 +126,19 @@ export type SendProgress = { fid: string; sent: number; created: number; updated
 const PROGRESS = "dataset.import-progress";
 const KEPT = 7 * 24 * 3600 * 1000;
 
-/** One import's identity: same collection, file, columns and upsert key give the same batches. */
-export const importId = (collectionId: string, f: File, columns: string[] | undefined, upsertKey: string | undefined) =>
-  JSON.stringify([collectionId, f.name, f.size, f.lastModified, columns ?? null, upsertKey ?? null]);
+/**
+ * One import's identity: same collection, fields, file, columns and upsert key give
+ * the same batches. The fields count because they type the values, and so where batches are cut.
+ */
+export const importId = (collectionId: string, schema: unknown, f: File, columns: string[] | undefined, upsertKey: string | undefined) =>
+  JSON.stringify([collectionId, hash(JSON.stringify(schema ?? null)), f.name, f.size, f.lastModified, columns ?? null, upsertKey ?? null]);
+
+/** A short FNV-1a hash, to name a schema without storing it. */
+function hash(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(36);
+}
 
 function all(): Record<string, SendProgress> {
   try {

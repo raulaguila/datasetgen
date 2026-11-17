@@ -3,7 +3,7 @@ import { CsvReader, parseCsv, schemaFromFile } from "./infer-schema";
 import { JsonArrayReader, inferFile, recordBatches } from "./import-stream";
 import { withRetry } from "./import-client";
 import { ApiError } from "./api/client";
-import { BATCH_RECORDS } from "./import-file";
+import { BATCH_RECORDS, RECORD_BYTES } from "./import-file";
 
 const csv = '﻿nome;obs;n\r\n"Ana; ""A""";"linha 1\nlinha 2";-1\r\nBia;;\'-5\r\n\r\n;;\r\nCid;x;3';
 
@@ -61,6 +61,14 @@ describe("import stream", () => {
     let passed = 0;
     for await (const b of recordBatches(chunked(lines.join("\n"), "x.jsonl", 997), { schema, upsertKey: "cod" })) passed += b.records.length;
     expect(passed).toBe(n);
+  });
+
+  it("sets aside a record over the server's size cap", async () => {
+    const text = [JSON.stringify({ s: "x".repeat(RECORD_BYTES) }), JSON.stringify({ s: "ok" })].join("\n");
+    const out = [];
+    for await (const b of recordBatches(chunked(text, "x.jsonl", 65536), { schema: null })) out.push(b);
+    expect(out.flatMap((b) => b.records.map((r) => r.line))).toEqual([2]);
+    expect(out.flatMap((b) => b.problems)).toEqual([{ line: 1, code: "too_large" }]);
   });
 
   it("reads CSV rows with the export's formula guard undone", async () => {

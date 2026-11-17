@@ -6,14 +6,16 @@ export interface ParsedRecord {
 
 export interface ParsedFile {
   records: ParsedRecord[];
-  /** Lines that are not JSON, or records too large to send. */
-  errors: { line: number; message: "parse" | "too_large" }[];
+  /** Lines that are not JSON. */
+  errors: { line: number; message: "parse" }[];
 }
 
 // The API takes up to 5000 records in an 8 MB body: batches stay well under both.
 // Fewer, larger batches keep a big file under the per-minute request limit.
 export const BATCH_BYTES = 4_000_000;
 export const BATCH_RECORDS = 5000;
+/** One record's data cap on the server (domain.RecordMaxBytes); the server measures it exactly. */
+export const RECORD_BYTES = 1 << 20;
 
 /** Reads JSON Lines (one record per line) or one JSON array of records. */
 export function parseImport(text: string): ParsedFile {
@@ -39,28 +41,4 @@ export function parseImport(text: string): ParsedFile {
     }
   });
   return out;
-}
-
-/** Splits records into request-sized batches; a record larger than one batch is reported instead. */
-export function batches(records: ParsedRecord[]): { batches: ParsedRecord[][]; tooLarge: number[] } {
-  const out: ParsedRecord[][] = [];
-  const tooLarge: number[] = [];
-  let current: ParsedRecord[] = [];
-  let size = 0;
-  for (const r of records) {
-    const bytes = new TextEncoder().encode(JSON.stringify(r.data)).length + 1;
-    if (bytes > BATCH_BYTES) {
-      tooLarge.push(r.line);
-      continue;
-    }
-    if (current.length && (size + bytes > BATCH_BYTES || current.length >= BATCH_RECORDS)) {
-      out.push(current);
-      current = [];
-      size = 0;
-    }
-    current.push(r);
-    size += bytes;
-  }
-  if (current.length) out.push(current);
-  return { batches: out, tooLarge };
 }

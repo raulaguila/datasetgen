@@ -149,7 +149,18 @@ func (s *Service) Import(ctx context.Context, cmd input.ImportRecordsCommand) (*
 			passed := make([]int, 0, len(cmd.Records))
 			docs := make([][]byte, 0, len(cmd.Records))
 			bad := map[int][]schema.Issue{}
+			// A record over the stored size limit is refused alone, not with its batch.
+			big, err := uow.Records().Oversized(ctx, cmd.Records)
+			if err != nil {
+				return err
+			}
+			for _, i := range big {
+				bad[i] = []schema.Issue{{Keyword: "too_large", Message: "record data is over 1 MB"}}
+			}
 			for i, data := range cmd.Records {
+				if _, ok := bad[i]; ok {
+					continue
+				}
 				issues, err := schema.Check(compiled, data)
 				if err != nil {
 					return err

@@ -529,7 +529,13 @@ func TestUniqueFieldsHold(t *testing.T) {
 		t.Fatalf("fixed keyed batch: %+v, %v", res, err)
 	}
 	wantCode(t, ignore(records.Import(ctx, input.ImportRecordsCommand{CollectionID: c.ID, Records: keyed.Records, BatchKey: strings.Repeat("x", 101)})), apperror.CodeInvalidInput)
-	if n, err := exported(records, ctx, c.ID, false); err != nil || n != 7 {
+	// A record over the stored size limit is refused alone; the rest of its batch saves.
+	huge := json.RawMessage(`{"codigo":"k4","x":"` + strings.Repeat("a", domain.RecordMaxBytes) + `"}`)
+	res, err = records.Import(ctx, input.ImportRecordsCommand{CollectionID: c.ID, Records: []json.RawMessage{huge, json.RawMessage(`{"codigo":"k5"}`)}, SkipInvalid: true})
+	if err != nil || res.Created != 1 || res.Invalid != 1 || res.Errors[0].Index != 0 || res.Errors[0].Issues[0].Keyword != "too_large" {
+		t.Fatalf("oversized import: %+v, %v", res, err)
+	}
+	if n, err := exported(records, ctx, c.ID, false); err != nil || n != 8 {
 		t.Fatalf("records after keyed imports: %d, %v", n, err)
 	}
 

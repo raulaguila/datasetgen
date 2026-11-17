@@ -134,7 +134,7 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange }:
     const out: Checked = { valid: 0, invalid: 0, problems: [], saved: 0 };
     const keep = (line: number, message: string) => { out.invalid++; if (out.problems.length < KEPT_PROBLEMS) out.problems.push({ line, message }); };
     // Batches an earlier send saved are not checked again: their unique values would now read as taken.
-    const before = loadProgress(importId(collectionId, f, cols, upsertKey));
+    const before = loadProgress(importId(collectionId, schema, f, cols, upsertKey));
     setResumed(before);
     try {
       await pass(f, cols, false, before?.sent ?? 0, null, (b, res, i) => {
@@ -179,7 +179,7 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange }:
   const send = async () => {
     if (!file || !checked) return;
     const cols = mapped();
-    const id = importId(collectionId, file, cols, upsertKey);
+    const id = importId(collectionId, schema, file, cols, upsertKey);
     const progress: SendProgress = loadProgress(id) ?? { fid: crypto.randomUUID(), sent: 0, created: 0, updated: 0, at: Date.now() };
     const skip = progress.sent;
     setError(null);
@@ -213,7 +213,7 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange }:
   /** Forgets where an earlier send stopped: the next send starts from the first line. */
   const startOver = () => {
     if (!file) return;
-    saveProgress(importId(collectionId, file, mapped(), upsertKey), null);
+    saveProgress(importId(collectionId, schema, file, mapped(), upsertKey), null);
     void check(file, mapped());
   };
 

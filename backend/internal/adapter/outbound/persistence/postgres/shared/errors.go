@@ -33,6 +33,9 @@ func WrapError(err error, resource string) error {
 		case "23503": // foreign_key_violation
 			return apperror.New(apperror.CodeResourceInUse, resource+" is in use").WithDetails("resource", resource)
 		case "23514": // check_violation
+			if pgErr.ConstraintName == "chk_app_record_data_size" {
+				return apperror.New(apperror.CodeValidationFailed, "record data is over 1 MB").WithField("data")
+			}
 			return apperror.New(apperror.CodeValidationFailed, "constraint violation")
 		case "42703": // undefined_column
 			return apperror.New(apperror.CodeInvalidInput, "undefined column or parameter name").WithField("column")

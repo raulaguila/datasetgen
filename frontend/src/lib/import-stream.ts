@@ -1,5 +1,5 @@
 import { fieldsOf } from "@/components/field-builder";
-import { BATCH_BYTES, BATCH_RECORDS, type ParsedRecord } from "@/lib/import-file";
+import { BATCH_BYTES, BATCH_RECORDS, RECORD_BYTES, type ParsedRecord } from "@/lib/import-file";
 import { CsvReader, SchemaInferrer, csvRow, rowReader } from "@/lib/infer-schema";
 import { xlsxRows } from "@/lib/xlsx";
 
@@ -13,6 +13,8 @@ import { xlsxRows } from "@/lib/xlsx";
 export type LineProblem = { line: number; code: "parse" | "too_large" | "duplicate"; field?: string };
 export type Batch = { records: ParsedRecord[]; problems: LineProblem[] };
 type Progress = (bytesRead: number) => void;
+/** Unique values remembered to report repeats before sending: about 200 MB at most. */
+const UNIQUE_TRACKED = 2_000_000;
 
 const isCsv = (f: File) => /\.csv$/i.test(f.name);
 const isXlsx = (f: File) => /\.xlsx$/i.test(f.name);
@@ -173,6 +175,7 @@ export async function* recordBatches(
 ): AsyncGenerator<Batch> {
   const uniques = fieldsOf(opts.schema).filter((r) => r.field.unique && r.key !== opts.upsertKey).map((r) => r.key);
   const seen = new Map(uniques.map((k) => [k, new Set<string>()]));
+  let tracked = 0;
   let records: ParsedRecord[] = [];
   let problems: LineProblem[] = [];
   let size = 0;
@@ -191,14 +194,16 @@ export async function* recordBatches(
   for await (const r of source()) {
     if (!("data" in r)) { problems.push(r); continue; }
     const bytes = encoder.encode(JSON.stringify(r.data)).length + 1;
-    if (bytes > BATCH_BYTES) { problems.push({ line: r.line, code: "too_large" }); continue; }
+    if (bytes > RECORD_BYTES) { problems.push({ line: r.line, code: "too_large" }); continue; }
     const dup = uniques.find((k) => {
       const v = (r.data as Record<string, unknown> | null)?.[k];
       if (v === undefined || v === null) return false;
       const set = seen.get(k)!;
       const key = JSON.stringify(v);
       if (set.has(key)) return true;
-      set.add(key);
+      // shortcut: past UNIQUE_TRACKED values a repeat is left to the server, which refuses it
+      // (its batch's records are already saved); raise it only if browsers hold far more memory.
+      if (tracked < UNIQUE_TRACKED) { set.add(key); tracked++; }
       return false;
     });
     if (dup) { problems.push({ line: r.line, code: "duplicate", field: dup }); continue; }

@@ -23,6 +23,10 @@ type RecordFilter struct {
 	TZ string
 }
 
+// RecordMaxBytes caps one record's data as Postgres stores it
+// (chk_app_record_data_size, uncompressed jsonb): about 250 000 tokens of text.
+const RecordMaxBytes = 1 << 20
+
 // Where operators. Values compare as JSON: numbers as numbers, strings
 // (ISO dates too) as text, so gt and lt work on both. A date value
 // (YYYY-MM-DD, or {"today": n}, the caller's today plus n days) compares

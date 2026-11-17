@@ -66,6 +66,8 @@ type RecordRepository interface {
 	// Comment reads one comment's record and author (NotFound when gone).
 	Comment(ctx context.Context, id string) (*domain.RecordComment, error)
 	DeleteComment(ctx context.Context, id string) error
+	// Oversized returns the positions of the documents whose stored size would pass domain.RecordMaxBytes.
+	Oversized(ctx context.Context, docs []json.RawMessage) ([]int, error)
 	// ClaimImportBatch marks an import batch key as being saved, until the
 	// transaction ends. When the key was saved before it returns that batch's
 	// counts (a retry); a claim racing another waits for it to commit.
