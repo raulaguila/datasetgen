@@ -18,6 +18,16 @@ import (
 	"github.com/raulaguila/dataset/pkg/schema"
 )
 
+// A collection name is not a database id. Explain how to recover before any
+// lookup or write, without exposing collections outside the key's scope.
+func (in collectionIn) checkCollection() error {
+	if uuid.Validate(in.CollectionID) == nil {
+		return nil
+	}
+	return apperror.New(apperror.CodeInvalidInput,
+		"expected the collection UUID from workspace_overview, not its name or slug. Call workspace_overview, copy the collection's id into collection_id, then retry.").WithField("collection_id")
+}
+
 // fieldUse is a tool argument that names fields of the collection.
 type fieldUse struct {
 	arg   string

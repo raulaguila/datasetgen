@@ -43,6 +43,7 @@ func newServer(ctx context.Context, app *input.Application, version string) *mcp
 	s := mcp.NewServer(&mcp.Implementation{Name: "dataset", Version: version}, &mcp.ServerOptions{
 		Instructions: "Work in steps. " +
 			"1. workspace_overview: every collection this key reaches, with its fields and the options of option fields. " +
+			"For collection_id, copy that collection's id UUID exactly from workspace_overview; never send its name or slug or invent an identifier. " +
 			"Arguments name a field by its key, never by its display name. Not sure which collection holds something? search_everywhere. " +
 			"2. To filter a text field, first learn its exact values with field_values. " +
 			"3. search_records with rules [{field, op, value}] to keep records by a field's value (search is free text in any field, not a filter), " +
@@ -56,12 +57,14 @@ func newServer(ctx context.Context, app *input.Application, version string) *mcp
 		"id, name, description, access, records and records in the trash, the newest record change, its fields " +
 		"(key, name, type, required, unique, options, the collection a reference points at, formulas, lookups, rollups, " +
 		"and the subfields of groups and lists described the same way) " +
-		"and the fields of other collections that reference it.",
+		"and the fields of other collections that reference it. Copy the collection's id UUID as collection_id in later calls; its name is only a display label.",
 		Annotations: readOnly}, t.workspaceOverview)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_collection", Description: "A collection's full JSON Schema: limits, formats, defaults and nested fields. workspace_overview already lists every field; read this only when that is not enough.",
 		Annotations: readOnly}, t.getCollection)
 	mcp.AddTool(s, &mcp.Tool{Name: "search_records", Description: "Find records of a collection by rules on its fields (and free text), newest change first unless sorted. Returns at most 50 per page and the total; " +
-		"read the next pages while more remain. To list the records whose field status is Pago, send rules [{\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}], " +
+		"read the next pages while more remain. " +
+		"collection_id must be the id UUID returned by workspace_overview, never the collection's name or slug. " +
+		"To list the records whose field status is Pago, send rules [{\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}], " +
 		"not search: search matches the text in any field. Pass fields with the keys you need to keep the answer short, and expand with reference fields to bring the records they point at.",
 		Annotations: readOnly}, t.searchRecords)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_record", Description: "One record by id: its data, version and dates.",
@@ -184,10 +187,13 @@ func (t tools) workspaceOverview(ctx context.Context, _ *mcp.CallToolRequest, _ 
 }
 
 type collectionIn struct {
-	CollectionID string `json:"collection_id" jsonschema:"the collection's id, from workspace_overview"`
+	CollectionID string `json:"collection_id" jsonschema:"the collection's UUID: copy its id exactly from workspace_overview, never its name or slug; do not invent an identifier"`
 }
 
 func (t tools) getCollection(ctx context.Context, _ *mcp.CallToolRequest, in collectionIn) (*mcp.CallToolResult, any, error) {
+	if err := in.checkCollection(); err != nil {
+		return nil, nil, err
+	}
 	c, err := t.app.Collections.Get(ctx, in.CollectionID)
 	if err != nil {
 		return nil, nil, err
@@ -212,15 +218,18 @@ type groupIn struct {
 
 // filterIn picks records of one collection; search_records and the tools that sum up or change records share it.
 type filterIn struct {
-	CollectionID string    `json:"collection_id" jsonschema:"the collection's id, from workspace_overview"`
-	Search       string    `json:"search,omitempty" jsonschema:"free text found anywhere in the record, in any field (a description mentioning it matches too). To keep records whose field has a value, use rules instead: field status eq Pago is {\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}"`
-	Rules        []ruleIn  `json:"rules,omitempty" jsonschema:"rules on fields, joined by AND (or OR when any is set); the way to filter by a field's value, e.g. [{\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}] or with op in and a list of values"`
-	Groups       []groupIn `json:"groups,omitempty" jsonschema:"bracketed sets of rules, joined with the rules by any: (a AND b) OR (c AND d)"`
-	Any          bool      `json:"any,omitempty" jsonschema:"join rules and groups by OR instead of AND"`
+	collectionIn
+	Search string    `json:"search,omitempty" jsonschema:"free text found anywhere in the record, in any field (a description mentioning it matches too). To keep records whose field has a value, use rules instead: field status eq Pago is {\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}"`
+	Rules  []ruleIn  `json:"rules,omitempty" jsonschema:"rules on fields, joined by AND (or OR when any is set); the way to filter by a field's value, e.g. [{\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}] or with op in and a list of values"`
+	Groups []groupIn `json:"groups,omitempty" jsonschema:"bracketed sets of rules, joined with the rules by any: (a AND b) OR (c AND d)"`
+	Any    bool      `json:"any,omitempty" jsonschema:"join rules and groups by OR instead of AND"`
 }
 
 // filter is the record filter the input describes, without paging or sorting.
 func (in filterIn) filter() (domain.RecordFilter, error) {
+	if err := in.checkCollection(); err != nil {
+		return domain.RecordFilter{}, err
+	}
 	where, err := whereOf(in)
 	return domain.RecordFilter{CollectionID: in.CollectionID, Search: in.Search, Where: where}, err
 }
@@ -405,6 +414,9 @@ func (t tools) relatedRecords(ctx context.Context, _ *mcp.CallToolRequest, in re
 }
 
 func (t tools) collectionStats(ctx context.Context, _ *mcp.CallToolRequest, in collectionIn) (*mcp.CallToolResult, any, error) {
+	if err := in.checkCollection(); err != nil {
+		return nil, nil, err
+	}
 	st, err := t.app.Collections.Stats(ctx, in.CollectionID, "UTC")
 	if err != nil {
 		return nil, nil, err
@@ -421,11 +433,14 @@ func (t tools) collectionStats(ctx context.Context, _ *mcp.CallToolRequest, in c
 }
 
 type createIn struct {
-	CollectionID string         `json:"collection_id" jsonschema:"the collection's id, from workspace_overview"`
-	Data         map[string]any `json:"data" jsonschema:"the record, a JSON object following the collection's schema"`
+	collectionIn
+	Data map[string]any `json:"data" jsonschema:"the record, a JSON object following the collection's schema"`
 }
 
 func (t tools) createRecord(ctx context.Context, _ *mcp.CallToolRequest, in createIn) (*mcp.CallToolResult, any, error) {
+	if err := in.checkCollection(); err != nil {
+		return nil, nil, err
+	}
 	data, err := json.Marshal(in.Data)
 	if err != nil || in.Data == nil {
 		return nil, nil, apperror.New(apperror.CodeInvalidInput, "data must be a JSON object").WithField("data")
@@ -478,11 +493,14 @@ func (t tools) updateRecord(ctx context.Context, _ *mcp.CallToolRequest, in upda
 }
 
 type deleteIn struct {
-	CollectionID string   `json:"collection_id" jsonschema:"the collection's id, from workspace_overview; every record must be in it"`
-	RecordIDs    []string `json:"record_ids" jsonschema:"1 to 100 record ids"`
+	collectionIn
+	RecordIDs []string `json:"record_ids" jsonschema:"1 to 100 record ids, all belonging to collection_id"`
 }
 
 func (t tools) deleteRecords(ctx context.Context, _ *mcp.CallToolRequest, in deleteIn) (*mcp.CallToolResult, any, error) {
+	if err := in.checkCollection(); err != nil {
+		return nil, nil, err
+	}
 	if err := t.app.Records.DeleteManyIn(ctx, in.CollectionID, in.RecordIDs); err != nil {
 		return nil, nil, err
 	}

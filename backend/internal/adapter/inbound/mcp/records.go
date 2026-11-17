@@ -130,8 +130,8 @@ func (t tools) fieldValues(ctx context.Context, _ *mcp.CallToolRequest, in field
 }
 
 type idsIn struct {
-	CollectionID string   `json:"collection_id" jsonschema:"the collection's id, from workspace_overview"`
-	RecordIDs    []string `json:"record_ids" jsonschema:"record ids of that collection"`
+	collectionIn
+	RecordIDs []string `json:"record_ids" jsonschema:"record ids of that collection"`
 }
 
 type getRecordsIn struct {
@@ -141,6 +141,9 @@ type getRecordsIn struct {
 }
 
 func (t tools) getRecords(ctx context.Context, _ *mcp.CallToolRequest, in getRecordsIn) (*mcp.CallToolResult, any, error) {
+	if err := in.checkCollection(); err != nil {
+		return nil, nil, err
+	}
 	if len(in.RecordIDs) == 0 || len(in.RecordIDs) > maxRecords {
 		return nil, nil, apperror.New(apperror.CodeInvalidInput, "record_ids must hold 1 to 50 ids").WithField("record_ids")
 	}
@@ -243,6 +246,9 @@ type viewOut struct {
 }
 
 func (t tools) listViews(ctx context.Context, _ *mcp.CallToolRequest, in collectionIn) (*mcp.CallToolResult, any, error) {
+	if err := in.checkCollection(); err != nil {
+		return nil, nil, err
+	}
 	views, err := t.app.Tools.Views(ctx, in.CollectionID)
 	if err != nil {
 		return nil, nil, err
@@ -266,6 +272,9 @@ type trashIn struct {
 }
 
 func (t tools) listTrash(ctx context.Context, _ *mcp.CallToolRequest, in trashIn) (*mcp.CallToolResult, any, error) {
+	if err := in.checkCollection(); err != nil {
+		return nil, nil, err
+	}
 	if err := in.check(); err != nil {
 		return nil, nil, err
 	}
@@ -339,6 +348,9 @@ func (t tools) updateRecords(ctx context.Context, _ *mcp.CallToolRequest, in upd
 }
 
 func (t tools) restoreRecords(ctx context.Context, _ *mcp.CallToolRequest, in idsIn) (*mcp.CallToolResult, any, error) {
+	if err := in.checkCollection(); err != nil {
+		return nil, nil, err
+	}
 	if len(in.RecordIDs) == 0 || len(in.RecordIDs) > maxBulk {
 		return nil, nil, apperror.New(apperror.CodeInvalidInput, "record_ids must hold 1 to 100 ids").WithField("record_ids")
 	}
@@ -350,11 +362,14 @@ func (t tools) restoreRecords(ctx context.Context, _ *mcp.CallToolRequest, in id
 }
 
 type createManyIn struct {
-	CollectionID string           `json:"collection_id" jsonschema:"the collection's id, from workspace_overview"`
-	Records      []map[string]any `json:"records" jsonschema:"1 to 100 records, each mapping field keys to values"`
+	collectionIn
+	Records []map[string]any `json:"records" jsonschema:"1 to 100 records, each mapping field keys to values"`
 }
 
 func (t tools) createRecords(ctx context.Context, _ *mcp.CallToolRequest, in createManyIn) (*mcp.CallToolResult, any, error) {
+	if err := in.checkCollection(); err != nil {
+		return nil, nil, err
+	}
 	if len(in.Records) == 0 || len(in.Records) > maxBulk {
 		return nil, nil, apperror.New(apperror.CodeInvalidInput, "records must hold 1 to 100 records").WithField("records")
 	}
