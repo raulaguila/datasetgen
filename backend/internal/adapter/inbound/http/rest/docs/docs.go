@@ -8530,6 +8530,11 @@ const docTemplate = `{
         "tools.mcpCallDTO": {
             "type": "object",
             "properties": {
+                "args": {
+                    "description": "the arguments as JSON, cut to 500 characters",
+                    "type": "string",
+                    "example": "{\"collection_id\":\"…\",\"rules\":[{\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}]}"
+                },
                 "collection_id": {
                     "type": "string"
                 },

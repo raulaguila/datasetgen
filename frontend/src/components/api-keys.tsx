@@ -20,6 +20,7 @@ import { account, collections } from "@/lib/api/endpoints";
 import type { ApiKey, KeyScope } from "@/lib/api/types";
 import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
+import { CallArgs } from "@/components/mcp-tools";
 import { roleAllows } from "@/lib/permissions";
 
 export type Access = "none" | "read" | "write";
@@ -209,6 +210,7 @@ function KeyUsage({ keyId }: { keyId: string }) {
           <span className="font-mono font-medium">{c.tool}</span>
           <span className={c.ok ? "text-muted-foreground" : "text-destructive"}>{t(c.ok ? "mcp_activity.ok" : "mcp_activity.failed")}</span>
           <span className="text-muted-foreground">{c.collection_name} · {format(c.created_at)}</span>
+          <CallArgs raw={c.args} />
           {c.error && <span className="basis-full break-words text-destructive">{c.error}</span>}
         </li>
       ))}

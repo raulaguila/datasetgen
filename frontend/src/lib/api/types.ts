@@ -503,5 +503,7 @@ export interface McpCall {
   user_name: string;
   ok: boolean;
   error?: string;
+  /** The call's arguments as JSON, cut to 500 characters. */
+  args?: string;
   created_at: string;
 }

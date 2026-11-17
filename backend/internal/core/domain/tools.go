@@ -246,5 +246,6 @@ type MCPCall struct {
 	Tool           string
 	OK             bool
 	Error          string
+	Args           string // the call's arguments as JSON, cut to 500 characters
 	CreatedAt      time.Time
 }

@@ -43,6 +43,7 @@ func newServer(ctx context.Context, app *input.Application, version string) *mcp
 	s := mcp.NewServer(&mcp.Implementation{Name: "dataset", Version: version}, &mcp.ServerOptions{
 		Instructions: "Read the collections this API key reaches. Start with workspace_overview: every collection, " +
 			"its description, record count and fields, and how the collections reference each other, in one call. " +
+			"Filter by a field's value with rules (field, op, value), never with search, which matches text in any field. " +
 			"An option field lists its values there: filter on them with eq or in. To learn what a text field holds, " +
 			"page through its values with field_values, then filter with those exact values. " +
 			"Read a collection's full JSON Schema with get_collection when needed, then find records with search_records; " +
@@ -60,7 +61,9 @@ func newServer(ctx context.Context, app *input.Application, version string) *mcp
 		Annotations: readOnly}, t.listCollections)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_collection", Description: "A collection's name, description and the JSON Schema its records follow: read it to learn the field names before searching.",
 		Annotations: readOnly}, t.getCollection)
-	mcp.AddTool(s, &mcp.Tool{Name: "search_records", Description: "Find records of a collection by text and by rules on its top-level fields, newest change first unless sorted. Returns at most 50 per page and the total.",
+	mcp.AddTool(s, &mcp.Tool{Name: "search_records", Description: "Find records of a collection by rules on its top-level fields (and free text), newest change first unless sorted. Returns at most 50 per page and the total; " +
+		"read the next pages while more remain. To list the records whose field status is Pago, send rules [{\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}], " +
+		"not search: search matches the text in any field.",
 		Annotations: readOnly}, t.searchRecords)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_record", Description: "One record by id: its data, version and dates.",
 		Annotations: readOnly}, t.getRecord)
@@ -233,8 +236,8 @@ type groupIn struct {
 // filterIn picks records of one collection; search_records and the tools that sum up or change records share it.
 type filterIn struct {
 	CollectionID string    `json:"collection_id" jsonschema:"the collection's id, from list_collections"`
-	Search       string    `json:"search,omitempty" jsonschema:"text found anywhere in the record JSON"`
-	Rules        []ruleIn  `json:"rules,omitempty" jsonschema:"rules on fields, joined by AND (or OR when any is set)"`
+	Search       string    `json:"search,omitempty" jsonschema:"free text found anywhere in the record, in any field (a description mentioning it matches too). To keep records whose field has a value, use rules instead: field status eq Pago is {\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}"`
+	Rules        []ruleIn  `json:"rules,omitempty" jsonschema:"rules on fields, joined by AND (or OR when any is set); the way to filter by a field's value, e.g. [{\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}] or with op in and a list of values"`
 	Groups       []groupIn `json:"groups,omitempty" jsonschema:"bracketed sets of rules, joined with the rules by any: (a AND b) OR (c AND d)"`
 	Any          bool      `json:"any,omitempty" jsonschema:"join rules and groups by OR instead of AND"`
 }

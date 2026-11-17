@@ -92,6 +92,7 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
   const activity = page.getByRole("list", { name: "Atividade dos assistentes" });
   await expect(activity.getByText("nota_por_titulo")).toBeVisible();
   await expect(activity.getByText(`chave assistente-${name}`, { exact: false }).first()).toBeVisible();
+  await expect(activity.getByText('{"titulo":"Beta"}').first()).toBeVisible(); // what the assistant asked
 
   // The key's own usage lists the same calls, by collection.
   await page.goto("/api-access");
@@ -99,6 +100,7 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
   await page.getByRole("menuitem", { name: "Ver uso" }).click();
   const usage = page.getByRole("list", { name: "Ver uso" });
   await expect(usage.getByText("nota_por_titulo").first()).toBeVisible();
+  await expect(usage.getByText('{"titulo":"Beta"}').first()).toBeVisible();
   await expect(usage.getByText(name, { exact: false }).first()).toBeVisible();
   await dropKey(page, `assistente-${name}`);
 });

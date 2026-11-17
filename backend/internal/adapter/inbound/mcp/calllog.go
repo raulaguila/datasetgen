@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -11,7 +12,18 @@ import (
 	"github.com/raulaguila/dataset/pkg/reqctx"
 )
 
-const maxCallError = 200
+const (
+	maxCallError = 200
+	maxCallArgs  = 500
+)
+
+// cut keeps the first n bytes of s, never splitting a character.
+func cut(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return strings.ToValidUTF8(s[:n], "")
+}
 
 type touchedKey struct{}
 
@@ -59,14 +71,13 @@ func (t tools) logCalls(next mcp.MethodHandler) mcp.MethodHandler {
 				}
 			}
 		}
-		if len(msg) > maxCallError {
-			msg = msg[:maxCallError]
-		}
+		msg = cut(msg, maxCallError)
+		given := cut(string(call.Params.Arguments), maxCallArgs)
 		slices.Sort(tc.ids)
 		calls := make([]domain.MCPCall, 0, len(tc.ids))
 		for _, id := range slices.Compact(tc.ids) {
 			calls = append(calls, domain.MCPCall{CollectionID: id, KeyID: key.ID, KeyName: key.Name, UserID: reqctx.Actor(ctx),
-				Tool: call.Params.Name, OK: ok, Error: msg})
+				Tool: call.Params.Name, OK: ok, Error: msg, Args: given})
 		}
 		// The answer goes out whatever the log does: it only shows owners what happened.
 		_ = t.app.Integrations.LogMCPCalls(context.WithoutCancel(ctx), calls)

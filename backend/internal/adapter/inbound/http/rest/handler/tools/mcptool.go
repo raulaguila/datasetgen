@@ -204,6 +204,7 @@ type mcpCallDTO struct {
 	UserName       string    `json:"user_name"`
 	OK             bool      `json:"ok"`
 	Error          string    `json:"error,omitempty"`
+	Args           string    `json:"args,omitempty" example:"{\"collection_id\":\"…\",\"rules\":[{\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}]}"` // the arguments as JSON, cut to 500 characters
 	CreatedAt      time.Time `json:"created_at"`
 }
 
@@ -243,7 +244,7 @@ func toMCPCallDTOs(list []domain.MCPCall) []mcpCallDTO {
 	out := make([]mcpCallDTO, len(list))
 	for i, m := range list {
 		out[i] = mcpCallDTO{CollectionID: m.CollectionID, CollectionName: m.CollectionName, Tool: m.Tool, KeyName: m.KeyName, KeyLive: m.KeyID != "",
-			UserName: m.UserName, OK: m.OK, Error: m.Error, CreatedAt: m.CreatedAt}
+			UserName: m.UserName, OK: m.OK, Error: m.Error, Args: m.Args, CreatedAt: m.CreatedAt}
 	}
 	return out
 }

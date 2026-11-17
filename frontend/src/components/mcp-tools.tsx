@@ -268,6 +268,19 @@ export function McpTools({ collection }: { collection: Collection }) {
   );
 }
 
+/** A logged call's arguments, compact and without the collection id the list already shows; raw when cut short. */
+export function CallArgs({ raw }: { raw?: string }) {
+  if (!raw || raw === "{}") return null;
+  let text = raw;
+  try {
+    const rest = JSON.parse(raw) as Record<string, unknown>;
+    delete rest.collection_id;
+    if (Object.keys(rest).length === 0) return null;
+    text = JSON.stringify(rest);
+  } catch { /* cut at 500 characters: show as kept */ }
+  return <code title={text} className="line-clamp-2 basis-full break-all font-mono text-xs text-muted-foreground">{text}</code>;
+}
+
 /** What AI assistants did in the collection through MCP: newest 100 calls of the last 30 days. */
 export function McpActivity({ collection }: { collection: Collection }) {
   const { t } = useI18n();
@@ -289,6 +302,7 @@ export function McpActivity({ collection }: { collection: Collection }) {
               <p className="text-xs text-muted-foreground">
                 {format(c.created_at)} · {c.user_name} · {t("mcp_activity.key").replace("{name}", c.key_name)}{!c.key_live && ` (${t("mcp_activity.key_gone")})`}
               </p>
+              <CallArgs raw={c.args} />
               {c.error && <p className="break-words text-xs text-destructive">{c.error}</p>}
             </li>
           ))}

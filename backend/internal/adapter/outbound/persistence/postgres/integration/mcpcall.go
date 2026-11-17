@@ -19,6 +19,7 @@ type mcpCallIn struct {
 	Tool         string  `json:"tool"`
 	OK           bool    `json:"ok"`
 	Error        string  `json:"error"`
+	Args         string  `json:"args"`
 }
 
 // LogMCPCalls inserts the calls in one statement. A key deleted meanwhile
@@ -29,7 +30,7 @@ func (r *Repository) LogMCPCalls(ctx context.Context, calls []domain.MCPCall) er
 	}
 	rows := make([]mcpCallIn, len(calls))
 	for i, c := range calls {
-		rows[i] = mcpCallIn{CollectionID: c.CollectionID, KeyName: c.KeyName, UserID: c.UserID, Tool: c.Tool, OK: c.OK, Error: c.Error}
+		rows[i] = mcpCallIn{CollectionID: c.CollectionID, KeyName: c.KeyName, UserID: c.UserID, Tool: c.Tool, OK: c.OK, Error: c.Error, Args: c.Args}
 		if c.KeyID != "" {
 			rows[i].KeyID = &c.KeyID
 		}
@@ -39,9 +40,9 @@ func (r *Repository) LogMCPCalls(ctx context.Context, calls []domain.MCPCall) er
 		return err
 	}
 	return shared.WrapError(r.db.WithContext(ctx).Exec(`
-		INSERT INTO app.mcp_call (collection_id, key_id, key_name, user_id, tool, ok, error)
-		SELECT x.collection_id, (SELECT k.id FROM app.api_key k WHERE k.id = x.key_id), x.key_name, x.user_id, x.tool, x.ok, x.error
-		FROM json_to_recordset(?::json) AS x(collection_id uuid, key_id uuid, key_name text, user_id uuid, tool text, ok boolean, error text)`,
+		INSERT INTO app.mcp_call (collection_id, key_id, key_name, user_id, tool, ok, error, args)
+		SELECT x.collection_id, (SELECT k.id FROM app.api_key k WHERE k.id = x.key_id), x.key_name, x.user_id, x.tool, x.ok, x.error, x.args
+		FROM json_to_recordset(?::json) AS x(collection_id uuid, key_id uuid, key_name text, user_id uuid, tool text, ok boolean, error text, args text)`,
 		string(list)).Error, "mcp call")
 }
 
@@ -55,13 +56,14 @@ type mcpCallRow struct {
 	Tool           string     `gorm:"column:tool"`
 	OK             bool       `gorm:"column:ok"`
 	Error          string     `gorm:"column:error"`
+	Args           string     `gorm:"column:args"`
 	CreatedAt      time.Time  `gorm:"column:created_at"`
 }
 
 func (r *Repository) MCPCalls(ctx context.Context, collectionID string, limit int) ([]domain.MCPCall, error) {
 	var rows []mcpCallRow
 	err := r.db.WithContext(ctx).Raw(`
-		SELECT c.collection_id, c.key_id, c.key_name, c.user_id, u.name AS user_name, c.tool, c.ok, c.error, c.created_at
+		SELECT c.collection_id, c.key_id, c.key_name, c.user_id, u.name AS user_name, c.tool, c.ok, c.error, c.args, c.created_at
 		FROM app.mcp_call c JOIN usr.usr_user u ON u.id = c.user_id
 		WHERE c.collection_id = ? ORDER BY c.created_at DESC, c.id DESC LIMIT ?`, collectionID, limit).Find(&rows).Error
 	return mcpCalls(rows, err)
@@ -70,7 +72,7 @@ func (r *Repository) MCPCalls(ctx context.Context, collectionID string, limit in
 func (r *Repository) KeyMCPCalls(ctx context.Context, keyID, userID string, limit int) ([]domain.MCPCall, error) {
 	var rows []mcpCallRow
 	err := r.db.WithContext(ctx).Raw(`
-		SELECT c.collection_id, col.name AS collection_name, c.key_id, c.key_name, c.user_id, c.tool, c.ok, c.error, c.created_at
+		SELECT c.collection_id, col.name AS collection_name, c.key_id, c.key_name, c.user_id, c.tool, c.ok, c.error, c.args, c.created_at
 		FROM app.mcp_call c JOIN app.collection col ON col.id = c.collection_id
 		WHERE c.key_id = ? AND c.user_id = ? ORDER BY c.created_at DESC, c.id DESC LIMIT ?`, keyID, userID, limit).Find(&rows).Error
 	return mcpCalls(rows, err)
@@ -83,7 +85,7 @@ func mcpCalls(rows []mcpCallRow, err error) ([]domain.MCPCall, error) {
 	out := make([]domain.MCPCall, len(rows))
 	for i, m := range rows {
 		out[i] = domain.MCPCall{CollectionID: m.CollectionID.String(), CollectionName: m.CollectionName, KeyName: m.KeyName, UserID: m.UserID.String(), UserName: m.UserName,
-			Tool: m.Tool, OK: m.OK, Error: m.Error, CreatedAt: m.CreatedAt}
+			Tool: m.Tool, OK: m.OK, Error: m.Error, Args: m.Args, CreatedAt: m.CreatedAt}
 		if m.KeyID != nil {
 			out[i].KeyID = m.KeyID.String()
 		}

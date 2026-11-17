@@ -155,6 +155,12 @@ func TestOwnersPublishMCPTools(t *testing.T) {
 	if err != nil || len(calls) != 6 || calls[0].Tool != "search_records" || !calls[0].OK || calls[0].KeyName != "Assistente" {
 		t.Fatalf("calls: %v %v", calls, err)
 	}
+	if calls[0].Args != `{"collection_id":"`+c.ID+`"}` || calls[1].Args != `{"cidade":"Belem","nomes":["mesa","x"]}` {
+		t.Fatalf("arguments not kept: %q, %q", calls[0].Args, calls[1].Args)
+	}
+	if mine, _ := integ.KeyMCPCalls(owner, key.Key.ID); mine[0].Args == "" {
+		t.Fatal("a key's log lacks the arguments")
+	}
 	if failed := slices.IndexFunc(calls, func(m domain.MCPCall) bool { return !m.OK && m.Error != "" }); failed < 0 {
 		t.Fatalf("no failed call logged: %v", calls)
 	}
