@@ -17,10 +17,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n/provider";
+import { McpToolTester, type Called, type McpTool } from "@/components/mcp-tool-tester";
 
 const MCP_PATH = "/api/proxy/v1/mcp";
 
-type Reach = { tools: string[]; collections: { name: string; access: string }[] };
+type Reach = { tools: McpTool[]; collections: { id: string; name: string; access: string }[] };
 
 /** One JSON-RPC call to the MCP endpoint with key, as an assistant would make it. */
 async function rpc(key: string, method: string, params: object): Promise<Record<string, unknown>> {
@@ -39,9 +40,8 @@ async function rpc(key: string, method: string, params: object): Promise<Record<
 async function reachOf(key: string): Promise<Reach> {
   const list = await rpc(key, "tools/list", {});
   const call = await rpc(key, "tools/call", { name: "list_collections", arguments: {} });
-  const tools = (list.tools as { name: string }[] | undefined) ?? [];
   const collections = ((call.structuredContent as { collections?: Reach["collections"] } | undefined)?.collections) ?? [];
-  return { tools: tools.map((x) => x.name), collections };
+  return { tools: list.tools as McpTool[] | undefined ?? [], collections };
 }
 
 /** How to plug an AI assistant into /v1/mcp; a key just made fills the examples. */
@@ -70,7 +70,10 @@ function McpConnectCard({ secret }: { secret: string | null }) {
   // The typed key wins; a key just made fills the field until then.
   const [typed, setTyped] = useState<string | null>(null);
   const testKey = (typed ?? secret ?? "").trim();
-  const check = useMutation({ mutationFn: () => reachOf(testKey) });
+  const check = useMutation({ mutationFn: (key: string) => reachOf(key).then((reach) => ({ key, reach })) });
+  const [picked, setPicked] = useState<string | null>(null);
+  const reach = check.data?.reach;
+  const tool = reach?.tools.find((x) => x.name === picked);
 
   // Hosted clients (the OpenAI API) call the server from the internet: a local or plain-HTTP address cannot work for them.
   const local = /^http:|\/\/(localhost|127\.|\[::1\])/.test(url);
@@ -112,7 +115,7 @@ function McpConnectCard({ secret }: { secret: string | null }) {
         </Step>
 
         <Step n={3} title={t("mcp_connect.test")}>
-          <form className="space-y-2" aria-label={t("mcp_connect.test")} onSubmit={(e) => { e.preventDefault(); if (testKey) check.mutate(); }}>
+          <form className="space-y-2" aria-label={t("mcp_connect.test")} onSubmit={(e) => { e.preventDefault(); if (testKey) { setPicked(null); check.mutate(testKey); } }}>
             <p className="text-xs text-muted-foreground">{t("mcp_connect.test_hint")}</p>
             <Label htmlFor="mcp-test-key" className="sr-only">{t("mcp_connect.test_key")}</Label>
             <div className="flex flex-wrap gap-2">
@@ -123,20 +126,32 @@ function McpConnectCard({ secret }: { secret: string | null }) {
               </Button>
             </div>
             <FormError message={check.isError ? t(check.error.message === "unauthorized" ? "mcp_connect.test_unauthorized" : "mcp_connect.test_failed") : null} />
-            {check.data && (
+            {reach && (
               <div role="status" className="space-y-2 rounded-md bg-muted/40 p-3 text-sm">
-                <p className="font-medium">{t("mcp_connect.test_ok").replace("{tools}", String(check.data.tools.length)).replace("{collections}", String(check.data.collections.length))}</p>
-                {check.data.collections.length > 0 && (
+                <p className="font-medium">{t("mcp_connect.test_ok").replace("{tools}", String(reach.tools.length)).replace("{collections}", String(reach.collections.length))}</p>
+                {reach.collections.length > 0 && (
                   <ul className="list-disc pl-5 text-xs text-muted-foreground">
-                    {check.data.collections.map((c) => <li key={c.name}>{c.name} · {t(c.access === "write" ? "integrations.read_write" : "integrations.read_only")}</li>)}
+                    {reach.collections.map((c) => <li key={c.id}>{c.name} · {t(c.access === "write" ? "integrations.read_write" : "integrations.read_only")}</li>)}
                   </ul>
                 )}
+                <p className="text-xs text-muted-foreground">{t("mcp_connect.try_hint")}</p>
                 <ul aria-label={t("mcp_connect.test_tools")} className="flex flex-wrap gap-1">
-                  {check.data.tools.map((name) => <li key={name}><code className="rounded bg-background px-1.5 py-0.5 font-mono text-xs">{name}</code></li>)}
+                  {reach.tools.map((x) => (
+                    <li key={x.name}>
+                      <button type="button" aria-pressed={picked === x.name} onClick={() => setPicked(picked === x.name ? null : x.name)}
+                        className="rounded border bg-background px-1.5 py-0.5 font-mono text-xs hover:border-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground">
+                        {x.name}
+                      </button>
+                    </li>
+                  ))}
                 </ul>
               </div>
             )}
           </form>
+          {tool && check.data && (
+            <McpToolTester key={`${check.data.key}:${tool.name}`} tool={tool} collections={reach?.collections ?? []}
+              call={(name, args) => rpc(check.data.key, "tools/call", { name, arguments: args }) as Promise<Called>} />
+          )}
         </Step>
       </ol>
     </FormSection>
