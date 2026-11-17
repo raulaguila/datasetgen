@@ -50,24 +50,43 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
   await expect(page.getByText(/vence em/).first()).toBeVisible();
   await page.getByRole("form", { name: "Testar conexão" }).getByRole("button", { name: "Testar" }).click();
   await expect(page.getByText(/^Conectado: 20 tools, 1 coleção/)).toBeVisible();
-  const reached = page.getByRole("list", { name: "Tools que a chave alcança" });
-  await expect(reached.getByText("nota_por_titulo")).toBeVisible();
-  // Any tool runs from the page with the key: a form from its schema, the collection already picked.
-  await reached.getByRole("button", { name: "field_values", exact: true }).click();
-  const tester = page.getByRole("form", { name: "Testar tool" });
+  // Any tool runs from its own section with the key: a list by kind, a form from its schema, the collection already picked.
+  const lab = page.getByRole("navigation", { name: "Tools da chave" });
+  await expect(lab.getByText("Dos donos")).toBeVisible();
+  await expect(lab.getByText("nota_por_titulo")).toBeVisible();
+  await page.getByRole("textbox", { name: "Buscar tool" }).fill("field_v");
+  await expect(lab.getByRole("button", { name: /^create_record/ })).toHaveCount(0);
+  await lab.getByRole("button", { name: /^field_values/ }).click();
+  const tester = page.getByRole("form", { name: "Chamada da tool" });
   await expect(tester.getByRole("combobox", { name: /^collection_id/ })).toContainText(name);
-  await tester.getByRole("textbox", { name: /^field/ }).fill("title");
+  // field picks from the collection's own fields.
+  await tester.getByRole("combobox", { name: /^field/ }).click();
+  await page.getByRole("option", { name: /^title/ }).click();
   await tester.getByRole("button", { name: "Executar" }).click();
   await expect(tester.getByRole("status")).toContainText("Resposta em");
+  await expect(tester.getByText(/KB · ~\d+ tokens/)).toBeVisible();
   await expect(tester.locator("pre")).toContainText('"distinct": 2');
+  // The request as JSON-RPC and curl.
+  await tester.getByRole("tab", { name: "Requisição" }).click();
+  await expect(tester.locator("pre").first()).toContainText('"name": "field_values"');
+  await expect(tester.locator("pre").last()).toContainText("Bearer $DATASET_KEY");
   // The same arguments as JSON, and back.
   await tester.getByRole("button", { name: "Editar como JSON" }).click();
   await expect(tester.getByLabel("Argumentos (JSON)")).toHaveValue(/"field": "title"/);
   await tester.getByRole("button", { name: "Editar como formulário" }).click();
-  await expect(tester.getByRole("textbox", { name: /^field/ })).toHaveValue("title");
+  await expect(tester.getByRole("combobox", { name: /^field/ })).toContainText("title");
+  // search_records edits its filter with the rules editor.
+  await page.getByRole("textbox", { name: "Buscar tool" }).fill("");
+  await lab.getByRole("button", { name: /^search_records/ }).click();
+  await expect(tester.getByRole("button", { name: "Condições" })).toBeVisible();
   await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/mcp-tester.png` : "test-results/mcp-tester.png", fullPage: true });
+  // A past call reopens with its arguments.
+  const history = page.getByRole("region", { name: "Últimas chamadas" });
+  await history.getByRole("button", { name: /field_values/ }).click();
+  await expect(tester.getByRole("combobox", { name: /^field/ })).toContainText("title");
+  await expect(tester.locator("pre")).toContainText('"distinct": 2');
   // A writing tool asks first; this read-only key is refused, as the assistant would be.
-  await reached.getByRole("button", { name: "create_record", exact: true }).click();
+  await lab.getByRole("button", { name: /^create_record\b(?!s)/ }).click();
   await expect(tester.getByText("Grava dados")).toBeVisible();
   await tester.getByRole("textbox", { name: /^data/ }).fill('{"title":"Gama"}');
   await tester.getByRole("button", { name: "Executar" }).click();
