@@ -19,7 +19,7 @@ import (
 func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	e := newEnv(t)
 	collections, records := collectionServices(e)
-	keys, _ := toolServices(e, t)
+	keys, toolSvc := toolServices(e, t)
 	owner := reqctx.WithActor(context.Background(), e.userID(t, e.activeUser(t)))
 	mk := func(name string) string {
 		c, err := collections.Create(owner, input.CreateCollectionCommand{Name: name, Schema: json.RawMessage(
@@ -98,7 +98,7 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	post("", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 401)
 	post("dsk_nope", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 401)
 	list := post(key.Secret, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 200)
-	if tools, _ := list["result"].(map[string]any)["tools"].([]any); len(tools) != 10 {
+	if tools, _ := list["result"].(map[string]any)["tools"].([]any); len(tools) != 18 {
 		t.Fatalf("tools: %v", list)
 	}
 
@@ -160,6 +160,32 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if got, failed := call("collection_stats", map[string]any{"collection_id": a}); failed || got["records"].(float64) != 2 {
 		t.Fatalf("collection_stats: %v", got)
 	}
+	// Totals, values, several records by id and saved views.
+	got, _ = call("aggregate_records", map[string]any{"collection_id": a, "numbers": []string{"preco"}})
+	if g := got["groups"].([]any); len(g) != 1 || g[0].(map[string]any)["count"].(float64) != 2 || g[0].(map[string]any)["preco"].(map[string]any)["sum"].(float64) != 14 {
+		t.Fatalf("aggregate_records: %v", got)
+	}
+	got, _ = call("aggregate_records", map[string]any{"collection_id": a, "group_by": "nome", "rules": []any{map[string]any{"field": "preco", "op": "lt", "value": 10}}})
+	if g := got["groups"].([]any); len(g) != 1 || g[0].(map[string]any)["value"] != "lapis" {
+		t.Fatalf("aggregate_records by nome: %v", got)
+	}
+	if got, failed := call("aggregate_records", map[string]any{"collection_id": hidden}); !failed {
+		t.Fatalf("aggregate_records outside the key: %v", got)
+	}
+	if got, _ = call("field_values", map[string]any{"collection_id": a, "field": "nome"}); got["distinct"].(float64) != 2 || got["filled"].(float64) != 2 || len(got["top"].([]any)) != 2 {
+		t.Fatalf("field_values: %v", got)
+	}
+	got, _ = call("get_records", map[string]any{"collection_id": a, "record_ids": []string{cheap, dear, safe}})
+	if len(got["records"].([]any)) != 2 || len(got["missing"].([]any)) != 1 || got["missing"].([]any)[0] != safe {
+		t.Fatalf("get_records: %v", got)
+	}
+	if _, err := toolSvc.CreateView(owner, a, "Caros", `?q=a&where={"any":false,"rules":[{"field":"preco","op":"gt","value":10}]}&sort=data.preco`, true); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = call("list_views", map[string]any{"collection_id": a})
+	if v := got["views"].([]any); len(v) != 1 || v[0].(map[string]any)["search"] != "a" || v[0].(map[string]any)["where"].(map[string]any)["rules"] == nil {
+		t.Fatalf("list_views: %v", got)
+	}
 	// A read key cannot write; a write key creates, changes some fields and deletes.
 	if _, failed := call("create_record", map[string]any{"collection_id": a, "data": map[string]any{"nome": "x"}}); !failed {
 		t.Fatal("a read key created a record")
@@ -199,6 +225,40 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if _, failed := call("get_record", map[string]any{"record_id": made}); !failed {
 		t.Fatal("a deleted record still reads")
 	}
+	// The trash lists it and gives it back; its history shows what update_record changed.
+	got, _ = call("list_trash", map[string]any{"collection_id": a})
+	if r := got["records"].([]any); len(r) != 1 || r[0].(map[string]any)["id"] != made {
+		t.Fatalf("list_trash: %v", got)
+	}
+	if got, failed := call("restore_records", map[string]any{"collection_id": a, "record_ids": []string{made}}); failed || got["restored"].(float64) != 1 {
+		t.Fatalf("restore_records: %v", got)
+	}
+	got, _ = call("record_history", map[string]any{"record_id": made})
+	v := got["versions"].([]any)
+	if len(v) != 2 || v[1].(map[string]any)["data"] == nil {
+		t.Fatalf("record_history: %v", got)
+	}
+	if ch := v[0].(map[string]any)["changes"].(map[string]any); len(ch) != 2 || ch["preco"].(map[string]any)["to"].(float64) != 3 || ch["nome"].(map[string]any)["to"] != nil {
+		t.Fatalf("record_history changes: %v", got)
+	}
+	// update_records wants a filter, counts with dry_run, then sets every match.
+	if _, failed := call("update_records", map[string]any{"collection_id": a, "set": map[string]any{"nome": "x"}}); !failed {
+		t.Fatal("update_records ran without a filter")
+	}
+	caros := []any{map[string]any{"field": "preco", "op": "gt", "value": 2}}
+	got, _ = call("update_records", map[string]any{"collection_id": a, "rules": caros, "set": map[string]any{"nome": "caro"}, "dry_run": true})
+	if got["matched"].(float64) != 2 || len(got["sample"].([]any)) != 2 {
+		t.Fatalf("update_records dry run: %v", got)
+	}
+	if r, _ := records.Get(owner, dear); !strings.Contains(string(r.Data), "caneta") {
+		t.Fatalf("a dry run changed a record: %s", r.Data)
+	}
+	if got, failed := call("update_records", map[string]any{"collection_id": a, "rules": caros, "set": map[string]any{"nome": "caro"}}); failed || got["updated"].(float64) != 2 {
+		t.Fatalf("update_records: %v", got)
+	}
+	if got, _ = call("field_values", map[string]any{"collection_id": a, "field": "nome", "search": "caro"}); got["top"].([]any)[0].(map[string]any)["count"].(float64) != 2 {
+		t.Fatalf("after update_records: %v", got)
+	}
 
 	// Swagger asks for JSON alone and sends the key in X-API-Key; the shortcuts skip the envelope.
 	plain := func(method, path, body string, want int) map[string]any {
@@ -223,7 +283,7 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if out := plain("POST", "/v1/mcp", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, 200); out["result"] == nil {
 		t.Fatalf("JSON-only accept: %v", out)
 	}
-	if tools, _ := plain("GET", "/v1/mcp/tools", "", 200)["tools"].([]any); len(tools) != 10 {
+	if tools, _ := plain("GET", "/v1/mcp/tools", "", 200)["tools"].([]any); len(tools) != 18 {
 		t.Fatal("GET /v1/mcp/tools: want 9 tools")
 	}
 	if got, _ := plain("POST", "/v1/mcp/tools/get_collection", `{"collection_id":"`+a+`"}`, 200)["structuredContent"].(map[string]any); got["schema"] == nil {

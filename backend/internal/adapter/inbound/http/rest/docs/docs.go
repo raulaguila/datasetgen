@@ -3625,7 +3625,7 @@ const docTemplate = `{
         },
         "/v1/mcp": {
             "post": {
-                "description": "The address an assistant connects to. Takes an API key only (X-API-Key, or \"Authorization: Bearer dsk_...\" from assistants). Methods: initialize, tools/list, tools/call ({\"name\":\"list_collections\",\"arguments\":{}}). Tools, limited to the key's collections: workspace_overview (start here: every collection with its counts, fields and references), list_collections, get_collection, search_records, get_record, related_records, collection_stats; with a write scope create_record, update_record and delete_records; plus the tools collection owners publish. GET /v1/mcp/tools and POST /v1/mcp/tools/{name} do the same without the JSON-RPC envelope.",
+                "description": "The address an assistant connects to. Takes an API key only (X-API-Key, or \"Authorization: Bearer dsk_...\" from assistants). Methods: initialize, tools/list, tools/call ({\"name\":\"list_collections\",\"arguments\":{}}). Tools, limited to the key's collections: workspace_overview (start here: every collection with its counts, fields and references), list_collections, get_collection, search_records, get_record, related_records, collection_stats, aggregate_records, field_values, get_records, record_history, list_views; with a write scope list_trash, create_record, update_record, update_records (dry_run first), delete_records and restore_records; plus the tools collection owners publish. GET /v1/mcp/tools and POST /v1/mcp/tools/{name} do the same without the JSON-RPC envelope.",
                 "consumes": [
                     "application/json"
                 ],

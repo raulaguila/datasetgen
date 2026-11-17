@@ -73,6 +73,7 @@ func newServer(ctx context.Context, app *input.Application, version string) *mcp
 	mcp.AddTool(s, &mcp.Tool{Name: "delete_records", Description: "Move up to 100 records of one collection to the trash, all or none; a record of another collection refuses the whole call. An owner can restore them from the trash.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: pointer.Of(true), IdempotentHint: true}}, t.deleteRecords)
 
+	t.addRecordTools(s)
 	t.addOwnTools(ctx, s)
 	s.AddReceivingMiddleware(t.logCalls)
 	return s
@@ -225,16 +226,27 @@ type groupIn struct {
 	Rules []ruleIn `json:"rules"`
 }
 
-type searchIn struct {
+// filterIn picks records of one collection; search_records and the tools that sum up or change records share it.
+type filterIn struct {
 	CollectionID string    `json:"collection_id" jsonschema:"the collection's id, from list_collections"`
 	Search       string    `json:"search,omitempty" jsonschema:"text found anywhere in the record JSON"`
 	Rules        []ruleIn  `json:"rules,omitempty" jsonschema:"rules on fields, joined by AND (or OR when any is set)"`
 	Groups       []groupIn `json:"groups,omitempty" jsonschema:"bracketed sets of rules, joined with the rules by any: (a AND b) OR (c AND d)"`
 	Any          bool      `json:"any,omitempty" jsonschema:"join rules and groups by OR instead of AND"`
-	Sort         string    `json:"sort,omitempty" jsonschema:"created_at, updated_at (default) or data.<field>"`
-	Order        string    `json:"order,omitempty" jsonschema:"asc or desc (default desc)"`
-	Page         int       `json:"page,omitempty" jsonschema:"page number, from 1"`
-	Limit        int       `json:"limit,omitempty" jsonschema:"records per page, 1 to 50 (default 20)"`
+}
+
+// filter is the record filter the input describes, without paging or sorting.
+func (in filterIn) filter() (domain.RecordFilter, error) {
+	where, err := whereOf(in)
+	return domain.RecordFilter{CollectionID: in.CollectionID, Search: in.Search, Where: where}, err
+}
+
+type searchIn struct {
+	filterIn
+	Sort  string `json:"sort,omitempty" jsonschema:"created_at, updated_at (default) or data.<field>"`
+	Order string `json:"order,omitempty" jsonschema:"asc or desc (default desc)"`
+	Page  int    `json:"page,omitempty" jsonschema:"page number, from 1"`
+	Limit int    `json:"limit,omitempty" jsonschema:"records per page, 1 to 50 (default 20)"`
 }
 
 type recordOut struct {
@@ -273,7 +285,7 @@ func rulesOf(in []ruleIn) ([]domain.Condition, error) {
 	return out, nil
 }
 
-func whereOf(in searchIn) (*domain.Where, error) {
+func whereOf(in filterIn) (*domain.Where, error) {
 	if len(in.Rules) == 0 && len(in.Groups) == 0 {
 		return nil, nil
 	}
@@ -293,7 +305,7 @@ func whereOf(in searchIn) (*domain.Where, error) {
 }
 
 func (t tools) searchRecords(ctx context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, any, error) {
-	where, err := whereOf(in)
+	filter, err := in.filter()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -305,10 +317,7 @@ func (t tools) searchRecords(ctx context.Context, _ *mcp.CallToolRequest, in sea
 	if sort == "" {
 		sort, order = "updated_at", "desc"
 	}
-	filter := domain.RecordFilter{
-		CollectionID: in.CollectionID, Search: in.Search, Sort: sort, Order: order, Where: where,
-		Page: domain.NewPage(in.Page, min(limit, maxRecords)),
-	}
+	filter.Sort, filter.Order, filter.Page = sort, order, domain.NewPage(in.Page, min(limit, maxRecords))
 	items, total, err := t.app.Records.List(ctx, filter)
 	if err != nil {
 		return nil, nil, err
