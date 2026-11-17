@@ -63,7 +63,7 @@ func newServer(ctx context.Context, app *input.Application, version string) *mcp
 		Annotations: readOnly}, t.getCollection)
 	mcp.AddTool(s, &mcp.Tool{Name: "search_records", Description: "Find records of a collection by rules on its top-level fields (and free text), newest change first unless sorted. Returns at most 50 per page and the total; " +
 		"read the next pages while more remain. To list the records whose field status is Pago, send rules [{\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}], " +
-		"not search: search matches the text in any field.",
+		"not search: search matches the text in any field. Pass fields with the names you need to keep the answer short.",
 		Annotations: readOnly}, t.searchRecords)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_record", Description: "One record by id: its data, version and dates.",
 		Annotations: readOnly}, t.getRecord)
@@ -248,8 +248,40 @@ func (in filterIn) filter() (domain.RecordFilter, error) {
 	return domain.RecordFilter{CollectionID: in.CollectionID, Search: in.Search, Where: where}, err
 }
 
+// fieldsIn names the data fields a tool returns, so a listing costs the model only what it reads.
+type fieldsIn struct {
+	Fields []string `json:"fields,omitempty" jsonschema:"top-level fields to return in each record's data, e.g. [\"name\",\"status\"]; left out: all of them. Ask only for the fields you will use when listing or counting. id, version and dates always come back."`
+}
+
+const maxFields = 50
+
+// keep checks the asked fields and cuts each record's data to them; the records share a collection the call already names.
+func (in fieldsIn) keep(rs []domain.Record) ([]recordOut, error) {
+	if err := in.check(); err != nil {
+		return nil, err
+	}
+	out := recordsOf(rs)
+	for i := range out {
+		out[i].CollectionID, out[i].Data = "", domain.KeepFields(out[i].Data, in.Fields)
+	}
+	return out, nil
+}
+
+func (in fieldsIn) check() error {
+	if len(in.Fields) > maxFields {
+		return apperror.New(apperror.CodeInvalidInput, "fields holds up to 50 names").WithField("fields")
+	}
+	for _, f := range in.Fields {
+		if f == "" || len(f) > 200 {
+			return apperror.New(apperror.CodeInvalidInput, "field names are 1-200 characters").WithField("fields")
+		}
+	}
+	return nil
+}
+
 type searchIn struct {
 	filterIn
+	fieldsIn
 	Sort  string `json:"sort,omitempty" jsonschema:"created_at, updated_at (default) or data.<field>"`
 	Order string `json:"order,omitempty" jsonschema:"asc or desc (default desc)"`
 	Page  int    `json:"page,omitempty" jsonschema:"page number, from 1"`
@@ -258,7 +290,7 @@ type searchIn struct {
 
 type recordOut struct {
 	ID           string          `json:"id"`
-	CollectionID string          `json:"collection_id"`
+	CollectionID string          `json:"collection_id,omitempty"` // left out in a listing of the collection the call names
 	Data         json.RawMessage `json:"data"`
 	Version      int             `json:"version"`
 	CreatedAt    time.Time       `json:"created_at"`
@@ -329,20 +361,34 @@ func (t tools) searchRecords(ctx context.Context, _ *mcp.CallToolRequest, in sea
 	if err != nil {
 		return nil, nil, err
 	}
-	return nil, map[string]any{"total": total, "page": filter.Page.Number, "records": recordsOf(items)}, nil
+	records, err := in.keep(items)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, map[string]any{"total": total, "page": filter.Page.Number, "records": records}, nil
 }
 
 type recordIn struct {
 	RecordID string `json:"record_id" jsonschema:"the record's id"`
 }
 
-func (t tools) getRecord(ctx context.Context, _ *mcp.CallToolRequest, in recordIn) (*mcp.CallToolResult, any, error) {
+type getRecordIn struct {
+	recordIn
+	fieldsIn
+}
+
+func (t tools) getRecord(ctx context.Context, _ *mcp.CallToolRequest, in getRecordIn) (*mcp.CallToolResult, any, error) {
+	if err := in.check(); err != nil {
+		return nil, nil, err
+	}
 	r, err := t.app.Records.Get(ctx, in.RecordID)
 	if err != nil {
 		return nil, nil, err
 	}
 	touch(ctx, r.CollectionID)
-	return nil, recordOf(*r), nil
+	out := recordOf(*r)
+	out.Data = domain.KeepFields(out.Data, in.Fields)
+	return nil, out, nil
 }
 
 type linksOut struct {

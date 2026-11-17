@@ -245,19 +245,8 @@ func (s *Service) RunMCPTool(ctx context.Context, t domain.MCPTool, args map[str
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	if len(t.Fields) > 0 {
-		for i := range items {
-			var data map[string]json.RawMessage
-			if json.Unmarshal(items[i].Data, &data) == nil {
-				kept := make(map[string]json.RawMessage, len(t.Fields))
-				for _, f := range t.Fields {
-					if v, ok := data[f]; ok {
-						kept[f] = v
-					}
-				}
-				items[i].Data, _ = json.Marshal(kept)
-			}
-		}
+	for i := range items {
+		items[i].Data = domain.KeepFields(items[i].Data, t.Fields)
 	}
 	return items, total, filter.Page.Number, nil
 }

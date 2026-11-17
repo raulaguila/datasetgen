@@ -188,6 +188,21 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if _, failed := call("field_values", map[string]any{"collection_id": a, "field": "nome", "limit": 500}); !failed {
 		t.Fatal("field_values took 500 a page")
 	}
+	// fields cuts each record's data to what the model asks for; the listing drops the collection it names.
+	got, _ = call("search_records", map[string]any{"collection_id": a, "search": "lapis", "fields": []string{"nome"}})
+	if r := got["records"].([]any)[0].(map[string]any); len(r["data"].(map[string]any)) != 1 || r["data"].(map[string]any)["nome"] != "lapis" || r["collection_id"] != nil || r["id"] != cheap {
+		t.Fatalf("search_records fields: %v", got)
+	}
+	if got, _ = call("get_record", map[string]any{"record_id": dear, "fields": []string{"preco"}}); got["data"].(map[string]any)["nome"] != nil || got["data"].(map[string]any)["preco"].(float64) != 12 {
+		t.Fatalf("get_record fields: %v", got)
+	}
+	if _, failed := call("search_records", map[string]any{"collection_id": a, "fields": []string{""}}); !failed {
+		t.Fatal("search_records took an empty field name")
+	}
+	got, _ = call("get_records", map[string]any{"collection_id": a, "record_ids": []string{cheap, dear}, "fields": []string{"preco"}})
+	if r := got["records"].([]any); len(r) != 2 || len(r[0].(map[string]any)["data"].(map[string]any)) != 1 {
+		t.Fatalf("get_records fields: %v", got)
+	}
 	got, _ = call("get_records", map[string]any{"collection_id": a, "record_ids": []string{cheap, dear, safe}})
 	if len(got["records"].([]any)) != 2 || len(got["missing"].([]any)) != 1 || got["missing"].([]any)[0] != safe {
 		t.Fatalf("get_records: %v", got)

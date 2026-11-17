@@ -118,7 +118,12 @@ type idsIn struct {
 	RecordIDs    []string `json:"record_ids" jsonschema:"record ids of that collection"`
 }
 
-func (t tools) getRecords(ctx context.Context, _ *mcp.CallToolRequest, in idsIn) (*mcp.CallToolResult, any, error) {
+type getRecordsIn struct {
+	idsIn
+	fieldsIn
+}
+
+func (t tools) getRecords(ctx context.Context, _ *mcp.CallToolRequest, in getRecordsIn) (*mcp.CallToolResult, any, error) {
 	if len(in.RecordIDs) == 0 || len(in.RecordIDs) > maxRecords {
 		return nil, nil, apperror.New(apperror.CodeInvalidInput, "record_ids must hold 1 to 50 ids").WithField("record_ids")
 	}
@@ -136,7 +141,11 @@ func (t tools) getRecords(ctx context.Context, _ *mcp.CallToolRequest, in idsIn)
 			missing = append(missing, id)
 		}
 	}
-	return nil, map[string]any{"records": recordsOf(items), "missing": missing}, nil
+	records, err := in.keep(items)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, map[string]any{"records": records, "missing": missing}, nil
 }
 
 type change struct {
@@ -228,7 +237,15 @@ func (t tools) listViews(ctx context.Context, _ *mcp.CallToolRequest, in collect
 
 const trashShown = 50
 
-func (t tools) listTrash(ctx context.Context, _ *mcp.CallToolRequest, in collectionIn) (*mcp.CallToolResult, any, error) {
+type trashIn struct {
+	collectionIn
+	fieldsIn
+}
+
+func (t tools) listTrash(ctx context.Context, _ *mcp.CallToolRequest, in trashIn) (*mcp.CallToolResult, any, error) {
+	if err := in.check(); err != nil {
+		return nil, nil, err
+	}
 	items, err := t.app.Tools.TrashedRecords(ctx, in.CollectionID)
 	if err != nil {
 		return nil, nil, err
@@ -237,7 +254,7 @@ func (t tools) listTrash(ctx context.Context, _ *mcp.CallToolRequest, in collect
 	items = items[:min(len(items), trashShown)]
 	out := make([]map[string]any, len(items))
 	for i, r := range items {
-		out[i] = map[string]any{"id": r.ID, "data": r.Data, "deleted_at": r.DeletedAt, "deleted_by": r.DeletedByName}
+		out[i] = map[string]any{"id": r.ID, "data": domain.KeepFields(r.Data, in.Fields), "deleted_at": r.DeletedAt, "deleted_by": r.DeletedByName}
 	}
 	return nil, map[string]any{"records": out, "more": more}, nil
 }

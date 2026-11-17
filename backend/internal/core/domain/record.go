@@ -151,6 +151,23 @@ func (f RecordFilter) SortField() string {
 	return ""
 }
 
+// KeepFields cuts a record's data to the named top-level fields; no fields,
+// or data that is not an object, comes back as it was.
+func KeepFields(data json.RawMessage, fields []string) json.RawMessage {
+	var all map[string]json.RawMessage
+	if len(fields) == 0 || json.Unmarshal(data, &all) != nil || all == nil {
+		return data
+	}
+	kept := make(map[string]json.RawMessage, len(fields))
+	for _, f := range fields {
+		if v, ok := all[f]; ok {
+			kept[f] = v
+		}
+	}
+	out, _ := json.Marshal(kept)
+	return out
+}
+
 // Record is one entry of a collection (app.record).
 type Record struct {
 	ID           string
