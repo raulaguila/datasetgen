@@ -580,7 +580,8 @@ func orderable(v any) bool {
 
 // Aggregate counts the selected records, by a group field or all together,
 // with sums and averages of up to five numeric fields.
-func (s *Service) Aggregate(ctx context.Context, filter domain.RecordFilter, group string, numeric []string) ([]domain.RecordGroup, error) {
+func (s *Service) Aggregate(ctx context.Context, filter domain.RecordFilter, q domain.GroupQuery) ([]domain.RecordGroup, error) {
+	group, numeric := q.Group, q.Numeric
 	filter.Page = domain.NewPage(1, 1)
 	if err := checkFilter(&filter); err != nil {
 		return nil, err
@@ -593,6 +594,9 @@ func (s *Service) Aggregate(ctx context.Context, filter domain.RecordFilter, gro
 			return nil, apperror.New(apperror.CodeInvalidInput, "field names are 1-200 characters").WithField("fields")
 		}
 	}
+	if q.Bucket != "" && (group == "" || q.Elements || !slices.Contains(domain.StatsBuckets, q.Bucket)) {
+		return nil, apperror.New(apperror.CodeInvalidInput, "bucket is day, week, month or year, with a date field to group by").WithField("bucket")
+	}
 	if _, err := policy.CollectionRole(ctx, s.Collections, filter.CollectionID, domain.RoleViewer); err != nil {
 		return nil, err
 	}
@@ -600,7 +604,7 @@ func (s *Service) Aggregate(ctx context.Context, filter domain.RecordFilter, gro
 	if filter.Where, err = s.resolveWhere(ctx, filter); err != nil {
 		return nil, err
 	}
-	return s.Repo.Aggregate(ctx, filter, group, numeric)
+	return s.Repo.Aggregate(ctx, filter, q)
 }
 
 // Stats profiles the selected records: how many fill each field, the range of

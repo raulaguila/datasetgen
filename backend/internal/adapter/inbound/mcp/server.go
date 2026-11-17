@@ -43,11 +43,11 @@ func newServer(ctx context.Context, app *input.Application, version string) *mcp
 	s := mcp.NewServer(&mcp.Implementation{Name: "dataset", Version: version}, &mcp.ServerOptions{
 		Instructions: "Work in steps. " +
 			"1. workspace_overview: every collection this key reaches, with its fields and the options of option fields. " +
-			"Arguments name a field by its key, never by its display name. " +
+			"Arguments name a field by its key, never by its display name. Not sure which collection holds something? search_everywhere. " +
 			"2. To filter a text field, first learn its exact values with field_values. " +
 			"3. search_records with rules [{field, op, value}] to keep records by a field's value (search is free text in any field, not a filter), " +
-			"and fields listing only the keys you need. " +
-			"4. aggregate_records to count or sum by a field instead of reading every record. " +
+			"fields listing only the keys you need, and expand to bring referenced records along. " +
+			"4. aggregate_records to count or sum by a field (each element of a list, or per month of a date) instead of reading every record. " +
 			"An error says what to fix (the right key, the valid options): fix the call and try again. " +
 			"Tools other than the built-in ones were made by the collections' owners for common questions: prefer them when they fit.",
 	})
@@ -62,7 +62,7 @@ func newServer(ctx context.Context, app *input.Application, version string) *mcp
 		Annotations: readOnly}, t.getCollection)
 	mcp.AddTool(s, &mcp.Tool{Name: "search_records", Description: "Find records of a collection by rules on its fields (and free text), newest change first unless sorted. Returns at most 50 per page and the total; " +
 		"read the next pages while more remain. To list the records whose field status is Pago, send rules [{\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}], " +
-		"not search: search matches the text in any field. Pass fields with the names you need to keep the answer short.",
+		"not search: search matches the text in any field. Pass fields with the keys you need to keep the answer short, and expand with reference fields to bring the records they point at.",
 		Annotations: readOnly}, t.searchRecords)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_record", Description: "One record by id: its data, version and dates.",
 		Annotations: readOnly}, t.getRecord)
@@ -259,6 +259,7 @@ func (in fieldsIn) check() error {
 type searchIn struct {
 	filterIn
 	fieldsIn
+	expandIn
 	Sort  string `json:"sort,omitempty" jsonschema:"created_at, updated_at (default) or data.<field key>"`
 	Order string `json:"order,omitempty" jsonschema:"asc or desc (default desc)"`
 	Page  int    `json:"page,omitempty" jsonschema:"page number, from 1"`
@@ -272,6 +273,8 @@ type recordOut struct {
 	Version      int             `json:"version"`
 	CreatedAt    time.Time       `json:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"`
+	// Expanded holds the records each asked reference field points at, by field key.
+	Expanded map[string][]refOut `json:"expanded,omitempty"`
 }
 
 func recordOf(r domain.Record) recordOut {
@@ -343,6 +346,9 @@ func (t tools) searchRecords(ctx context.Context, _ *mcp.CallToolRequest, in sea
 	}
 	records, err := in.keep(items)
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := t.expand(ctx, in.CollectionID, in.Expand, records, items); err != nil {
 		return nil, nil, err
 	}
 	return nil, map[string]any{"total": total, "page": filter.Page.Number, "records": records}, nil

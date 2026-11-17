@@ -106,6 +106,16 @@ type RecordGroup struct {
 	Maxs  map[string]float64
 }
 
+// GroupQuery says how Aggregate groups and what it sums.
+type GroupQuery struct {
+	Group   string   // a top-level field; empty for one total row
+	Numeric []string // up to five number fields to sum, average, min and max
+	// Bucket (day, week, month or year) groups a date field by span, keyed by the span's first day.
+	Bucket string
+	// Elements groups a list field by each element it holds instead of the whole list.
+	Elements bool
+}
+
 // StatsQuery names the fields a profile reads, by what it shows of each.
 type StatsQuery struct {
 	Filled  []string // how many records fill each
@@ -116,6 +126,8 @@ type StatsQuery struct {
 	// Top and Skip page the values, commonest first: Top of them after the
 	// first Skip. Zero Top lists the default few.
 	Top, Skip int
+	// Elements counts each element of a list field as a value of its own.
+	Elements bool
 }
 
 // StatsBuckets are the spans a date series counts by.

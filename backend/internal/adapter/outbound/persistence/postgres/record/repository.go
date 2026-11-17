@@ -236,11 +236,21 @@ func ruleSQL(c domain.Condition) (string, []any) {
 }
 
 // shortcut: groups and sums scan the filter's rows each time, fine to ~100 000 records per collection.
-func (r *Repository) Aggregate(ctx context.Context, filter domain.RecordFilter, group string, numeric []string) ([]domain.RecordGroup, error) {
+func (r *Repository) Aggregate(ctx context.Context, filter domain.RecordFilter, q domain.GroupQuery) ([]domain.RecordGroup, error) {
+	group, numeric := q.Group, q.Numeric
 	cols := []string{"count(*) AS n"}
 	var vars []any
 	key := "NULL::text"
-	if group != "" {
+	switch {
+	case group == "":
+	case q.Bucket != "":
+		// The span's first day as a JSON string; values that are not dates group as null.
+		key = `CASE WHEN jsonb_typeof(data -> ?) = 'string' AND pg_input_is_valid(left(data ->> ?, 10), 'date')
+			THEN to_json(to_char(date_trunc(?, left(data ->> ?, 10)::date), 'YYYY-MM-DD'))::text END`
+		vars = append(vars, group, group, q.Bucket, group)
+	case q.Elements:
+		key = "g.v::text"
+	default:
 		key = "(data -> ?)::text"
 		vars = append(vars, group)
 	}
@@ -249,11 +259,15 @@ func (r *Repository) Aggregate(ctx context.Context, filter domain.RecordFilter, 
 		cols = append(cols, fmt.Sprintf("sum("+num+" AS s%d, avg("+num+" AS a%d, min("+num+" AS m%d, max("+num+" AS x%d", i, i, i, i))
 		vars = append(vars, f, f, f, f, f, f, f, f)
 	}
-	q := r.matching(ctx, filter).Select(key+" AS k, "+strings.Join(cols, ", "), vars...)
-	if group != "" {
-		q = q.Group("k").Order("n DESC").Limit(100)
+	db := r.matching(ctx, filter)
+	if group != "" && q.Elements && q.Bucket == "" {
+		db = db.Joins("CROSS JOIN LATERAL jsonb_array_elements("+elementsOf+") AS g(v)", group, group, group)
 	}
-	rows, err := q.Rows()
+	db = db.Select(key+" AS k, "+strings.Join(cols, ", "), vars...)
+	if group != "" {
+		db = db.Group("k").Order("n DESC").Limit(100)
+	}
+	rows, err := db.Rows()
 	if err != nil {
 		return nil, shared.WrapError(err, "record")
 	}
@@ -283,6 +297,10 @@ func (r *Repository) Aggregate(ctx context.Context, filter domain.RecordFilter, 
 	}
 	return out, shared.WrapError(rows.Err(), "record")
 }
+
+// elementsOf is a field's list, or the field alone as a list of one, for grouping by each element;
+// an empty list leaves the record out. Takes the field three times.
+const elementsOf = "CASE WHEN jsonb_typeof(data -> ?::text) = 'array' THEN data -> ?::text ELSE jsonb_build_array(data -> ?::text) END"
 
 // filledSQL is true when a field holds a value: not missing, null, "" or [].
 const filledSQL = `coalesce(data -> ?::text, 'null') NOT IN ('null'::jsonb, '""'::jsonb, '[]'::jsonb)`
@@ -342,9 +360,15 @@ func (r *Repository) Stats(ctx context.Context, filter domain.RecordFilter, q do
 	}
 
 	if len(q.Values) > 0 {
+		value := "(data -> f)"
 		inner := r.matching(ctx, filter).
-			Joins("CROSS JOIN jsonb_array_elements_text(?::jsonb) AS k(f)", jsonList(q.Values)).
-			Select("f, (data -> f)::text AS k, count(*) AS n, row_number() OVER (PARTITION BY f ORDER BY count(*) DESC, (data -> f)::text) AS rn, count(*) OVER (PARTITION BY f) AS d").
+			Joins("CROSS JOIN jsonb_array_elements_text(?::jsonb) AS k(f)", jsonList(q.Values))
+		if q.Elements {
+			value = "e.v"
+			inner = inner.Joins("CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(data -> f) = 'array' THEN data -> f ELSE jsonb_build_array(data -> f) END) AS e(v)")
+		}
+		inner = inner.
+			Select("f, " + value + "::text AS k, count(*) AS n, row_number() OVER (PARTITION BY f ORDER BY count(*) DESC, " + value + "::text) AS rn, count(*) OVER (PARTITION BY f) AS d").
 			Group("f, k")
 		rows, err := r.db.WithContext(ctx).Table("(?) AS t", inner).Select("f, k, n, d, rn").Where("rn = 1 OR rn > ? AND rn <= ?", q.Skip, q.Skip+q.Top).Order("f, rn").Rows()
 		if err != nil {

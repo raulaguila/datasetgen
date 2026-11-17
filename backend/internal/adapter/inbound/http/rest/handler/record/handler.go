@@ -369,7 +369,7 @@ func (h *Handler) Aggregate(c fiber.Ctx) error {
 	if f := c.Query("sum"); f != "" {
 		numeric = strings.Split(f, ",")
 	}
-	groups, err := h.svc.Aggregate(c.Context(), filter, c.Query("group"), numeric)
+	groups, err := h.svc.Aggregate(c.Context(), filter, domain.GroupQuery{Group: c.Query("group"), Numeric: numeric})
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}

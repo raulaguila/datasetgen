@@ -49,11 +49,11 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
   await expect(page.locator("pre").filter({ hasText: "claude mcp add" })).toContainText(secret);
   await expect(page.getByText(/vence em/).first()).toBeVisible();
   await page.getByRole("form", { name: "Testar conexão" }).getByRole("button", { name: "Testar" }).click();
-  await expect(page.getByText(/^Conectado: 18 tools, 1 coleção/)).toBeVisible();
+  await expect(page.getByText(/^Conectado: 20 tools, 1 coleção/)).toBeVisible();
   const reached = page.getByRole("list", { name: "Tools que a chave alcança" });
   await expect(reached.getByText("nota_por_titulo")).toBeVisible();
   // Any tool runs from the page with the key: a form from its schema, the collection already picked.
-  await reached.getByRole("button", { name: "field_values" }).click();
+  await reached.getByRole("button", { name: "field_values", exact: true }).click();
   const tester = page.getByRole("form", { name: "Testar tool" });
   await expect(tester.getByRole("combobox", { name: /^collection_id/ })).toContainText(name);
   await tester.getByRole("textbox", { name: /^field/ }).fill("title");
@@ -67,7 +67,7 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
   await expect(tester.getByRole("textbox", { name: /^field/ })).toHaveValue("title");
   await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/mcp-tester.png` : "test-results/mcp-tester.png", fullPage: true });
   // A writing tool asks first; this read-only key is refused, as the assistant would be.
-  await reached.getByRole("button", { name: "create_record" }).click();
+  await reached.getByRole("button", { name: "create_record", exact: true }).click();
   await expect(tester.getByText("Grava dados")).toBeVisible();
   await tester.getByRole("textbox", { name: /^data/ }).fill('{"title":"Gama"}');
   await tester.getByRole("button", { name: "Executar" }).click();

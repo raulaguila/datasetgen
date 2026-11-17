@@ -468,7 +468,7 @@ func TestWhereRulesAndGroups(t *testing.T) {
 	wantCode(t, ignore2(records.List(owner, domain.RecordFilter{CollectionID: c.ID, Where: &domain.Where{Rules: []domain.Condition{rule("v", "in", "5")}}})), apperror.CodeInvalidInput)
 	wantCode(t, ignore2(records.List(owner, domain.RecordFilter{CollectionID: c.ID, Where: &domain.Where{Groups: []domain.Where{{Groups: []domain.Where{{}}}}}})), apperror.CodeInvalidInput)
 
-	groups, err := records.Aggregate(owner, domain.RecordFilter{CollectionID: c.ID}, "cat", []string{"v"})
+	groups, err := records.Aggregate(owner, domain.RecordFilter{CollectionID: c.ID}, domain.GroupQuery{Group: "cat", Numeric: []string{"v"}})
 	if err != nil || len(groups) != 2 {
 		t.Fatalf("groups: %+v, %v", groups, err)
 	}
@@ -478,7 +478,7 @@ func TestWhereRulesAndGroups(t *testing.T) {
 			t.Errorf("group %s: %+v, want count 2 sum %v", g.Key, g, want)
 		}
 	}
-	total, err := records.Aggregate(owner, domain.RecordFilter{CollectionID: c.ID, Where: &domain.Where{Rules: []domain.Condition{rule("cat", "eq", `"a"`)}}}, "", []string{"v"})
+	total, err := records.Aggregate(owner, domain.RecordFilter{CollectionID: c.ID, Where: &domain.Where{Rules: []domain.Condition{rule("cat", "eq", `"a"`)}}}, domain.GroupQuery{Numeric: []string{"v"}})
 	if err != nil || len(total) != 1 || total[0].Count != 2 || total[0].Avgs["v"] != 7.5 || total[0].Mins["v"] != 5 || total[0].Maxs["v"] != 10 {
 		t.Fatalf("totals: %+v, %v", total, err)
 	}
@@ -1110,7 +1110,7 @@ func TestWhereRicherRules(t *testing.T) {
 		t.Fatalf("helper plain rule: %d, %v", len(list), err)
 	}
 	// Totals and profiles take the same rules.
-	if g, err := records.Aggregate(owner, domain.RecordFilter{CollectionID: orders.ID, Where: &domain.Where{Rules: []domain.Condition{rule("cidade", "eq", `"Recife"`)}}}, "", []string{"valor"}); err != nil || g[0].Sums["valor"] != 15 {
+	if g, err := records.Aggregate(owner, domain.RecordFilter{CollectionID: orders.ID, Where: &domain.Where{Rules: []domain.Condition{rule("cidade", "eq", `"Recife"`)}}}, domain.GroupQuery{Numeric: []string{"valor"}}); err != nil || g[0].Sums["valor"] != 15 {
 		t.Fatalf("aggregate by lookup: %+v, %v", g, err)
 	}
 }

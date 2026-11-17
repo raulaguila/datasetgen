@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/google/uuid"
 	"golang.org/x/text/runes"
 	"golang.org/x/text/transform"
 	"golang.org/x/text/unicode/norm"
@@ -147,4 +148,101 @@ func fold(s string) string {
 		out = s
 	}
 	return strings.ToLower(strings.TrimSpace(out))
+}
+
+const maxExpand = 5
+
+// expandIn names reference fields whose records come along, so the model reads a client's name without another call.
+type expandIn struct {
+	Expand []string `json:"expand,omitempty" jsonschema:"keys of reference fields whose records come along in each record's expanded, e.g. [\"client\"]; \"client.name\" brings only that field of them. Up to 5."`
+}
+
+type refOut struct {
+	ID   string          `json:"id"`
+	Data json.RawMessage `json:"data"`
+}
+
+// expand fills out[i].Expanded from the references in raw[i] (the data before fields cut it),
+// reading each referenced collection once per 100 ids, as the key's member.
+func (t tools) expand(ctx context.Context, collectionID string, asked []string, out []recordOut, raw []domain.Record) error {
+	if len(asked) == 0 || len(raw) == 0 {
+		return nil
+	}
+	subs := map[string][]string{} // reference field -> fields of the referenced records to keep (none: all)
+	var order []string
+	for _, a := range asked {
+		field, sub, _ := strings.Cut(a, ".")
+		if _, seen := subs[field]; !seen {
+			order = append(order, field)
+			subs[field] = nil
+		}
+		if sub != "" {
+			subs[field] = append(subs[field], sub)
+		}
+	}
+	if len(order) > maxExpand {
+		return apperror.New(apperror.CodeInvalidInput, "expand names up to 5 reference fields").WithField("expand")
+	}
+	c, err := t.app.Collections.Get(ctx, collectionID)
+	if err != nil {
+		return err
+	}
+	fields := schema.Fields(c.Schema)
+	for _, name := range order {
+		f, err := field(fields, "expand", name)
+		if err != nil {
+			return err
+		}
+		if f.Type != "reference" && f.Type != "references" {
+			return apperror.New(apperror.CodeInvalidInput, fmt.Sprintf("expand: %s is a %s field, not a reference", name, f.Type)).WithField("expand")
+		}
+		ids := make([][]string, len(raw))
+		var all []string
+		for i, r := range raw {
+			ids[i] = refIDs(r.Data, name)
+			all = append(all, ids[i]...)
+		}
+		slices.Sort(all)
+		found := map[string]json.RawMessage{}
+		for chunk := range slices.Chunk(slices.Compact(all), maxBulk) {
+			items, _, err := t.app.Records.List(ctx, domain.RecordFilter{CollectionID: f.Target, IDs: chunk, Page: domain.NewPage(1, maxBulk)})
+			if err != nil {
+				if apperror.IsCode(err, apperror.CodeNotFound) {
+					return apperror.New(apperror.CodeInvalidInput, "expand: "+name+" points at a collection this key cannot read").WithField("expand")
+				}
+				return err
+			}
+			for _, it := range items {
+				found[it.ID] = domain.KeepFields(it.Data, subs[name])
+			}
+		}
+		for i := range out {
+			for _, id := range ids[i] {
+				if data, ok := found[id]; ok {
+					if out[i].Expanded == nil {
+						out[i].Expanded = map[string][]refOut{}
+					}
+					out[i].Expanded[name] = append(out[i].Expanded[name], refOut{ID: id, Data: data})
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// refIDs reads the record ids a reference field holds: one id, or a list of them.
+func refIDs(data json.RawMessage, field string) []string {
+	var doc map[string]json.RawMessage
+	if json.Unmarshal(data, &doc) != nil {
+		return nil
+	}
+	var many []string
+	var one string
+	if json.Unmarshal(doc[field], &one) == nil {
+		many = []string{one}
+	} else {
+		_ = json.Unmarshal(doc[field], &many)
+	}
+	// An id that is not a uuid points nowhere; leaving it out keeps the lookup from failing.
+	return slices.DeleteFunc(many, func(id string) bool { return uuid.Validate(id) != nil })
 }

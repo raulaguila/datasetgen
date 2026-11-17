@@ -14,7 +14,7 @@ type RecordRepository interface {
 	List(ctx context.Context, filter domain.RecordFilter) ([]domain.Record, int64, error)
 	// Aggregate counts the records the filter selects, by group field (or all
 	// together when group is ""), with sums and averages of numeric fields.
-	Aggregate(ctx context.Context, filter domain.RecordFilter, group string, numeric []string) ([]domain.RecordGroup, error)
+	Aggregate(ctx context.Context, filter domain.RecordFilter, q domain.GroupQuery) ([]domain.RecordGroup, error)
 	// Stats profiles the selected records over the query's fields, in one pass per part.
 	Stats(ctx context.Context, filter domain.RecordFilter, q domain.StatsQuery) (*domain.RecordStats, error)
 	FindByID(ctx context.Context, id string) (*domain.Record, error)
