@@ -4,7 +4,7 @@ import { createContext, useContext } from "react";
 import Link from "next/link";
 import { Check, ExternalLink, FileIcon } from "lucide-react";
 import { useFormatDate } from "@/components/bits";
-import { FILE, REF, SECTION, SHOW_WHEN, fileRefs, isImage, shows, type ShowWhen } from "@/components/field-builder";
+import { FILE, MULTILINE, REF, SECTION, SHOW_WHEN, TEXT_AREA_FROM, fileRefs, isImage, shows, type ShowWhen } from "@/components/field-builder";
 import { formatFigure } from "@/components/format-figure";
 import { Markdown, looksLikeMarkdown } from "@/components/markdown";
 import { CodeBlock } from "@/components/secret";
@@ -42,7 +42,7 @@ export const isEmpty = (v: unknown) =>
 
 /** A value that reads in one line: it goes in the summary grid; the rest gets a section of its own. */
 export function isShort(s: S, v: unknown): boolean {
-  if (typeof v === "string") return !(typeof s.maxLength === "number" && s.maxLength >= 500) && v.length <= 160 && !v.includes("\n");
+  if (typeof v === "string") return s[MULTILINE] !== true && !(typeof s.maxLength === "number" && s.maxLength >= TEXT_AREA_FROM) && v.length <= 160 && !v.includes("\n");
   if (Array.isArray(v)) return s[REF] === undefined && s[FILE] === undefined && v.length <= 6 && v.every((x) => typeof x !== "object");
   return typeof v !== "object" || v === null;
 }

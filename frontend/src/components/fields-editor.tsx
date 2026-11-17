@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Braces, ChevronDown, ChevronRight, Copy, Eye, GripVertical, ListTodo, MapPin, MoreHorizontal, Plus, RotateCcw, Star, Trash2, Users, Gauge, Search, type LucideIcon } from "lucide-react";
 import { IconAction } from "@/components/bits";
 import {
-  AUTO_TYPES, FIELD_TYPES, FORMULA_RESULTS, ITEM_TYPES, LONG_TEXT, OPTION_COLORS, PATTERN_TYPES, ROLLUP_FNS, SHOW_OPS, SUBFIELD_TYPES, UNIQUE_TYPES, VIRTUAL_TYPES,
+  AUTO_TYPES, FIELD_TYPES, FORMULA_RESULTS, ITEM_TYPES, OPTION_COLORS, PATTERN_TYPES, ROLLUP_FNS, SHOW_OPS, SUBFIELD_TYPES, UNIQUE_TYPES, VIRTUAL_TYPES,
   addField, addProp, blankField, typeOf, typesKeepingValues, isNumberField, canonical, duplicateField, fieldProblem, fieldsOf, isObjectType, keyOf, limitKeys, moveField, moveFieldTo, optionsOf, propOf,
   propsOf, removeField, requiredOf, restoreField, setProp, updateField,
   type Field, type FieldRow, type FieldType, type Schema, type ShowWhen,
@@ -488,8 +488,8 @@ function FieldForm({ formId, offered, topLevel, initial, initialKey, keyLocked, 
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor={`${id}-max`}>{t(maxLabel)}</Label>
-                <Input id={`${id}-max`} type="number" value={field.max} placeholder={field.type === "text" ? String(LONG_TEXT) : undefined}
-                  aria-invalid={shown === "collections.field_limits_invalid" || shown === "collections.field_text_max" || shown === "collections.field_string_max"} onChange={(e) => set({ max: e.target.value })} />
+                <Input id={`${id}-max`} type="number" value={field.max} placeholder={t("collections.field_no_max")}
+                  aria-invalid={shown === "collections.field_limits_invalid" || shown === "collections.field_string_max"} onChange={(e) => set({ max: e.target.value })} />
               </div>
             </div>
           )}

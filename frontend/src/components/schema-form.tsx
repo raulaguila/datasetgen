@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useMemo, useRef, useState, type Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Copy, FileUp, Loader2, Paperclip, Plus, Search, X } from "lucide-react";
-import { AUTO, DEFAULT_NOW, FILE, FORMULA, LOOKUP, REF, ROLLUP, SECTION, SHOW_WHEN, WIDTH, fileRefs, isImage, recordTitle, shows, type ShowWhen } from "@/components/field-builder";
+import { AUTO, DEFAULT_NOW, FILE, FORMULA, LOOKUP, MULTILINE, REF, ROLLUP, SECTION, SHOW_WHEN, TEXT_AREA_FROM, WIDTH, fileRefs, isImage, recordTitle, shows, type ShowWhen } from "@/components/field-builder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -399,13 +399,13 @@ function SelectWidget(props: WidgetProps) {
 const widgets = { SelectWidget };
 
 /**
- * Text areas for strings allowed to run long (the field builder's "long text"),
+ * Text areas for long-text fields, including older schemas with length limits,
  * the first example as the placeholder, and a JSON box for free objects below
  * the root, at any depth.
  */
 export function uiFor(schema: unknown, nested = false): UiSchema {
   if (!schema || typeof schema !== "object") return {};
-  const s = schema as { type?: unknown; maxLength?: unknown; examples?: unknown; properties?: Record<string, unknown>; items?: unknown; [REF]?: unknown; [FILE]?: unknown; [AUTO]?: unknown; [FORMULA]?: unknown; [LOOKUP]?: unknown; [ROLLUP]?: unknown };
+  const s = schema as { type?: unknown; maxLength?: unknown; examples?: unknown; properties?: Record<string, unknown>; items?: unknown; [REF]?: unknown; [FILE]?: unknown; [AUTO]?: unknown; [FORMULA]?: unknown; [LOOKUP]?: unknown; [ROLLUP]?: unknown; [MULTILINE]?: unknown };
   if (nested && s.type === "string" && typeof s[REF] === "string") return { "ui:field": "reference" };
   if (nested && s.type === "array" && typeof s[REF] === "string") return { "ui:field": "references" };
   if (nested && (s.type === "object" || s.type === "array") && s[FILE] === true) return { "ui:field": "file" };
@@ -413,7 +413,7 @@ export function uiFor(schema: unknown, nested = false): UiSchema {
   if (nested && (typeof s[AUTO] === "string" || typeof s[FORMULA] === "string")) return { "ui:readonly": true }; // the server fills it on save
   const out: UiSchema = {};
   if (Array.isArray(s.examples) && typeof s.examples[0] === "string") out["ui:placeholder"] = s.examples[0];
-  if (s.type === "string" && typeof s.maxLength === "number" && s.maxLength >= 500) out["ui:widget"] = "textarea";
+  if (s.type === "string" && (s[MULTILINE] === true || (typeof s.maxLength === "number" && s.maxLength >= TEXT_AREA_FROM))) out["ui:widget"] = "textarea";
   if (s.type === "string") return out;
   if (nested && s.type === "object" && s.properties === undefined) return { ...out, "ui:field": "json" };
   // Several picks from a fixed list: a checkbox each, not the browser's cramped multi-select box.

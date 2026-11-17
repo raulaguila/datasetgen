@@ -273,7 +273,7 @@
     "conteudo": {
       "type": "string",
       "title": "Conteúdo (Markdown)",
-      "maxLength": 100000
+      "x-multiline": true
     },
     "url": {
       "type": "string",

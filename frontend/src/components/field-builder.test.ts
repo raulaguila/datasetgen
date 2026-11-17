@@ -30,7 +30,7 @@ it("writes formats, help, placeholder and limits", () => {
   const s = addField({}, field({ name: "Quando", key: "quando", type: "datetime" }));
   expect((s.properties as Record<string, unknown>).quando).toEqual({ title: "Quando", type: "string", format: "date-time" });
   const t = addField({}, field({ name: "Resumo", key: "resumo", type: "text", description: "Uma frase", placeholder: "Ex.: dano em área", min: "10" }));
-  expect((t.properties as Record<string, unknown>).resumo).toEqual({ title: "Resumo", type: "string", description: "Uma frase", examples: ["Ex.: dano em área"], minLength: 10, maxLength: 5000 });
+  expect((t.properties as Record<string, unknown>).resumo).toEqual({ title: "Resumo", type: "string", description: "Uma frase", examples: ["Ex.: dano em área"], minLength: 10, "x-multiline": true });
   const n = addField({}, field({ name: "Nota", key: "nota", type: "integer", min: "0", max: "10", default: "5" }));
   expect((n.properties as Record<string, unknown>).nota).toEqual({ title: "Nota", type: "integer", default: 5, minimum: 0, maximum: 10 });
 });
@@ -57,11 +57,20 @@ describe("fieldsOf", () => {
       ["params", "params", "string", false, true],
     ]);
     const [nome, descricao, categoria] = fieldsOf(wired).map((r) => r.field);
-    expect([nome.min, nome.max, descricao.max, descricao.description, categoria.options]).toEqual(["1", "", "", "Ajuda", "gatilho, efeito"]);
+    expect([nome.min, nome.max, descricao.max, descricao.description, categoria.options]).toEqual(["1", "", "5000", "Ajuda", "gatilho, efeito"]);
   });
 });
 
 describe("updateField", () => {
+  it("removes an existing text limit while keeping the long-text editor", () => {
+    const descricao = fieldsOf(wired)[1].field;
+    const next = updateField(wired, "descricao", { ...descricao, max: "" });
+    expect((next.properties as Record<string, unknown>).descricao).toEqual({ title: "Descrição", type: "string", description: "Ajuda", "x-multiline": true });
+    expect(fieldsOf(next)[1].field.type).toBe("text");
+    expect(fieldsOf(next)[1].field.max).toBe("");
+    expect(fieldsOf(updateField(wired, "descricao", descricao))[1].field.max).toBe("5000");
+  });
+
   it("edits in place, keeping keywords the builder does not know", () => {
     const [nome] = fieldsOf(wired).map((r) => r.field);
     const next = updateField(wired, "nome", { ...nome, name: "Nome do wired", required: false, min: "" });
@@ -74,7 +83,7 @@ describe("updateField", () => {
     const categoria = fieldsOf(wired)[2].field;
     const next = updateField(wired, "categoria", { ...categoria, name: "Categoria", key: "tipo", type: "text", required: true, options: "" });
     expect(Object.keys(next.properties as object)).toEqual(["nome", "descricao", "tipo", "site", "params"]);
-    expect((next.properties as Record<string, unknown>).tipo).toEqual({ title: "Categoria", type: "string", maxLength: 5000 });
+    expect((next.properties as Record<string, unknown>).tipo).toEqual({ title: "Categoria", type: "string", "x-multiline": true });
     expect(next.required).toEqual(["nome", "tipo"]);
   });
 });
@@ -88,7 +97,7 @@ describe("fieldProblem", () => {
     expect(fieldProblem(field({ name: "A", key: "a", type: "enum" }), free)).toBe("collections.field_options_needed");
     expect(fieldProblem(field({ name: "A", key: "a", min: "5", max: "2" }), free)).toBe("collections.field_limits_invalid");
     expect(fieldProblem(field({ name: "A", key: "a", min: "1.5" }), free)).toBe("collections.field_limits_invalid");
-    expect(fieldProblem(field({ name: "A", key: "a", type: "text", max: "100" }), free)).toBe("collections.field_text_max");
+    expect(fieldProblem(field({ name: "A", key: "a", type: "text", max: "100" }), free)).toBeNull();
     expect(fieldProblem(field({ name: "A", key: "a", max: "800" }), free)).toBe("collections.field_string_max");
     expect(fieldProblem(field({ name: "A", key: "a", type: "integer", default: "2.5" }), free)).toBe("collections.field_default_invalid");
     expect(fieldProblem(field({ name: "A", key: "a", type: "enum", options: "x, y", default: "z" }), free)).toBe("collections.field_default_invalid");

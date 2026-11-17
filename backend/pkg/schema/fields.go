@@ -109,7 +109,8 @@ func describe(f *Field, p map[string]any) {
 		f.Type = map[string]string{"date": "date", "date-time": "datetime", "email": "email", "uri": "url"}[str("format")]
 		if f.Type == "" {
 			f.Type = "text"
-			if n, _ := p["maxLength"].(float64); n >= 500 {
+			multiline, _ := p["x-multiline"].(bool)
+			if n, _ := p["maxLength"].(float64); multiline || n >= 500 {
 				f.Type = "long_text"
 			}
 		}

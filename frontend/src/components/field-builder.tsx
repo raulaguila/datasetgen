@@ -84,9 +84,9 @@ export function fileRefs(v: unknown): FileRef[] {
 }
 export const isImage = (f: FileRef) => /^image\//.test(f.type ?? "") || /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(f.name ?? "");
 
-/** Long text: SchemaForm draws a text area for strings allowed this long. */
-export const LONG_TEXT = 5000;
-/** The shortest maxLength SchemaForm (uiFor) draws as a text area. */
+/** Long-text presentation is independent of optional validation limits. */
+export const MULTILINE = "x-multiline";
+/** Older schemas used maxLength to select the long-text editor. */
 export const TEXT_AREA_FROM = 500;
 
 /** String formats the builder offers as types; the server asserts them. */
@@ -161,12 +161,12 @@ export function limitKeys(type: FieldType): [string, string] | null {
 }
 
 /** Keywords the builder writes; any other keyword of a property is kept as it was. */
-const RULE_KEYS = ["title", "description", "examples", "default", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", "pattern", UNIQUE, PRIVATE, REF, COLORS, SECTION, WIDTH, SHOW_WHEN, DEFAULT_NOW, NUMBER_FORMAT, DECIMALS];
+const RULE_KEYS = ["title", "description", "examples", "default", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", "pattern", UNIQUE, PRIVATE, REF, COLORS, SECTION, WIDTH, SHOW_WHEN, DEFAULT_NOW, NUMBER_FORMAT, DECIMALS, MULTILINE];
 /**
  * Keywords that never change which records are valid, so saving them is safe:
  * how the form looks, a new record's default, and whether share links show the field.
  */
-export const DISPLAY_KEYS = ["default", PRIVATE, "title", "description", "examples", COLORS, SECTION, WIDTH, SHOW_WHEN, DEFAULT_NOW, NUMBER_FORMAT, DECIMALS];
+export const DISPLAY_KEYS = ["default", PRIVATE, "title", "description", "examples", COLORS, SECTION, WIDTH, SHOW_WHEN, DEFAULT_NOW, NUMBER_FORMAT, DECIMALS, MULTILINE];
 
 /** A storage key from a label: "Nome do Cliente" → "nome_do_cliente". */
 export function keyOf(name: string): string {
@@ -246,7 +246,7 @@ function withRules(base: Record<string, unknown>, f: Field): Record<string, unkn
     if (f.min.trim()) out[limits[0]] = Number(f.min);
     if (f.max.trim()) out[limits[1]] = Number(f.max);
   }
-  if (f.type === "text" && out.maxLength === undefined) out.maxLength = LONG_TEXT;
+  if (f.type === "text") out[MULTILINE] = true;
   if (f.unique && UNIQUE_TYPES.includes(f.type)) out[UNIQUE] = true;
   if (f.private) out[PRIVATE] = true;
   if (f.type === "enum") {
@@ -288,7 +288,7 @@ export function typeOf(p: unknown): FieldType | undefined {
     case "string": {
       const format = Object.entries(FORMATS).find(([, f]) => f === s.format)?.[0] as FieldType | undefined;
       if (format) return format;
-      return typeof s.maxLength === "number" && s.maxLength >= TEXT_AREA_FROM ? "text" : "string";
+      return s[MULTILINE] === true || (typeof s.maxLength === "number" && s.maxLength >= TEXT_AREA_FROM) ? "text" : "string";
     }
     case "number":
     case "integer":
@@ -349,8 +349,7 @@ export function fieldsOf(schema: Schema | null): FieldRow[] {
         placeholder: typeof examples[0] === "string" ? examples[0] : "",
         default: isObjectType(type) ? "" : defaultText(p?.default, type),
         min: num(limits?.[0]),
-        // The long-text default limit is how the type is stored, not a rule someone set.
-        max: type === "text" && p?.maxLength === LONG_TEXT ? "" : num(limits?.[1]),
+        max: num(limits?.[1]),
         ref: typeof p?.[REF] === "string" ? p[REF] : typeof rollup?.collection === "string" ? rollup.collection : "",
         via: typeof (lookup ?? rollup)?.ref === "string" ? String((lookup ?? rollup)!.ref) : "",
         source: typeof (lookup ?? rollup)?.field === "string" ? String((lookup ?? rollup)!.field) : "",
@@ -420,7 +419,6 @@ export function fieldProblem(f: Field, taken: (key: string) => boolean, initialK
     const counts = limits[0] !== "minimum"; // lengths and item counts are whole numbers
     const bad = (n?: number) => n !== undefined && (!Number.isFinite(n) || (counts && (!Number.isInteger(n) || n < 0)));
     if (bad(lo) || bad(hi) || (lo !== undefined && hi !== undefined && lo > hi)) return "collections.field_limits_invalid";
-    if (f.type === "text" && hi !== undefined && hi < TEXT_AREA_FROM) return "collections.field_text_max";
     if (f.type === "string" && hi !== undefined && hi >= TEXT_AREA_FROM) return "collections.field_string_max";
   }
   const raw = f.default.trim();
@@ -543,7 +541,7 @@ export function schemaChanges(original: Schema | null, next: Schema | null): Sch
     if (r.field.unique && !old.field.unique) out.push({ kind: "unique", name: r.field.name, risky: false });
     // Unique has its own line above; the rest of the keywords compare as rules.
     const strip = (p: Record<string, unknown>) => ({ ...p, [UNIQUE]: undefined });
-    const look = (p: Record<string, unknown>) => canonical(Object.fromEntries(DISPLAY_KEYS.map((k) => [k, p?.[k]])));
+    const look = (p: Record<string, unknown>) => canonical(Object.fromEntries(DISPLAY_KEYS.map((k) => [k, k === MULTILINE ? typeOf(p) === "text" : p?.[k]])));
     const rules = (p: Record<string, unknown>) => ({ ...strip(p), ...Object.fromEntries(DISPLAY_KEYS.map((k) => [k, undefined])) });
     const [was, now] = [strip(propsOf(original)[r.key]), strip(propsOf(next)[r.key])];
     if (r.advanced !== old.advanced || r.field.type !== old.field.type) out.push({ kind: "type", name: r.field.name, risky: true });

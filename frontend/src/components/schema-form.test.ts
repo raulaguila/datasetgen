@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { issueErrors, uiFor, withToday } from "./schema-form";
 
 describe("uiFor", () => {
+  it("keeps unlimited long-text fields as text areas, nested too", () => {
+    const text = { type: "string", "x-multiline": true };
+    expect(uiFor({ type: "object", properties: { conteudo: text, grupo: { type: "object", properties: { texto: text } } } }))
+      .toEqual({ conteudo: { "ui:widget": "textarea" }, grupo: { texto: { "ui:widget": "textarea" } } });
+  });
+
   it("draws text areas for long strings, nested too", () => {
     const schema = {
       type: "object",

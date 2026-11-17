@@ -19,6 +19,7 @@ describe("record view layout", () => {
   it("keeps one-line values for the summary", () => {
     expect(isShort({ type: "string" }, "curto")).toBe(true);
     expect(isShort({ type: "string", maxLength: 5000 }, "curto")).toBe(false);
+    expect(isShort({ type: "string", "x-multiline": true }, "curto")).toBe(false);
     expect(isShort({ type: "string" }, "linha\noutra")).toBe(false);
     expect(isShort({ type: "array" }, ["a", "b"])).toBe(true);
     expect(isShort({ type: "array" }, [{ a: 1 }])).toBe(false);

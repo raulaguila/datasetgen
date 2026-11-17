@@ -9,6 +9,7 @@ func TestFields(t *testing.T) {
 	raw := []byte(`{"type":"object","required":["nome"],"properties":{
 		"nome":{"type":"string","title":"Nome","x-unique":true,"description":"Quem paga"},
 		"obs":{"type":"string","maxLength":5000},
+		"conteudo":{"type":"string","x-multiline":true},
 		"venc":{"type":"string","format":"date","title":"Vencimento"},
 		"status":{"enum":["aberto","pago"]},
 		"tags":{"type":"array","items":{"type":"string"}},
@@ -24,6 +25,7 @@ func TestFields(t *testing.T) {
 	want := []Field{
 		{Key: "nome", Name: "Nome", Type: "text", Description: "Quem paga", Required: true, Unique: true},
 		{Key: "obs", Type: "long_text"},
+		{Key: "conteudo", Type: "long_text"},
 		{Key: "venc", Name: "Vencimento", Type: "date"},
 		{Key: "status", Type: "option", Options: []string{"aberto", "pago"}},
 		{Key: "tags", Type: "text_list"},

@@ -3,10 +3,21 @@ package schema
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/raulaguila/dataset/pkg/apperror"
 )
+
+func TestMultilineHasNoImplicitLengthLimit(t *testing.T) {
+	s, err := Compile([]byte(`{"type":"object","properties":{"conteudo":{"type":"string","x-multiline":true}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(s, []byte(`{"conteudo":"`+strings.Repeat("x", 200_000)+`"}`)); err != nil {
+		t.Fatalf("long content: %v", err)
+	}
+}
 
 const wired = `{
   "type": "object",
