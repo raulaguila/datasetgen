@@ -317,6 +317,75 @@ def guide(fm, body, rel, repo):
     })
 
 
+# The client's text placeholders, shown as a reader would say them.
+PLACEHOLDERS = {"tileX": "X", "tileY": "Y", "error": "[erro]"}
+GENERATED = "Gerado (revisar)"
+
+
+def short_name(nome):
+    """'EFEITO WIRED: Dar Pontos' -> 'dar pontos', the name pages write in bold."""
+    return re.sub(r"^[^:]*:\s*", "", nome).strip().lower()
+
+
+def enrich(wireds, guides, here):
+    """What the docs leave out: texts for draft pages (textos/*.yaml, generated and marked for
+    review), negative versions as records of their own, color/model variants, readable
+    placeholders, absolute anchors and the links between wireds and guides."""
+    texts = {}
+    for f in sorted(os.listdir(os.path.join(here, "textos"))):
+        if f.endswith(".yaml"):
+            texts.update(yaml.safe_load(open(os.path.join(here, "textos", f), encoding="utf-8")) or {})
+    have = {w["classname"] for w in wireds}
+    for w in list(wireds):
+        neg = w.get("versao_negativa") or {}
+        if neg.get("classname") and neg["classname"] not in have:
+            have.add(neg["classname"])
+            wireds.append(drop_empty({
+                "nome": neg.get("nome") or neg["classname"], "classname": neg["classname"], "versao_positiva": w["classname"],
+                "tipo": w["tipo"], "secao": w["secao"], "descricao": neg.get("descricao"), "revisao": neg.get("revisao"),
+                "disponibilidade": w.get("disponibilidade"), "rascunho": w.get("rascunho"), "url": w["url"],
+            }))
+    for w in wireds:
+        c = w["classname"]
+        m = re.search(r"\*(\d+)$", c) or re.fullmatch(r"wf_storage_(?:coins|furni)(\d)", c)
+        if m:
+            w["variante"] = int(m.group(1))
+        t = texts.get(c) or texts.get(re.sub(r"\*\d+$", "", c)) or {}
+        generated = False
+        if t.get("descricao") and w.get("descricao", c) in ("", c):
+            w["descricao"], generated = t["descricao"].strip(), True
+        if t.get("conteudo") and not w.get("conteudo"):
+            w["conteudo"], generated = t["conteudo"].strip(), True
+        w["fonte_texto"] = GENERATED if generated else "Documentação"
+        for p in w.get("parametros", []):
+            fix = lambda s: re.sub(r"%(\w+)%", lambda m: PLACEHOLDERS.get(m.group(1), "N"), s)
+            for k in ("rotulo", "descricao"):
+                if k in p:
+                    p[k] = fix(p[k])
+            if "opcoes" in p:
+                p["opcoes"] = [fix(o) for o in p["opcoes"]]
+    for r in wireds + guides:
+        if r.get("conteudo"):
+            r["conteudo"] = re.sub(r"\]\((#[^)\s]+)\)", lambda m: f"]({r['url']}{m.group(1)})", r["conteudo"])
+    by_url = {w["url"]: w["classname"] for w in wireds if not w.get("versao_positiva")}
+    by_name = {}
+    for w in sorted(wireds, key=lambda w: w["classname"]):  # a shared name goes to its first model or color
+        by_name.setdefault(short_name(w["nome"]), w["classname"])
+    linked = lambda text: re.findall(r"\]\((" + re.escape(SITE) + r"/[^)#\s]*)", text or "")
+    for w in wireds:
+        text = w.get("conteudo", "")
+        refs = [by_url[u] for u in linked(text) if u in by_url] + [by_name[n.lower()] for n in re.findall(r"\*\*([^*]+)\*\*", text) if n.lower() in by_name]
+        w["relacionados"] = sorted(set(refs) - {w["classname"]}) or None
+    cites = {}
+    for g in guides:
+        for u in linked(g.get("conteudo")):
+            if u in by_url:
+                cites.setdefault(by_url[u], set()).add(g["url"])
+    for w in wireds:
+        w["guias"] = sorted(cites.get(w["classname"], ())) or None
+    wireds[:] = [drop_empty(w) for w in wireds]
+
+
 def main(repo, out, furnidata=None, texts=None):
     names = furni_names(furnidata) if furnidata else {}
     texts = client_texts(texts) if texts else {}
@@ -344,6 +413,7 @@ def main(repo, out, furnidata=None, texts=None):
             else:
                 guides.append(guide(fm, body, rel, repo))
     fill_grids(wireds + guides, wireds)
+    enrich(wireds, guides, os.path.dirname(os.path.abspath(__file__)))
     os.makedirs(out, exist_ok=True)
     for name, rows, key in (("wireds", wireds, "classname"), ("guias", guides, "url")):
         rows.sort(key=lambda r: r.get(key) or "")

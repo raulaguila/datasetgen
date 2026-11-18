@@ -20,6 +20,17 @@
       "description": "Nome técnico do mobi no Habbo",
       "x-unique": true
     },
+    "versao_positiva": {
+      "type": "string",
+      "title": "Versão positiva",
+      "description": "Classname do wired positivo, quando este registro é uma versão negativa"
+    },
+    "variante": {
+      "type": "integer",
+      "title": "Variante",
+      "minimum": 1,
+      "description": "Modelo ou cor do mesmo mobi: o número no fim do classname"
+    },
     "tipo": {
       "type": "string",
       "title": "Tipo",
@@ -274,6 +285,35 @@
       "type": "string",
       "title": "Conteúdo (Markdown)",
       "x-multiline": true
+    },
+    "fonte_texto": {
+      "type": "string",
+      "title": "Origem do texto",
+      "enum": [
+        "Documentação",
+        "Gerado (revisar)",
+        "Revisado"
+      ],
+      "description": "De onde vêm a descrição e o conteúdo; textos gerados ainda precisam de revisão"
+    },
+    "relacionados": {
+      "type": "array",
+      "title": "Wireds relacionados",
+      "description": "Classnames dos wireds citados no conteúdo",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "guias": {
+      "type": "array",
+      "title": "Guias que citam",
+      "description": "Páginas de guia que levam a este wired",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uri"
+      }
     },
     "url": {
       "type": "string",

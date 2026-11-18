@@ -1,0 +1,321 @@
+# Texts written for pages the docs leave as drafts. Generated, to be reviewed:
+# each record they fill gets fonte_texto "Gerado (revisar)". Keys are classnames;
+# a key without its "*N" suffix covers every color variant.
+
+conf_area_hide:
+  descricao: Configurador que esconde uma área do quarto, junto com os mobis e usuários que estão nela, enquanto estiver ativo.
+  conteudo: |
+    ## O que faz
+    O **Ocultador de Área** é um configurador: ele não entra em pilhas de Wired, mas muda o comportamento do quarto enquanto está ativo. Ele esconde uma área escolhida do quarto, deixando-a invisível para quem está no quarto.
+
+    ## Quando usar
+    - Para preparar cenários que só aparecem em um momento do jogo.
+    - Para esconder a "sala de máquinas" (pilhas de Wired, mobis auxiliares) da vista dos jogadores.
+
+    ## Observações
+    - Como todo configurador, basta colocá-lo no quarto e ajustar sua área; ele não precisa de ativador.
+    - Confira o resultado entrando no quarto com outra conta, sem direitos, para ver o que os visitantes enxergam.
+
+conf_handitem_block:
+  descricao: Configurador que impede os usuários do quarto de receber ou trocar itens de mão.
+  conteudo: |
+    ## O que faz
+    O **Bloqueador de item de mão** é um configurador do quarto. Com ele no quarto, os usuários deixam de pegar itens de mão (bebidas, comidas e outros) por conta própria, como em geladeiras e máquinas.
+
+    ## Quando usar
+    - Em jogos que usam o item de mão como "estado" do jogador (por exemplo, quem segura um item está em uma equipe ou carrega uma chave). Assim, só os Wireds entregam ou retiram itens, e ninguém burla o jogo pegando um item por fora.
+    - Combine com a condição **Usuário tem item de mão** e com o efeito de bot **Dar item de mão** para controlar quem segura o quê.
+
+conf_invis_control:
+  descricao: Configurador que controla a visibilidade dos mobis invisíveis do quarto.
+  conteudo: |
+    ## O que faz
+    O **Controlador de mobi invisível** é um configurador que decide se os mobis marcados como invisíveis aparecem ou não no quarto.
+
+    ## Quando usar
+    - Para deixar à vista, durante a montagem, os mobis auxiliares que ficam escondidos durante o jogo.
+    - Para esconder pisos, blocos e marcadores usados só pelos Wireds, deixando o cenário limpo para os visitantes.
+
+conf_kickwars_enable:
+  descricao: Configurador que habilita o modo Kick Wars no quarto.
+  conteudo: |
+    ## O que faz
+    O **Habilitar Kick Wars** é um configurador: com ele no quarto, o modo de jogo Kick Wars fica ativo.
+
+    ## Observações
+    - A documentação ainda não descreve as regras do modo. Teste no seu quarto antes de anunciar um evento com ele.
+
+conf_queue_speed:
+  descricao: Configurador que muda a velocidade com que os rollers do quarto movem usuários e mobis.
+  conteudo: |
+    ## O que faz
+    O **Controlador de velocidade de Roller** é um configurador que ajusta a velocidade de todos os rollers do quarto.
+
+    ## Quando usar
+    - Em corridas e circuitos de roller, para deixar o percurso mais rápido ou mais lento.
+    - Em sistemas que dependem do tempo que um usuário leva para passar pelos rollers (por exemplo, combinado com **No tempo escolhido**).
+
+conf_wired_disable:
+  descricao: Configurador que desativa os Wireds do quarto enquanto estiver ativo.
+  conteudo: |
+    ## O que faz
+    O **Desativador Wired** é um configurador que impede as pilhas de Wired do quarto de rodar.
+
+    ## Quando usar
+    - Durante a montagem ou manutenção de um jogo, para que nada dispare enquanto você mexe nas pilhas.
+    - Para pausar todo o quarto entre eventos sem desmontar nada.
+
+highscore_classic:
+  conteudo: |
+    ## O que faz
+    A **Pontuação Clássica** mostra as melhores pontuações feitas no quarto. Cada linha é uma pontuação, e o mesmo jogador ou equipe pode aparecer várias vezes. A versão "Geral" guarda o histórico de todos os tempos.
+
+    ## Como funciona
+    - A pontuação vem dos efeitos **Dar Pontos** e **Pontuação recebida** usados durante a partida.
+    - A partida é marcada pelo cronômetro de jogos: quando ele termina, as pontuações entram na tabela.
+    - Os números no fim do classname (`*1` a `*4`) são variantes de cor do mesmo mobi; o funcionamento é igual.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Moeda
+
+    ENTÃO
+      - Dar Pontos: 1 ponto
+    ```
+    Com um cronômetro de jogos controlando a partida, a tabela registra quem fez mais pontos.
+
+highscore_fastesttime:
+  conteudo: |
+    ## O que faz
+    A **Classificação Tempo mais Rápido** registra o tempo que cada jogador levou para cumprir o objetivo e coloca no topo quem foi mais rápido. A versão "Geral" guarda o histórico de todos os tempos.
+
+    ## Quando usar
+    - Corridas, labirintos e circuitos: quem chega primeiro ao fim fica no topo.
+    - Os números no fim do classname (`*1` a `*4`) são variantes de cor do mesmo mobi; o funcionamento é igual.
+
+highscore_longesttime:
+  conteudo: |
+    ## O que faz
+    A **Classificação Maior Tempo** registra por quanto tempo cada jogador sustentou o objetivo e coloca no topo quem durou mais. A versão "Geral" guarda o histórico de todos os tempos.
+
+    ## Quando usar
+    - Jogos de sobrevivência e resistência: ficar mais tempo sem cair, sem ser pego ou sem errar.
+    - Os números no fim do classname (`*1` a `*4`) são variantes de cor do mesmo mobi; o funcionamento é igual.
+
+highscore_mostwin:
+  conteudo: |
+    ## O que faz
+    A **Pontuação Mais Vitórias** conta vitórias, não pontos: a equipe com mais pontos no fim de cada round ganha uma vitória, e as vitórias se somam ao longo do tempo. A versão "Geral" guarda o histórico de todos os tempos.
+
+    ## Quando usar
+    - Jogos de equipe com várias rodadas (futebol, Banzai, Freeze), quando o que importa é quem vence mais partidas.
+    - Os números no fim do classname (`*1` a `*4`) são variantes de cor do mesmo mobi; o funcionamento é igual.
+
+highscore_perteam:
+  conteudo: |
+    ## O que faz
+    A **Pontuação por equipe** dá um lugar na tabela para cada formação de equipe, para as equipes competirem entre si. A versão "Geral" guarda o histórico de todos os tempos.
+
+    ## Quando usar
+    - Torneios em que as mesmas equipes jogam várias vezes e você quer comparar a melhor marca de cada uma.
+    - Os números no fim do classname (`*1` a `*4`) são variantes de cor do mesmo mobi; o funcionamento é igual.
+
+wf_antenna1:
+  descricao: Antena que recebe os sinais enviados pelo efeito Mandar Sinal e dispara as pilhas ligadas a ela.
+  conteudo: |
+    ## O que faz
+    A **Antena Wired** recebe sinais. Quando o efeito **Mandar Sinal** envia um sinal para esta antena, o ativador **Receber Sinal** da pilha ligada a ela dispara, levando junto os mobis e usuários enviados no sinal.
+
+    ## Quando usar
+    - Para dividir um sistema grande em partes: uma pilha termina mandando um sinal, e outra pilha, em outro canto do quarto, continua a partir dele.
+    - Para repetir a mesma lógica em vários lugares sem copiar as pilhas.
+    - Os seletores **Mobi do Sinal** e **Habbos do Sinal** pegam o que veio junto com o sinal.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Botão
+
+    ENTÃO
+      - Mandar Sinal: Antena da Porta
+        Usar usuários do seletor
+    ```
+    Na pilha da antena, **Receber Sinal** dispara e um **Teleportar para Mobi** com "Usar usuários do Sinal" leva quem apertou o botão.
+
+wf_antenna2:
+  descricao: Versão pequena da Antena Wired, que recebe os sinais enviados pelo efeito Mandar Sinal.
+  conteudo: |
+    ## O que faz
+    A **Antena Wired Pequena** funciona como a **Antena Wired**: recebe os sinais do efeito **Mandar Sinal** e dispara a pilha ligada a ela. Muda só o tamanho do mobi, útil para esconder a antena no cenário.
+
+wf_room_linker:
+  descricao: Utilitário que conecta este quarto a outros quartos, para que os Wireds troquem sinais e usuários entre eles.
+  conteudo: |
+    ## O que faz
+    O **Conector de Quarto WIRED** liga quartos entre si. Com os quartos conectados, sistemas de um quarto podem agir em outro, por exemplo levando usuários de um quarto para o próximo.
+
+    ## Quando usar
+    - Jogos e eventos com várias salas (fases, andares, áreas de espera).
+    - Combine com o efeito **Teletransportar para o Quarto** para mover jogadores entre as salas.
+
+    ## Observações
+    - A documentação ainda não detalha os limites de conexão. Teste com quartos seus antes de montar um evento.
+
+wf_storage_coins1:
+  conteudo: |
+    ## O que faz
+    O **Baú de Créditos** guarda créditos dentro do quarto e pode ser usado pelos Wireds. É dele que o efeito **Entregar Moeda do Baú** tira as moedas que entrega aos usuários, e é nele que entram os pagamentos das transações com **Contrato de Pagamento**.
+
+    ## Quando usar
+    - Prêmios em créditos para vencedores de jogos e eventos.
+    - Lojas e cobranças dentro do quarto, junto com contratos.
+
+    ## Observações
+    - Existem dois modelos (`wf_storage_coins1` e `wf_storage_coins2`) com o mesmo funcionamento; muda a aparência.
+    - O efeito só entrega o que o baú tem: mantenha-o abastecido.
+
+wf_storage_coins2:
+  conteudo: |
+    ## O que faz
+    Segundo modelo do **Baú de Créditos**: guarda créditos no quarto para os Wireds entregarem com **Entregar Moeda do Baú** ou receberem em transações. Funciona igual ao `wf_storage_coins1`; muda a aparência.
+
+wf_storage_furni1:
+  conteudo: |
+    ## O que faz
+    O **Baú de Mobis** guarda mobis dentro do quarto e pode ser usado pelos Wireds. É dele que o efeito **Entregar Mobi do Baú** tira os mobis que entrega aos usuários.
+
+    ## Quando usar
+    - Prêmios em mobis para vencedores de jogos e eventos.
+    - Lojas dentro do quarto, junto com contratos e transações.
+    - A condição **Baú Possui X Itens** e o extra **Baú de Tipo** consultam o que está guardado.
+
+    ## Observações
+    - Existem dois modelos (`wf_storage_furni1` e `wf_storage_furni2`) com o mesmo funcionamento; muda a aparência.
+
+wf_storage_furni2:
+  conteudo: |
+    ## O que faz
+    Segundo modelo do **Baú de Mobis**: guarda mobis no quarto para os Wireds entregarem com **Entregar Mobi do Baú**. Funciona igual ao `wf_storage_furni1`; muda a aparência.
+
+wf_storage_furni_starter:
+  conteudo: |
+    ## O que faz
+    O **Baú de Mobis Inicial** guarda mobis, mas **não tem integração com Wireds**: os efeitos de baú não conseguem entregar o que está nele.
+
+    ## Observações
+    - É distribuído em eventos oficiais. Para prêmios automáticos, use o **Baú de Mobis** comum.
+
+wf_trg_at_time_long:
+  conteudo: |
+    ## O que faz
+    O ativador **No tempo escolhido (longo)** dispara a pilha depois de um tempo, contado a partir do momento em que os temporizadores do quarto foram reiniciados. Funciona como **No tempo escolhido**, mas aceita esperas bem maiores.
+
+    ## Configurações
+    - **Estabelecer o tempo:** quanto tempo esperar antes de disparar.
+
+    ## Quando usar
+    - Eventos com etapas longas: abrir uma porta depois de alguns minutos, encerrar uma rodada demorada.
+    - Use o efeito **Reiniciar tempo** para começar a contagem de novo.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - No tempo escolhido (longo): 5 minutos
+
+    ENTÃO
+      - Mudar estado do Mobi: Portão
+    ```
+
+wf_var_dailytask:
+  descricao: Variável que acompanha o progresso de uma tarefa diária de cada usuário.
+  conteudo: |
+    ## O que faz
+    A **Variável: Tarefa Diária** guarda o progresso de uma tarefa que se renova a cada dia.
+
+    ## Quando usar
+    - Missões diárias no quarto: visitar, coletar ou vencer algo uma vez por dia.
+    - Combine com as condições de variável (**Tem Variável**, **Valor Variável**) para checar se a tarefa do dia já foi feita.
+
+    ## Observações
+    - Está disponível apenas para a staff; a documentação ainda não detalha as configurações.
+
+wf_var_quest:
+  conteudo: |
+    ## O que faz
+    A **Variável: Tarefa** acompanha o progresso de uma tarefa: quantos passos foram feitos e se ela terminou.
+
+    ## Quando usar
+    - Missões no quarto, como coletar itens ou passar por pontos de controle.
+    - Use **Mudar Valor Variável** para avançar o progresso e **Valor Variável** para checar se a tarefa terminou.
+
+    ## Observações
+    - Está disponível apenas para a staff.
+
+wf_var_quest_chain:
+  conteudo: |
+    ## O que faz
+    A **Variável: Cadeia de Tarefas** acompanha uma sequência de tarefas, em que cada uma só começa depois que a anterior termina.
+
+    ## Quando usar
+    - Histórias e campanhas com várias etapas no quarto.
+    - Combine com **Variável: Tarefa** para cada etapa e com as condições de variável para liberar a próxima.
+
+    ## Observações
+    - Está disponível apenas para a staff.
+
+wf_xtra_achievement_enabler:
+  descricao: Configurador que habilita no quarto as conquistas Wired escolhidas, para que o efeito Avançar Conquista possa usá-las.
+  conteudo: |
+    ## O que faz
+    O **Habilitar Conquistas** liga, no quarto, as conquistas Wired que os efeitos podem avançar.
+
+    ## Configurações
+    - **Conquistas Wired a serem habilitadas:** quais conquistas este quarto pode dar.
+
+    ## Quando usar
+    - Junto com o efeito **Avançar Conquista**, que só funciona para conquistas habilitadas.
+
+    ## Observações
+    - Está disponível apenas para a staff.
+
+wf_contract_payment:
+  conteudo: |
+    ## O que faz
+    O **Contrato de Pagamento** define o que o usuário precisa pagar para que uma transação Wired seja concluída: créditos ou mobis.
+
+    ## Como funciona
+    1. O efeito **Iniciar Transação** abre a transação com base no contrato.
+    2. O usuário paga o que o contrato pede.
+    3. Com o pagamento feito, a transação termina e a pilha continua (por exemplo, entregando um prêmio).
+
+    ## Quando usar
+    - Lojas, entradas pagas e serviços dentro do quarto.
+    - O extra **Contrato Customizável** ajusta o que o contrato pede.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo clica no Mobi: Balcão
+
+    ENTÃO
+      - Iniciar Transação: Contrato de Pagamento (5 créditos)
+    ```
+
+wf_contract_reward:
+  conteudo: |
+    ## O que faz
+    O **Contrato de Recompensa** define o que o usuário recebe quando a transação Wired é concluída.
+
+    ## Quando usar
+    - Junto com um **Contrato de Pagamento**, para formar uma compra: o usuário paga e recebe a recompensa.
+    - Prêmios entregues ao terminar um desafio.
+
+wf_contract_trade:
+  conteudo: |
+    ## O que faz
+    O **Contrato de Troca** define os itens envolvidos em uma troca: o que o usuário entrega e o que recebe em troca, na mesma transação.
+
+    ## Quando usar
+    - Trocas de itens do jogo (fichas por prêmios, peças por recompensas).
+    - Inicie a troca com o efeito **Iniciar Transação**; cancele com **Cancelar Transação**.

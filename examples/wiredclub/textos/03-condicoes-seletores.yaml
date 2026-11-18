@@ -1,0 +1,531 @@
+# Conditions and selectors whose docs page is a draft. Generated, to be reviewed.
+
+wf_cnd_actor_dir:
+  conteudo: |
+    ## O que faz
+    Passa se o usuário estiver virado para a direção configurada.
+
+    ## Configurações
+    - **Selecionar direção:** uma ou mais das 8 direções.
+
+    ## Quando usar
+    - Jogos de "olhe para a porta", portas que só abrem de frente, mira em jogos de tiro.
+
+wf_cnd_actor_in_group:
+  conteudo: |
+    ## O que faz
+    Passa se o usuário for membro do grupo configurado (ou do grupo do quarto).
+
+    ## Configurações
+    - **Escolha o grupo:** o grupo do quarto ou um grupo da lista.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Piso Escuro
+
+    SE
+      - Membro do Grupo: "VIP"
+
+    ENTÃO
+      - Teleportar para Mobi: Área VIP
+    ```
+
+    Tem versão negativa: **NÃO é membro de grupo** (`wf_cnd_not_in_group`).
+
+wf_cnd_actor_in_team:
+  conteudo: |
+    ## O que faz
+    Passa se o usuário estiver na equipe configurada.
+
+    ## Configurações
+    - **Escolha um time:** Vermelho, Verde, Azul ou Amarelo.
+
+    ## Quando usar
+    - Portas e áreas só de uma equipe, pontos que só valem para um time.
+    - Tem versão negativa: **NÃO é membro da equipe** (`wf_cnd_not_in_team`).
+
+wf_cnd_chest_has_item_type:
+  conteudo: |
+    ## O que faz
+    Passa se o baú selecionado guardar mobis do tipo configurado.
+
+    ## Quando usar
+    - Antes de entregar um prêmio específico, para não rodar o efeito com o baú sem aquele mobi.
+
+wf_cnd_chest_has_items:
+  conteudo: |
+    ## O que faz
+    Compara a quantidade de itens guardados no baú com um valor.
+
+    ## Configurações
+    - **Comparar valor:** o número de referência.
+    - **Escolha o tipo:** menor que, igual ou maior que.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Pódio
+
+    SE
+      - Baú Possui X Itens: maior que 0
+
+    ENTÃO
+      - Entregar Mobi do Baú: 1
+    ```
+
+wf_cnd_counter_time_matches:
+  conteudo: |
+    ## O que faz
+    Passa se o cronômetro selecionado estiver marcando o tempo configurado.
+
+    ## Quando usar
+    - Eventos em momentos exatos da partida: "faltando 10 segundos, acenda o alarme".
+
+wf_cnd_date_rng_active:
+  conteudo: |
+    ## O que faz
+    Passa só entre uma data/hora de início e uma de fim.
+
+    ## Configurações
+    - **Data de início** e **Data do final**.
+
+    ## Quando usar
+    - Eventos com prazo: prêmios que só valem durante o fim de semana do evento.
+
+wf_cnd_has_altitude:
+  conteudo: |
+    ## O que faz
+    Compara a altura do mobi selecionado com um valor.
+
+    ## Configurações
+    - **Selecionar altura:** a altura de referência.
+    - **Escolha o tipo:** menor que, igual ou maior que.
+
+    ## Quando usar
+    - Elevadores e plataformas: saber se a plataforma já chegou ao topo.
+
+wf_cnd_has_furni_on:
+  conteudo: |
+    ## O que faz
+    Passa se os mobis selecionados tiverem outro mobi (ou um avatar) em cima.
+
+    ## Configurações
+    - **Permite ativação se:** um dos mobis tem mobi em cima, todos têm, um tem avatar em cima ou todos têm avatar em cima.
+
+    ## Quando usar
+    - Quebra-cabeças de empurrar caixas: a porta abre quando todas as placas estão cobertas.
+    - Tem versão negativa: **NÃO há Mobis em cima** (`wf_cnd_not_furni_on`).
+
+wf_cnd_has_handitem:
+  conteudo: |
+    ## O que faz
+    Passa se o usuário estiver segurando o item de mão configurado.
+
+    ## Configurações
+    - **Item de mão:** qual item ele precisa segurar.
+
+    ## Quando usar
+    - Chaves e senhas: só passa quem pegou o item certo.
+    - O **Bloqueador de item de mão** impede que os jogadores peguem itens por fora do jogo.
+    - Tem versão negativa: **Habbo NÃO tem item de mão** (`wf_cnd_not_has_handitem`).
+
+wf_cnd_has_var:
+  conteudo: |
+    ## O que faz
+    Passa se o alvo (mobi, usuário ou quarto) tiver a variável selecionada.
+
+    ## Quando usar
+    - Saber se o jogador já entrou no jogo (recebeu a variável com **Dar Variável**).
+    - Tem versão negativa: **NÃO tem Variável** (`wf_cnd_neg_has_var`).
+
+wf_cnd_match_date:
+  conteudo: |
+    ## O que faz
+    Passa se a data atual coincidir com a configurada: meses, dias da semana e dias do mês escolhidos.
+
+    ## Configurações
+    - **Mês** e **Dia da semana:** marque os que valem.
+
+    ## Quando usar
+    - Sistemas que só funcionam aos fins de semana ou em um mês temático.
+
+wf_cnd_match_snapshot:
+  conteudo: |
+    ## O que faz
+    Passa se os mobis selecionados estiverem como estavam quando o Wired foi salvo: estado, posição, direção e altura.
+
+    ## Configurações
+    Marque o que comparar: altura, direção, posição no quarto e estado.
+
+    ## Quando usar
+    - Quebra-cabeças: a porta abre quando todas as alavancas estão na posição certa.
+    - Tem versão negativa: **O estado do Mobi NÃO coincide** (`wf_cnd_not_match_snap`).
+
+wf_cnd_match_time:
+  conteudo: |
+    ## O que faz
+    Passa se o horário atual coincidir com o configurado.
+
+    ## Quando usar
+    - Sistemas que funcionam só em certos horários, como uma loja que abre à noite.
+
+    ## Observações
+    - Os textos da janela mapeados hoje para este wired (mês e dia da semana) são os mesmos de **Data coincide**; confira no jogo quais campos aparecem.
+
+wf_cnd_slc_quantity:
+  conteudo: |
+    ## O que faz
+    Compara a quantidade de mobis ou usuários selecionados pelos seletores da pilha com um valor.
+
+    ## Quando usar
+    - "Comece o jogo quando houver pelo menos 4 pessoas na área": um seletor **Habbos na Área** e esta condição.
+
+    ## Exemplo
+    ```pseudowired
+    ALVOS
+      - Habbos na Área: Área de Espera
+
+    QUANDO
+      - A cada 5 segundos
+
+    SE
+      - Selecionar Quantidade: usuários ≥ 4
+
+    ENTÃO
+      - Teleportar para Mobi: Largada
+        Usar usuários do seletor
+    ```
+
+wf_cnd_stuff_is:
+  conteudo: |
+    ## O que faz
+    Passa se o mobi que disparou a pilha for um dos mobis escolhidos ou do mesmo tipo deles.
+
+    ## Quando usar
+    - Pilhas disparadas por vários mobis, quando só alguns tipos devem continuar.
+    - Tem versão negativa: **Mobi NÃO coincide** (`wf_cnd_not_stuff_is`).
+
+    ## Observações
+    - Os textos da janela mapeados hoje para este wired são os de **Ter Mobi em cima**; confira no jogo quais opções aparecem.
+
+wf_cnd_team_has_rank:
+  conteudo: |
+    ## O que faz
+    Passa se a equipe escolhida estiver na colocação configurada (1º a 4º lugar).
+
+    ## Configurações
+    - **Escolha um time** e **Posicionamento**.
+
+    ## Quando usar
+    - No fim da partida, para premiar só a equipe em 1º lugar.
+
+wf_cnd_team_has_score:
+  conteudo: |
+    ## O que faz
+    Passa se a equipe escolhida tiver atingido a pontuação configurada.
+
+    ## Configurações
+    - **Escolha um time** e **Equipe tem que marcar:** os pontos necessários.
+
+    ## Quando usar
+    - Encerrar a partida quando uma equipe chega a 10 pontos.
+
+wf_cnd_time_less_than:
+  conteudo: |
+    ## O que faz
+    Passa se tiver passado **menos** tempo do que o configurado desde que os temporizadores do quarto foram reiniciados.
+
+    ## Configurações
+    - **Ativar antes de:** o limite de tempo.
+
+    ## Quando usar
+    - Bônus para quem completa algo rápido. Reinicie a contagem com **Reiniciar tempo**.
+
+wf_cnd_time_more_than:
+  conteudo: |
+    ## O que faz
+    Passa se tiver passado **mais** tempo do que o configurado desde que os temporizadores do quarto foram reiniciados.
+
+    ## Configurações
+    - **Ativar depois de:** o tempo mínimo.
+
+    ## Quando usar
+    - Liberar uma saída só depois de um tempo de jogo.
+
+wf_cnd_trggrer_on_frn:
+  conteudo: |
+    ## O que faz
+    Passa se o usuário que ativou a pilha estiver em cima de um dos mobis selecionados.
+
+    ## Quando usar
+    - Botões que só funcionam com o jogador em um lugar: "diga :abrir em cima do tapete".
+    - Tem versão negativa: **Ativador NÃO está no Mobi** (`wf_cnd_not_trggrer_on`).
+
+wf_cnd_triggerer_match:
+  conteudo: |
+    ## O que faz
+    Passa se o usuário que ativou a pilha for o configurado.
+
+    ## Quando usar
+    - Comandos só para o dono do quarto ou para uma pessoa da equipe do evento.
+    - Tem versão negativa: **Ativador NÃO coincide** (`wf_cnd_not_triggerer_match`).
+
+wf_cnd_user_count_in:
+  conteudo: |
+    ## O que faz
+    Passa se o número de usuários no quarto estiver entre o mínimo e o máximo configurados.
+
+    ## Configurações
+    - **Ao menos N pessoas** e **Não mais de N pessoas**.
+
+    ## Quando usar
+    - Jogos que precisam de um mínimo de jogadores para começar.
+    - Tem versão negativa: **NÃO há usuários suficientes no quarto** (`wf_cnd_not_user_count`).
+
+wf_cnd_user_performs_action:
+  conteudo: |
+    ## O que faz
+    Passa se o usuário estiver fazendo a ação configurada: acenar, mandar beijo, rir, sentar, deitar, dançar, fazer um sinal e outras.
+
+    ## Configurações
+    - **Ação:** a ação esperada.
+    - **Filtrar por dança** e **Filtrar por sinal:** restringem a uma dança ou a um sinal específico.
+
+    ## Quando usar
+    - Senhas por gesto ("acene para abrir"), jogos de dança.
+    - Tem versão negativa: **Habbo não faz NENHUMA ação** (`wf_cnd_not_user_performs_action`).
+
+wf_cnd_valid_moves:
+  conteudo: |
+    ## O que faz
+    Passa se o mobi ou o usuário conseguir fazer o movimento configurado, sem ser bloqueado.
+
+    ## Quando usar
+    - Antes de mover algo, para evitar que o efeito rode quando o caminho está fechado.
+
+wf_cnd_var_age_match:
+  conteudo: |
+    ## O que faz
+    Compara há quanto tempo a variável existe (ou foi alterada pela última vez) com um valor.
+
+    ## Quando usar
+    - Tempos de espera: "só pode pegar o prêmio de novo 1 hora depois".
+
+wf_cnd_var_val_match:
+  conteudo: |
+    ## O que faz
+    Compara o valor de uma variável com o valor configurado.
+
+    ## Quando usar
+    - "Se as vidas chegarem a 0, o jogador sai do jogo."
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Armadilha
+
+    SE
+      - Valor Variável: "vidas" = 1
+
+    ENTÃO
+      - Kickar Usuário: "Fim de jogo!"
+    ```
+
+wf_cnd_wearing_badge:
+  conteudo: |
+    ## O que faz
+    Passa se o usuário estiver usando o emblema configurado.
+
+    ## Quando usar
+    - Áreas para quem tem um emblema de evento ou de equipe.
+    - Tem versão negativa: **Não está usando o emblema** (`wf_cnd_not_wearing_b`).
+
+wf_cnd_wearing_effect:
+  conteudo: |
+    ## O que faz
+    Passa se o usuário estiver com o efeito visual de avatar configurado.
+
+    ## Quando usar
+    - Jogos que usam efeitos como "uniforme".
+    - Tem versão negativa: **Não está usando o efeito** (`wf_cnd_not_wearing_fx`).
+
+wf_slc_furni_altitude:
+  conteudo: |
+    ## O que faz
+    Seleciona os mobis cuja altura é menor, igual ou maior que o valor configurado.
+
+    ## Configurações
+    - **Selecionar altura** e **Escolha o tipo:** menor que, igual ou maior que.
+
+wf_slc_furni_area:
+  conteudo: |
+    ## O que faz
+    Seleciona todos os mobis dentro da área configurada.
+
+    ## Configurações
+    - **Seleção de Área:** clique em "Selecionar Área" e arraste no quarto para marcar a área.
+
+    ## Exemplo
+    ```pseudowired
+    ALVOS
+      - Mobi na Área: Pista
+
+    QUANDO
+      - Habbo anda no Mobi: Botão
+
+    ENTÃO
+      - Mudar estado do Mobi
+        Usar mobis do seletor
+    ```
+
+wf_slc_furni_bytype:
+  conteudo: |
+    ## O que faz
+    Seleciona todos os mobis do quarto do mesmo tipo dos mobis escolhidos.
+
+    ## Configurações
+    - **Selecione mobis apenas se o estado corresponder:** só pega os que estão no mesmo estado.
+
+    ## Quando usar
+    - Agir em todas as lâmpadas, portas ou blocos de um tipo sem escolhê-los um a um.
+
+wf_slc_furni_neighborhood:
+  conteudo: |
+    ## O que faz
+    Seleciona os mobis em volta dos mobis de referência, nos pisos vizinhos marcados.
+
+    ## Configurações
+    - **Selecionar Pisos Vizinhos:** quais quadrados em volta contam.
+
+    ## Quando usar
+    - Explosões, efeitos em área ao redor de um ponto.
+
+wf_slc_furni_onfurni:
+  conteudo: |
+    ## O que faz
+    Seleciona mobis pela relação de altura com os mobis configurados.
+
+    ## Configurações
+    - Mobis acima, mobis abaixo, mobis na mesma altura ou todos os mobis no mesmo piso.
+
+wf_slc_furni_picks:
+  conteudo: |
+    ## O que faz
+    Seleciona os mobis escolhidos à mão na configuração. É a forma mais simples de definir alvos para os efeitos.
+
+wf_slc_furni_signal:
+  conteudo: |
+    ## O que faz
+    Seleciona os mobis que vieram junto com o sinal recebido pela pilha (enviado por **Mandar Sinal**).
+
+wf_slc_furni_with_var:
+  conteudo: |
+    ## O que faz
+    Seleciona os mobis que têm a variável configurada.
+
+    ## Quando usar
+    - Agir só nos mobis marcados ("já coletados", "ativos").
+
+wf_slc_remote:
+  conteudo: |
+    ## O que faz
+    Usa como seleção o resultado dos seletores de outras pilhas.
+
+    ## Configurações
+    - **Filtrar as pilhas de Wired:** usar todas ou sortear uma.
+    - **Tipo de seleção:** união (tudo o que alguma pilha selecionou) ou interseção (só o que todas selecionaram).
+
+wf_slc_users_area:
+  conteudo: |
+    ## O que faz
+    Seleciona todos os usuários dentro da área configurada.
+
+    ## Configurações
+    - **Seleção de Área:** clique em "Selecionar Área" e arraste no quarto.
+
+    ## Exemplo
+    ```pseudowired
+    ALVOS
+      - Habbos na Área: Área de Detecção
+
+    QUANDO
+      - Habbo diz algo: ":teleportar"
+
+    ENTÃO
+      - Teleportar para Mobi: Área de Prêmios
+        Usar usuários do seletor
+    ```
+
+wf_slc_users_byaction:
+  conteudo: |
+    ## O que faz
+    Seleciona os usuários que estão fazendo a ação configurada (acenar, sentar, dançar, um sinal e outras).
+
+wf_slc_users_byname:
+  conteudo: |
+    ## O que faz
+    Seleciona os usuários com os nomes digitados.
+
+    ## Configurações
+    - **Digite os nomes:** um nome por linha.
+
+wf_slc_users_bytype:
+  conteudo: |
+    ## O que faz
+    Seleciona os usuários de um tipo: Habbos, Mascotes ou Bots.
+
+wf_slc_users_group:
+  conteudo: |
+    ## O que faz
+    Seleciona os usuários que são membros do grupo configurado (o do quarto ou um da lista).
+
+wf_slc_users_handitem:
+  conteudo: |
+    ## O que faz
+    Seleciona os usuários que estão segurando o item de mão configurado.
+
+wf_slc_users_neighborhood:
+  conteudo: |
+    ## O que faz
+    Seleciona os usuários nos pisos vizinhos dos mobis de referência.
+
+wf_slc_users_onfurni:
+  conteudo: |
+    ## O que faz
+    Seleciona os usuários que estão em cima dos mobis configurados.
+
+wf_slc_users_signal:
+  conteudo: |
+    ## O que faz
+    Seleciona os usuários que vieram junto com o sinal recebido pela pilha (enviado por **Mandar Sinal**).
+
+wf_slc_users_team:
+  conteudo: |
+    ## O que faz
+    Seleciona os usuários da equipe configurada (Vermelha, Verde, Azul ou Amarela).
+
+wf_slc_users_with_var:
+  conteudo: |
+    ## O que faz
+    Seleciona os usuários que têm a variável configurada.
+
+# Negative versions: their own records, linked to the positive by versao_positiva.
+wf_act_neg_call_stacks:
+  descricao: Versão negativa de Faz pilhas de wireds; executa as pilhas escolhidas quando as condições da pilha não passam (o "senão" da pilha).
+wf_act_neg_log:
+  descricao: Versão negativa de Escrever nos logs; grava a mensagem nos logs de Wired quando as condições da pilha não passam (o "senão" da pilha).
+wf_act_neg_send_signal:
+  descricao: Versão negativa de Mandar Sinal; envia o sinal às antenas quando as condições da pilha não passam (o "senão" da pilha).
+wf_cnd_not_has_handitem:
+  descricao: Passa se o usuário NÃO estiver segurando o item de mão configurado.
+wf_cnd_neg_has_var:
+  descricao: Passa se o alvo NÃO tiver a variável selecionada.
+wf_cnd_not_triggerer_match:
+  descricao: Passa se o usuário que ativou a pilha NÃO for o configurado.
+wf_cnd_not_user_performs_action:
+  descricao: Passa se o usuário NÃO estiver fazendo nenhuma das ações configuradas.
+wf_cnd_not_wearing_b:
+  descricao: Passa se o usuário NÃO estiver usando o emblema configurado.
+wf_cnd_not_wearing_fx:
+  descricao: Passa se o usuário NÃO estiver com o efeito de avatar configurado.

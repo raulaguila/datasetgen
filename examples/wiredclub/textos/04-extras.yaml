@@ -1,0 +1,266 @@
+# Extras, selector filters and variable extras whose docs page is a draft. Generated, to be reviewed.
+# Extras go in the COMO part of a stack: they change how the stack runs.
+
+wf_xtra_anim_time:
+  conteudo: |
+    ## O que faz
+    Ajusta a duração da animação dos efeitos de movimento da pilha.
+
+    ## Configurações
+    - **Tempo de animação (ms):** quanto tempo, em milissegundos, cada movimento leva na tela.
+
+    ## Quando usar
+    - Movimentos mais lentos e suaves (elevadores) ou mais rápidos (projéteis).
+
+wf_xtra_custom_contract:
+  conteudo: |
+    ## O que faz
+    Personaliza o contrato usado pelos Wireds de transação da pilha.
+
+    ## Configurações
+    - **Tipo de elemento:** créditos ou mobi.
+
+    ## Quando usar
+    - Quando o preço ou o prêmio muda conforme o jogo, sem precisar trocar o contrato.
+
+wf_xtra_exec_in_order:
+  conteudo: |
+    ## O que faz
+    Faz os efeitos da pilha rodarem na ordem em que foram empilhados, de baixo para cima. Sem ele, a ordem não é garantida.
+
+    ## Quando usar
+    - Sempre que um efeito depende do anterior: entrar na equipe **e depois** iniciar o cronômetro.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Piso Colorido
+
+    COMO
+      - Executa na Ordem
+
+    ENTÃO
+      - Entrar na Equipe: Time Vermelho
+      - Controlar Cronômetro: Começar
+    ```
+
+wf_xtra_execution_limit:
+  conteudo: |
+    ## O que faz
+    Limita quantas vezes a pilha pode rodar dentro de uma janela de tempo.
+
+    ## Configurações
+    - **Quantidade de execuções:** o máximo de execuções.
+    - **Janela de tempo:** o intervalo, em segundos, em que o limite vale.
+
+    ## Quando usar
+    - Evitar spam: um botão que só dá prêmio uma vez a cada 10 segundos.
+
+wf_xtra_filter_furni:
+  conteudo: |
+    ## O que faz
+    Reduz a seleção de mobis da pilha a uma quantidade fixa.
+
+    ## Configurações
+    - **Filtrar para N mobis:** quantos mobis ficam na seleção.
+
+    ## Quando usar
+    - Sortear alguns mobis entre os selecionados (acender 3 lâmpadas ao acaso).
+
+wf_xtra_filter_furni_by_var:
+  conteudo: |
+    ## O que faz
+    Mantém na seleção os mobis com os maiores ou menores valores de uma variável.
+
+    ## Quando usar
+    - Achar o mobi "mais carregado" ou "menos usado" de um grupo.
+
+wf_xtra_filter_users:
+  conteudo: |
+    ## O que faz
+    Reduz a seleção de usuários da pilha a uma quantidade fixa.
+
+    ## Configurações
+    - **Filtrar para N Habbos:** quantos usuários ficam na seleção.
+
+    ## Quando usar
+    - Sortear um vencedor entre os jogadores de uma área.
+
+    ## Exemplo
+    ```pseudowired
+    ALVOS
+      - Habbos na Área: Plateia
+
+    COMO
+      - Quantidade de Usuários: 1
+
+    QUANDO
+      - Habbo diz algo: ":sortear"
+
+    ENTÃO
+      - Teleportar para Mobi: Palco
+        Usar usuários do seletor
+    ```
+
+wf_xtra_filter_users_by_var:
+  conteudo: |
+    ## O que faz
+    Mantém na seleção os usuários com os maiores ou menores valores de uma variável.
+
+    ## Quando usar
+    - Premiar quem tem mais pontos, ou eliminar quem tem menos vidas.
+
+wf_xtra_mov_carry_users:
+  conteudo: |
+    ## O que faz
+    Faz os usuários serem carregados junto quando o mobi em que estão se move.
+
+    ## Configurações
+    - **Usuários são carregados quando:** estão de pé diretamente sobre o mobi, ou no mesmo piso que ele.
+
+    ## Quando usar
+    - Elevadores, plataformas móveis, barcos.
+
+wf_xtra_mov_curve:
+  conteudo: |
+    ## O que faz
+    Faz o mobi se mover em curva, em vez de em linha reta.
+
+    ## Configurações
+    - **Movimento curvado:** ativa a curva.
+
+wf_xtra_mov_no_animation:
+  conteudo: |
+    ## O que faz
+    Tira a animação dos movimentos da pilha: os mobis aparecem direto no destino.
+
+    ## Quando usar
+    - Trocas instantâneas de cenário, teletransporte de mobis.
+
+wf_xtra_mov_physics:
+  conteudo: |
+    ## O que faz
+    Muda a física dos movimentos da pilha: o que bloqueia o mobi, se ele mantém a altura e se atravessa mobis ou usuários.
+
+    ## Configurações
+    - **Está bloqueado por mobis:** quais mobis param o movimento.
+    - **Manter a altura do mobi:** ele anda sem subir ou descer conforme o piso.
+    - **Mover através dos mobis** e **Mover através dos Habbos**.
+
+    ## Quando usar
+    - Plataformas que passam por cima de obstáculos, fantasmas que atravessam paredes.
+
+wf_xtra_or_eval:
+  conteudo: |
+    ## O que faz
+    Muda como as condições da pilha são avaliadas. Sem ele, todas precisam passar; com ele, você escolhe quantas.
+
+    ## Configurações
+    - **Condições que precisam coincidir:** todas, pelo menos uma, não todas ou nenhuma, ou uma quantidade (menos de, exatamente, mais de).
+    - Você pode escolher a quais condições ele se aplica; sem escolha, vale para todas.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Porta
+
+    COMO
+      - Pelo menos uma condição é verdadeira
+
+    SE
+      - Membro do Grupo: "VIP"
+      - Usar Emblema: "Staff"
+
+    ENTÃO
+      - Teleportar para Mobi: Área VIP
+    ```
+
+wf_xtra_random:
+  conteudo: |
+    ## O que faz
+    Em vez de rodar todos os efeitos da pilha, sorteia alguns.
+
+    ## Configurações
+    - **Selecione N efeitos:** quantos efeitos são sorteados por vez.
+
+    ## Quando usar
+    - Roletas, prêmios aleatórios, eventos surpresa.
+
+wf_xtra_rotate_to_dir:
+  conteudo: |
+    ## O que faz
+    Transforma o movimento do mobi em um projétil: controla distância, trajetória e direções.
+
+    ## Configurações
+    - **Distância da animação:** do início ao bloco de destino, ultrapassar em X blocos ou sempre disparar X blocos.
+    - **Tipo de trajetória:** reta ou curva.
+    - **Sistema:** 8 ou 4 direções.
+    - Variáveis do projétil: blocos percorridos, colisões com usuários e mobis, posição e altitude da animação, se está viajando.
+
+    ## Quando usar
+    - Jogos de tiro, arremesso e bolas.
+
+wf_xtra_scan_chest_furni_by_type:
+  conteudo: |
+    ## O que faz
+    Faz a pilha procurar mobis de um tipo dentro de um baú.
+
+    ## Configurações
+    - **Opções de Escaneamento:** todos os itens do baú ou só os pré-visualizados.
+
+wf_xtra_text_input_variable:
+  conteudo: |
+    ## O que faz
+    Captura um texto digitado pelo usuário e guarda em uma variável.
+
+    ## Configurações
+    - **Tipo de Espaço:** único ou múltiplo; mobi ou usuário.
+    - **Tipo de exibição variável:** numérica ou textual.
+
+    ## Quando usar
+    - Senhas, respostas de quiz, apostas digitadas no chat.
+
+wf_xtra_text_output_furni_name:
+  conteudo: |
+    ## O que faz
+    Coloca o nome de um mobi dentro dos textos dos Wireds da pilha (como em **Mostrar mensagem**).
+
+    ## Quando usar
+    - Mensagens que dizem qual mobi foi coletado: "Você pegou a Chave Dourada!".
+
+wf_xtra_text_output_username:
+  conteudo: |
+    ## O que faz
+    Coloca o nome de um usuário dentro dos textos dos Wireds da pilha.
+
+    ## Quando usar
+    - Mensagens personalizadas: "Parabéns, Fulano!".
+
+wf_xtra_text_output_variable:
+  conteudo: |
+    ## O que faz
+    Coloca o valor de uma variável dentro dos textos dos Wireds da pilha.
+
+    ## Quando usar
+    - Mostrar placar, vidas ou moedas: "Você tem 3 vidas".
+
+wf_xtra_unseen:
+  conteudo: |
+    ## O que faz
+    Roda um efeito por vez e não repete um efeito até que todos tenham rodado.
+
+    ## Quando usar
+    - Sequências sem repetição: perguntas de quiz, falas de um Bot.
+
+wf_xtra_var_text_connector:
+  conteudo: |
+    ## O que faz
+    Liga textos a valores de variável, para montar resultados dinâmicos (por exemplo, nomes de níveis ou faixas de pontuação).
+
+wf_xtra_var_time_util:
+  conteudo: |
+    ## O que faz
+    Lê partes de tempo de uma variável: o valor, a data de criação ou a da última mudança, em milissegundos, segundos, minutos, horas, dia, semana, mês ou ano.
+
+    ## Quando usar
+    - Tempos de espera e rankings por período: "há quantos dias o jogador entrou pela última vez".

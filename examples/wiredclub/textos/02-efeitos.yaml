@@ -1,0 +1,583 @@
+# Effects whose docs page is a draft. Generated, to be reviewed. Every effect also
+# has the delay setting ("Efeito de atraso de N segundos"), not repeated here.
+
+wf_act_bot_teleport:
+  conteudo: |
+    ## O que faz
+    Teletransporta um Bot do quarto para um dos mobis escolhidos. Se houver mais de um mobi, o destino é um deles.
+
+    ## Configurações
+    - **Nome do Bot:** o nome exato do Bot que será teletransportado.
+    - Os mobis de destino são escolhidos na seleção do Wired.
+
+    ## Quando usar
+    - Fazer um Bot "aparecer" em pontos diferentes do quarto, como um guia ou um apresentador.
+    - Repor um Bot na posição inicial no começo de cada rodada.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo entra no quarto
+
+    ENTÃO
+      - Teletransportar Bot ao Mobi: Bot "Guia" → Tapete de boas-vindas
+    ```
+
+wf_act_call_stacks:
+  conteudo: |
+    ## O que faz
+    Executa outras pilhas de Wired a partir desta. Você escolhe até 20 pilhas, e os efeitos delas rodam sem passar pelos ativadores nem pelas condições delas.
+
+    ## Quando usar
+    - Reaproveitar uma sequência de efeitos em vários lugares: monte a sequência uma vez e chame-a de onde precisar.
+    - Organizar sistemas grandes em blocos menores.
+
+    ## Observações
+    - Tem versão negativa (**Faz pilhas**, `wf_act_neg_call_stacks`).
+    - Como as condições da pilha chamada são ignoradas, faça as checagens na pilha que chama.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Botão Reset
+
+    ENTÃO
+      - Faz pilhas de wireds: Pilha "Reiniciar jogo"
+    ```
+
+wf_act_cancel_transaction:
+  conteudo: |
+    ## O que faz
+    Cancela uma transação Wired que está em andamento, sem concluí-la.
+
+    ## Configurações
+    - **Cancelar transação:** só a transação de um contrato específico ("Contrato especificado") ou qualquer transação em andamento.
+
+    ## Quando usar
+    - Desistência: o usuário sai da área da loja ou clica em "cancelar".
+    - Limite de tempo para concluir uma compra ou troca.
+
+wf_act_change_var_val:
+  conteudo: |
+    ## O que faz
+    Muda o valor de uma variável já atribuída a um mobi, usuário ou ao quarto: somar, subtrair, definir um valor, entre outras operações.
+
+    ## Quando usar
+    - Contadores: pontos, vidas, moedas do jogo, passos de uma missão.
+    - Para a variável existir no alvo antes, use **Dar Variável**.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Moeda
+
+    ENTÃO
+      - Mudar Valor Variável: "moedas" + 1
+        Use o usuário acionador
+    ```
+
+wf_act_chase:
+  conteudo: |
+    ## O que faz
+    Move o mobi selecionado em direção ao usuário mais próximo que esteja na mesma linha ou coluna. Quando o mobi encosta em um usuário, o ativador **Batida** dispara.
+
+    ## Quando usar
+    - Monstros e fantasmas que perseguem os jogadores.
+    - Jogos de pega-pega: combine com **Batida** para eliminar ou pontuar quem foi pego.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - A cada 1 segundo
+
+    ENTÃO
+      - Perseguir: Fantasma
+    ```
+    Em outra pilha, **Batida** no Fantasma teleporta o jogador para fora.
+
+wf_act_click_conf:
+  conteudo: |
+    ## O que faz
+    Muda o que acontece quando os usuários clicam em mobis e em outros usuários: o clique pode atravessar o mobi ou o usuário e chegar ao que está atrás.
+
+    ## Configurações
+    - **Ao clicar em um mobi:** Padrão, ou o clique atravessa o mobi.
+    - **Ao clicar em um usuário:** Padrão, clicar no usuário mas andar por trás dele, ou o clique atravessa o usuário.
+
+    ## Quando usar
+    - Cenários com mobis decorativos na frente do piso, onde o jogador precisa clicar no chão atrás deles.
+    - Jogos lotados, para que os jogadores não fiquem presos clicando uns nos outros.
+
+wf_act_control_clock:
+  conteudo: |
+    ## O que faz
+    Controla um cronômetro de jogos selecionado: começar, parar, zerar, pausar ou continuar.
+
+    ## Configurações
+    - **Selecione a Opção:** Começar, Parar, Reset, Pausa ou Reiniciar.
+
+    ## Quando usar
+    - Marcar o início e o fim das partidas: as tabelas de classificação usam o cronômetro de jogos para saber quando a partida termina.
+    - Pausar o jogo durante uma explicação.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Largada
+
+    ENTÃO
+      - Controlar Cronômetro: Cronômetro de Jogos (Começar)
+    ```
+
+wf_act_flee:
+  conteudo: |
+    ## O que faz
+    Move o mobi selecionado para longe do usuário mais próximo que esteja na mesma linha ou coluna. Se um usuário encostar no mobi, o ativador **Batida** dispara.
+
+    ## Quando usar
+    - Jogos de caça: o jogador persegue o mobi (um coelho, uma bola) para pegá-lo.
+    - O contrário de **Perseguir**.
+
+wf_act_furni_to_furni:
+  conteudo: |
+    ## O que faz
+    Move um mobi selecionado até outro mobi selecionado, passo a passo.
+
+    ## Quando usar
+    - Fazer um mobi seguir um caminho até um alvo (um carrinho até a estação, uma bola até o gol).
+    - Use extras de movimento (**Física do Movimento**, **Tempo de Animação**) para ajustar como ele anda.
+
+wf_act_furni_to_user:
+  conteudo: |
+    ## O que faz
+    Move um mobi selecionado em direção a um usuário.
+
+    ## Quando usar
+    - Mobis que vão até o jogador: um mascote decorativo, um item que "segue" quem o ativou.
+    - Diferente de **Perseguir**, o alvo é o usuário escolhido, não o mais próximo.
+
+wf_act_give_currency:
+  conteudo: |
+    ## O que faz
+    Entrega créditos guardados em um **Baú de Créditos** ao usuário.
+
+    ## Configurações
+    - **Quantidade a dar:** quantos créditos cada usuário recebe.
+    - O baú de onde sai o dinheiro é escolhido na seleção do Wired.
+
+    ## Quando usar
+    - Prêmios em créditos para vencedores.
+    - O efeito só entrega o que o baú tem: confira o saldo com **Baú Possui X Itens**.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Pódio 1º lugar
+
+    ENTÃO
+      - Entregar Moeda do Baú: 10 créditos
+        Use o usuário acionador
+    ```
+
+wf_act_give_furni:
+  conteudo: |
+    ## O que faz
+    Entrega mobis guardados em um **Baú de Mobis** ao usuário.
+
+    ## Configurações
+    - **Quantidade a dar:** quantos mobis cada usuário recebe.
+    - **Tipo de iteração do baú:** em que ordem os mobis saem do baú: aleatória, primeiro a entrar é o primeiro a sair, ou último a entrar é o primeiro a sair.
+
+    ## Quando usar
+    - Prêmios em mobis, sorteios (ordem aleatória) ou entregas em fila (ordem de entrada).
+
+wf_act_give_reward:
+  conteudo: |
+    ## O que faz
+    Entrega ao usuário uma recompensa configurada, como um emblema ou um mobi.
+
+    ## Configurações
+    - **Modo recompensas:** dar a quantidade especificada ou dar tudo.
+    - **Recompensa:** a quantidade a entregar.
+
+    ## Observações
+    - Está disponível apenas para a staff, para eventos oficiais.
+
+wf_act_give_score:
+  conteudo: |
+    ## O que faz
+    Dá pontos ao usuário no jogo em andamento. Os pontos aparecem nas tabelas de classificação do quarto.
+
+    ## Configurações
+    - **Configurar pontuação:** quantos pontos dar de cada vez.
+    - **Quantidade de vezes por jogo:** quantas vezes o mesmo usuário pode receber pontos deste efeito em uma partida.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Moeda
+
+    ENTÃO
+      - Dar Pontos: 1 ponto, 10 vezes por jogo
+    ```
+
+wf_act_give_score_tm:
+  conteudo: |
+    ## O que faz
+    Dá pontos a uma equipe (Vermelha, Verde, Azul ou Amarela), não a um usuário.
+
+    ## Configurações
+    - **Configurar pontuação:** quantos pontos dar de cada vez.
+    - **Escolha um time:** a equipe que recebe os pontos.
+    - **Quantidade de vezes por jogo:** quantas vezes o efeito pode dar pontos em uma partida.
+
+    ## Quando usar
+    - Jogos de equipe (futebol, captura da bandeira), com as tabelas **Pontuação por equipe** ou **Mais Vitórias**.
+
+wf_act_give_var:
+  conteudo: |
+    ## O que faz
+    Atribui uma variável a um mobi, usuário ou ao quarto, com o valor configurado. É o primeiro passo para usar variáveis: o alvo precisa ter a variável antes de ela ser lida ou alterada.
+
+    ## Quando usar
+    - Dar "vidas", "moedas" ou um estado ao jogador quando ele entra no jogo.
+    - Marcar mobis (por exemplo, "já coletado").
+    - Depois, use **Mudar Valor Variável** e as condições de variável.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo entra no quarto
+
+    ENTÃO
+      - Dar Variável: "vidas" = 3
+        Use o usuário acionador
+    ```
+
+wf_act_init_transaction:
+  conteudo: |
+    ## O que faz
+    Inicia uma transação Wired com base no contrato selecionado (pagamento, recompensa ou troca). Precisa de um baú e de um contrato.
+
+    ## Configurações
+    - **Tipo de transação:** Normal, Multiplicador ou Multiplicador automático (repete a transação conforme a quantidade).
+
+    ## Quando usar
+    - Lojas e trocas dentro do quarto. Para desistir no meio, use **Cancelar Transação**.
+
+wf_act_join_team:
+  conteudo: |
+    ## O que faz
+    Coloca o usuário em uma equipe.
+
+    ## Configurações
+    - **Escolha um time:** Vermelho, Verde, Azul ou Amarelo.
+    - **Tipo de equipe:** Wired, Battle Banzai ou Freeze, conforme o jogo.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Piso Vermelho
+
+    ENTÃO
+      - Entrar na Equipe: Time Vermelho (Wired)
+    ```
+
+wf_act_kick_user:
+  conteudo: |
+    ## O que faz
+    Expulsa o usuário do quarto, mostrando uma mensagem.
+
+    ## Configurações
+    - **Mensagem:** o texto que o usuário vê ao ser expulso.
+
+    ## Quando usar
+    - Eliminação em jogos ("você caiu!"), áreas proibidas, proteção do quarto.
+    - Não expulsa o dono do quarto.
+
+wf_act_leave_team:
+  conteudo: |
+    ## O que faz
+    Tira o usuário da equipe em que ele está.
+
+    ## Quando usar
+    - Ao sair da área do jogo ou ao ser eliminado, para que ele não conte mais nos pontos da equipe.
+
+wf_act_log:
+  conteudo: |
+    ## O que faz
+    Escreve uma mensagem nos logs de Wired do quarto, para testar e depurar sistemas.
+
+    ## Configurações
+    - **Nível de registro:** a importância da mensagem.
+    - **Mensagem de registro:** o texto gravado.
+    - **Visualizar registros:** abre os logs.
+
+    ## Quando usar
+    - Para descobrir se uma pilha rodou e com quais valores. Coloque-o no meio de um sistema que não funciona como esperado.
+    - Tem versão negativa (`wf_act_neg_log`).
+
+wf_act_match_to_sshot:
+  conteudo: |
+    ## O que faz
+    Faz os mobis selecionados voltarem ao estado que tinham quando o Wired foi salvo: posição, direção, altura e estado.
+
+    ## Configurações
+    Marque o que deve voltar:
+    - Altura atual
+    - Atual direção
+    - Atual posição no Quarto
+    - Atual estado do Mobi
+
+    ## Quando usar
+    - Reiniciar o cenário no fim de cada rodada.
+    - A condição **Estado e Posição do Mobi combinam** checa o mesmo "retrato".
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Botão Reset
+
+    ENTÃO
+      - Mobis que voltam à programação original: Portas, Blocos
+    ```
+
+wf_act_move_furni_as_group:
+  conteudo: |
+    ## O que faz
+    Move um grupo de mobis para um destino mantendo a distância entre eles, como se fossem uma peça só.
+
+    ## Quando usar
+    - Mover estruturas montadas com vários mobis (um carro, uma plataforma, uma parede).
+
+wf_act_move_furni_to:
+  conteudo: |
+    ## O que faz
+    Move o mobi que disparou a pilha para perto de um dos mobis selecionados.
+
+    ## Configurações
+    - **Direção:** de que lado do mobi de destino o mobi é colocado.
+    - **Espaçamento:** quantos quadrados separam os mobis colocados.
+
+    ## Observações
+    - Está disponível apenas para a staff. Os textos da janela ainda aparecem em inglês no cliente.
+
+wf_act_move_rotate:
+  conteudo: |
+    ## O que faz
+    Move e/ou gira os mobis selecionados.
+
+    ## Configurações
+    - **Mover Mobi:** nenhum movimento, mover aleatoriamente ou em uma direção.
+    - **Girar Mobi:** nenhuma rotação, sentido horário, anti-horário ou direções aleatórias.
+
+    ## Quando usar
+    - Obstáculos que andam, plataformas que giram, peças de jogo.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - A cada 0,5 segundo
+
+    ENTÃO
+      - Mover e Rotacionar Mobi: Obstáculo (mover aleatoriamente)
+    ```
+
+wf_act_move_rotate_user:
+  conteudo: |
+    ## O que faz
+    Move e/ou gira um usuário conforme a configuração.
+
+    ## Configurações
+    - **Mover usuário:** a direção do movimento.
+    - **Girar usuário:** a direção para onde ele fica virado.
+
+    ## Quando usar
+    - Empurrões, esteiras, armadilhas que tiram o jogador do lugar.
+
+wf_act_move_to_dir:
+  conteudo: |
+    ## O que faz
+    Faz o mobi andar em uma direção. Quando o caminho é bloqueado, o mobi muda de direção conforme a configuração. Se o mobi encostar em um usuário, o ativador **Batida** dispara.
+
+    ## Configurações
+    - **Direção de Início:** para onde o mobi começa a andar.
+    - **Quando o movimento é bloqueado:** esperar, girar 45° ou 90° para a direita ou esquerda, voltar ou girar para uma direção aleatória.
+
+    ## Quando usar
+    - Bolas que quicam nas paredes, inimigos que patrulham um corredor.
+
+wf_act_mute_triggerer:
+  conteudo: |
+    ## O que faz
+    Silencia o usuário por um tempo, mostrando uma mensagem.
+
+    ## Configurações
+    - **Mensagem:** o texto que o usuário vê.
+    - **Duração:** por quantos minutos ele fica sem poder falar.
+
+    ## Observações
+    - Está disponível apenas para a staff.
+
+wf_act_progress_ach:
+  descricao: Efeito que avança o progresso do usuário em uma conquista Wired habilitada no quarto.
+  conteudo: |
+    ## O que faz
+    Avança o progresso do usuário em uma conquista Wired.
+
+    ## Configurações
+    - **Modo de Progressão:** definir o progresso ou somar ao progresso que ele já tem.
+
+    ## Observações
+    - A conquista precisa estar habilitada no quarto pelo configurador **Habilitar Conquistas**.
+    - Está disponível apenas para a staff.
+
+wf_act_rel_mov:
+  conteudo: |
+    ## O que faz
+    Move o mobi selecionado a partir da posição e direção atuais dele, um número de quadrados em cada eixo.
+
+    ## Configurações
+    - **Eixo X:** quantos quadrados mover e em que direção no eixo X.
+    - **Eixo Y:** quantos quadrados mover e em que direção no eixo Y.
+
+    ## Quando usar
+    - Movimentos exatos: abrir uma porta deslizando dois quadrados, levar uma peça uma casa para a frente.
+
+wf_act_remove_furni:
+  conteudo: |
+    ## O que faz
+    Remove os mobis temporários que foram colocados no quarto por Wireds.
+
+    ## Quando usar
+    - Limpar o cenário no fim de uma rodada, apagando o que foi gerado durante o jogo.
+
+wf_act_remove_var:
+  conteudo: |
+    ## O que faz
+    Remove uma variável de um mobi, usuário ou do quarto.
+
+    ## Quando usar
+    - Reiniciar o estado do jogador ao sair do jogo.
+    - Depois de remover, a condição **Tem Variável** passa a falhar para aquele alvo.
+
+wf_act_reset_timers:
+  conteudo: |
+    ## O que faz
+    Reinicia a contagem dos ativadores de tempo do quarto (**No tempo escolhido**, **No tempo escolhido (longo)**) e das condições de tempo.
+
+    ## Quando usar
+    - No começo de cada rodada, para que os eventos cronometrados recomecem do zero.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Largada
+
+    ENTÃO
+      - Reiniciar tempo
+    ```
+
+wf_act_send_signal:
+  conteudo: |
+    ## O que faz
+    Envia um sinal para as antenas configuradas. Na pilha da antena, o ativador **Receber Sinal** dispara e pode usar os mobis e usuários enviados junto.
+
+    ## Configurações
+    - **Opções de sinal:** enviar um sinal só, ou um sinal para cada mobi ou para cada usuário selecionado.
+
+    ## Quando usar
+    - Ligar sistemas entre si sem repetir pilhas.
+    - Tem versão negativa (`wf_act_neg_send_signal`).
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo diz algo: ":abrir"
+
+    ENTÃO
+      - Mandar Sinal: Antena do Portão
+    ```
+
+wf_act_show_message:
+  conteudo: |
+    ## O que faz
+    Mostra uma mensagem só para o usuário que ativou a pilha (ou para os selecionados), sem aparecer para os outros.
+
+    ## Configurações
+    - **Mensagem:** o texto.
+    - **Estilo:** largura do balão e ícone (notificação, alerta, certo, errado, caveira e outros).
+
+    ## Quando usar
+    - Avisos e dicas para o jogador: "Você pegou a chave!", "Faltam 3 moedas".
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Piso Escuro
+
+    ENTÃO
+      - Mostrar mensagem: "Pisou!"
+    ```
+
+wf_act_teleport_to:
+  conteudo: |
+    ## O que faz
+    Teletransporta o usuário para um mobi. Com mais de um mobi selecionado, o destino é sorteado entre eles.
+
+    ## Configurações
+    - **Opções de Tele:** teletransporte rápido, sem a animação.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Portal
+
+    ENTÃO
+      - Teleportar para Mobi: Área de Prêmios
+    ```
+
+wf_act_teleport_to_room:
+  conteudo: |
+    ## O que faz
+    Leva o usuário para outro quarto.
+
+    ## Configurações
+    - **Escolha o quarto:** o quarto de destino.
+
+    ## Quando usar
+    - Jogos com várias salas, passagem de fase, saída do evento.
+    - Veja também o **Conector de Quarto WIRED**.
+
+wf_act_toggle_state:
+  conteudo: |
+    ## O que faz
+    Muda o estado do mobi, como se alguém clicasse duas vezes nele (acender uma luz, abrir uma porta, girar uma placa).
+
+    ## Configurações
+    - **Tipo de alternância:** ir para o próximo estado ou voltar para o anterior.
+
+    ## Exemplo
+    ```pseudowired
+    QUANDO
+      - Habbo anda no Mobi: Interruptor
+
+    ENTÃO
+      - Mudar estado do Mobi: Lâmpada
+    ```
+
+wf_act_unfreeze:
+  conteudo: |
+    ## O que faz
+    Descongela o usuário, devolvendo a ele o movimento.
+
+    ## Quando usar
+    - Depois de um congelamento por tempo, ou ao começar a rodada.
+
+wf_act_user_to_furni:
+  conteudo: |
+    ## O que faz
+    Faz o usuário andar até um mobi.
+
+    ## Quando usar
+    - Levar o jogador a um ponto do quarto com caminhada, sem o teletransporte.

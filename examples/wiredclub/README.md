@@ -52,4 +52,8 @@ With that key, a later import updates the same records instead of adding copies,
 
 To map a wired's settings, add its classname to [parametros.json](parametros.json) with the `wiredfurni.params` groups its window shows (the part after `wiredfurni.params.`, for example `show_message`). Search the saved client texts for `wiredfurni.params.` to see the groups.
 
+Pages the docs leave as drafts get their texts from [textos/](textos/): a YAML file per kind, keyed by classname (a key without the `*N` suffix covers every color). These texts were written from each wired's name, settings and the guides, not by the docs authors: the records they fill get `fonte_texto: "Gerado (revisar)"`, and the docs' own text always wins when a page gets one. After checking a record in the game, set it to `Revisado`.
+
+Each run also makes every negative version a record of its own (`versao_positiva` names its positive), sets `variante` on color and model variants (`highscore_classic*2`, `wf_storage_coins2`), writes the client's placeholders as a reader says them (`%seconds%` → `N`), makes in-page anchors absolute, and lists in `relacionados` the wireds a page links to or names in bold and in `guias` the guides that link to it.
+
 `MISSING_NEGATIVES` in [convert.py](convert.py) adds a negative version the game has but the docs' infobox leaves out (today `wf_cnd_not_has_handitem`).
