@@ -182,7 +182,7 @@ export default function CollectionTrashPage() {
     <CollectionPage section="collections.tab.trash" description="trash.subtitle">
       {(collection) => roleAllows(collection.role, "editor")
         ? <div className="space-y-4"><Trash collection={collection} /></div>
-        : <EmptyState icon={Trash2} title={t("error.forbidden")} description={t("trash.editors_only")} />}
+        : <EmptyState icon={Trash2} title={t("error.forbidden_page")} description={t("trash.editors_only")} />}
     </CollectionPage>
   );
 }

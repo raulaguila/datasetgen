@@ -31,11 +31,11 @@ export function PageHeader({
 }) {
   useDocumentTitle(title);
   return (
-    <div data-ui-page-header className="border-b px-[var(--space-page)] py-[var(--space-page-y)] sm:py-4">
+    <div data-ui-page-header className="px-[var(--space-page)] py-3 md:pb-5">
       <div className="flex w-full flex-col gap-[var(--space-row)] sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
       <div className="min-w-0 max-w-full flex-1 sm:basis-64">
-        <h1 className="font-heading text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
-        {description && <p className="mt-1 max-w-[72ch] text-sm text-muted-foreground">{description}</p>}
+        <h1 className="font-heading text-xl font-semibold tracking-tight md:text-2xl">{title}</h1>
+        {description && <p className="mt-1 max-w-[75ch] text-sm text-muted-foreground">{description}</p>}
       </div>
       {action && <div className="flex max-w-full flex-wrap items-center gap-2 [&>*]:max-w-full [&>*]:flex-wrap">{action}</div>}
       </div>
@@ -43,9 +43,12 @@ export function PageHeader({
   );
 }
 
-/** Page body padding shared by every app screen. */
-export function PageBody({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("w-full space-y-6 px-[var(--space-page)] py-[var(--space-page-y)]", className)}>{children}</div>;
+/**
+ * Page body shared by every app screen. Data pages (tables, boards, charts) use the full width;
+ * `width="form"` keeps settings and editors to a readable 960px column.
+ */
+export function PageBody({ children, className, width = "data" }: { children: React.ReactNode; className?: string; width?: "data" | "form" }) {
+  return <div className={cn("w-full space-y-6 px-[var(--space-page)] py-[var(--space-page-y)]", width === "form" && "max-w-[calc(960px+2*var(--space-page))]", className)}>{children}</div>;
 }
 
 const STATUS_CLS: Record<UserStatus, string> = {

@@ -104,7 +104,7 @@ export function CommandPalette() {
               aria-label={t("palette.placeholder")}
               aria-activedescendant={hits.length ? `palette-${current}` : undefined}
               placeholder={t("palette.placeholder")}
-              className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/70"
               value={text}
               onChange={(e) => { setText(e.target.value); setActive(0); }}
               onKeyDown={(e) => {

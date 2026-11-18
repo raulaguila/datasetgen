@@ -334,7 +334,7 @@ export default function CollectionIntegrationsPage() {
     <CollectionPage section="collections.tab.integrations" description="integrations.subtitle">
       {(collection) => roleAllows(collection.role, "owner") ? (
         <IntegrationTabs collection={collection} />
-      ) : <EmptyState icon={Plug} title={t("error.forbidden")} description={t("integrations.owners_only")} />}
+      ) : <EmptyState icon={Plug} title={t("error.forbidden_page")} description={t("integrations.owners_only")} />}
     </CollectionPage>
   );
 }

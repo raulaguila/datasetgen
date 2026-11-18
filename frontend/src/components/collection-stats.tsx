@@ -207,7 +207,7 @@ function Series({ points, bucket, line = false }: { points: { at: string; count:
       </figcaption>
       <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
         {/* The scale: its top and zero, with a faint line at the top. */}
-        <div className="flex h-24 flex-col justify-between text-right text-[0.6875rem] leading-none tabular-nums text-muted-foreground" aria-hidden><span>{num(max)}</span><span>0</span></div>
+        <div className="flex h-24 flex-col justify-between text-right text-xs leading-none tabular-nums text-muted-foreground" aria-hidden><span>{num(max)}</span><span>0</span></div>
         <div className="relative h-24 border-t border-dashed border-border" role="img" aria-label={label} onMouseLeave={() => setHover(null)}>
           {asLine ? (
             <>

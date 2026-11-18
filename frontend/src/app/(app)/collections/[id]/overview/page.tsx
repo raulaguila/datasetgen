@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, ChevronRight, Circle, Plus } from "lucide-react";
+import { CheckCircle2, ChevronRight, Circle, FileJson, Plus } from "lucide-react";
 import { avatarStyle, initials, useRelativeTime } from "@/components/bits";
 import { recordTitle } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
+import { EmptyState } from "@/components/empty-state";
+import { ExportMenu } from "@/components/export-menu";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -34,7 +36,7 @@ function lastDays(): string[] {
 }
 
 /** One number; with `href` the whole card opens the page behind it. */
-function Stat({ label, value, hint, href, title }: { label: string; value: React.ReactNode; hint?: string; href?: string; title?: string }) {
+function Stat({ label, value, hint, href, title, meter }: { label: string; value: React.ReactNode; hint?: string; href?: string; title?: string; meter?: number }) {
   const body = (
     <>
       <p className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -42,8 +44,13 @@ function Stat({ label, value, hint, href, title }: { label: string; value: React
         {href && <ChevronRight className="size-3.5 opacity-60 transition-transform group-hover/stat:translate-x-0.5" aria-hidden />}
       </p>
       {/* Words ("3 minutes ago") take a smaller size and may wrap, so they read whole in a narrow tile. */}
-      <p className={cn("mt-1 font-heading font-semibold tabular-nums first-letter:uppercase", typeof value === "string" && /\p{L}/u.test(value) ? "line-clamp-2 text-base leading-snug sm:text-lg" : "truncate text-xl sm:text-2xl")} title={title}>{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+      <p className={cn("mt-1 font-heading font-semibold tabular-nums", typeof value === "string" && /\p{L}/u.test(value) ? "line-clamp-2 text-base leading-snug sm:text-lg" : "truncate text-xl sm:text-2xl")} title={title}>{value}</p>
+      {meter !== undefined && (
+        <span className="mt-2 block h-1 overflow-hidden rounded-full bg-destructive/25" aria-hidden>
+          <span className="block h-full rounded-full bg-success" style={{ width: `${meter * 100}%` }} />
+        </span>
+      )}
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </>
   );
   return (
@@ -55,6 +62,7 @@ function Stat({ label, value, hint, href, title }: { label: string; value: React
 
 /** Starter keys: a collection still on them has not had its fields set up. */
 const STARTER_KEYS = ["title", "notes"];
+const MATURE = 10;
 
 /** What a new collection still needs, each step ticked off as it happens. */
 function NextSteps({ collection, records, members }: { collection: Collection; records: number; members: number }) {
@@ -68,7 +76,8 @@ function NextSteps({ collection, records, members }: { collection: Collection; r
     { done: records > 0, label: t("overview.step_records"), href: base },
     ...(roleAllows(collection.role, "owner") ? [{ done: members > 1, label: t("overview.step_members"), href: `${base}/members` }] : []),
   ];
-  if (steps.every((s) => s.done) || dismissed) return null;
+  // A collection with real data no longer needs a checklist, even if nobody was invited.
+  if (steps.every((s) => s.done) || dismissed || records >= MATURE) return null;
   return (
     <Card className="gap-0 overflow-hidden p-0">
       <div className="flex items-center justify-between gap-2 border-b px-4 py-2">
@@ -97,10 +106,11 @@ function Overview({ collection }: { collection: Collection }) {
   const stepsGone = useUIStore((st) => st.stepsDismissed.includes(collection.id));
   const base = `/collections/${collection.id}`;
   const editor = roleAllows(collection.role, "editor");
-  const owner = roleAllows(collection.role, "owner");
   const stats = useQuery({ queryKey: ["collections", "stats", collection.id], queryFn: ({ signal }) => collections.stats(collection.id, signal) });
   const { q: quality, stale } = useQuality(collection, editor);
   const invalid = quality.data?.status === "done" && !stale ? quality.data.invalid_count : null;
+  const checked = quality.data?.status === "done" && !stale ? quality.data.checked : 0;
+  const valid = invalid === null ? null : checked - invalid;
   const recent = useQuery({ queryKey: ["records", collection.id, "recent"], queryFn: ({ signal }) => records.list({ collection_id: collection.id, page: 1, limit: 5 }, signal) });
   const number = new Intl.NumberFormat(locale);
 
@@ -114,7 +124,7 @@ function Overview({ collection }: { collection: Collection }) {
   const dayLabel = (day: string) => new Date(`${day}T00:00:00`).toLocaleDateString(locale, { day: "numeric", month: "short" });
   // A handful of active days reads better as a sentence than as a row of empty bars.
   const active = days.filter((d) => d.count > 0);
-  const steps = editor && !stepsGone ? <NextSteps collection={collection} records={s.records} members={s.members} /> : null;
+  const steps = editor && !stepsGone && s.records < MATURE ? <NextSteps collection={collection} records={s.records} members={s.members} /> : null;
   // A single member makes the ranking say nothing.
   const side = steps ?? (s.members > 1 ? "contributors" : null);
 
@@ -122,7 +132,17 @@ function Overview({ collection }: { collection: Collection }) {
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label={t("overview.records")} value={number.format(s.records)} href={base} />
-        <Stat label={t("overview.members")} value={number.format(s.members)} href={owner ? `${base}/members` : undefined} />
+        {editor ? (
+          <Stat
+            label={t("overview.valid")}
+            value={valid === null ? "—" : number.format(valid)}
+            hint={valid === null || !checked ? undefined : t("overview.valid_share").replace("{p}", String(Math.floor((valid / checked) * 100)))}
+            meter={valid === null || !checked ? undefined : valid / checked}
+            href={`${base}/quality`}
+          />
+        ) : (
+          <Stat label={t("overview.members")} value={number.format(s.members)} />
+        )}
         {editor && (
           <Stat
             label={t("overview.invalid")}
@@ -174,7 +194,12 @@ function Overview({ collection }: { collection: Collection }) {
           {recent.isPending ? (
             <div className="p-4"><ListSkeleton rows={2} /></div>
           ) : !recent.data?.items.length ? (
-            <p className="px-4 py-6 text-sm text-muted-foreground">{t("records.empty")}</p>
+            <EmptyState
+              className="m-4 py-8"
+              icon={FileJson}
+              title={t("records.empty")}
+              action={editor && <Button variant="outline" nativeButton={false} render={<Link href={`/records/new?collection=${collection.id}`} />}><Plus className="size-4" />{t("records.new")}</Button>}
+            />
           ) : (
             <ul className="divide-y">
               {recent.data.items.map((r) => {
@@ -200,7 +225,7 @@ function Overview({ collection }: { collection: Collection }) {
             <ul className="divide-y">
               {s.contributors.map((c) => (
                 <li key={c.user_id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-semibold" style={avatarStyle(c.user_id)} aria-hidden>{initials(c.name)}</span>
+                  <span className="grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold" style={avatarStyle(c.user_id)} aria-hidden>{initials(c.name)}</span>
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{c.name}</span>
                   <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                     {t("overview.created_edited").replace("{c}", number.format(c.created)).replace("{e}", number.format(c.edited))}
@@ -222,6 +247,7 @@ function OverviewActions({ collection }: { collection: Collection }) {
   return (
     <>
       {collection.role && <span className="text-xs text-muted-foreground">{t("overview.your_role")}: {t(`members.role.${collection.role}`)}</span>}
+      <ExportMenu collection={collection} />
       {roleAllows(collection.role, "editor") && (
         <Button nativeButton={false} render={<Link href={`/records/new?collection=${collection.id}`} />}><Plus className="size-4" />{t("records.new")}</Button>
       )}

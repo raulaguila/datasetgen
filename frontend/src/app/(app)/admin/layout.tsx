@@ -23,7 +23,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (user && need && !can(user, ...need)) {
     return (
       <PageBody>
-        <EmptyState icon={ShieldAlert} title={t("error.forbidden")} description={t("error.admin_only")}
+        <EmptyState icon={ShieldAlert} title={t("error.forbidden_page")} description={t("error.admin_only")}
           action={<Button variant="outline" nativeButton={false} render={<Link href="/collections" />}>{t("nav.collections")}</Button>} />
       </PageBody>
     );

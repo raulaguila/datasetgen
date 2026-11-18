@@ -239,7 +239,7 @@ export function McpTools({ collection }: { collection: Collection }) {
                   {x.params.length > 0 && <p className="font-mono text-xs text-muted-foreground">({x.params.map((p) => `${p.name}${p.required ? "" : "?"}`).join(", ")})</p>}
                 </div>
                 <IconAction label={t("common.edit")} target={x.name} onClick={() => setEditing(x)}><Pencil className="size-4" /></IconAction>
-                <IconAction label={t("common.delete")} target={x.name} className="text-destructive" onClick={() => setRemoving(x)}><Trash2 className="size-4" /></IconAction>
+                <IconAction label={t("common.delete")} target={x.name} className="text-muted-foreground hover:text-destructive" onClick={() => setRemoving(x)}><Trash2 className="size-4" /></IconAction>
               </li>
             ))}
           </ul>

@@ -8,7 +8,10 @@ import { toast } from "sonner";
 import { FormSection, FormSections, useFormatDate } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
-import { fieldsOf, recordTitle, type Field } from "@/components/field-builder";
+import { VIRTUAL_TYPES, fieldsOf, recordTitle, type Field } from "@/components/field-builder";
+import { useStats } from "@/components/collection-stats";
+import { TYPE_ICONS } from "@/components/type-icons";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
@@ -24,6 +27,7 @@ import { useI18n } from "@/lib/i18n/provider";
 import { plural } from "@/lib/i18n/plural";
 import { useQuality } from "@/lib/hooks/use-quality";
 import { roleAllows } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
 import { CollectionPage } from "../_parts";
 
 type Fix = Omit<RecordFix, "dry_run">;
@@ -223,6 +227,66 @@ function BulkFix({ collection, report, onDone, fieldLabel, issueText }: { collec
 }
 
 /** Records that a change of fields left out of format, each with the rules it breaks. */
+/** Each field: how many records fill it and how many of the listed problems sit on it. */
+function FieldHealth({ collection, report, fieldName }: { collection: Collection; report?: QualityReport; fieldName: (key: string) => string }) {
+  const { t, locale } = useI18n();
+  const rows = fieldsOf(collection.schema ?? null).filter((r) => !VIRTUAL_TYPES.includes(r.field.type));
+  const stats = useStats(collection.id, { any: false, rules: [] }, { filled: rows }, rows.length > 0);
+  if (!rows.length || !stats.data) return null;
+  const total = stats.data.total;
+  const problems = new Map<string, number>();
+  for (const rec of report?.invalid ?? []) {
+    for (const key of new Set(rec.issues.map((i) => i.path.split("/")[1] ?? ""))) problems.set(key, (problems.get(key) ?? 0) + 1);
+  }
+  const pct = new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 });
+  const num = new Intl.NumberFormat(locale);
+  return (
+    <Card className="gap-0 overflow-hidden p-0">
+      <div className="border-b px-4 py-3">
+        <h2 className="font-heading text-base font-semibold">{t("quality.by_field")}</h2>
+        <p className="text-sm text-muted-foreground">{t("quality.by_field_desc")}</p>
+      </div>
+      <Table data-compact>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t("quality.field")}</TableHead>
+            <TableHead className="w-[40%]">{t("analysis.filled")}</TableHead>
+            <TableHead className="w-32 text-right">{t("overview.invalid")}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => {
+            const Icon = TYPE_ICONS[r.field.type];
+            const filled = stats.data.fields[r.key]?.filled ?? 0;
+            const share = total ? filled / total : 0;
+            const bad = problems.get(r.key) ?? 0;
+            return (
+              <TableRow key={r.key}>
+                <TableCell>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="truncate font-medium">{fieldName(r.key)}</span>
+                    <code className="truncate font-mono text-xs text-muted-foreground">{r.key}</code>
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="flex items-center gap-3" title={`${num.format(filled)} / ${num.format(total)}`}>
+                    <span className="h-1.5 min-w-16 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+                      <span className="block h-full rounded-full bg-primary/70" style={{ width: `${share * 100}%` }} />
+                    </span>
+                    <span className="w-12 shrink-0 text-right tabular-nums">{pct.format(share)}</span>
+                  </span>
+                </TableCell>
+                <TableCell className={cn("text-right tabular-nums", bad ? "font-medium text-destructive" : "text-muted-foreground")}>{bad ? num.format(bad) : "—"}</TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </Card>
+  );
+}
+
 function Quality({ collection }: { collection: Collection }) {
   const { t } = useI18n();
   const format = useFormatDate();
@@ -288,6 +352,7 @@ function Quality({ collection }: { collection: Collection }) {
         </p>
         <div className="ml-auto">{recheck}</div>
       </div>
+      <FieldHealth collection={collection} report={r.status === "done" && !stale ? r : undefined} fieldName={(k) => labels.get(k) ?? k} />
       {r.status === "done" && !stale && r.invalid_count > 0 && (
         <BulkFix key={String(r.finished_at)} collection={collection} report={r} onDone={() => start.mutate()} fieldLabel={(k) => (k ? labels.get(k) ?? k : t("quality.root"))} issueText={issue} />
       )}
@@ -327,7 +392,7 @@ export default function CollectionQualityPage() {
     <CollectionPage section="collections.tab.quality" description="quality.subtitle">
       {(collection) => roleAllows(collection.role, "editor")
         ? <Quality collection={collection} />
-        : <EmptyState icon={ListChecks} title={t("error.forbidden")} description={t("quality.editors_only")} />}
+        : <EmptyState icon={ListChecks} title={t("error.forbidden_page")} description={t("quality.editors_only")} />}
     </CollectionPage>
   );
 }

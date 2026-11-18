@@ -472,7 +472,7 @@ export default function ProfilePage() {
   return (
     <>
       <PageHeader title={t("nav.profile")} description={t("profile.subtitle")} />
-      <PageBody>
+      <PageBody width="form">
         {user ? (
           <>
             <ProfileHeader />

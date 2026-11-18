@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, type LucideIcon } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TableHead } from "@/components/ui/table";
 import { useI18n } from "@/lib/i18n/provider";
@@ -8,9 +8,11 @@ import { cn } from "@/lib/utils";
 import type { SortOrder } from "@/lib/api/types";
 
 /** A column header that sorts the list; a new column starts ascending, dates newest first. */
-export function SortHead({ field, label, sort, order, onSort, className }: {
+export function SortHead({ field, label, icon: Icon, sort, order, onSort, className }: {
   field: string;
   label: string;
+  /** The field type's glyph, the same one the field editor shows. */
+  icon?: LucideIcon;
   sort: string;
   order: SortOrder;
   onSort: (sort: string, order: SortOrder) => void;
@@ -21,6 +23,7 @@ export function SortHead({ field, label, sort, order, onSort, className }: {
   return (
     <TableHead className={className} aria-sort={active ? (order === "asc" ? "ascending" : "descending") : undefined}>
       <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => onSort(field, next)}>
+        {Icon && <Icon className="size-3.5 opacity-60" aria-hidden />}
         {label}
         {active && (order === "asc" ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />)}
       </button>

@@ -13,7 +13,7 @@ test("records come in, go out and keep their history", async ({ page }) => {
   const records = page.url();
 
   // Import: one valid line, one missing the required title, one not JSON.
-  await page.getByRole("button", { name: "Mais" }).click();
+  await page.getByRole("button", { name: "Exportar" }).click();
   await page.getByRole("menuitem", { name: "Importar" }).click();
   await page.locator("#import-file").setInputFiles({
     name: "dados.jsonl",
@@ -45,7 +45,7 @@ test("records come in, go out and keep their history", async ({ page }) => {
   // Export as JSON Lines.
   const [download] = await Promise.all([
     page.waitForEvent("download"),
-    page.getByRole("button", { name: "Mais" }).click().then(() => page.getByRole("menuitem", { name: "JSON Lines (.jsonl)" }).click()),
+    page.getByRole("button", { name: "Exportar" }).click().then(() => page.getByRole("menuitem", { name: "JSON Lines (.jsonl)" }).click()),
   ]);
   expect(download.suggestedFilename()).toMatch(/\.jsonl$/);
   const lines = (await readFile(await download.path(), "utf8")).trim().split("\n");

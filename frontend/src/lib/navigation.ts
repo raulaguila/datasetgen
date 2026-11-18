@@ -36,28 +36,35 @@ export interface CollectionSection {
   shortcut?: string;
 }
 
-/** The sections of one collection, under the collection picked in the sidebar. */
-export const COLLECTION_NAV: CollectionSection[] = [
-  { seg: "/overview", key: "collections.tab.overview", icon: LayoutDashboard, shortcut: "o" },
-  { seg: "", key: "collections.tab.records", icon: FileJson, shortcut: "r" },
-  { seg: "/fields", key: "collections.tab.fields", icon: ListTree, shortcut: "f" },
-  { seg: "/analysis", key: "collections.tab.analysis", icon: ChartColumn, shortcut: "n" },
-];
-
-/** How the collection is doing, its "Monitoring" group in the sidebar. */
-export const COLLECTION_MONITORING_NAV: CollectionSection[] = [
-  { seg: "/quality", key: "collections.tab.quality", icon: ListChecks, need: "editor", shortcut: "q" },
-  { seg: "/audit", key: "collections.tab.audit", icon: ScrollText, need: "owner", shortcut: "a" },
-  { seg: "/trash", key: "collections.tab.trash", icon: Trash2, need: "editor", shortcut: "t" },
-];
-
-/** The collection's own administration, its "Settings" group in the sidebar. */
-export const COLLECTION_SETTINGS_NAV: CollectionSection[] = [
-  { seg: "/settings", key: "collections.tab.general", icon: Settings2, need: "owner", shortcut: "," },
-  { seg: "/members", key: "collections.tab.members", icon: UserCog, need: "owner", shortcut: "m" },
-  { seg: "/automations", key: "collections.tab.automations", icon: Zap, need: "owner", shortcut: "u" },
-  { seg: "/integrations", key: "collections.tab.integrations", icon: Plug, need: "owner", shortcut: "i" },
+/** A collection's pages in the sidebar, in three labelled sections that are always open. */
+export const COLLECTION_GROUPS: { key: MessageKey; items: CollectionSection[] }[] = [
+  {
+    key: "nav.section.data",
+    items: [
+      { seg: "/overview", key: "collections.tab.overview", icon: LayoutDashboard, shortcut: "o" },
+      { seg: "", key: "collections.tab.records", icon: FileJson, shortcut: "r" },
+      { seg: "/fields", key: "collections.tab.fields", icon: ListTree, shortcut: "f" },
+      { seg: "/analysis", key: "collections.tab.analysis", icon: ChartColumn, shortcut: "n" },
+      { seg: "/quality", key: "collections.tab.quality", icon: ListChecks, need: "editor", shortcut: "q" },
+    ],
+  },
+  {
+    key: "nav.section.flows",
+    items: [
+      { seg: "/automations", key: "collections.tab.automations", icon: Zap, need: "owner", shortcut: "u" },
+      { seg: "/integrations", key: "collections.tab.integrations", icon: Plug, need: "owner", shortcut: "i" },
+    ],
+  },
+  {
+    key: "nav.section.manage",
+    items: [
+      { seg: "/members", key: "collections.tab.members", icon: UserCog, need: "owner", shortcut: "m" },
+      { seg: "/audit", key: "collections.tab.audit", icon: ScrollText, need: "owner", shortcut: "a" },
+      { seg: "/trash", key: "collections.tab.trash", icon: Trash2, need: "editor", shortcut: "t" },
+      { seg: "/settings", key: "collections.tab.settings", icon: Settings2, need: "owner", shortcut: "," },
+    ],
+  },
 ];
 
 /** Every section of a collection, for shortcuts and the palette. */
-export const COLLECTION_SECTIONS: CollectionSection[] = [...COLLECTION_NAV, ...COLLECTION_MONITORING_NAV, ...COLLECTION_SETTINGS_NAV];
+export const COLLECTION_SECTIONS: CollectionSection[] = COLLECTION_GROUPS.flatMap((g) => g.items);

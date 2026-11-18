@@ -6,7 +6,7 @@ import { fieldFigure } from "@/components/format-figure";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { keepPreviousData, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Download, FileJson, FileUp, Eye, MoreHorizontal, Paperclip, PencilLine, Plus, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, FileJson, Eye, Paperclip, PencilLine, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageBody, PageHeader, useRelativeTime } from "@/components/bits";
 import { EmptyState } from "@/components/empty-state";
@@ -19,14 +19,14 @@ import { CellFilter, CellFilterHint, RecordRules, andWhere, legacyRules, parseWh
 import { BoardView, CalendarView, GalleryView, layoutFields, type Layout } from "@/components/record-views";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QueryErrorState } from "@/components/query-error-state";
-import { RecordImportDialog } from "@/components/record-import-dialog";
+import { ExportMenu } from "@/components/export-menu";
+import { TYPE_ICONS } from "@/components/type-icons";
 import { ListSkeleton } from "@/components/skeletons";
 import { SelectAllHead, SelectCell, SelectionBar, useSelection } from "@/components/selection";
 import { SortHead, SortSelect } from "@/components/sort-head";
 import { TablePagination, emptyPageFallback } from "@/components/table-pagination";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -102,7 +102,6 @@ function RecordList({ collection }: { collection: Collection }) {
   const order: SortOrder = params.order === "asc" ? "asc" : "desc";
   const [search, setSearch] = useState(params.q);
   const [hidden, setHidden] = useState<string[]>([]);
-  const [importing, setImporting] = useState(false);
   const [bulk, setBulk] = useState(false);
   const q = searchTerm(useDebounced(params.q));
   const list = useQuery({
@@ -166,8 +165,6 @@ function RecordList({ collection }: { collection: Collection }) {
     set({ group: "" });
   };
   const sortProps = { sort, order, onSort: (f: string, o: SortOrder) => set({ sort: f, order: o, page: 1 }) };
-  const download = (format: "jsonl" | "csv", valid: boolean) =>
-    void records.export(collection.id, format, valid).catch((err) => toast.error(errorMessage(err, "common.save_failed", t)));
   const clear = () => { setSearch(""); set({ q: "", filter: "", where: "", page: 1 }); };
   const applyView = (query: string) => {
     window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
@@ -247,25 +244,13 @@ function RecordList({ collection }: { collection: Collection }) {
           </Sheet>
           {/* On phones its buttons join the row, so all of them space out evenly. */}
           <div className="flex items-center gap-2 max-sm:contents sm:ml-auto">
+            {report && report.checked > 0 && (
+              <Link href={`/collections/${collection.id}/quality`} className="inline-flex h-[var(--control-h)] items-center gap-2 rounded-lg border px-3 text-sm tabular-nums hover:bg-muted" title={t("collections.tab.quality")}>
+                <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-success" aria-hidden />{t("records.valid_n").replace("{n}", num(report.checked - report.invalid_count))}</span>
+                {report.invalid_count > 0 && <span className="inline-flex items-center gap-1 text-warn"><span className="size-2 rounded-full bg-warn" aria-hidden />{t("records.invalid_n").replace("{n}", num(report.invalid_count))}</span>}
+              </Link>
+            )}
             <SavedViews collectionId={collection.id} canShare={canEdit} onApply={applyView} />
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="outline" aria-label={t("common.more")} />}><MoreHorizontal className="size-4" /><span className="max-2xl:sr-only">{t("common.more")}</span></DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-56">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">{t("export.title")}</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => download("jsonl", false)}><Download className="size-4" />{t("export.jsonl")}</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => download("csv", false)}><Download className="size-4" />{t("export.csv")}</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => download("jsonl", true)}><Download className="size-4" />{t("export.jsonl_valid")}</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => download("csv", true)}><Download className="size-4" />{t("export.csv_valid")}</DropdownMenuItem>
-                </DropdownMenuGroup>
-                {canEdit && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setImporting(true)}><FileUp className="size-4" />{t("import.title")}</DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
         {search.trim() !== "" && !searchTerm(search) && <p className="basis-full text-xs text-muted-foreground" role="status">{t("common.search_min")}</p>}
@@ -273,7 +258,6 @@ function RecordList({ collection }: { collection: Collection }) {
       </div>
       {/* The applied conditions, a row of their own below the toolbar. */}
       <div ref={setBar} className="empty:hidden" />
-      {canEdit && <RecordImportDialog collectionId={collection.id} schema={collection.schema} open={importing} onOpenChange={setImporting} />}
       {groupRow && <RecordGroups selection={scope} group={groupRow} fields={rows} label={(k) => show(k, groupRow)} onPick={pickGroup} />}
       {layout !== "table" && by ? (
         layout === "board" ? <BoardView collection={collection} by={by} search={scope.search} where={where} show={show} extra={columns.filter((c) => c.key !== by.key).slice(0, 3)} canEdit={canEdit} save={saveField} />
@@ -299,8 +283,8 @@ function RecordList({ collection }: { collection: Collection }) {
                 {canEdit && <SelectAllHead selection={selection} />}
                 {/* The first column, the record's name, gets the room; the others what is left. */}
                 {columns.length ? columns.map((c, i) => c.field.type === "file" || c.field.type === "files"
-                  ? <TableHead key={c.key} className={i === 0 ? "w-[40%]" : undefined}>{c.field.name}</TableHead>
-                  : <SortHead key={c.key} field={`data.${c.key}`} label={c.field.name} className={i === 0 ? "w-[40%]" : undefined} {...sortProps} />) : <TableHead>{t("records.record")}</TableHead>}
+                  ? <TableHead key={c.key} className={i === 0 ? "w-[40%]" : undefined}><span className="inline-flex items-center gap-1">{(() => { const I = TYPE_ICONS[c.field.type]; return <I className="size-3.5 opacity-60" aria-hidden />; })()}{c.field.name}</span></TableHead>
+                  : <SortHead key={c.key} field={`data.${c.key}`} label={c.field.name} icon={TYPE_ICONS[c.field.type]} className={i === 0 ? "w-[40%]" : undefined} {...sortProps} />) : <TableHead>{t("records.record")}</TableHead>}
                 <SortHead field="updated_at" label={t("common.updated_at")} className="w-32" {...sortProps} />
               </TableRow>
             </TableHeader>
@@ -309,7 +293,7 @@ function RecordList({ collection }: { collection: Collection }) {
                 const data = (r.data ?? {}) as Record<string, unknown>;
                 const cells = columns.length ? columns.map((c) => ({ key: c.key, row: c, label: c.field.name, text: show(data[c.key], c), file: fileRefs(data[c.key])[0] })) : [{ key: "", row: undefined, label: t("records.record"), text: JSON.stringify(r.data), file: undefined }];
                 return (
-                  <TableRow key={r.id} className="cursor-pointer hover:bg-muted/60" onClick={() => router.push(`/records/${r.id}`)}>
+                  <TableRow key={r.id} className={cn("cursor-pointer hover:bg-muted/60", isInvalid(r.id, r.updated_at) && "[&>td:first-child]:shadow-[inset_3px_0_0_var(--warn)]")} onClick={() => router.push(`/records/${r.id}`)}>
                     {canEdit && <SelectCell selection={selection} id={r.id} label={cells[0].text} />}
                     {cells.map((c, i) => { const cell = (
                       <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : "field"} className={cn(i === 0 ? "max-w-0 min-w-40" : "max-w-0 min-w-24 text-muted-foreground", i > 0 && c.row?.field.unique && "font-mono text-xs xl:min-w-48")} title={c.row?.field.type === "url" ? String(data[c.key] ?? "") : undefined}>
@@ -367,7 +351,7 @@ function NewCollection() {
   return (
     <>
       <PageHeader title={t("collections.new")} />
-      <PageBody>{loading ? <ListSkeleton rows={3} /> : <CollectionForm collection={null} parts={["details", "fields"]} />}</PageBody>
+      <PageBody width="form">{loading ? <ListSkeleton rows={3} /> : <CollectionForm collection={null} parts={["details", "fields"]} />}</PageBody>
     </>
   );
 }
@@ -378,7 +362,7 @@ export default function CollectionRecordsPage() {
   if (id === "new") return <NewCollection />;
   const count = (_: Collection, n?: number) => (n === undefined ? undefined : t(n === 1 ? "nav.record_one" : "nav.record_many").replace("{n}", String(n)));
   return (
-    <CollectionPage section="collections.tab.records" countRecords description={count} action={(c) => roleAllows(c.role, "editor") && <NewRecordButton collection={c} />}>
+    <CollectionPage section="collections.tab.records" countRecords description={count} action={(c) => <><ExportMenu collection={c} />{roleAllows(c.role, "editor") && <NewRecordButton collection={c} />}</>}>
       {(collection) => <RecordList collection={collection} />}
     </CollectionPage>
   );

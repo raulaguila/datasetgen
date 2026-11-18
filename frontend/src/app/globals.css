@@ -136,37 +136,37 @@
   /* The brand panel stays deep in dark mode: the light primary would glare. Buttons keep --gradient-brand. */
   --brand-panel: linear-gradient(135deg, oklch(0.36 0.12 268), oklch(0.28 0.09 270));
   --brand-foreground: oklch(0.96 0.01 270);
-  --background: oklch(.18 0 0);
-  --content: oklch(.18 0 0);
-  --foreground: oklch(.94 0 0);
-  --card: oklch(.25 0 0);
-  --card-foreground: oklch(.94 0 0);
-  --popover: oklch(.27 0 0);
-  --popover-foreground: oklch(.94 0 0);
+  --background: oklch(.17 0.014 var(--accent-h));
+  --content: oklch(.17 0.014 var(--accent-h));
+  --foreground: oklch(.94 0.006 var(--accent-h));
+  --card: oklch(.25 0.014 var(--accent-h));
+  --card-foreground: oklch(.94 0.006 var(--accent-h));
+  --popover: oklch(.27 0.014 var(--accent-h));
+  --popover-foreground: oklch(.94 0.006 var(--accent-h));
   --primary: oklch(0.747312 0.129614 272.266084);
   --primary-foreground: oklch(0.187396 0.012644 270.658583);
   --primary-strong: var(--primary);
-  --secondary: oklch(.29 0 0);
-  --secondary-foreground: oklch(.94 0 0);
-  --muted: oklch(.29 0 0);
-  --muted-foreground: oklch(.77 0 0);
-  --accent: oklch(.32 0 0);
-  --accent-foreground: oklch(.94 0 0);
+  --secondary: oklch(.29 0.014 var(--accent-h));
+  --secondary-foreground: oklch(.94 0.006 var(--accent-h));
+  --muted: oklch(.29 0.014 var(--accent-h));
+  --muted-foreground: oklch(.77 0.006 var(--accent-h));
+  --accent: oklch(.32 0.014 var(--accent-h));
+  --accent-foreground: oklch(.94 0.006 var(--accent-h));
   --destructive: oklch(0.80 0.12 22);
   --success: oklch(0.80 0.12 150);
   --warn: oklch(0.82 0.11 75);
   --info: oklch(0.80 0.10 240);
-  --border: oklch(.40 0 0);
-  --input: oklch(.62 0 0);
-  --input-fill: oklch(.40 0 0);
+  --border: oklch(.40 0.014 var(--accent-h));
+  --input: oklch(.62 0.012 var(--accent-h));
+  --input-fill: oklch(.40 0.014 var(--accent-h));
   --ring: oklch(0.70 0.15 var(--accent-h));
-  --sidebar: oklch(.21 0 0);
-  --sidebar-foreground: oklch(.94 0 0);
+  --sidebar: oklch(.21 0.014 var(--accent-h));
+  --sidebar-foreground: oklch(.94 0.006 var(--accent-h));
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(.32 0 0);
-  --sidebar-accent-foreground: oklch(.94 0 0);
-  --sidebar-border: oklch(.40 0 0);
+  --sidebar-accent: oklch(.32 0.014 var(--accent-h));
+  --sidebar-accent-foreground: oklch(.94 0.006 var(--accent-h));
+  --sidebar-border: oklch(.40 0.014 var(--accent-h));
   --sidebar-ring: oklch(0.70 0.15 var(--accent-h));
 }
 
@@ -200,8 +200,9 @@
     outline: 2px solid var(--ring);
     outline-offset: 3px;
   }
+  /* Lighter than help text, so a hint never reads as a value someone typed. */
   :where(input, textarea)::placeholder {
-    color: var(--muted-foreground);
+    color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
     opacity: 1;
   }
 }

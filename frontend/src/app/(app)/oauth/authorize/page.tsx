@@ -21,7 +21,7 @@ export default function OAuthAuthorizePage() {
   return (
     <>
       <PageHeader title={t("oauth.title")} description={t("oauth.subtitle")} />
-      <PageBody>
+      <PageBody width="form">
         <Suspense>
           <Consent />
         </Suspense>

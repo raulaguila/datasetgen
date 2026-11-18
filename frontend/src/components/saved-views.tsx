@@ -63,7 +63,7 @@ export function SavedViews({ collectionId, canShare, onApply }: { collectionId: 
                   {v.name}
                 </button>
                 {v.shared && <Users className="size-4 shrink-0 text-muted-foreground" role="img" aria-label={t("views.shared")}><title>{t("views.shared")}</title></Users>}
-                {v.mine && <IconAction label={t("common.delete")} target={v.name} className="text-destructive" onClick={() => remove.mutate(v.id)}><Trash2 className="size-4" /></IconAction>}
+                {v.mine && <IconAction label={t("common.delete")} target={v.name} className="text-muted-foreground hover:text-destructive" onClick={() => remove.mutate(v.id)}><Trash2 className="size-4" /></IconAction>}
               </li>
             ))}
           </ul>

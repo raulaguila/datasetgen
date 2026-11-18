@@ -341,7 +341,7 @@ export default function CollectionAutomationsPage() {
     <CollectionPage section="collections.tab.automations" description="automations.subtitle">
       {(collection) => roleAllows(collection.role, "owner") ? (
         <FormSections><Automations collection={collection} /></FormSections>
-      ) : <EmptyState icon={Zap} title={t("error.forbidden")} description={t("integrations.owners_only")} />}
+      ) : <EmptyState icon={Zap} title={t("error.forbidden_page")} description={t("integrations.owners_only")} />}
     </CollectionPage>
   );
 }

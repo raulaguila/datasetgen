@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useId, useState, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, ChevronDown, ChevronRight, Plus, Settings, Star } from "lucide-react";
+import { ChevronRight, KeyRound, Plus, Star } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { CollectionAvatar } from "@/components/collection-avatar";
 import { BrandWordmark } from "@/components/brand-wordmark";
@@ -12,11 +12,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { collections } from "@/lib/api/endpoints";
 import { useMe } from "@/lib/context/me";
 import { useI18n } from "@/lib/i18n/provider";
-import { COLLECTION_MONITORING_NAV, COLLECTION_NAV, COLLECTION_SECTIONS, COLLECTION_SETTINGS_NAV, type CollectionSection } from "@/lib/navigation";
+import { ADMIN_NAV, COLLECTION_GROUPS, COLLECTION_SECTIONS, isActive, type CollectionSection } from "@/lib/navigation";
 import { can, roleAllows } from "@/lib/permissions";
 import { useUIStore } from "@/lib/store/ui";
-
-type Group = "collection" | "monitoring" | "settings";
 
 const WIDE = "(min-width: 1024px)";
 const subscribeWide = (listener: () => void) => {
@@ -34,12 +32,10 @@ function collectionInPath(pathname: string): string | undefined {
 }
 
 /**
- * Floating sidebar, after the reference app's workspace rail: the collections
- * listed at the top, the selected one opening its work sections (records,
- * fields) below it; its monitoring and settings form groups of their own under
- * "New collection", each shown when the caller's role reaches one of its items.
- * One group is open at a time, the one the page is in.
- * Platform administration lives in the account menu, not here.
+ * Floating sidebar: the collections listed at the top, the selected one opening
+ * all of its pages below it in three labelled sections (data, flows, manage),
+ * always open, each page shown when the caller's role reaches it. The pages of
+ * the account and the platform close the rail, so every destination lives here.
  */
 export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { collapsed: boolean; onToggle: () => void; mobile?: boolean; onNavigate?: () => void }) {
   const { t } = useI18n();
@@ -66,28 +62,9 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
   const active = items.find((c) => c.id === activeId);
   const base = active ? `/collections/${active.id}` : "";
   const allowed = (s: CollectionSection) => !s.need || roleAllows(active?.role, s.need);
-  const sections = COLLECTION_NAV.filter(allowed);
-  const groups = ([
-    { group: "monitoring", label: t("collections.tab.monitoring"), icon: Activity, items: COLLECTION_MONITORING_NAV.filter(allowed) },
-    { group: "settings", label: t("collections.tab.settings"), icon: Settings, items: COLLECTION_SETTINGS_NAV.filter(allowed) },
-  ] as const).filter((g) => g.items.length > 0);
-  const pageGroup = base ? groups.find((g) => g.items.some((s) => pathname === base + s.seg))?.group : undefined;
-  const inCollection = !!base && !pageGroup && (pathname === base || pathname.startsWith(base + "/") || pathname.startsWith("/records/"));
-  const routeGroup: Group | null = pageGroup ?? (inCollection ? "collection" : null);
-  // Each navigation opens the page's group and closes the other; the settings toggle works in between.
-  const context = `${pathname}|${active?.id}|${active?.role}|${routeGroup}`;
-  const [disclosure, setDisclosure] = useState<{ context: string; open: Group[] }>({ context, open: routeGroup ? [routeGroup] : [] });
-  let open = disclosure.open;
-  if (disclosure.context !== context) {
-    open = routeGroup ? [routeGroup] : [];
-    setDisclosure({ context, open });
-  }
-  const toggle = (group: Group) => setDisclosure({ context, open: open.includes(group) ? open.filter((g) => g !== group) : [...open, group] });
-  const enterGroup = (group: Group) => {
-    setDisclosure({ context, open: [group] });
-    onNavigate?.();
-  };
-  const groupId = useId();
+  const groups = COLLECTION_GROUPS.map((g) => ({ ...g, items: g.items.filter(allowed) })).filter((g) => g.items.length > 0);
+  const admin = ADMIN_NAV.filter((item) => !item.needs || can(user, ...item.needs));
+  const globals = [{ href: "/api-access", key: "nav.api_access" as const, icon: KeyRound }, ...admin];
 
   // "g" then a section's key opens it in the selected collection, as in the reference app.
   const router = useRouter();
@@ -114,15 +91,15 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
 
   const tooltip = (label: string, child: React.ReactElement) =>
     compact ? <Tooltip><TooltipTrigger render={child} /><TooltipContent side="right">{label}</TooltipContent></Tooltip> : child;
-  const link = (s: CollectionSection, group: Group) => {
+  const link = (s: CollectionSection) => {
     const href = base + s.seg;
     // Records is the collection's root; its record pages count as Records too.
     const current = s.seg ? pathname === href : pathname === base || pathname.startsWith("/records/");
     const name = t(s.key);
     return (
       <span key={s.seg} className="contents">
-        {tooltip(name, (
-          <Link href={href} aria-label={name} aria-current={current ? "page" : undefined} className="rail-item" onClick={() => enterGroup(group)}>
+        {tooltip(s.shortcut ? `${name} (g ${s.shortcut})` : name, (
+          <Link href={href} aria-label={name} aria-keyshortcuts={s.shortcut && `g ${s.shortcut}`} title={s.shortcut && !compact ? `${name} (g ${s.shortcut})` : undefined} aria-current={current ? "page" : undefined} className="rail-item" onClick={onNavigate}>
             <s.icon className="size-4" aria-hidden />
             {!compact && <span>{name}</span>}
           </Link>
@@ -130,6 +107,20 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
       </span>
     );
   };
+  const globalNav = (
+    <nav className="rail-global" aria-label={t("nav.section.global")}>
+      {globals.map((item) => (
+        <span key={item.href} className="contents">
+          {tooltip(t(item.key), (
+            <Link href={item.href} aria-label={t(item.key)} aria-current={isActive(pathname, item.href) ? "page" : undefined} className="rail-item" onClick={onNavigate}>
+              <item.icon className="size-4" aria-hidden />
+              {!compact && <span>{t(item.key)}</span>}
+            </Link>
+          ))}
+        </span>
+      ))}
+    </nav>
+  );
   const count = (n = 0) => (n === 1 ? t("nav.record_one") : t("nav.record_many").replace("{n}", String(n)));
 
   return (
@@ -155,14 +146,21 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
                 return (
                   <li key={c.id} className="rail-workspace-group" data-selected={selected ? "" : undefined}>
                     {tooltip(c.name, (
-                      <Link href={`/collections/${c.id}/overview`} className="rail-item rail-workspace" aria-label={c.name} title={c.name} aria-current={selected ? "true" : undefined} onClick={() => enterGroup("collection")}>
+                      <Link href={`/collections/${c.id}/overview`} className="rail-item rail-workspace" aria-label={c.name} title={c.name} aria-current={selected ? "true" : undefined} onClick={onNavigate}>
                         <CollectionAvatar collection={c} className="rail-avatar" />
                         {!compact && <span className="rail-workspace-copy"><strong>{c.name}</strong><span>{count(c.record_count)}</span></span>}
                         {!compact && pinned.includes(c.id) && <Star className="rail-pin" fill="currentColor" aria-label={t("collections.pinned")} />}
                       </Link>
                     ))}
-                    {selected && open.includes("collection") && (
-                      <nav className="rail-workspace-navigation" aria-label={c.name}>{sections.map((s) => link(s, "collection"))}</nav>
+                    {selected && (
+                      <nav className="rail-workspace-navigation" aria-label={c.name}>
+                        {groups.map((g) => (
+                          <div key={g.key} role="group" aria-label={t(g.key)} className="rail-nav-section">
+                            {!compact && <span className="rail-nav-label" aria-hidden>{t(g.key)}</span>}
+                            {g.items.map(link)}
+                          </div>
+                        ))}
+                      </nav>
                     )}
                   </li>
                 );
@@ -174,28 +172,13 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
                 {!compact && <span>{t("collections.new")}</span>}
               </Link>
             ))}
-            {/* Outside a collection's pages (profile, notifications) they would point at a collection the page does not name. */}
-            {active && routeGroup && groups.length > 0 && (
-              <section className="rail-admin">
-                {groups.map(({ group, label, icon: Icon, items: entries }) => (
-                  <div key={`${active.id}:${group}`} className="rail-admin-group" data-open={open.includes(group) ? "" : undefined}>
-                    {tooltip(`${label} · ${active.name}`, (
-                      <button type="button" className="rail-item rail-administration" aria-label={label} aria-expanded={open.includes(group)} aria-controls={`${groupId}-${group}`}
-                        data-active={pageGroup === group ? "" : undefined} onClick={() => toggle(group)}>
-                        <Icon className="size-5" aria-hidden />
-                        {!compact && <><span>{label}</span><ChevronDown className="rail-admin-chevron size-4" aria-hidden /></>}
-                      </button>
-                    ))}
-                    <nav id={`${groupId}-${group}`} aria-label={label} hidden={!open.includes(group)}>{entries.map((s) => link(s, group))}</nav>
-                  </div>
-                ))}
-              </section>
-            )}
+            {mobile && globalNav}
           </>
         )}
       </div>
       {!mobile && (
         <div className="rail-footer">
+          {user && globalNav}
           <button type="button" className="rail-item rail-toggle" aria-label={t("layout.toggle_sidebar")} title={t(compact ? "layout.expand" : "layout.collapse")} aria-expanded={!compact} onClick={onToggle}>
             <ChevronRight className="size-5" style={compact ? undefined : { transform: "rotate(180deg)" }} aria-hidden />
             {!compact && <span>{t("layout.collapse")}</span>}

@@ -256,7 +256,7 @@ test("auto fields, comments and an upsert import", async ({ page }) => {
 
   // "Code" matches no field: it is mapped by hand. A1 exists, B2 is new.
   await page.goto(`/collections/${id}`);
-  await page.getByRole("button", { name: "Mais" }).click();
+  await page.getByRole("button", { name: "Exportar" }).click();
   await page.getByRole("menuitem", { name: "Importar" }).click();
   const dialog = page.getByRole("dialog", { name: "Importar" });
   await dialog.getByLabel("Registros que já existem").click();
@@ -281,7 +281,7 @@ test("a JSON Lines upsert keeps adjacent large integer keys distinct", async ({ 
   });
   const { id } = await made.json();
   await page.goto(`/collections/${id}`);
-  await page.getByRole("button", { name: "Mais" }).click();
+  await page.getByRole("button", { name: "Exportar" }).click();
   await page.getByRole("menuitem", { name: "Importar" }).click();
   const dialog = page.getByRole("dialog", { name: "Importar" });
   await dialog.getByLabel("Registros que já existem").click();

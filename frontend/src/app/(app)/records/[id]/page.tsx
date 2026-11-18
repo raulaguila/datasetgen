@@ -82,7 +82,7 @@ function RecordViewPage({ id }: { id: string }) {
   useEffect(() => { if (collection) setCollection(collection.id); }, [collection, setCollection]);
   const editable = roleAllows(collection?.role, "editor");
   const title = record ? recordTitle(collection?.schema ?? null, record.data) ?? `${t("records.record")} ${record.id.slice(0, 8)}` : t("records.record");
-  useCrumb(title, collection && { label: collection.name, href: `/collections/${collection.id}` });
+  useCrumb(title, collection && { label: collection.name, href: `/collections/${collection.id}/overview` });
   const failed = detail.error ?? parent.error;
   const sequence = useSequenceStore((st) => st.ids);
   const { prev, next, index } = neighbours(sequence, id);
@@ -100,7 +100,7 @@ function RecordViewPage({ id }: { id: string }) {
     const label = t(dir === "prev" ? "records.prev" : "records.next");
     const Icon = dir === "prev" ? ChevronLeft : ChevronRight;
     return to
-      ? <Button variant="outline" size="icon" nativeButton={false} aria-label={label} title={`${label} (${dir === "prev" ? "k" : "j"})`} render={<Link href={`/records/${to}`} data-step={dir} />}><Icon className="size-4" /></Button>
+      ? <Button variant="outline" size="icon" nativeButton={false} aria-label={label} title={`${label} (${dir === "prev" ? "k" : "j"})`} aria-keyshortcuts={dir === "prev" ? "k" : "j"} render={<Link href={`/records/${to}`} data-step={dir} />}><Icon className="size-4" /></Button>
       : <Button variant="outline" size="icon" disabled aria-label={label}><Icon className="size-4" /></Button>;
   };
 
@@ -123,8 +123,8 @@ function RecordViewPage({ id }: { id: string }) {
               </div>
             )}
             {editable && (
-              <Button nativeButton={false} title={`${t("common.edit")} (e)`} render={<Link href={`/records/${record.id}/edit`} data-step="edit" />}>
-                <Pencil className="size-4" />{t("common.edit")}
+              <Button nativeButton={false} title={`${t("common.edit")} (e)`} aria-keyshortcuts="e" render={<Link href={`/records/${record.id}/edit`} data-step="edit" />}>
+                <Pencil className="size-4" />{t("common.edit")}<kbd className="ml-1 hidden rounded border border-current/30 px-1 font-mono text-xs leading-4 opacity-70 sm:inline">E</kbd>
               </Button>
             )}
           </>

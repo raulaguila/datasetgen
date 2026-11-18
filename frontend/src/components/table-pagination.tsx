@@ -32,6 +32,8 @@ export function TablePagination({
 }) {
   const { t } = useI18n();
   if (totalItems === 0) return null;
+  // Everything fits on the smallest page: paging controls would only add noise.
+  if (page === 1 && totalItems <= PAGE_SIZE_OPTIONS[0]) return null;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const startIndex = (page - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalItems);

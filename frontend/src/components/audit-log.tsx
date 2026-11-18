@@ -51,12 +51,10 @@ function daysAgo(n: number): string {
 const PRESETS = [["audit.today", 0], ["audit.last_7", 6], ["audit.last_30", 29]] as const;
 
 /** Adding reads green, removing red, any other change blue. */
-const GOOD = /[._](create|import|invite|reinvite|restore|untrash|enable|member_add|bootstrap|promote)$/;
-const BAD = /[._](delete|delete_invalid|purge|disable|member_remove|member_leave|sessions_revoke)$/;
+// Routine changes stay neutral; red marks what cannot be undone or touches access.
+const ALERT = /[._](purge|delete_invalid|disable|sessions_revoke|member_remove|permissions)$|^admin\./;
 function tone(action: string): string {
-  return GOOD.test(action) ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-    : BAD.test(action) ? "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
-    : "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  return ALERT.test(action) ? "border-destructive/30 bg-destructive/10 text-destructive" : "text-muted-foreground";
 }
 
 /**
@@ -288,16 +286,22 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
             title={t(action || user || from || to ? "common.no_results" : "audit.empty")}
             action={(action || user || from || to) && <Button variant="outline" onClick={() => set({ action: "", user: "", from: "", to: "", page: 1 })}>{t("common.clear_filters")}</Button>}
           />
-        ) : (
+        ) : (() => {
+          // A column that says nothing is left out: the actor when the list is filtered to one, details when no row has any.
+          const rows = list.data.items;
+          const showActor = !user;
+          const showDetails = rows.some((r) => details(r.details, r.target_label).length > 0);
+          const span = 3 + Number(showActor) + Number(showDetails);
+          return (
           <Card className="gap-0 overflow-hidden p-0">
             <Table data-responsive data-compact>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-44">{t("audit.when")}</TableHead>
-                  <TableHead>{t("audit.actor")}</TableHead>
+                  {showActor && <TableHead>{t("audit.actor")}</TableHead>}
                   <TableHead>{t("audit.action")}</TableHead>
                   <TableHead>{t("audit.target")}</TableHead>
-                  <TableHead>{t("audit.details")}</TableHead>
+                  {showDetails && <TableHead>{t("audit.details")}</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -311,7 +315,7 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
                     <Fragment key={r.id}>
                     {(i === 0 || dayOf(all[i - 1].lead.created_at) !== dayOf(r.created_at)) && (
                       <TableRow className="hover:bg-transparent" data-day>
-                        <TableCell colSpan={5} className="bg-muted/50 py-1.5 text-xs font-medium text-muted-foreground first-letter:uppercase">{dayLabel(r.created_at)}</TableCell>
+                        <TableCell colSpan={span} className="bg-muted/50 py-1.5 text-xs font-medium text-muted-foreground first-letter:uppercase">{dayLabel(r.created_at)}</TableCell>
                       </TableRow>
                     )}
                     <TableRow className={cn("cursor-pointer", of && "bg-muted/30")} onClick={() => setOpen(r)}>
@@ -319,13 +323,13 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
                         {/* the keyboard way to the full record; a click anywhere on the row does the same */}
                         <button type="button" className="text-left tabular-nums hover:underline" title={format(r.created_at)} aria-label={`${t("audit.open")}: ${format(r.created_at)}`}>{time(r.created_at)}</button>
                       </TableCell>
-                      <TableCell data-label={t("audit.actor")} data-cell="name" onClick={(e) => e.stopPropagation()}>
+                      {showActor && <TableCell data-label={t("audit.actor")} data-cell="name" onClick={(e) => e.stopPropagation()}>
                         {r.actor_id ? (
                           <Link href={`${pathname}?user=${r.actor_id}`} className="hover:underline" title={r.actor_email}>{r.actor_name || r.actor_email || r.actor_id.slice(0, 8)}</Link>
                         ) : (
                           <span className="text-muted-foreground">{t("audit.system")}</span>
                         )}
-                      </TableCell>
+                      </TableCell>}
                       <TableCell data-label={t("audit.action")} data-cell="status">
                         <span className="inline-flex items-center gap-1.5">
                           <Badge variant="outline" className={cn("font-normal", tone(r.action))}>{label(r.action)}</Badge>
@@ -344,7 +348,7 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell data-label={t("audit.details")} data-cell="detail" className="text-muted-foreground"><span className="block truncate lg:max-w-56 2xl:max-w-80" title={extra || undefined}>{extra || "-"}</span></TableCell>
+                      {showDetails && <TableCell data-label={t("audit.details")} data-cell="detail" className="text-muted-foreground"><span className="block truncate lg:max-w-56 2xl:max-w-80" title={extra || undefined}>{extra || "-"}</span></TableCell>}
                     </TableRow>
                     </Fragment>
                   );
@@ -364,7 +368,8 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
               />
             )}
           </Card>
-        )}
+          );
+        })()}
       </div>
       {/* A side drawer: long details scroll inside it and the list stays in view. */}
       <Sheet open={open !== null} onOpenChange={(o) => !o && setOpen(null)}>

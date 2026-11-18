@@ -109,7 +109,7 @@ function InvitePage() {
   return (
     <>
       <PageHeader title={t("users.invite")} />
-      <PageBody><InviteForm /></PageBody>
+      <PageBody width="form"><InviteForm /></PageBody>
     </>
   );
 }
@@ -185,7 +185,7 @@ function UserDetail({ id }: { id: string }) {
           </div>
         )}
       />
-      <PageBody>
+      <PageBody width="form">
         {detail.isPending ? (
           <ListSkeleton rows={3} />
         ) : detail.error instanceof ApiError && detail.error.code === "NOT_FOUND" ? (

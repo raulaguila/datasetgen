@@ -197,7 +197,7 @@ export default function CollectionMembersPage() {
       {(collection) => roleAllows(collection.role, "owner") ? (
         <MemberList collection={collection}><AddMember collection={collection} /></MemberList>
       ) : (
-        <EmptyState icon={Users} title={t("error.forbidden")} description={t("members.owners_only")} />
+        <EmptyState icon={Users} title={t("error.forbidden_page")} description={t("members.owners_only")} />
       )}
     </CollectionPage>
   );

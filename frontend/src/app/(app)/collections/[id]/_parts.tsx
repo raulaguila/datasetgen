@@ -78,7 +78,7 @@ export function useRecordCount(collectionId: string | undefined, enabled = true)
  * Loads the collection in the URL and frames one of its sections: the header with
  * its name, loading and missing states, and the sidebar's current collection.
  */
-export function CollectionPage({ section, description, countRecords = false, action, children }: {
+export function CollectionPage({ section, description, countRecords = false, action, width, children }: {
   section: MessageKey;
   /** What the section is for, or a line built from the collection and its record count. */
   description?: MessageKey | ((collection: Collection, recordCount?: number) => string | undefined);
@@ -86,6 +86,7 @@ export function CollectionPage({ section, description, countRecords = false, act
   countRecords?: boolean;
   /** The section's main action, drawn in the header as on every other page. */
   action?: (collection: Collection) => React.ReactNode;
+  width?: "data" | "form";
   children: (collection: Collection) => React.ReactNode;
 }) {
   const { t } = useI18n();
@@ -96,7 +97,7 @@ export function CollectionPage({ section, description, countRecords = false, act
   const collection = detail.data;
   const gone = detail.error instanceof ApiError && detail.error.code === "NOT_FOUND";
   useEffect(() => setCollection(gone ? null : id), [id, gone, setCollection]);
-  useCrumb(collection && t(section), collection && { label: collection.name, href: `/collections/${collection.id}` });
+  useCrumb(collection && t(section), collection && { label: collection.name, href: `/collections/${collection.id}/overview` });
   const recordCount = useRecordCount(collection?.id, countRecords);
   const subtitle = !collection ? undefined
     : typeof description === "function" ? description(collection, recordCount)
@@ -105,7 +106,7 @@ export function CollectionPage({ section, description, countRecords = false, act
   return (
     <>
       <PageHeader title={t(section)} description={subtitle} action={collection && action?.(collection)} />
-      <PageBody>
+      <PageBody width={width}>
         {loading || detail.isPending ? (
           <ListSkeleton rows={3} />
         ) : gone ? (
@@ -285,7 +286,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                 <IconPicker value={icon} onChange={setIcon} label={t("collections.icon")} noneLabel={t("collections.icon_none")} disabled={!editable} />
                 <p className="flex items-center gap-2 text-xs text-muted-foreground">
                   {t("collections.icon_desc")}
-                  <CollectionAvatar collection={{ id: collection?.id ?? "new", name: name.trim() || "?", icon }} className="size-6 rounded-md text-[10px] font-semibold" />
+                  <CollectionAvatar collection={{ id: collection?.id ?? "new", name: name.trim() || "?", icon }} className="size-6 rounded-md text-xs font-semibold" />
                 </p>
               </div>
             </div>

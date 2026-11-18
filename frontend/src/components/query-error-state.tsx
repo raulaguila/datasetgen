@@ -22,7 +22,7 @@ export function QueryErrorState({
 }) {
   const { t } = useI18n();
   if (error instanceof ApiError && error.code === "FORBIDDEN") {
-    title ??= t("error.forbidden");
+    title ??= t("error.forbidden_page");
     description ??= "";
     onRetry = undefined;
   }

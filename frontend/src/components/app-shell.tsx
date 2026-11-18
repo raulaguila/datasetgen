@@ -27,7 +27,6 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { redirectToLogin } from "@/lib/api/client";
 import { account, notifications } from "@/lib/api/endpoints";
 import { useMe } from "@/lib/context/me";
-import { can } from "@/lib/permissions";
 import { useI18n } from "@/lib/i18n/provider";
 import { ACCOUNT_PAGES, ADMIN_NAV, MAIN_NAV, isActive } from "@/lib/navigation";
 import { useCrumbStore } from "@/lib/store/crumb";
@@ -58,7 +57,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const crumb = useCrumbStore((s) => s.label);
   const parent = useCrumbStore((s) => s.parent);
   const count = unread.data?.unread ?? 0;
-  const admin = ADMIN_NAV.filter((item) => !item.needs || can(user, ...item.needs));
 
   return (
     <div className="app-frame">
@@ -129,7 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <Bell className="size-4" />
                 {count > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] font-semibold leading-4 text-primary-foreground">
+                  <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-xs font-semibold leading-4 text-primary-foreground">
                     {count > 99 ? "99+" : count}
                   </span>
                 )}
@@ -152,22 +150,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem render={<Link href="/profile" />}>{t("nav.profile")}</DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href="/api-access" />}>{t("nav.api_access")}</DropdownMenuItem>
-                  {admin.length > 0 && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuGroup>
-                        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">{t("nav.admin_area")}</DropdownMenuLabel>
-                        {admin.map((item) => (
-                          <DropdownMenuItem key={item.href} render={<Link href={item.href} />}>
-                            <item.icon className="size-4" aria-hidden />
-                            {t(item.key)}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuGroup>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => void redirectToLogin()}>{t("common.logout")}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

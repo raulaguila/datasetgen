@@ -62,7 +62,7 @@ export function IconPicker({ value, onChange, label, noneLabel, disabled }: {
       type="button"
       aria-pressed={category === key}
       onClick={() => setCategory(key)}
-      className={cn("rounded-md px-2 py-0.5 text-[11px] transition-colors",
+      className={cn("rounded-md px-2 py-0.5 text-xs transition-colors",
         category === key ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground")}
     >
       {text}
@@ -101,7 +101,7 @@ export function IconPicker({ value, onChange, label, noneLabel, disabled }: {
               onKeyDown={(e) => {
                 if (e.key === "ArrowDown") { e.preventDefault(); focusOption(Math.max(0, slugs.indexOf(tabSlug ?? ""))); }
               }}
-              className="mb-2 h-8 w-full rounded-md border border-input bg-card px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring dark:bg-transparent"
+              className="mb-2 h-8 w-full rounded-md border border-input bg-card px-2 text-xs outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring dark:bg-transparent"
             />
             <div className="mb-2 flex flex-wrap gap-1">
               {chip("all", t("icon.group.all"))}
@@ -141,7 +141,7 @@ export function IconPicker({ value, onChange, label, noneLabel, disabled }: {
                   </button>
                 ))}
               </div>
-              {slugs.length === 0 && <p className="py-2 text-center text-[11px] text-muted-foreground">{t("icon.empty")}</p>}
+              {slugs.length === 0 && <p className="py-2 text-center text-xs text-muted-foreground">{t("icon.empty")}</p>}
             </div>
           </Popover.Popup>
         </Popover.Positioner>

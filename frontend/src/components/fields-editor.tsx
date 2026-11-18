@@ -154,7 +154,7 @@ function OptionsEditor({ id, field, invalid, set }: { id: string; field: Field; 
               <Input aria-label={`${t("fields.option")} ${i + 1}`} className="h-8 min-w-0 flex-1" defaultValue={o} maxLength={100} onBlur={(e) => rename(i, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }} />
               <IconAction label={t("collections.field_up")} target={o} disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="size-4" /></IconAction>
               <IconAction label={t("collections.field_down")} target={o} disabled={i === options.length - 1} onClick={() => move(i, 1)}><ArrowDown className="size-4" /></IconAction>
-              <IconAction label={t("fields.option_remove")} target={o} className="text-destructive" onClick={() => write(options.filter((x) => x !== o))}><Trash2 className="size-4" /></IconAction>
+              <IconAction label={t("fields.option_remove")} target={o} className="text-muted-foreground hover:text-destructive" onClick={() => write(options.filter((x) => x !== o))}><Trash2 className="size-4" /></IconAction>
             </li>
           ))}
         </ul>
@@ -769,7 +769,7 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
                       <IconAction label={t("collections.field_down")} target={field.name} disabled={i === rows.length - 1 || searching} onClick={() => onChange(moveField(schema, key, 1))}><ArrowDown className="size-4" /></IconAction>
                       <IconAction label={t("fields.duplicate")} target={field.name} onClick={() => onChange(duplicateField(schema, key, t("fields.copy_suffix")))}><Copy className="size-4" /></IconAction>
                     </span>
-                    <IconAction label={t("collections.field_remove")} target={field.name} className="text-destructive" onClick={() => onChange(removeField(schema, key))}><Trash2 className="size-4" /></IconAction>
+                    <IconAction label={t("collections.field_remove")} target={field.name} className="text-muted-foreground hover:text-destructive" onClick={() => onChange(removeField(schema, key))}><Trash2 className="size-4" /></IconAction>
                   </div>
                 )}
               </div>
