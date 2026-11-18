@@ -167,7 +167,7 @@ function MemberList({ collection, children }: { collection: Collection; children
             </div>
             <div className="ml-12 flex items-center gap-1 sm:ml-0">
             <RoleSelect value={m.role} label={`${t("members.role")}: ${m.name}`} disabled={setRole.isPending || lastOwner(m)} onChange={(role) => role !== m.role && setRole.mutate({ m, role })} />
-            <IconAction label={t("members.remove")} target={m.name} className="text-destructive" disabled={lastOwner(m)} onClick={() => setRemoving(m)}><Trash2 className="size-4" /></IconAction>
+            <IconAction label={t("members.remove")} target={m.name} className="text-destructive disabled:text-muted-foreground" disabled={lastOwner(m)} onClick={() => setRemoving(m)}><Trash2 className="size-4" /></IconAction>
             </div>
           </li>
         ))}

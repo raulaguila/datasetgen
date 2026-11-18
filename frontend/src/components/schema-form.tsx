@@ -7,6 +7,7 @@ import { useMemo, useRef, useState, type Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Copy, FileUp, Loader2, Paperclip, Plus, Search, X } from "lucide-react";
 import { AUTO, DEFAULT_NOW, FILE, FORMULA, LOOKUP, MULTILINE, REF, ROLLUP, SECTION, SHOW_WHEN, TEXT_AREA_FROM, WIDTH, fileRefs, isImage, recordTitle, shows, type ShowWhen } from "@/components/field-builder";
+import { Markdown, looksLikeMarkdown } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -396,7 +397,29 @@ function SelectWidget(props: WidgetProps) {
   );
 }
 
-const widgets = { SelectWidget };
+const DefaultTextarea = getDefaultRegistry().widgets.TextareaWidget;
+
+/** Long text grows with its content; text that holds Markdown can be previewed as the record page draws it. */
+function TextareaWidget(props: WidgetProps) {
+  const { t } = useI18n();
+  const [preview, setPreview] = useState(false);
+  const text = typeof props.value === "string" ? props.value : "";
+  const markdown = looksLikeMarkdown(text);
+  return (
+    <div data-wide>
+      {markdown && (
+        <div className="mb-1 flex justify-end">
+          <Button type="button" size="xs" variant="ghost" aria-pressed={preview} onClick={() => setPreview((p) => !p)}>{t(preview ? "schema.md_edit" : "schema.md_preview")}</Button>
+        </div>
+      )}
+      {preview && markdown
+        ? <div className="min-h-24 rounded-lg border bg-card px-3 py-2"><Markdown text={text} /></div>
+        : <DefaultTextarea {...props} />}
+    </div>
+  );
+}
+
+const widgets = { SelectWidget, TextareaWidget };
 
 /**
  * Text areas for long-text fields, including older schemas with length limits,

@@ -291,7 +291,9 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
           const rows = list.data.items;
           const showActor = !user;
           const showDetails = rows.some((r) => details(r.details, r.target_label).length > 0);
-          const span = 3 + Number(showActor) + Number(showDetails);
+          // A collection's own log where every row is about the collection itself: the target column would repeat "this collection".
+          const showTarget = !collectionId || rows.some((r) => r.target_id !== collectionId);
+          const span = 2 + Number(showActor) + Number(showDetails) + Number(showTarget);
           return (
           <Card className="gap-0 overflow-hidden p-0">
             <Table data-responsive data-compact>
@@ -300,7 +302,7 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
                   <TableHead className="w-44">{t("audit.when")}</TableHead>
                   {showActor && <TableHead>{t("audit.actor")}</TableHead>}
                   <TableHead>{t("audit.action")}</TableHead>
-                  <TableHead>{t("audit.target")}</TableHead>
+                  {showTarget && <TableHead>{t("audit.target")}</TableHead>}
                   {showDetails && <TableHead>{t("audit.details")}</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -341,14 +343,14 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
                           )}
                         </span>
                       </TableCell>
-                      <TableCell data-label={t("audit.target")} data-cell="sub">
+                      {showTarget && <TableCell data-label={t("audit.target")} data-cell="sub">
                         {self ? <span className="text-muted-foreground">{t("audit.this_collection")}</span> : (
                           <span className={cn("block truncate lg:max-w-56 2xl:max-w-80", r.target_gone && "text-muted-foreground line-through")} title={r.target_gone ? `${target} · ${t("audit.target_gone")}` : target}>
                             {href ? <Link href={href} className="hover:underline" onClick={(e) => e.stopPropagation()}>{target}</Link> : target}
                           </span>
                         )}
-                      </TableCell>
-                      {showDetails && <TableCell data-label={t("audit.details")} data-cell="detail" className="text-muted-foreground"><span className="block truncate lg:max-w-56 2xl:max-w-80" title={extra || undefined}>{extra || "-"}</span></TableCell>}
+                      </TableCell>}
+                      {showDetails && <TableCell data-label={t("audit.details")} data-cell="detail" className="text-muted-foreground"><span className="line-clamp-2 break-words lg:max-w-72 2xl:max-w-96" title={extra || undefined}>{extra || "-"}</span></TableCell>}
                     </TableRow>
                     </Fragment>
                   );

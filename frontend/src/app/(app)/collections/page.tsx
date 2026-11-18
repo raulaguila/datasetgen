@@ -219,7 +219,7 @@ function Row({ c, pinned, onPin, onRemove, onDuplicate }: RowProps) {
             <DropdownMenuItem onClick={() => router.push(base)}><FileJson className="size-4" aria-hidden />{t("collections.tab.records")}</DropdownMenuItem>
             {owner && <>
               <DropdownMenuItem onClick={() => router.push(`${base}/members`)}><UserCog className="size-4" aria-hidden />{t("collections.tab.members")}</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push(`${base}/settings`)}><Settings2 className="size-4" aria-hidden />{t("collections.general_settings")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push(`${base}/settings`)}><Settings2 className="size-4" aria-hidden />{t("collections.tab.settings")}</DropdownMenuItem>
             </>}
             {onDuplicate && <DropdownMenuItem onClick={() => onDuplicate(c)}><Copy className="size-4" aria-hidden />{t("duplicate.title")}</DropdownMenuItem>}
             {(canLeave || owner) && <DropdownMenuSeparator />}

@@ -17,9 +17,9 @@ export function ThemeToggle() {
   const isDark = mounted && resolvedTheme === "dark";
   return (
     <button
-      aria-label={`${t("common.theme")}: ${t(isDark ? "profile.theme_light" : "profile.theme_dark")}`}
+      aria-label={t(isDark ? "theme.to_light" : "theme.to_dark")}
       type="button"
-      title={t(isDark ? "profile.theme_light" : "profile.theme_dark")}
+      title={t(isDark ? "theme.to_light" : "theme.to_dark")}
       onClick={() => {
         const next = isDark ? "light" : "dark";
         setTheme(next);

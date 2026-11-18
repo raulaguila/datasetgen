@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Pencil } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight, Copy, Link2, MoreHorizontal, Pencil } from "lucide-react";
+import { toast } from "sonner";
 import { PageBody, PageHeader, useFormatDate } from "@/components/bits";
 import { EmptyState } from "@/components/empty-state";
 import { recordTitle } from "@/components/field-builder";
@@ -15,16 +16,18 @@ import { RecordLinks } from "@/components/record-links";
 import { RecordView } from "@/components/record-view";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ApiError } from "@/lib/api/client";
 import { collections, records } from "@/lib/api/endpoints";
 import type { Collection, DataRecord } from "@/lib/api/types";
 import { useMe } from "@/lib/context/me";
+import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
 import { neighbours, useSequenceStore } from "@/lib/store/sequence";
 import { useUIStore } from "@/lib/store/ui";
-import { cn } from "@/lib/utils";
+import { cn, copyText } from "@/lib/utils";
 import RecordEditPage from "./edit/page";
 
 type S = Record<string, unknown>;
@@ -84,6 +87,18 @@ function RecordViewPage({ id }: { id: string }) {
   const title = record ? recordTitle(collection?.schema ?? null, record.data) ?? `${t("records.record")} ${record.id.slice(0, 8)}` : t("records.record");
   useCrumb(title, collection && { label: collection.name, href: `/collections/${collection.id}/overview` });
   const failed = detail.error ?? parent.error;
+  const router = useRouter();
+  const client = useQueryClient();
+  // A copy opens in the form, so the fields that must differ can be changed at once.
+  const duplicate = useMutation({
+    mutationFn: () => records.create(record!.collection_id, record!.data),
+    onSuccess: (copy) => {
+      void client.invalidateQueries({ queryKey: ["records", copy.collection_id] });
+      toast.success(t("records.duplicated"));
+      router.push(`/records/${copy.id}/edit`);
+    },
+    onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
+  });
   const sequence = useSequenceStore((st) => st.ids);
   const { prev, next, index } = neighbours(sequence, id);
   // j / k step through the list, e edits, as in mail apps; typing in a field is left alone.
@@ -127,6 +142,13 @@ function RecordViewPage({ id }: { id: string }) {
                 <Pencil className="size-4" />{t("common.edit")}<kbd className="ml-1 hidden rounded border border-current/30 px-1 font-mono text-xs leading-4 opacity-70 sm:inline">E</kbd>
               </Button>
             )}
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label={t("common.more")} title={t("common.more")} />}><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => void copyText(window.location.href).then(() => toast.success(t("records.link_copied")))}><Link2 className="size-4" />{t("records.copy_link")}</DropdownMenuItem>
+                {editable && <DropdownMenuItem disabled={duplicate.isPending} onClick={() => duplicate.mutate()}><Copy className="size-4" />{t("records.duplicate")}</DropdownMenuItem>}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         )}
       />

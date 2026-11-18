@@ -12,6 +12,10 @@ export function proxy(req: NextRequest) {
   if (signedIn && (pathname === "/login" || pathname === "/register")) {
     return NextResponse.redirect(new URL("/", req.url));
   }
+  // Signed in, the password changes in the profile; reset and activate links from mail still open.
+  if (signedIn && pathname === "/forgot-password") {
+    return NextResponse.redirect(new URL("/profile#security", req.url));
+  }
   if (!isPublic && !signedIn) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
