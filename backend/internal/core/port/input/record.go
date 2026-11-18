@@ -91,8 +91,10 @@ type ExportOptions struct {
 }
 
 type Export struct {
-	Name   string
-	Schema json.RawMessage
+	Name        string
+	Description string
+	Icon        string
+	Schema      json.RawMessage
 	// Keys are the top-level keys the records hold, sorted: the CSV columns
 	// past the form's fields.
 	Keys []string

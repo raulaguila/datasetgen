@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addField } from "./helpers";
+import { addField, newCollection } from "./helpers";
 
 const fieldsList = (page: Page) => page.getByRole("list", { name: "Campos" });
 
@@ -8,13 +8,10 @@ const fieldsList = (page: Page) => page.getByRole("list", { name: "Campos" });
 // table, the sidebar sections, the warning when records already exist and members.
 test("a collection's records follow its fields", async ({ page }) => {
   const name = `e2e-${Date.now()}`;
-  await page.goto("/collections/new");
-  await page.locator("#c-name").fill(name);
+  const records = await newCollection(page, name, "Em branco");
 
-  // The starter fields go; three are built with the list instead of JSON.
+  // Fields are built on the new collection's Fields page, with the list instead of JSON.
   const fields = page.getByRole("list", { name: "Campos" });
-  await page.getByRole("button", { name: "Remover campo: Título" }).click();
-  await page.getByRole("button", { name: "Remover campo: Notas" }).click();
   await addField(page, "Nome", { required: true });
   await addField(page, "Nota", { help: "De 0 a 10" });
   await addField(page, "Categoria", { required: true, options: "gatilho, efeito" });
@@ -22,8 +19,9 @@ test("a collection's records follow its fields", async ({ page }) => {
   await expect(fields.getByRole("listitem")).toHaveText([/^NomeObrigatório/, /^CategoriaObrigatório/, /^Nota/]);
 
   // The preview's required fields stay empty: they must not block this save.
-  await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(page.getByText("Alterações salvas.").first()).toBeVisible();
+  await page.goto(records);
   // The sidebar lists it and opens its sections.
   await expect(page.getByRole("list", { name: "Coleções" }).getByRole("link", { name })).toHaveAttribute("aria-current", "true");
 
@@ -117,10 +115,7 @@ test("a collection's records follow its fields", async ({ page }) => {
 // object takes any JSON and refuses text that does not parse.
 test("groups hold subfields and free objects take JSON", async ({ page }) => {
   const name = `e2e-group-${Date.now()}`;
-  await page.goto("/collections/new");
-  await page.locator("#c-name").fill(name);
-  await page.getByRole("button", { name: "Remover campo: Título" }).click();
-  await page.getByRole("button", { name: "Remover campo: Notas" }).click();
+  const records = await newCollection(page, name, "Em branco");
   await addField(page, "Nome", { required: true });
   await addField(page, "Endereço", { type: "Grupo de campos" });
   await expect(page.getByRole("list", { name: "Campos", exact: true }).getByRole("listitem").filter({ hasText: "Endereço" }).first()).toContainText("0 subcampos");
@@ -131,8 +126,9 @@ test("groups hold subfields and free objects take JSON", async ({ page }) => {
   await expect(page.getByRole("list", { name: "Subcampos: Endereço" })).toHaveCount(0);
   await page.getByRole("button", { name: "Mostrar subcampos: Endereço" }).click();
   await addField(page, "Extra", { type: "Objeto livre (JSON)" });
-  await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(page.getByText("Alterações salvas.").first()).toBeVisible();
+  await page.goto(records);
 
   await page.getByRole("button", { name: "Novo registro" }).click();
   // A new record starts in its first field.
@@ -177,12 +173,13 @@ test("templates start collections and unique fields hold", async ({ page }) => {
   const create = page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" });
   await create.click();
   await expect(page.getByText("Dê um nome à coleção.").first()).toBeVisible();
-  await page.getByRole("radio", { name: "Contatos" }).click();
-  await expect(fieldsList(page).getByRole("listitem").filter({ hasText: "E-mail" })).toContainText(/único/i);
+  await page.getByLabel("Modelo").click();
+  await page.getByRole("option", { name: "Contatos" }).click();
   await page.locator("#c-name").fill(name);
   await create.click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
-  const records = page.url();
+  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}\/fields$/);
+  await expect(fieldsList(page).getByRole("listitem").filter({ hasText: "E-mail" })).toContainText(/único/i);
+  const records = page.url().replace(/\/fields$/, "");
 
   for (const who of ["Ana", "Bia"]) {
     await page.goto(records.replace(/\/collections\/([^/]+)$/, "/records/new?collection=$1"));
@@ -196,4 +193,31 @@ test("templates start collections and unique fields hold", async ({ page }) => {
   await page.goto(`${records}/audit`);
   await expect(page.getByRole("row").filter({ hasText: "Hoje" })).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: "Registro criado" })).toContainText("Ana");
+});
+
+// A whole-collection export carries name, icon, fields and records: the new-collection page recreates it in one go.
+test("a whole-collection export recreates the collection", async ({ page }) => {
+  const name = `e2e-bundle-${Date.now()}`;
+  const records = await newCollection(page, name, "Contatos");
+  await page.goto(records.replace(/\/collections\/([^/]+)$/, "/records/new?collection=$1"));
+  await page.locator("#rec_nome").fill("Ana");
+  await page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true }).click();
+  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+
+  await page.getByRole("button", { name: "Exportar" }).click();
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: /Coleção completa/ }).click()]);
+  expect(download.suggestedFilename()).toMatch(/\.collection\.jsonl$/);
+
+  await page.goto("/collections/new");
+  await page.getByRole("radio", { name: /Importar de um arquivo/ }).click();
+  await page.locator("input[type=file]").setInputFiles(await download.path());
+  await expect(page.locator("#c-name")).toHaveValue(name);
+  await page.locator("#c-name").fill(`${name}-copia`);
+  await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
+  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+  const dialog = page.getByRole("dialog", { name: "Importar" });
+  await dialog.getByRole("button", { name: /^Importar 1/ }).click();
+  await expect(page.getByRole("row").filter({ hasText: "Ana" })).toBeVisible();
+  await page.goto(`${page.url()}/fields`);
+  await expect(fieldsList(page).getByRole("listitem").filter({ hasText: "E-mail" })).toContainText(/único/i);
 });

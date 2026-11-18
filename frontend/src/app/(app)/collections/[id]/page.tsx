@@ -44,7 +44,8 @@ import { useCrumb } from "@/lib/store/crumb";
 import { useSequenceStore } from "@/lib/store/sequence";
 import { cn, searchTerm } from "@/lib/utils";
 import { deleteWithUndo } from "@/lib/undo-delete";
-import { CollectionForm, CollectionPage } from "./_parts";
+import { CollectionPage } from "./_parts";
+import { NewCollectionForm } from "./_new";
 
 /**
  * The titles of the records reference columns point at, one lookup per column
@@ -350,8 +351,8 @@ function NewCollection() {
   useCrumb(t("collections.new"));
   return (
     <>
-      <PageHeader title={t("collections.new")} />
-      <PageBody width="form">{loading ? <ListSkeleton rows={3} /> : <CollectionForm collection={null} parts={["details", "fields"]} />}</PageBody>
+      <PageHeader title={t("collections.new")} description={t("collections.new_desc")} />
+      <PageBody>{loading ? <ListSkeleton rows={3} /> : <NewCollectionForm />}</PageBody>
     </>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormError } from "@/components/bits";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FileUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -62,7 +62,14 @@ interface Busy {
  * answer saves nothing twice, and failures that may pass are tried again. Where a
  * send stopped is kept in this browser: the same file continues from there.
  */
-export function RecordImportDialog({ collectionId, schema, open, onOpenChange }: { collectionId: string; schema?: Record<string, unknown>; open: boolean; onOpenChange: (open: boolean) => void }) {
+export function RecordImportDialog({ collectionId, schema, open, onOpenChange, initialFile }: {
+  collectionId: string;
+  schema?: Record<string, unknown>;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** A file already chosen (on the new-collection page): its check starts when the dialog opens. */
+  initialFile?: File | null;
+}) {
   const { t, locale } = useI18n();
   const num = (n: number) => n.toLocaleString(locale);
   const client = useQueryClient();
@@ -235,6 +242,14 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange }:
   const invalid = checked?.invalid ?? 0;
   const pct = busy?.read !== undefined && file?.size ? Math.min(100, Math.round((busy.read / file.size) * 100)) : null;
   const canSend = !!checked && checked.valid > 0 && (invalid === 0 || skipInvalid) && !busy;
+
+  // Once: the ref also keeps React's dev double-run from starting a second check.
+  const started = useRef(false);
+  useEffect(() => {
+    if (!open || !initialFile || started.current) return;
+    started.current = true;
+    void pick(initialFile);
+  }, [open, initialFile]); // eslint-disable-line react-hooks/exhaustive-deps -- pick is recreated each render; the ref runs it once
 
   return (
     <Dialog open={open} onOpenChange={close}>

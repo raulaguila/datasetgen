@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { formAlert, guestPage } from "./helpers";
+import { formAlert, guestPage, newCollection } from "./helpers";
 
 const api = (page: Page, path: string, data: unknown) => page.request.post(`/api/proxy${path}`, { data });
 
@@ -92,11 +92,7 @@ test("conditions, groups, inline edit and the board", async ({ page }) => {
 
 // A public form adds records without a session; a read-only list shows them; a deleted link stops.
 test("share links: a public form and a read-only list", async ({ page, browser }) => {
-  await page.goto("/collections/new");
-  await page.locator("#c-name").fill(`publico-${Date.now()}`);
-  await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
-  const records = page.url();
+  const records = await newCollection(page, `publico-${Date.now()}`);
   await page.goto(`${records}/integrations`);
   await page.getByRole("button", { name: "Criar formulário" }).click();
   await page.getByRole("button", { name: "Criar lista de leitura" }).click();

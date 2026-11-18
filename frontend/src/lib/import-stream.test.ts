@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { CsvReader, parseCsv, schemaFromFile } from "./infer-schema";
-import { JsonArrayReader, inferFile, recordBatches } from "./import-stream";
+import { JsonArrayReader, collectionHead, inferFile, recordBatches } from "./import-stream";
 import { records as apiRecords } from "./api/endpoints";
 import { withRetry } from "./import-client";
 import { ApiError } from "./api/client";
@@ -176,5 +176,24 @@ describe("withRetry", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("collection export", () => {
+  const head = { name: "Livros", description: "Lidos", icon: "book", schema: { type: "object", properties: { t: { type: "string" } } } };
+  const file = (text: string, name = "x.collection.jsonl") => chunked(text, name, 5);
+  const content = `${JSON.stringify({ $collection: head })}\n{"t":"a"}\n{"t":"b"}\n`;
+
+  it("reads the collection from the first line", async () => {
+    expect(await collectionHead(file(content))).toEqual(head);
+    expect(await collectionHead(file('{"t":"a"}\n'))).toBeNull();
+    expect(await collectionHead(file("nome\nAna", "x.csv"))).toBeNull();
+  });
+
+  it("imports only the records after it", async () => {
+    let n = 0;
+    for await (const b of recordBatches(file(content), { schema: head.schema })) n += b.records.length;
+    expect(n).toBe(2);
+    expect(Object.keys((await inferFile(file(content)))!.properties as object)).toEqual(["t"]);
   });
 });

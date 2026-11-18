@@ -44,4 +44,10 @@ func TestRecordsCSVFollowsTheFormOrder(t *testing.T) {
 	if lines := write(writeJSONL); strings.Count(lines, "\n") != 2 || !strings.HasPrefix(lines, `{"alpha":"=1+1"`) {
 		t.Fatalf("jsonl: %q", lines)
 	}
+	exp.Name, exp.Description, exp.Icon = "Livros", "Lidos", "book"
+	lines := strings.Split(write(writeCollection), "\n")
+	wantHead := `{"$collection":{"name":"Livros","description":"Lidos","icon":"book","schema":{"properties":{"zeta":{},"alpha":{}}}}}`
+	if len(lines) != 4 || lines[0] != wantHead || !strings.HasPrefix(lines[1], `{"alpha":"=1+1"`) {
+		t.Fatalf("collection: %q", lines)
+	}
 }

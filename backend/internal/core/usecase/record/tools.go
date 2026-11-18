@@ -136,7 +136,7 @@ func (s *Service) Export(ctx context.Context, collectionID string, options input
 			after = batch[len(batch)-1].ID
 		}
 	}
-	return &input.Export{Name: c.Name, Schema: c.Schema, Keys: keys, Each: each}, nil
+	return &input.Export{Name: c.Name, Description: c.Description, Icon: c.Icon, Schema: c.Schema, Keys: keys, Each: each}, nil
 }
 
 // checkMatch accepts a JSON object of up to 10 top-level fields with plain values.

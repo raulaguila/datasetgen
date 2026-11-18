@@ -1,15 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { dropKey } from "./helpers";
+import { dropKey, newCollection } from "./helpers";
 
 // An owner publishes an MCP tool on the Integrations page; an assistant with a
 // key to the collection sees it and calls it through the web address.
 test("an owner publishes an MCP tool and an assistant calls it", async ({ page }) => {
   const name = `mcp-${Date.now()}`;
-  await page.goto("/collections/new");
-  await page.locator("#c-name").fill(name);
-  await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
-  const records = page.url();
+  const records = await newCollection(page, name);
+  await page.goto(records);
   const collectionId = records.split("/").pop()!;
   for (const title of ["Alfa", "Beta"]) {
     const res = await page.request.post("/api/proxy/v1/records", { data: { collection_id: collectionId, data: { title, notes: `nota ${title}` } } });

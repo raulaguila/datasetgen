@@ -164,7 +164,7 @@ export const records = {
     const blob = new Blob([prefix, ',"records":[', body.sourceRecords.join(","), "]}"], { type: "application/json" });
     return apiFetch<ImportResult>("/v1/records/import", { method: "POST", blob });
   },
-  export: (collection_id: string, format: "jsonl" | "csv", valid: boolean) =>
+  export: (collection_id: string, format: "jsonl" | "csv" | "collection", valid: boolean) =>
     apiDownload(`/v1/records/export${query({ collection_id, format, valid: valid || undefined })}`, `records.${format}`),
   /** Counts the selected records by a field (or all together) with sums and averages of numeric fields. */
   aggregate: (p: { collection_id: string; search?: string; filter?: string; where?: string; group?: string; sum?: string }, signal?: AbortSignal) =>

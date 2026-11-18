@@ -14,6 +14,22 @@ export const strongPassword = "Quiet river lantern 42";
 /** An address no earlier run used, so the flows never collide with old data. */
 export const uniqueEmail = (tag: string) => `e2e-${tag}-${Date.now()}@example.test`;
 
+/**
+ * Creates a collection from a template ("Título e notas" when none is named) and
+ * returns its records URL; the page is left on the new collection's Fields.
+ */
+export async function newCollection(page: Page, name: string, template?: string) {
+  await page.goto("/collections/new");
+  await page.locator("#c-name").fill(name);
+  if (template) {
+    await page.getByLabel("Modelo").click();
+    await page.getByRole("option", { name: template }).click();
+  }
+  await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
+  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}\/fields$/);
+  return page.url().replace(/\/fields$/, "");
+}
+
 export async function login(page: Page, email: string, password: string) {
   await page.goto("/login");
   await page.getByLabel("E-mail").fill(email);

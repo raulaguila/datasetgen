@@ -1,16 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { addField, dropKey } from "./helpers";
+import { addField, dropKey, newCollection } from "./helpers";
 
 // CSV import, sort by a field, bulk edit, a saved view, the trash, an API key
 // used through the web address, and the field history.
 test("a collection's tools: CSV, bulk edit, views, trash, API key, field history", async ({ page }) => {
   const name = `kit-${Date.now()}`;
-  await page.goto("/collections/new");
-  await page.locator("#c-name").fill(name);
   // The starter fields: Título (title, required) and Notas (notes).
-  await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
-  const records = page.url();
+  const records = await newCollection(page, name);
+  await page.goto(records);
   const collectionId = records.split("/").pop()!;
 
   // CSV: columns by label or key.
@@ -100,17 +97,13 @@ test("a collection's tools: CSV, bulk edit, views, trash, API key, field history
 // A reference field picks a record of another collection; a file field uploads at once.
 test("reference and file fields", async ({ page }) => {
   const target = `alvo-${Date.now()}`;
-  await page.goto("/collections/new");
-  await page.locator("#c-name").fill(target);
-  await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+  await page.goto(await newCollection(page, target));
   await page.getByRole("button", { name: "Novo registro" }).click();
   await page.locator("#rec_title").fill("Alvo 1");
   await page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true }).click();
   await expect(page.getByRole("row").filter({ hasText: "Alvo 1" })).toBeVisible();
 
-  await page.goto("/collections/new");
-  await page.locator("#c-name").fill(`links-${Date.now()}`);
+  const links = await newCollection(page, `links-${Date.now()}`);
   await page.getByRole("button", { name: "Adicionar campo", exact: true }).click();
   const panel = page.getByRole("dialog", { name: "Adicionar campo" });
   await panel.getByRole("button", { name: "Referência", exact: true }).click();
@@ -120,8 +113,9 @@ test("reference and file fields", async ({ page }) => {
   await panel.getByRole("button", { name: "Adicionar campo", exact: true }).click();
   await expect(panel).toBeHidden();
   await addField(page, "Anexo", { type: "Arquivo" });
-  await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(page.getByText("Alterações salvas.").first()).toBeVisible();
+  await page.goto(links);
 
   await page.getByRole("button", { name: "Novo registro" }).click();
   await page.locator("#rec_title").fill("Com ligação");

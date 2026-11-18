@@ -2,10 +2,10 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Braces, ChevronRight, Eye, FileUp, History, MoreHorizontal, RotateCcw } from "lucide-react";
+import { Braces, ChevronRight, Eye, History, MoreHorizontal, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { FieldNote, FormSection, FormSections, PageBody, PageHeader, SaveBar, useFormatDate } from "@/components/bits";
 import { CollectionAvatar } from "@/components/collection-avatar";
@@ -30,17 +30,14 @@ import { useUnsavedGuard } from "@/lib/hooks/use-unsaved-guard";
 import { useI18n } from "@/lib/i18n/provider";
 import { plural } from "@/lib/i18n/plural";
 import type { MessageKey } from "@/lib/i18n/messages";
-import { can, roleAllows } from "@/lib/permissions";
+import { roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
 import { useUIStore } from "@/lib/store/ui";
 import { cn } from "@/lib/utils";
-import { TEMPLATE_IDS, templateFields, type TemplateId } from "@/lib/collection-templates";
-import { templateSchema } from "@/lib/infer-schema";
-import { Cancelled, inferSchema } from "@/lib/import-client";
 import { collectionName, description as descriptionRule, ready } from "@/lib/validation";
 
 /** The fields a new collection starts with, named in the user's language. */
-const starter = (t: (k: MessageKey) => string) => ({
+export const starter = (t: (k: MessageKey) => string) => ({
   type: "object",
   required: ["title"],
   properties: {
@@ -49,13 +46,13 @@ const starter = (t: (k: MessageKey) => string) => ({
   },
 });
 
-const pretty = (v: unknown) => JSON.stringify(v, null, 2);
+export const pretty = (v: unknown) => JSON.stringify(v, null, 2);
 
 // The form generator is the heaviest code on these pages; load it only where a form shows.
 export const SchemaForm = dynamic(() => import("@/components/schema-form").then((m) => m.SchemaForm), { ssr: false, loading: () => <ListSkeleton rows={2} /> });
 
 /** The schema text as an object, or why it is not one (the parser's message names the position). */
-function parseSchema(text: string): { schema: Record<string, unknown> | null; error?: string } {
+export function parseSchema(text: string): { schema: Record<string, unknown> | null; error?: string } {
   try {
     const v: unknown = JSON.parse(text);
     return v && typeof v === "object" && !Array.isArray(v) ? { schema: v as Record<string, unknown> } : { schema: null };
@@ -158,92 +155,56 @@ function SchemaHistory({ collection, enabled, onLoad }: { collection: Collection
 }
 
 /**
- * Name, description and schema of a collection. A new collection shows both
- * parts; an existing one shows the part its page is for ("details" on Settings,
- * "fields" on Fields), and saving sends only what changed.
+ * Name, description and schema of a collection: each page shows its part
+ * ("details" on Settings, "fields" on Fields), and saving sends only what changed.
+ * A new collection is made on the new-collection page (_new.tsx).
  */
-export function CollectionForm({ collection, parts }: { collection: Collection | null; parts: ("details" | "fields")[] }) {
-  const { t, locale } = useI18n();
-  const { user } = useMe();
+export function CollectionForm({ collection, parts }: { collection: Collection; parts: ("details" | "fields")[] }) {
+  const { t } = useI18n();
   const router = useRouter();
   const client = useQueryClient();
-  const editable = collection ? roleAllows(collection.role, "owner") : can(user, "collections", "create");
-  const recordCount = useRecordCount(collection?.id, parts.includes("fields") && editable);
-  const original = pretty(collection?.schema ?? starter(t));
-  const [name, setName] = useState(collection?.name ?? "");
-  const [desc, setDesc] = useState(collection?.description ?? "");
-  const [icon, setIcon] = useState(collection?.icon ?? "");
+  const editable = roleAllows(collection.role, "owner");
+  const recordCount = useRecordCount(collection.id, parts.includes("fields") && editable);
+  const original = pretty(collection.schema ?? starter(t));
+  const [name, setName] = useState(collection.name);
+  const [desc, setDesc] = useState(collection.description);
+  const [icon, setIcon] = useState(collection.icon);
   const [schemaText, setSchemaText] = useState(original);
   const [error, setError] = useState<string | null>(null);
-  const [version, setVersion] = useState(collection?.version);
-  // A new collection: the name's error shows once Create was pressed without one.
-  const [tried, setTried] = useState(false);
-  const [template, setTemplate] = useState<TemplateId | "file">("basic");
-  const [fileNote, setFileNote] = useState<string | null>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
-  const nameError = collectionName(name) ?? (tried && !name.trim() ? "collections.name_needed" : null);
-  const pickTemplate = (id: TemplateId) => {
-    setTemplate(id);
-    setFileNote(null);
-    setSchemaText(pretty(id === "basic" ? starter(t) : templateSchema(templateFields(locale, id))));
-  };
-  // Read in the import worker: a large file keeps the page answering, with its progress shown.
-  const reading = useRef<AbortController | null>(null);
-  const pickFile = async (file: File) => {
-    reading.current?.abort();
-    const ctl = (reading.current = new AbortController());
-    const shown = (read: number) => setFileNote(t("collections.template_file_reading").replace("{file}", file.name).replace("{pct}", String(file.size ? Math.min(100, Math.round((read / file.size) * 100)) : 0)));
-    shown(0);
-    let next: Record<string, unknown> | null;
-    try {
-      next = await inferSchema(file, shown, ctl.signal);
-    } catch (err) {
-      if (err instanceof Cancelled) return;
-      return setFileNote(err instanceof Error && err.message.startsWith("xlsx:") ? t("import.bad_xlsx") : t("collections.template_file_empty"));
-    }
-    if (!next) return setFileNote(t("collections.template_file_empty"));
-    setTemplate("file");
-    setSchemaText(pretty(next));
-    setFileNote(t("collections.template_file_loaded").replace("{n}", String(Object.keys(next.properties as object).length)).replace("{file}", file.name));
-  };
+  const [version, setVersion] = useState(collection.version);
+  const nameError = collectionName(name);
   const parsed = useMemo(() => parseSchema(schemaText), [schemaText]);
   const schema = parsed.schema;
   const [sheet, setSheet] = useState<"preview" | "history" | "json" | null>(null);
   const [previewData, setPreviewData] = useState<unknown>({});
   const schemaChanged = schemaText !== original;
-  const changes = useMemo(() => (collection ? schemaChanges(collection.schema ?? null, schema) : []), [collection, schema]);
+  const changes = useMemo(() => schemaChanges(collection.schema ?? null, schema), [collection, schema]);
   // Changes that can leave stored records out of format: confirmed first, then Quality is a click away.
   const risky = !!recordCount && changes.some((c) => c.risky);
   const [confirming, setConfirming] = useState(false);
-  const dirty = collection
-    ? name.trim() !== collection.name || desc.trim() !== collection.description || icon !== collection.icon || schemaChanged
-    : name.trim() !== "";
+  const dirty = name.trim() !== collection.name || desc.trim() !== collection.description || icon !== collection.icon || schemaChanged;
   useUnsavedGuard(editable && dirty, t("roles.leave_unsaved"));
 
   // The variable says whether the save was risky, for the toast that follows.
   const save = useMutation<Collection, unknown, boolean>({
     mutationFn: () => {
-      const input = { name: name.trim(), description: desc.trim(), icon, schema };
-      if (!collection) return collections.create(input);
-      return collections.update(collection.id, { name: input.name, description: input.description, icon: icon !== collection.icon ? icon : undefined, schema: schemaChanged ? schema : undefined, version });
+      return collections.update(collection.id, { name: name.trim(), description: desc.trim(), icon: icon !== collection.icon ? icon : undefined, schema: schemaChanged ? schema : undefined, version });
     },
     onSuccess: (saved, wasRisky) => {
       setError(null);
       client.setQueryData(["collections", "detail", saved.id], saved);
       void client.invalidateQueries({ queryKey: ["collections"] });
-      toast.success(t(collection ? "common.saved" : "collections.created"), wasRisky ? { action: { label: t("collections.check_quality"), onClick: () => router.push(`/collections/${saved.id}/quality`) } } : undefined);
-      if (!collection) router.replace(`/collections/${saved.id}`);
-      else setVersion(saved.version);
+      toast.success(t("common.saved"), wasRisky ? { action: { label: t("collections.check_quality"), onClick: () => router.push(`/collections/${saved.id}/quality`) } } : undefined);
+      setVersion(saved.version);
     },
     onError: (err) => {
       // The backend names the broken schema rule; it reads better than a generic failure.
       setError(err instanceof ApiError && err.field === "schema" ? err.message : errorMessage(err, "common.save_failed", t));
-      if (collection && err instanceof ApiError && err.code === "CONFLICT") void client.invalidateQueries({ queryKey: ["collections", "detail", collection.id] });
+      if (err instanceof ApiError && err.code === "CONFLICT") void client.invalidateQueries({ queryKey: ["collections", "detail", collection.id] });
     },
   });
 
   const discard = () => {
-    if (!collection) return router.push("/collections");
     setName(collection.name);
     setDesc(collection.description);
     setIcon(collection.icon);
@@ -258,16 +219,11 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
     // noValidate: required fields in the preview are a demo, not part of this save.
     <form noValidate onSubmit={(e) => {
       e.preventDefault();
-      if (!collection && !ready([name, collectionName])) {
-        setTried(true);
-        document.getElementById("c-name")?.focus();
-        return;
-      }
       if (risky) setConfirming(true);
       else save.mutate(false);
     }}
       // Ctrl/⌘+Enter saves from any field.
-      onKeyDown={(e) => { if (editable && (dirty || !collection) && e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); e.currentTarget.requestSubmit(); } }}>
+      onKeyDown={(e) => { if (editable && dirty && e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); e.currentTarget.requestSubmit(); } }}>
       <FormSections>
         {!editable && <p role="status" className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{t("collections.readonly")}</p>}
         {parts.includes("details") && (
@@ -275,7 +231,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="c-name">{t("auth.name")}</Label>
-                <Input id="c-name" required autoFocus={!collection} maxLength={120} aria-invalid={!!nameError} aria-describedby="c-name-note" disabled={!editable} value={name} onChange={(e) => setName(e.target.value)} />
+                <Input id="c-name" required maxLength={120} aria-invalid={!!nameError} aria-describedby="c-name-note" disabled={!editable} value={name} onChange={(e) => setName(e.target.value)} />
                 <FieldNote id="c-name-note" error={nameError && t(nameError)} />
               </div>
               <div className="space-y-2">
@@ -286,7 +242,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                 <IconPicker value={icon} onChange={setIcon} label={t("collections.icon")} noneLabel={t("collections.icon_none")} disabled={!editable} />
                 <p className="flex items-center gap-2 text-xs text-muted-foreground">
                   {t("collections.icon_desc")}
-                  <CollectionAvatar collection={{ id: collection?.id ?? "new", name: name.trim() || "?", icon }} className="size-6 rounded-md text-xs font-semibold" />
+                  <CollectionAvatar collection={{ id: collection.id, name: name.trim() || "?", icon }} className="size-6 rounded-md text-xs font-semibold" />
                 </p>
               </div>
             </div>
@@ -304,31 +260,12 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
             )}
             {/* One column, the card's full width as on every other page: each field opens in a side panel, and so do the preview, the history and the JSON. */}
             <div className="space-y-4">
-                {!collection && editable && (
-                  // A new collection starts from a ready-made set of fields, or from a data file's columns.
-                  <div className="space-y-2">
-                    <div role="radiogroup" aria-label={t("collections.start_with")} className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm text-muted-foreground">{t("collections.start_with")}</span>
-                      {TEMPLATE_IDS.map((id) => (
-                        <Button key={id} type="button" size="sm" variant={template === id ? "secondary" : "outline"} role="radio" aria-checked={template === id} onClick={() => pickTemplate(id)}>
-                          {t(`collections.template.${id}`)}
-                        </Button>
-                      ))}
-                      <Button type="button" size="sm" variant={template === "file" ? "secondary" : "outline"} role="radio" aria-checked={template === "file"} onClick={() => fileInput.current?.click()}>
-                        <FileUp className="size-4" />{t("collections.template.file")}
-                      </Button>
-                      <input ref={fileInput} type="file" accept=".json,.jsonl,.ndjson,.csv,.xlsx,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" aria-label={t("collections.template.file")}
-                        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void pickFile(f); }} />
-                    </div>
-                    <p className="text-xs text-muted-foreground" role="status">{fileNote ?? t("collections.template_file_hint")}</p>
-                  </div>
-                )}
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <Button type="button" variant="outline" size="sm" disabled={!schema} onClick={() => setSheet("preview")}><Eye className="size-4" />{t("collections.preview")}</Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label={t("fields.more")} />}><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {collection && editable && <DropdownMenuItem onClick={() => setSheet("history")}><History className="size-4" />{t("field_history.title")}</DropdownMenuItem>}
+                      {editable && <DropdownMenuItem onClick={() => setSheet("history")}><History className="size-4" />{t("field_history.title")}</DropdownMenuItem>}
                       <DropdownMenuItem onClick={() => setSheet("json")}><Braces className="size-4" />{t("collections.json_toggle")}</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -341,9 +278,9 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
                 )}
                 <FieldsEditor
                   schema={schema}
-                  original={collection?.schema ?? null}
+                  original={collection.schema ?? null}
                   editable={editable}
-                  keysLocked={!!collection && recordCount !== 0}
+                  keysLocked={recordCount !== 0}
                   onChange={(next) => setSchemaText(pretty(next))}
                 />
                 {changes.length > 0 && (
@@ -364,7 +301,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
             <SidePanel open={sheet === "preview"} onOpenChange={(o) => !o && setSheet(null)} title={t("collections.preview")} description={t("collections.preview_desc")} wide>
               {schema && <SchemaForm schema={schema} data={previewData} onChange={setPreviewData} idPrefix="preview" columns={2} />}
             </SidePanel>
-            {collection && editable && (
+            {editable && (
               <SidePanel open={sheet === "history"} onOpenChange={(o) => !o && setSheet(null)} title={t("field_history.title")}>
                 <SchemaHistory collection={collection} enabled={sheet === "history"} onLoad={(old) => { setSchemaText(pretty(old)); setSheet(null); toast.info(t("field_history.loaded")); }} />
               </SidePanel>
@@ -388,23 +325,22 @@ export function CollectionForm({ collection, parts }: { collection: Collection |
             </SidePanel>
           </section>
         )}
-        {editable && (dirty || !collection) && (
+        {editable && dirty && (
           <SaveBar
             footer
             submit
-            label={t(collection ? "roles.unsaved" : "collections.new")}
+            label={t("roles.unsaved")}
             status={
               <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                {collection ? t("roles.unsaved") : t(name.trim() ? "collections.ready_to_create" : "collections.name_needed")}
+                {t("roles.unsaved")}
                 <span className="hidden text-xs font-normal text-muted-foreground sm:inline"><kbd className="font-mono">Ctrl</kbd>+<kbd className="font-mono">Enter</kbd> {t("records.shortcut_save")}</span>
               </span>
             }
             error={error}
             saving={save.isPending}
-            // A new collection's Create stays live: pressing it without a name says what is missing.
-            canSave={!!schema && !descriptionRule(desc) && (collection ? dirty && ready([name, collectionName]) : !collectionName(name))}
-            saveLabel={t(collection ? "common.save" : "common.create")}
-            discardLabel={t(collection ? "common.discard" : "common.cancel")}
+            canSave={!!schema && !descriptionRule(desc) && dirty && ready([name, collectionName])}
+            saveLabel={t("common.save")}
+            discardLabel={t("common.discard")}
             onDiscard={discard}
           />
         )}

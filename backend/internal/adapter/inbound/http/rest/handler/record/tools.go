@@ -155,11 +155,11 @@ func (h *Handler) Import(c fiber.Ctx) error {
 }
 
 // @Summary Download every record of a collection as JSON Lines or CSV
-// @Description JSON Lines holds one record's data per line. CSV has one column per field, in the form's order, then any other keys; lists and objects are written as JSON. Streamed, any number of records; CSV columns past the form come from up to 1 000 keys.
+// @Description JSON Lines holds one record's data per line. "collection" is JSON Lines whose first line is {"$collection":{name, description, icon, schema}}: the whole collection, which the new-collection page recreates in one go. CSV has one column per field, in the form's order, then any other keys; lists and objects are written as JSON. Streamed, any number of records; CSV columns past the form come from up to 1 000 keys.
 // @Tags Records
 // @Produce plain
 // @Param collection_id query string true "Collection ID"
-// @Param format query string false "File format" Enums(jsonl, csv) default(jsonl)
+// @Param format query string false "File format" Enums(jsonl, csv, collection) default(jsonl)
 // @Param valid query bool false "Only records that match the current schema"
 // @Security BearerAuth
 // @Success 200 {string} string
@@ -171,8 +171,8 @@ func (h *Handler) Import(c fiber.Ctx) error {
 // @Router /v1/records/export [get]
 func (h *Handler) Export(c fiber.Ctx) error {
 	format := c.Query("format", "jsonl")
-	if format != "jsonl" && format != "csv" {
-		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "format must be jsonl or csv").WithField("format"))
+	if format != "jsonl" && format != "csv" && format != "collection" {
+		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "format must be jsonl, csv or collection").WithField("format"))
 	}
 	// The body streams after this handler returns, when the request's context is
 	// cancelled and c is reused: the export gets its own context and copies.
@@ -183,13 +183,20 @@ func (h *Handler) Export(c fiber.Ctx) error {
 		cancel()
 		return mapper.WriteError(c, err)
 	}
-	name := fmt.Sprintf("%s-%s.%s", exp.Name, time.Now().UTC().Format("20060102"), format)
+	ext := format
+	if format == "collection" {
+		ext = "collection.jsonl"
+	}
+	name := fmt.Sprintf("%s-%s.%s", exp.Name, time.Now().UTC().Format("20060102"), ext)
 	c.Set(fiber.HeaderContentDisposition, `attachment; filename="`+asciiName(name)+`"; filename*=UTF-8''`+url.PathEscape(name))
 	write := writeJSONL
 	c.Set(fiber.HeaderContentType, "application/x-ndjson; charset=utf-8")
-	if format == "csv" {
+	switch format {
+	case "csv":
 		write = writeCSV
 		c.Set(fiber.HeaderContentType, "text/csv; charset=utf-8")
+	case "collection":
+		write = writeCollection
 	}
 	// The server's write timeout covers a whole response; the stream gets the export's own.
 	if err := c.RequestCtx().SetWriteDeadline(time.Now().Add(exportTimeout)); err != nil {
@@ -217,6 +224,24 @@ func writeJSONL(w *bufio.Writer, exp *input.Export) error {
 		_, err := w.Write(compact.Bytes())
 		return err
 	})
+}
+
+// writeCollection writes the collection itself on the first line, then its records as JSON Lines.
+func writeCollection(w *bufio.Writer, exp *input.Export) error {
+	type meta struct {
+		Name        string          `json:"name"`
+		Description string          `json:"description"`
+		Icon        string          `json:"icon"`
+		Schema      json.RawMessage `json:"schema"`
+	}
+	head, err := json.Marshal(map[string]meta{"$collection": {exp.Name, exp.Description, exp.Icon, exp.Schema}})
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(append(head, '\n')); err != nil {
+		return err
+	}
+	return writeJSONL(w, exp)
 }
 
 func writeCSV(w *bufio.Writer, exp *input.Export) error {

@@ -107,7 +107,28 @@ export class JsonArrayReader {
   }
 }
 
-/** Records of a JSON Lines file or of one JSON array, both read in pieces. */
+/** A whole collection, as the first line of a "collection" export: {"$collection": {...}}. */
+export type CollectionHead = { name: string; description: string; icon: string; schema: Record<string, unknown> };
+const isHead = (v: unknown): v is { $collection: CollectionHead } =>
+  !!v && typeof v === "object" && !Array.isArray(v) && "$collection" in v;
+/** The first line is read in one piece: far more than any schema needs. */
+const HEAD_BYTES = 8 << 20;
+
+/** The collection a "collection" export starts with; null for any other file. */
+export async function collectionHead(file: File): Promise<CollectionHead | null> {
+  if (isTable(file)) return null;
+  const text = (await file.slice(0, HEAD_BYTES).text()).replace(/^\uFEFF/, "");
+  const end = text.indexOf("\n");
+  try {
+    const v: unknown = JSON.parse(end < 0 ? text : text.slice(0, end));
+    const head = isHead(v) ? v.$collection : null;
+    return head && head.schema && typeof head.schema === "object" && !Array.isArray(head.schema) ? head : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Records of a JSON Lines file or of one JSON array, both read in pieces; a collection export's first line is not one. */
 async function* jsonRecords(file: File, progress?: Progress): AsyncGenerator<ParsedRecord | LineProblem> {
   let line = 0;
   let rest = "";
@@ -118,6 +139,7 @@ async function* jsonRecords(file: File, progress?: Progress): AsyncGenerator<Par
     if (!raw.trim()) return;
     try {
       const record: ParsedRecord = { line, data: JSON.parse(raw) };
+      if (line === 1 && isHead(record.data)) return;
       if (needsNumberSource(raw)) record.sourceJSON = raw.trim();
       yield record;
     } catch { yield { line, code: "parse" }; }

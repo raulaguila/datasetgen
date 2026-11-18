@@ -1,16 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
+import { newCollection } from "./helpers";
 
 // Import with a check first, field filters, export, a record's history and
 // restore, the background quality check, a bulk fix and duplicating.
 test("records come in, go out and keep their history", async ({ page }) => {
   const name = `tools-${Date.now()}`;
-  await page.goto("/collections/new");
-  await page.locator("#c-name").fill(name);
   // The starter fields: Título (title, required) and Notas (notes).
-  await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
-  const records = page.url();
+  const records = await newCollection(page, name);
+  await page.goto(records);
 
   // Import: one valid line, one missing the required title, one not JSON.
   await page.getByRole("button", { name: "Exportar" }).click();

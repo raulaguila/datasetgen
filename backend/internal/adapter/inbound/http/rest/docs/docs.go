@@ -5599,7 +5599,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "JSON Lines holds one record's data per line. CSV has one column per field, in the form's order, then any other keys; lists and objects are written as JSON. Streamed, any number of records; CSV columns past the form come from up to 1 000 keys.",
+                "description": "JSON Lines holds one record's data per line. \"collection\" is JSON Lines whose first line is {\"$collection\":{name, description, icon, schema}}: the whole collection, which the new-collection page recreates in one go. CSV has one column per field, in the form's order, then any other keys; lists and objects are written as JSON. Streamed, any number of records; CSV columns past the form come from up to 1 000 keys.",
                 "produces": [
                     "text/plain"
                 ],
@@ -5618,7 +5618,8 @@ const docTemplate = `{
                     {
                         "enum": [
                             "jsonl",
-                            "csv"
+                            "csv",
+                            "collection"
                         ],
                         "type": "string",
                         "default": "jsonl",
