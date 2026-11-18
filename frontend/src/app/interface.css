@@ -470,7 +470,7 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
 .rail-body > .rail-global { margin-top:auto; padding-top:12px; border-top:1px solid var(--rail-border); }
 :is(.rail-workspace-navigation, .rail-global) .rail-item { font-size:14px; min-height:var(--rail-row-h); height:auto; white-space:normal; padding-block:4px; gap:8px; }
 :is(.rail-workspace-navigation, .rail-global) .rail-item:hover { background:transparent; color:var(--rail-item-hover-fg,var(--foreground)); }
-:is(.rail-workspace-navigation, .rail-global) .rail-item > svg { box-sizing:border-box; overflow:visible; width:32px; height:32px; padding:6px; margin-inline:2px; border-radius:50%; flex-shrink:0; }
+:is(.rail-workspace-navigation, .rail-global) .rail-item > svg { box-sizing:border-box; overflow:visible; width:34px; height:34px; padding:7px; margin-inline:2px; border-radius:50%; flex-shrink:0; }
 :is(.rail-workspace-navigation, .rail-global) .rail-item:hover > svg { background:var(--rail-item-hover-bg); }
 :is(.rail-workspace-navigation, .rail-global) .rail-item[aria-current=page] { background:transparent; color:var(--primary-strong); font-weight:600; }
 :is(.rail-workspace-navigation, .rail-global) .rail-item[aria-current=page] > svg { background:var(--rail-current-bg); color:var(--rail-current-fg); }
@@ -558,8 +558,8 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
   .toolbar-tools button, .toolbar-tools > a { height:2.75rem; justify-content:center; }
 }
 
-/* With a mouse the page links sit tighter so all eleven fit beside the collections; touch keeps 44px targets. */
+/* With a mouse the page links sit a little tighter; touch keeps 44px targets. */
 @media (pointer: fine) {
-  :is(.rail-workspace-navigation, .rail-global) .rail-item { min-height:34px; padding-block:1px; }
-  :is(.rail-workspace-navigation, .rail-global) .rail-item > svg { width:28px; height:28px; padding:5px; }
+  :is(.rail-workspace-navigation, .rail-global) .rail-item { min-height:36px; padding-block:1px; }
+  :is(.rail-workspace-navigation, .rail-global) .rail-item > svg { width:31px; height:31px; padding:6px; }
 }
