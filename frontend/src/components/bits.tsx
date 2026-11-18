@@ -79,9 +79,11 @@ export function ActiveBadge({ enabled }: { enabled: boolean }) {
   );
 }
 
+/** First and last word's first letters ("Wired Club – guias" → "WG"), so names sharing a first word still differ. */
 export function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? parts[0]?.[1] ?? "")).toUpperCase();
+  const parts = name.trim().split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w));
+  const last = parts.length > 1 ? parts[parts.length - 1] : undefined;
+  return ((parts[0]?.[0] ?? "") + (last?.[0] ?? parts[0]?.[1] ?? "")).toUpperCase();
 }
 
 /** Date and time in the user's language. */

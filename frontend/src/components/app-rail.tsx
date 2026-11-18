@@ -4,10 +4,11 @@ import { useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, KeyRound, Plus, Star } from "lucide-react";
+import { ChevronRight, ChevronsUpDown, KeyRound, LayoutList, Plus, Star } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { CollectionAvatar } from "@/components/collection-avatar";
 import { BrandWordmark } from "@/components/brand-wordmark";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { collections } from "@/lib/api/endpoints";
 import { useMe } from "@/lib/context/me";
@@ -141,8 +142,7 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
           <>
             {!compact && (
               <div className="rail-group-heading" data-away={focused ? "up" : undefined} inert={focused}>
-                <span className="rail-label" aria-hidden>{t("nav.collections")}</span>
-                <Link href="/collections" onClick={onNavigate}>{t("nav.manage")}</Link>
+                <Link href="/collections" className="rail-label" title={t("nav.manage_collections")} onClick={onNavigate}>{t("nav.collections")}</Link>
               </div>
             )}
             <ul aria-label={t("nav.collections")} className="rail-workspaces">
@@ -151,8 +151,27 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
                 const away = focused && !selected;
                 return (
                   <li key={c.id} className="rail-workspace-group" data-selected={selected ? "" : undefined} data-away={away ? (i < activeIndex ? "up" : "down") : undefined} inert={away}>
-                    {tooltip(c.name, (
-                      <Link href={`/collections/${c.id}/overview`} className="rail-item rail-workspace" aria-label={c.name} title={c.name} aria-current={selected ? "true" : undefined} onClick={onNavigate}>
+                    {selected ? (
+                      // The open collection heads its pages; a click switches to another without the list.
+                      <DropdownMenu>
+                        <DropdownMenuTrigger render={<button type="button" className="rail-item rail-workspace rail-switch" aria-label={`${c.name}: ${t("nav.switch_collection")}`} title={t("nav.switch_collection")} />}>
+                          <CollectionAvatar collection={c} className="rail-avatar" />
+                          {!compact && <span className="rail-workspace-copy"><strong>{c.name}</strong><span>{count(c.record_count)}</span></span>}
+                          {!compact && <ChevronsUpDown className="rail-switch-icon" aria-hidden />}
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent side={compact ? "right" : "bottom"} align="start" className="min-w-60">
+                          {items.filter((o) => o.id !== c.id).map((o) => (
+                            <DropdownMenuItem key={o.id} render={<Link href={`/collections/${o.id}/overview`} onClick={onNavigate} />}>
+                              <CollectionAvatar collection={o} className="size-6 rounded-full text-xs" />
+                              <span className="min-w-0 flex-1 truncate">{o.name}</span>
+                            </DropdownMenuItem>
+                          ))}
+                          {items.length > 1 && <DropdownMenuSeparator />}
+                          <DropdownMenuItem render={<Link href="/collections" onClick={onNavigate} />}><LayoutList className="size-4" />{t("nav.manage_collections")}</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : tooltip(c.name, (
+                      <Link href={`/collections/${c.id}/overview`} className="rail-item rail-workspace" aria-label={c.name} title={c.name} onClick={onNavigate}>
                         <CollectionAvatar collection={c} className="rail-avatar" />
                         {!compact && <span className="rail-workspace-copy"><strong>{c.name}</strong><span>{count(c.record_count)}</span></span>}
                         {!compact && pinned.includes(c.id) && <Star className="rail-pin" fill="currentColor" aria-label={t("collections.pinned")} />}
@@ -174,7 +193,7 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
             </ul>
             {can(user, "collections", "create") && tooltip(t("collections.new"), (
               <Link href="/collections/new" className="rail-item rail-create" aria-label={t("collections.new")} data-away={focused ? "down" : undefined} inert={focused} onClick={onNavigate}>
-                <Plus className="size-5" aria-hidden />
+                <Plus className="size-4" aria-hidden />
                 {!compact && <span>{t("collections.new")}</span>}
               </Link>
             ))}

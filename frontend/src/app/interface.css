@@ -251,8 +251,11 @@ button,a,input,select,textarea {
 }
 .rail-create {
   margin-top: 4px;
-  width: 100%
+  width: 100%;
+  min-height: 40px
 }
+/* Same 24px slot as an avatar, so the label lines up with the collection names. */
+.rail-create > svg { box-sizing:border-box; width:24px; height:24px; padding:4px; flex-shrink:0; border:1px dashed var(--rail-border); border-radius:50%; }
 .rail-main { display: flex; flex-direction: column; }
 .rail-main .rail-item[aria-current=page] {
   background: color-mix(in oklab,var(--primary) 16%,transparent);
@@ -267,7 +270,7 @@ button,a,input,select,textarea {
   border-top: 1px solid var(--rail-border)
 }
 /* Enlarge only the artwork; rail targets keep their size. */
-:is(.rail-create, .rail-toggle) > svg {
+:is(.rail-toggle) > svg {
   width: 24px;
   height: 24px;
   flex-shrink: 0;
@@ -435,8 +438,7 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
 }
 .rail-label { font-size:12px; line-height:1.4; font-weight:500; color:var(--muted-foreground); padding:4px 8px 6px; }
 .rail-group-heading { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
-.rail-group-heading > a { padding:4px 8px; font-size:12px; color:var(--primary); }
-.rail-group-heading > a:hover { text-decoration:underline; }
+.rail-group-heading > a.rail-label:hover { color:var(--foreground); text-decoration:underline; }
 .rail-workspace { height:44px; min-height:44px; padding-block:4px; }
 .rail-avatar { display:flex; align-items:center; justify-content:center; flex-shrink:0; width:24px; height:24px; border-radius:50%; font-size:12px; font-weight:500; }
 .rail-workspace-copy { display:flex; flex-direction:column; min-width:0; gap:0; }
@@ -453,17 +455,16 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
 :is(.rail-workspace-group, .rail-group-heading)[data-away=up] { transform:translateY(-32px); }
 :is(.rail-workspace-group, .rail-create)[data-away=down] { transform:translateY(32px); }
 .rail-workspaces .rail-workspace[aria-current=true] { background:var(--rail-parent-bg); }
-.rail-workspace-group[data-selected]:has(> .rail-workspace-navigation) { position:relative; isolation:isolate; border-radius:calc(var(--rail-row-h)/2) calc(var(--rail-row-h)/2) min(12px,calc(var(--radius)*1.6)) min(12px,calc(var(--radius)*1.6)); }
-.rail-workspace-group[data-selected]:has(> .rail-workspace-navigation)::before {
-  content:""; position:absolute; z-index:-1; pointer-events:none;
-  inset:calc(var(--rail-row-h)/2) var(--rail-submenu-inset,8px) 0;
-  border-radius:inherit;
-  background:color-mix(in oklab,var(--primary) 8%,var(--sidebar));
-}
+/* The open collection is a plain heading over its pages: only the current page carries the accent. */
+.rail-switch { width:100%; height:auto; cursor:pointer; }
+.rail-switch .rail-workspace-copy > strong { font-weight:600; white-space:normal; line-height:18px; }
+.rail-switch-icon { width:16px; height:16px; margin-inline-start:auto; flex-shrink:0; color:var(--muted-foreground); }
+.rail-switch:hover .rail-switch-icon, .rail-switch[aria-expanded=true] .rail-switch-icon { color:var(--foreground); }
+.rail-switch[aria-expanded=true] { background:var(--accent); color:var(--foreground); }
 .rail-workspace-navigation { display:flex; flex-direction:column; gap:6px; padding:4px; margin-top:2px; }
 /* A collection's pages in three always-open sections; the label names each one, a rule replaces it when compact. */
 .rail-nav-section { display:flex; flex-direction:column; gap:2px; }
-.rail-nav-label { padding:0 10px 2px; font-size:12px; line-height:16px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:var(--muted-foreground); }
+.rail-nav-label { padding:10px 10px 2px; font-size:12px; line-height:16px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:var(--muted-foreground); }
 /* Account and platform pages close the rail body, below the collections. */
 .rail-global { display:flex; flex-direction:column; gap:2px; }
 .rail-body > .rail-global { margin-top:auto; padding-top:12px; border-top:1px solid var(--rail-border); }
@@ -479,13 +480,11 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
 :is([data-ui-workspace-rail][data-collapsed], html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile])) .rail-nav-section + .rail-nav-section { position:relative; padding-top:7px; }
 /* The rule is drawn, not a border with margins, so every section's icons stay on one axis. */
 :is([data-ui-workspace-rail][data-collapsed], html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile])) .rail-nav-section + .rail-nav-section::before { content:""; position:absolute; top:0; left:12px; right:12px; height:1px; background:var(--rail-border); }
-:is([data-ui-workspace-rail][data-collapsed], html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile])) .rail-workspace-group[data-selected]:has(> .rail-workspace-navigation) { --rail-submenu-inset:4px; border-radius:999px; }
 @media (min-width:768px) and (max-width:1023px) {
   [data-ui-workspace-rail]:not([data-mobile]) :is(.rail-label, .rail-group-heading) { display:none; }
   [data-ui-workspace-rail]:not([data-mobile]) .rail-workspace-navigation { padding:4px 0; gap:6px; }
   [data-ui-workspace-rail]:not([data-mobile]) .rail-nav-section + .rail-nav-section { position:relative; padding-top:7px; }
   [data-ui-workspace-rail]:not([data-mobile]) .rail-nav-section + .rail-nav-section::before { content:""; position:absolute; top:0; left:12px; right:12px; height:1px; background:var(--rail-border); }
-  [data-ui-workspace-rail]:not([data-mobile]) .rail-workspace-group[data-selected]:has(> .rail-workspace-navigation) { --rail-submenu-inset:4px; border-radius:999px; }
 }
 
 /* Collection management mirrors thoth's workspace list: groups of rows with stats and actions. */
