@@ -455,6 +455,8 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
 /* Focus on one collection: the ones above slide up, the ones below slide down, until only it is left. */
 .rail-workspace-group:not([data-selected]), .rail-create, .rail-group-heading { max-height:64px; transition:max-height 240ms ease, opacity 200ms ease, transform 240ms ease, margin 240ms ease; }
 :is(.rail-workspace-group, .rail-create, .rail-group-heading)[data-away] { max-height:0; min-height:0; opacity:0; overflow:hidden; pointer-events:none; margin-bottom:-4px; }
+/* The heading sits outside the list's gap: a negative margin would pull the open collection above the scroll edge and clip it. */
+.rail-group-heading[data-away] { margin-bottom:0; }
 :is(.rail-workspace-group, .rail-group-heading)[data-away=up] { transform:translateY(-32px); }
 :is(.rail-workspace-group, .rail-create)[data-away=down] { transform:translateY(32px); }
 .rail-workspaces .rail-workspace[aria-current=true] { background:var(--rail-parent-bg); }
