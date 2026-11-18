@@ -46,7 +46,7 @@ Both are required: a run without them would write the docs' shorter names over t
 
 When a run adds a field, such as `parametros`, paste the new schema into the collection first.
 
-An import merges each record's top-level fields into the stored one: a field the run no longer writes keeps its old value. To clear one, import it empty (`"parametros": []`).
+An import merges each record's top-level fields into the stored one: a field the run no longer writes keeps its old value. So every wired gets `parametros`, empty (`[]`) when its window has no mapped settings, and a setting dropped from parametros.json is cleared on the next import.
 
 With that key, a later import updates the same records instead of adding copies, so running `make wireds` again and importing keeps the collections in step with the docs.
 

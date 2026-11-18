@@ -422,6 +422,10 @@ def main(repo, out, furnidata=None, texts=None):
                 guides.append(guide(fm, body, rel, repo))
     fill_grids(wireds + guides, wireds)
     enrich(wireds, guides, os.path.dirname(os.path.abspath(__file__)))
+    if groups:
+        # An import merges fields, so a wired without settings must say so to clear old ones.
+        for w in wireds:
+            w.setdefault("parametros", [])
     os.makedirs(out, exist_ok=True)
     for name, rows, key in (("wireds", wireds, "classname"), ("guias", guides, "url")):
         rows.sort(key=lambda r: r.get(key) or "")
