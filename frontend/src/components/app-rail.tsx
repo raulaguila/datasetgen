@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, KeyRound, Plus, Star } from "lucide-react";
+import { ChevronLeft, ChevronRight, KeyRound, Plus, Star } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { CollectionAvatar } from "@/components/collection-avatar";
 import { BrandWordmark } from "@/components/brand-wordmark";
@@ -60,6 +60,12 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
   const all = [...(list.data?.items ?? []), ...(missing && extra.data ? [extra.data] : [])];
   const items = [...all.filter((c) => pinned.includes(c.id)), ...all.filter((c) => !pinned.includes(c.id))];
   const active = items.find((c) => c.id === activeId);
+  // Inside a collection the rail shows only it: the others slide away until "All collections" brings them back
+  // for this page (a new page focuses again).
+  const [browseAt, setBrowseAt] = useState<string | null>(null);
+  const inCollection = !!collectionInPath(pathname) || pathname.startsWith("/records/");
+  const focused = inCollection && !!active && browseAt !== pathname;
+  const activeIndex = items.findIndex((c) => c.id === activeId);
   const base = active ? `/collections/${active.id}` : "";
   const allowed = (s: CollectionSection) => !s.need || roleAllows(active?.role, s.need);
   const groups = COLLECTION_GROUPS.map((g) => ({ ...g, items: g.items.filter(allowed) })).filter((g) => g.items.length > 0);
@@ -134,17 +140,23 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
       <div className="rail-body">
         {user && (
           <>
-            {!compact && (
+            {focused ? tooltip(t("nav.all_collections"), (
+              <button type="button" className="rail-item rail-back" aria-label={t("nav.all_collections")} onClick={() => setBrowseAt(pathname)}>
+                <ChevronLeft className="size-4" aria-hidden />
+                {!compact && <span>{t("nav.all_collections")}</span>}
+              </button>
+            )) : !compact && (
               <div className="rail-group-heading">
                 <span className="rail-label" aria-hidden>{t("nav.collections")}</span>
                 <Link href="/collections" onClick={onNavigate}>{t("nav.manage")}</Link>
               </div>
             )}
             <ul aria-label={t("nav.collections")} className="rail-workspaces">
-              {items.map((c) => {
+              {items.map((c, i) => {
                 const selected = c.id === active?.id;
+                const away = focused && !selected;
                 return (
-                  <li key={c.id} className="rail-workspace-group" data-selected={selected ? "" : undefined}>
+                  <li key={c.id} className="rail-workspace-group" data-selected={selected ? "" : undefined} data-away={away ? (i < activeIndex ? "up" : "down") : undefined} inert={away}>
                     {tooltip(c.name, (
                       <Link href={`/collections/${c.id}/overview`} className="rail-item rail-workspace" aria-label={c.name} title={c.name} aria-current={selected ? "true" : undefined} onClick={onNavigate}>
                         <CollectionAvatar collection={c} className="rail-avatar" />
@@ -167,7 +179,7 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
               })}
             </ul>
             {can(user, "collections", "create") && tooltip(t("collections.new"), (
-              <Link href="/collections/new" className="rail-item rail-create" aria-label={t("collections.new")} onClick={onNavigate}>
+              <Link href="/collections/new" className="rail-item rail-create" aria-label={t("collections.new")} data-away={focused ? "down" : undefined} inert={focused} onClick={onNavigate}>
                 <Plus className="size-5" aria-hidden />
                 {!compact && <span>{t("collections.new")}</span>}
               </Link>
