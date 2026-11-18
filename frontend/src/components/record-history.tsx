@@ -143,7 +143,7 @@ export function RecordVersions({ record, snapshots, pending, picked, onPick, edi
             const current = v.version === record.version;
             return (
               <li key={v.version} className="flex items-center gap-2 py-2">
-                <Checkbox id={id} checked={picked.includes(v.version)} onCheckedChange={() => toggle(v.version)} />
+                <Checkbox id={id} aria-label={`${t("history.compare_pick")}: ${t("history.version").replace("{n}", String(v.version))}`} checked={picked.includes(v.version)} onCheckedChange={() => toggle(v.version)} />
                 <label htmlFor={id} className="min-w-0 flex-1 cursor-pointer">
                   <span className="block text-sm font-medium">
                     {t("history.version").replace("{n}", String(v.version))}
@@ -152,7 +152,7 @@ export function RecordVersions({ record, snapshots, pending, picked, onPick, edi
                   <span className="block truncate text-xs text-muted-foreground">{format(v.saved_at)}</span>
                 </label>
                 {editable && !current && (
-                  <Button size="icon-sm" variant="ghost" aria-label={`${t("history.restore")} ${v.version}`} title={t("history.restore")} onClick={() => setRestoring(v)}>
+                  <Button size="icon-sm" variant="ghost" aria-label={`${t("history.restore")}: ${t("history.version").replace("{n}", String(v.version))}`} title={t("history.restore")} onClick={() => setRestoring(v)}>
                     <RotateCcw className="size-3.5" />
                   </Button>
                 )}

@@ -107,7 +107,7 @@ export function CollectionPage({ section, description, countRecords = false, act
         {loading || detail.isPending ? (
           <ListSkeleton rows={3} />
         ) : gone ? (
-          <EmptyState title={t("error.not_found")} description={t("error.record_gone")} action={<Button variant="outline" nativeButton={false} render={<Link href="/collections" />}>{t("common.back_to_list")}</Button>} />
+          <EmptyState title={t("error.not_found")} description={t("error.collection_gone")} action={<Button variant="outline" nativeButton={false} render={<Link href="/collections" />}>{t("common.back_to_list")}</Button>} />
         ) : detail.isError || !collection ? (
           <QueryErrorState error={detail.error} onRetry={() => void detail.refetch()} />
         ) : (

@@ -414,6 +414,9 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
   table[data-records] td[data-cell=date] { grid-row: auto; grid-column: -3 / -1; order: 1; margin-top: 2px; }
   /* The inline editor opens on double-click, a desktop gesture: on a card the value is just text, the card itself the tap target. */
   table[data-records] td[data-cell=field] > [role=button] { min-height: 0; height: auto; }
+  /* A card's field is one line after its name: a long value ends in "…" instead of wrapping letter by letter. */
+  table[data-records] td[data-cell=field] > * { min-width: 0; flex: 1; }
+  table[data-records] td[data-cell=field] .truncate { white-space: nowrap; overflow-wrap: normal; }
 }
 
 

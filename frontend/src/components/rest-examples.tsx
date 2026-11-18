@@ -35,7 +35,7 @@ export function RestExamples({ collection }: { collection: Collection }) {
       </div>
       <div className="space-y-1.5">
         <h3 className="font-medium">{t("integrations.docs_update")}</h3>
-        <CodeBlock>{`curl ${auth} -X PATCH -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ data: example, version: 1 })}' \\\n  "${base}/v1/records/<record-id>"`}</CodeBlock>
+        <CodeBlock>{`curl ${auth} -X PUT -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ data: example, version: 1 })}' \\\n  "${base}/v1/records/<record-id>"`}</CodeBlock>
         <p className="text-xs text-muted-foreground">{t("integrations.docs_update_hint")}</p>
       </div>
       <div className="space-y-1.5">

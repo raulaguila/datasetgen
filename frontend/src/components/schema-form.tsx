@@ -493,6 +493,8 @@ export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec",
       disabled={disabled}
       noHtml5Validate
       showErrorList={false}
+      // The errors show under each field; without a handler RJSF also logs them as console errors.
+      onError={() => undefined}
       extraErrors={extraErrors}
       liveValidate={liveValidate}
       idPrefix={idPrefix}

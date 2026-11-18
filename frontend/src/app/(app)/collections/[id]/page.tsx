@@ -6,7 +6,8 @@ import { fieldFigure } from "@/components/format-figure";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { keepPreviousData, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, FileJson, Eye, Paperclip, PencilLine, Plus, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Download, FileJson, Eye, Paperclip, PencilLine, Plus, Search, Trash2 } from "lucide-react";
+import { saveFile } from "@/lib/api/client";
 import { toast } from "sonner";
 import { PageBody, PageHeader, useRelativeTime } from "@/components/bits";
 import { EmptyState } from "@/components/empty-state";
@@ -120,6 +121,15 @@ function RecordList({ collection }: { collection: Collection }) {
   const idsKey = items.map((r) => r.id).join(",");
   useEffect(() => { if (idsKey) setSequence(idsKey.split(",")); }, [idsKey, setSequence]);
   const num = useNumberFormat();
+  // A search hit whose text sits in fields the table does not show says where it matched.
+  const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const hiddenMatches = (data: Record<string, unknown>) => {
+    if (!q) return [];
+    const needle = fold(q);
+    const has = (f: FieldRow) => fold(show(data[f.key], f) ?? "").includes(needle);
+    if (columns.some(has)) return [];
+    return rows.filter((f) => !columns.some((c) => c.key === f.key) && has(f)).map((f) => f.field.name);
+  };
   const show = (v: unknown, c?: FieldRow) => {
     if (v === undefined || v === null || v === "") return "—";
     if (typeof v === "number") return fieldFigure(c?.field, v, locale, num);
@@ -223,7 +233,7 @@ function RecordList({ collection }: { collection: Collection }) {
 
   return (
     <>
-      {/* Search, then the tools; phones keep the tools as one row of icons (their names stay for screen readers). */}
+      {/* Search, then the tools; phones get them two by two, the quality count left to the Quality page. */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-0 basis-full sm:min-w-56 sm:max-w-xs sm:flex-1 sm:basis-auto">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -246,7 +256,7 @@ function RecordList({ collection }: { collection: Collection }) {
           {/* On phones its buttons join the row, so all of them space out evenly. */}
           <div className="flex items-center gap-2 max-sm:contents sm:ml-auto">
             {report && report.checked > 0 && (
-              <Link href={`/collections/${collection.id}/quality`} className="inline-flex h-[var(--control-h)] items-center gap-2 rounded-lg border px-3 text-sm tabular-nums hover:bg-muted" title={t("collections.tab.quality")}>
+              <Link href={`/collections/${collection.id}/quality`} className="inline-flex h-[var(--control-h)] items-center gap-2 rounded-lg border px-3 text-sm tabular-nums hover:bg-muted max-sm:hidden" title={t("collections.tab.quality")}>
                 <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-success" aria-hidden />{t("records.valid_n").replace("{n}", num(report.checked - report.invalid_count))}</span>
                 {report.invalid_count > 0 && <span className="inline-flex items-center gap-1 text-warn"><span className="size-2 rounded-full bg-warn" aria-hidden />{t("records.invalid_n").replace("{n}", num(report.invalid_count))}</span>}
               </Link>
@@ -292,6 +302,7 @@ function RecordList({ collection }: { collection: Collection }) {
             <TableBody>
               {items.map((r) => {
                 const data = (r.data ?? {}) as Record<string, unknown>;
+                const matchedIn = hiddenMatches(data);
                 const cells = columns.length ? columns.map((c) => ({ key: c.key, row: c, label: c.field.name, text: show(data[c.key], c), file: fileRefs(data[c.key])[0] })) : [{ key: "", row: undefined, label: t("records.record"), text: JSON.stringify(r.data), file: undefined }];
                 return (
                   <TableRow key={r.id} className={cn("cursor-pointer hover:bg-muted/60", isInvalid(r.id, r.updated_at) && "[&>td:first-child]:shadow-[inset_3px_0_0_var(--warn)]")} onClick={() => router.push(`/records/${r.id}`)}>
@@ -303,7 +314,10 @@ function RecordList({ collection }: { collection: Collection }) {
                             {isInvalid(r.id, r.updated_at) && (
                               <AlertTriangle className="size-4 shrink-0 text-warn" role="img" aria-label={t("overview.invalid")}><title>{t("records.invalid_hint")}</title></AlertTriangle>
                             )}
-                            <Link href={`/records/${r.id}`} className="block truncate font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{c.text}</Link>
+                            <span className="min-w-0">
+                              <Link href={`/records/${r.id}`} className="block truncate font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{c.text}</Link>
+                              {matchedIn.length > 0 && <span className="block truncate text-xs text-muted-foreground">{t("records.found_in").replace("{fields}", matchedIn.join(", "))}</span>}
+                            </span>
                           </span>
                         ) : canEdit && c.row && editsInline(c.row) ? (
                           <EditableCell row={c.row} value={data[c.key]} text={c.text} recordId={r.id} save={saveField} />
@@ -332,6 +346,10 @@ function RecordList({ collection }: { collection: Collection }) {
         </>
       )}
       <SelectionBar selection={selection}>
+        {/* The selection is on this page, so its records are at hand: no request. */}
+        <Button variant="outline" onClick={() => saveFile(new Blob([items.filter((r) => selection.has(r.id)).map((r) => JSON.stringify(r.data) + "\n").join("")], { type: "application/x-ndjson" }), `${collection.name}-${selection.ids.length}.jsonl`)}>
+          <Download className="size-4" />{t("export.selected")}
+        </Button>
         <Button variant="outline" onClick={() => setBulk(true)}><PencilLine className="size-4" />{t("bulk.title")}</Button>
         <Button variant="destructive" onClick={removeSelected}><Trash2 className="size-4" />{t("common.delete_selected")}</Button>
       </SelectionBar>

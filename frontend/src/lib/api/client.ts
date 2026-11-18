@@ -85,7 +85,12 @@ export async function apiFetch<T>(path: string, opts: FetchOpts = {}): Promise<T
 export async function apiDownload(path: string, fallbackName: string): Promise<void> {
   const res = await apiResponse(path, {});
   const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? fallbackName;
-  const url = URL.createObjectURL(await res.blob());
+  saveFile(await res.blob(), name);
+}
+
+/** Hands the browser a file to save. */
+export function saveFile(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);

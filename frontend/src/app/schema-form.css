@@ -21,6 +21,8 @@
 .rjsf textarea.form-control { height: auto; min-height: 6rem; padding: 0.5rem 0.625rem; }
 .rjsf .form-control:focus-visible { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent); }
 .rjsf .form-control:disabled { opacity: 0.6; cursor: not-allowed; }
+/* A field with an error: its own input only, not the inputs of a group's subfields. */
+.rjsf .has-error > :is(input, textarea, select).form-control, .rjsf .has-error > div > :is(input, textarea, select).form-control { border-color: var(--destructive); }
 .rjsf .checkbox label { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; }
 /* A list of picks: each box apart from its text, the rows a touch apart. */
 .rjsf .checkboxes { display: grid; gap: 0.375rem; }

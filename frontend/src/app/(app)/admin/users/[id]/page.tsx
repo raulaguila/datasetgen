@@ -189,7 +189,7 @@ function UserDetail({ id }: { id: string }) {
         {detail.isPending ? (
           <ListSkeleton rows={3} />
         ) : detail.error instanceof ApiError && detail.error.code === "NOT_FOUND" ? (
-          <EmptyState title={t("error.not_found")} description={t("error.record_gone")} action={<Button variant="outline" nativeButton={false} render={<Link href="/admin/users" />}>{t("common.back_to_list")}</Button>} />
+          <EmptyState title={t("error.not_found")} description={t("error.user_gone")} action={<Button variant="outline" nativeButton={false} render={<Link href="/admin/users" />}>{t("common.back_to_list")}</Button>} />
         ) : detail.isError ? (
           <QueryErrorState error={detail.error} onRetry={() => void detail.refetch()} />
         ) : (

@@ -68,7 +68,8 @@ function Card({ r, collection, extra, show, draggable, onDragStart }: { r: DataR
     <Link href={`/records/${r.id}`} draggable={draggable} onDragStart={onDragStart}
       className="block space-y-1 rounded-md border bg-card p-2.5 text-sm shadow-xs hover:border-primary/50 focus-visible:outline-2">
       <p className="truncate font-medium">{title}</p>
-      {extra.filter((f) => data[f.key] !== undefined && data[f.key] !== "").map((f) => (
+      {/* The title field is the heading already: not repeated as a line. */}
+      {extra.filter((f) => data[f.key] !== undefined && data[f.key] !== "" && show(data[f.key], f) !== title).map((f) => (
         <p key={f.key} className="truncate text-xs text-muted-foreground"><span>{f.field.name}:</span> {show(data[f.key], f)}</p>
       ))}
     </Link>

@@ -213,8 +213,8 @@ export function SaveBar({ label, status, error, saving, canSave, saveLabel, disc
         footer ? "bottom-0 -mx-6 -mb-6 rounded-b-xl border-t bg-card px-6 py-4 sm:-mx-8 sm:-mb-8 sm:px-8" : "bottom-4 rounded-lg border bg-muted px-4 py-3",
       )}
     >
-      <span className="flex-1 text-sm font-medium">{status ?? label}</span>
-      {error && <div className="basis-full"><FormError message={error} /></div>}
+      {/* The error takes the status's place, so the buttons keep theirs. */}
+      <div className="min-w-0 flex-1 text-sm font-medium">{error ? <FormError message={error} /> : status ?? label}</div>
       <Button type="button" variant="ghost" disabled={saving} onClick={onDiscard}>{discardLabel}</Button>
       {extra}
       <Button type={submit ? "submit" : "button"} disabled={saving || !canSave} onClick={submit ? undefined : onSave}>

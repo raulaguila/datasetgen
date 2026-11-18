@@ -3,14 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Database, KeyRound, Search, User as UserIcon, UserRound, type LucideIcon } from "lucide-react";
+import { Bell, Database, FileText, KeyRound, Search, User as UserIcon, UserRound, type LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { collections, users } from "@/lib/api/endpoints";
+import { recordTitle } from "@/components/field-builder";
+import { collections, records, users } from "@/lib/api/endpoints";
 import { useMe } from "@/lib/context/me";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useI18n } from "@/lib/i18n/provider";
-import { ADMIN_NAV, MAIN_NAV, type NavItem } from "@/lib/navigation";
-import { can } from "@/lib/permissions";
+import { ADMIN_NAV, COLLECTION_SECTIONS, MAIN_NAV, type NavItem } from "@/lib/navigation";
+import { can, roleAllows } from "@/lib/permissions";
+import { useUIStore } from "@/lib/store/ui";
 import { cn } from "@/lib/utils";
 
 interface Hit {
@@ -30,7 +32,7 @@ function useHits(key: string, q: string, enabled: boolean, fn: (signal: AbortSig
   return useQuery({ queryKey: ["palette", key, q], queryFn: ({ signal }) => fn(signal), enabled, staleTime: 10_000 });
 }
 
-/** Ctrl/Cmd+K: jump to a screen, or to a user or role by name. */
+/** Ctrl/Cmd+K: jump to a screen, a page or record of the open collection, a collection or a user. */
 export function CommandPalette() {
   const { t } = useI18n();
   const { user } = useMe();
@@ -54,6 +56,13 @@ export function CommandPalette() {
 
   const userHits = useHits("users", q, search && can(user, "users", "read"), (signal) =>
     users.list({ page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((u) => ({ href: `/admin/users/${u.id}`, label: u.name, hint: u.email, icon: UserIcon }))));
+  // The collection last opened: its pages, and its records by their content.
+  const collectionId = useUIStore((s) => s.collectionId);
+  const lastCollection = useQuery({ queryKey: ["collections", "detail", collectionId], queryFn: () => collections.get(collectionId!), enabled: open && !!collectionId, retry: false }).data;
+  const recordHits = useHits(`records:${lastCollection?.id}`, q, search && !!lastCollection, (signal) =>
+    records.list({ collection_id: lastCollection!.id, page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((rec) => ({
+      href: `/records/${rec.id}`, label: recordTitle(lastCollection!.schema ?? null, rec.data) ?? rec.id, hint: lastCollection!.name, icon: FileText,
+    }))));
   const collectionHits = useHits("collections", q, search && !!user, (signal) =>
     collections.list({ page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((c) => ({ href: `/collections/${c.id}`, label: c.name, hint: t("nav.collections"), icon: Database }))));
 
@@ -62,10 +71,14 @@ export function CommandPalette() {
     .filter((item) => (!item.needs || can(user, ...item.needs)))
     .map((item) => ({ href: item.href, label: t(item.key), icon: item.icon }))
     .filter((hit) => hit.label.toLowerCase().includes(needle));
-  const hits = [...pages, ...(userHits.data ?? []), ...(collectionHits.data ?? [])];
+  const sections: Hit[] = !lastCollection || !needle ? [] : COLLECTION_SECTIONS
+    .filter((sec) => !sec.need || roleAllows(lastCollection.role, sec.need))
+    .map((sec) => ({ href: `/collections/${lastCollection.id}${sec.seg}`, label: t(sec.key), hint: lastCollection.name, icon: sec.icon }))
+    .filter((hit) => hit.label.toLowerCase().includes(needle));
+  const hits = [...pages, ...sections, ...(recordHits.data ?? []), ...(collectionHits.data ?? []), ...(userHits.data ?? [])];
   const current = Math.min(active, hits.length - 1);
   // While the typed text waits for the debounce or a search is in flight, "nothing found" would be a guess.
-  const searching = text.trim().length >= 2 && (text.trim() !== q || userHits.isFetching || collectionHits.isFetching);
+  const searching = text.trim().length >= 2 && (text.trim() !== q || userHits.isFetching || collectionHits.isFetching || recordHits.isFetching);
 
   const changeOpen = (next: boolean) => {
     setOpen(next);

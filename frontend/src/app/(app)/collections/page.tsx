@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -170,6 +171,8 @@ function Row({ c, pinned, onPin, onRemove, onDuplicate }: RowProps) {
   const open = () => router.push(`${base}/overview`);
   const owner = roleAllows(c.role, "owner");
   const activity = relative(c.last_activity ?? c.updated_at);
+  // The only member of a collection is its only owner, and a collection keeps an owner: leaving is refused.
+  const canLeave = c.member !== false && !(owner && (c.member_count ?? 0) <= 1);
   const stats: [typeof FileJson, number, MessageKey, MessageKey][] = [
     [FileJson, c.record_count ?? 0, "collections.unit_record", "collections.unit_records"],
     [ListTree, c.field_count ?? 0, "collections.unit_field", "collections.unit_fields"],
@@ -177,7 +180,8 @@ function Row({ c, pinned, onPin, onRemove, onDuplicate }: RowProps) {
   ];
   return (
     <li className="collection-row">
-      <button type="button" className="collection-open" onClick={open} aria-label={c.name}>
+      {/* A link, so it opens in a new tab with Ctrl/⌘+click like any other. */}
+      <Link href={`${base}/overview`} className="collection-open" aria-label={c.name}>
         <CollectionAvatar collection={c} className="collection-avatar" />
         <span className="collection-copy">
           <span className="collection-name">{c.name}</span>
@@ -185,11 +189,11 @@ function Row({ c, pinned, onPin, onRemove, onDuplicate }: RowProps) {
             {/* A platform admin reaches every collection as owner without being a member: say so, not "Owner". */}
             {c.member === false
               ? <Badge variant="outline" title={t("collections.admin_access_hint")}>{t("collections.admin_access")}</Badge>
-              : c.role && <Badge variant="secondary">{t(`members.role.${c.role}`)}</Badge>}
+              : c.role && !owner && <Badge variant="secondary">{t(`members.role.${c.role}`)}</Badge>}
             {c.description && <span className="collection-description" title={c.description}>{c.description}</span>}
           </span>
         </span>
-      </button>
+      </Link>
       <div className="collection-stats">
         {stats.map(([Icon, n, one, many]) => (
           <span className="collection-stat" key={one}><Icon className="size-3.5" aria-hidden /><span>{number.format(n)} {t(n === 1 ? one : many)}</span></span>
@@ -218,8 +222,8 @@ function Row({ c, pinned, onPin, onRemove, onDuplicate }: RowProps) {
               <DropdownMenuItem onClick={() => router.push(`${base}/settings`)}><Settings2 className="size-4" aria-hidden />{t("collections.general_settings")}</DropdownMenuItem>
             </>}
             {onDuplicate && <DropdownMenuItem onClick={() => onDuplicate(c)}><Copy className="size-4" aria-hidden />{t("duplicate.title")}</DropdownMenuItem>}
-            {(c.member !== false || owner) && <DropdownMenuSeparator />}
-            {c.member !== false && <DropdownMenuItem variant="destructive" onClick={() => onRemove(c, "leave")}><LogOut className="size-4" aria-hidden />{t("collections.leave")}</DropdownMenuItem>}
+            {(canLeave || owner) && <DropdownMenuSeparator />}
+            {canLeave && <DropdownMenuItem variant="destructive" onClick={() => onRemove(c, "leave")}><LogOut className="size-4" aria-hidden />{t("collections.leave")}</DropdownMenuItem>}
             {owner && <DropdownMenuItem variant="destructive" onClick={() => onRemove(c, "delete")}><Trash2 className="size-4" aria-hidden />{t("collections.delete")}</DropdownMenuItem>}
           </DropdownMenuContent>
         </DropdownMenu>
