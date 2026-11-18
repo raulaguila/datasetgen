@@ -206,7 +206,7 @@ def setting_groups(texts):
             settings.append({"chave": g, "rotulo": texts[PARAMS + g]})
         for p in parents:
             kids = sorted((k for k in keys if k.rsplit(".", 1)[0] == p and num(k)), key=lambda k: int(k.rsplit(".", 1)[1]))
-            label = texts.get(PARAMS + p) or texts.get(PARAMS + p + "_selection") or ""
+            label = texts.get(PARAMS + p) or texts.get(PARAMS + p + "_selection") or texts.get(PARAMS + p.rsplit(".", 1)[0]) or ""
             settings.append(drop_empty({"chave": p, "rotulo": label, "opcoes": [texts[PARAMS + k] for k in kids]}))
         if not settings:
             # A group of named fields only ("bot.name", "link.key"): each field, notes aside.
@@ -221,11 +221,19 @@ def setting_groups(texts):
     return groups
 
 
-def wired_settings(classname, kind, groups, mapping):
+def wired_settings(classname, kind, groups, mapping, texts):
     names = list(mapping.get(classname, []))
     # Every effect has a delay and every selector can filter the current selection.
     names = (["delay"] if kind == "Efeito" else ["selector_option"] if kind == "Seletor" else []) + names
-    return [s for g in names for s in groups.get(g, [])]
+
+    def pick(name):
+        # "time" takes the whole group; "time.hour_selection" only that setting or field.
+        if "." not in name:
+            return groups.get(name, [])
+        hit = [s for s in groups.get(name.split(".")[0], []) if s["chave"] == name]
+        return hit or ([{"chave": name, "rotulo": texts[PARAMS + name]}] if PARAMS + name in texts else [])
+
+    return [s for n in names for s in pick(n)]
 
 
 # The docs' wording of each source option -> its wiredfurni.params.sources key.
@@ -407,7 +415,7 @@ def main(repo, out, furnidata=None, texts=None):
             if fm.get("infobox") and parts[0] == "referencia" and len(parts) >= 3 and parts[1] in SECTIONS:
                 w = wired(fm, body, rel, repo, names)
                 if groups:
-                    w["parametros"] = wired_settings(w["classname"], w["tipo"], groups, mapping) or None
+                    w["parametros"] = wired_settings(w["classname"], w["tipo"], groups, mapping, texts) or None
                     w["fontes"] = wired_sources(body, texts) or None
                 wireds.append(drop_empty(w))
             else:

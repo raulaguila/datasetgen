@@ -34,7 +34,7 @@ habbo.com.br may refuse downloads from a script (HTTP 463). The target then stop
 make wireds FURNIDATA=~/Downloads/furnidata.json TEXTS=~/Downloads/external_flash_texts.txt
 ```
 
-Both are required: an import replaces each record, so a run without them would drop the game names or the settings already in the collection.
+Both are required: a run without them would write the docs' shorter names over the game names and leave the settings out.
 
 `make clean` removes `.cache/` and `out/`; neither is tracked.
 
@@ -46,11 +46,13 @@ Both are required: an import replaces each record, so a run without them would d
 
 When a run adds a field, such as `parametros`, paste the new schema into the collection first.
 
+An import merges each record's top-level fields into the stored one: a field the run no longer writes keeps its old value. To clear one, import it empty (`"parametros": []`).
+
 With that key, a later import updates the same records instead of adding copies, so running `make wireds` again and importing keeps the collections in step with the docs.
 
 ## Adding data the docs lack
 
-To map a wired's settings, add its classname to [parametros.json](parametros.json) with the `wiredfurni.params` groups its window shows (the part after `wiredfurni.params.`, for example `show_message`). Search the saved client texts for `wiredfurni.params.` to see the groups.
+To map a wired's settings, add its classname to [parametros.json](parametros.json) with the `wiredfurni.params` groups its window shows (the part after `wiredfurni.params.`, for example `show_message`). When a group holds settings of several wireds (`time`, `texts`), list only the ones the window shows, as `group.setting` (`time.hour_selection`, `texts.placeholder_type.furni`). Search the saved client texts for `wiredfurni.params.` to see the groups.
 
 Pages the docs leave as drafts get their texts from [textos/](textos/): a YAML file per kind, keyed by classname (a key without the `*N` suffix covers every color). These texts were written from each wired's name, settings and the guides, not by the docs authors: the records they fill get `fonte_texto: "Gerado (revisar)"`, and the docs' own text always wins when a page gets one. After checking a record in the game, set it to `Revisado`.
 

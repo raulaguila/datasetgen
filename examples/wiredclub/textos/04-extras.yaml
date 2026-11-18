@@ -214,8 +214,8 @@ wf_xtra_text_input_variable:
     Captura um texto digitado pelo usuário e guarda em uma variável.
 
     ## Configurações
-    - **Tipo de Espaço:** único ou múltiplo; mobi ou usuário.
-    - **Tipo de exibição variável:** numérica ou textual.
+    - **Nome gravado:** o nome do texto capturado.
+    - **Tipo de entrada variável** e **Tipo de exibição variável:** numérica ou textual.
 
     ## Quando usar
     - Senhas, respostas de quiz, apostas digitadas no chat.

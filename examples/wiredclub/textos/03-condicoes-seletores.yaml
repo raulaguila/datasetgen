@@ -145,7 +145,7 @@ wf_cnd_match_date:
     Passa se a data atual coincidir com a configurada: meses, dias da semana e dias do mês escolhidos.
 
     ## Configurações
-    - **Mês** e **Dia da semana:** marque os que valem.
+    - **Ano**, **Mês**, **Dia** e **Dia da semana:** para cada um, um valor exato, um intervalo ou nenhum filtro.
 
     ## Quando usar
     - Sistemas que só funcionam aos fins de semana ou em um mês temático.
@@ -167,11 +167,11 @@ wf_cnd_match_time:
     ## O que faz
     Passa se o horário atual coincidir com o configurado.
 
+    ## Configurações
+    - **Horas**, **Minutos** e **Segundos:** para cada um, um valor exato, um intervalo ou nenhum filtro.
+
     ## Quando usar
     - Sistemas que funcionam só em certos horários, como uma loja que abre à noite.
-
-    ## Observações
-    - Os textos da janela mapeados hoje para este wired (mês e dia da semana) são os mesmos de **Data coincide**; confira no jogo quais campos aparecem.
 
 wf_cnd_slc_quantity:
   conteudo: |
@@ -202,12 +202,12 @@ wf_cnd_stuff_is:
     ## O que faz
     Passa se o mobi que disparou a pilha for um dos mobis escolhidos ou do mesmo tipo deles.
 
+    ## Configurações
+    - Só a escolha dos mobis; não há outras opções.
+
     ## Quando usar
     - Pilhas disparadas por vários mobis, quando só alguns tipos devem continuar.
     - Tem versão negativa: **Mobi NÃO coincide** (`wf_cnd_not_stuff_is`).
-
-    ## Observações
-    - Os textos da janela mapeados hoje para este wired são os de **Ter Mobi em cima**; confira no jogo quais opções aparecem.
 
 wf_cnd_team_has_rank:
   conteudo: |
