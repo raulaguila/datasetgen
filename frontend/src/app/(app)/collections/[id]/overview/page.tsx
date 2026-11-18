@@ -6,6 +6,7 @@ import { CheckCircle2, ChevronRight, Circle, FileJson, Plus } from "lucide-react
 import { avatarStyle, initials, useRelativeTime } from "@/components/bits";
 import { recordTitle } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
+import { CollectionDashboard } from "@/components/collection-dashboard";
 import { EmptyState } from "@/components/empty-state";
 import { ExportMenu } from "@/components/export-menu";
 import { ListSkeleton } from "@/components/skeletons";
@@ -36,7 +37,19 @@ function lastDays(): string[] {
 }
 
 /** One number; with `href` the whole card opens the page behind it. */
-function Stat({ label, value, hint, href, title, meter }: { label: string; value: React.ReactNode; hint?: string; href?: string; title?: string; meter?: number }) {
+/** A line through the points, scaled to fit; flat when they never change. */
+function Spark({ points }: { points: number[] }) {
+  const lo = Math.min(...points);
+  const range = Math.max(...points) - lo || 1;
+  const d = points.map((p, i) => `${((i / (points.length - 1)) * 100).toFixed(1)},${(22 - ((p - lo) / range) * 20).toFixed(1)}`).join(" ");
+  return (
+    <svg viewBox="0 0 100 24" preserveAspectRatio="none" className="mt-2 block h-6 w-full text-primary" aria-hidden>
+      <polyline points={d} fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Stat({ label, value, hint, href, title, meter, spark }: { label: string; value: React.ReactNode; hint?: string; href?: string; title?: string; meter?: number; spark?: number[] }) {
   const body = (
     <>
       <p className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -45,6 +58,7 @@ function Stat({ label, value, hint, href, title, meter }: { label: string; value
       </p>
       {/* Words ("3 minutes ago") take a smaller size and may wrap, so they read whole in a narrow tile. */}
       <p className={cn("mt-1 font-heading font-semibold tabular-nums", typeof value === "string" && /\p{L}/u.test(value) ? "line-clamp-2 text-base leading-snug sm:text-lg" : "truncate text-xl sm:text-2xl")} title={title}>{value}</p>
+      {spark && <Spark points={spark} />}
       {meter !== undefined && (
         <span className="mt-2 block h-1 overflow-hidden rounded-full bg-destructive/25" aria-hidden>
           <span className="block h-full rounded-full bg-success" style={{ width: `${meter * 100}%` }} />
@@ -124,6 +138,9 @@ function Overview({ collection }: { collection: Collection }) {
   const dayLabel = (day: string) => new Date(`${day}T00:00:00`).toLocaleDateString(locale, { day: "numeric", month: "short" });
   // A handful of active days reads better as a sentence than as a row of empty bars.
   const active = days.filter((d) => d.count > 0);
+  // The total at the end of each day: deleted records are not in the series, so this is growth from new ones.
+  let running = Math.max(0, s.records - created);
+  const growth = created ? days.map((d) => (running += d.count)) : undefined;
   const steps = editor && !stepsGone && s.records < MATURE ? <NextSteps collection={collection} records={s.records} members={s.members} /> : null;
   // A single member makes the ranking say nothing.
   const side = steps ?? (s.members > 1 ? "contributors" : null);
@@ -131,7 +148,7 @@ function Overview({ collection }: { collection: Collection }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label={t("overview.records")} value={number.format(s.records)} href={base} />
+        <Stat label={t("overview.records")} value={number.format(s.records)} href={base} spark={growth} hint={created ? t("overview.growth").replace("{n}", number.format(created)) : undefined} />
         {editor ? (
           <Stat
             label={t("overview.valid")}
@@ -184,6 +201,8 @@ function Overview({ collection }: { collection: Collection }) {
           </>
         )}
       </Card>
+
+      <CollectionDashboard collection={collection} readOnly />
 
       <div className={cn("grid gap-6", side && "lg:grid-cols-2")}>
         <Card className="gap-0 overflow-hidden p-0">

@@ -173,11 +173,17 @@ function spanOf(widgets: Widget[]) {
   return (_: Widget, i: number) => cn(SM_SPAN[sm[i]], XL_SPAN[xl[i]]);
 }
 
-export function CollectionDashboard({ collection, scope }: { collection: Collection; /** The page's filter, joined to every widget's conditions. */ scope?: Where }) {
+export function CollectionDashboard({ collection, scope, readOnly = false }: {
+  collection: Collection;
+  /** The page's filter, joined to every widget's conditions. */
+  scope?: Where;
+  /** Widgets only, no editing: the overview shows them; Analysis is where they are built. */
+  readOnly?: boolean;
+}) {
   const { t } = useI18n();
   const client = useQueryClient();
   const formId = useId();
-  const owner = roleAllows(collection.role, "owner");
+  const owner = roleAllows(collection.role, "owner") && !readOnly;
   const key = ["collections", "dashboard", collection.id];
   const q = useQuery({ queryKey: key, queryFn: ({ signal }) => tools.dashboard(collection.id, signal) });
   const [draft, setDraft] = useState<Widget[] | null>(null);
@@ -193,7 +199,7 @@ export function CollectionDashboard({ collection, scope }: { collection: Collect
   const widgets = draft ?? q.data?.widgets ?? [];
   const span = spanOf(widgets);
   if (q.isPending || q.isError) return null;
-  if (!widgets.length && !draft && !owner) return null;
+  if (!widgets.length && !draft && (!owner || readOnly)) return null;
 
   const move = (i: number, to: number) => setDraft((w) => { const next = [...(w ?? [])]; const [it] = next.splice(i, 1); next.splice(to, 0, it); return next; });
   const put = (w: Widget) => {

@@ -553,6 +553,6 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
 
 /* With a mouse the page links sit tighter so all eleven fit beside the collections; touch keeps 44px targets. */
 @media (pointer: fine) {
-  :is(.rail-workspace-navigation, .rail-global) .rail-item { min-height:36px; padding-block:2px; }
+  :is(.rail-workspace-navigation, .rail-global) .rail-item { min-height:34px; padding-block:1px; }
   :is(.rail-workspace-navigation, .rail-global) .rail-item > svg { width:28px; height:28px; padding:5px; }
 }
