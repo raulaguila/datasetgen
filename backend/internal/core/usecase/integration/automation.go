@@ -76,27 +76,40 @@ func (s *Service) Automations(ctx context.Context, collectionID string) ([]domai
 	return s.Store.Integrations().Automations(ctx, collectionID)
 }
 
+func invalidField(field, msg string) error {
+	return apperror.New(apperror.CodeInvalidInput, msg).WithField(field)
+}
+
 // checkAutomation validates the settings; the conditions are tried on the
 // collection now, so a bad rule fails here and not on every run.
 func (s *Service) checkAutomation(ctx context.Context, collectionID string, in input.AutomationInput) (*domain.Automation, error) {
-	bad := func(field, msg string) error { return apperror.New(apperror.CodeInvalidInput, msg).WithField(field) }
 	a := &domain.Automation{CollectionID: collectionID, Name: strings.TrimSpace(in.Name), Enabled: in.Enabled, Trigger: in.Trigger, Conditions: in.Conditions, Action: in.Action, Config: in.Config}
 	if n := utf8.RuneCountInString(a.Name); n < 1 || n > maxName {
-		return nil, bad("name", "name must be 1-80 characters")
+		return nil, invalidField("name", "name must be 1-80 characters")
 	}
 	switch a.Trigger {
 	case domain.TriggerCreated, domain.TriggerUpdated:
 	case domain.TriggerDaily:
 		if in.Hour == nil || *in.Hour < 0 || *in.Hour > 23 {
-			return nil, bad("hour", "a daily automation needs an hour from 0 to 23")
+			return nil, invalidField("hour", "a daily automation needs an hour from 0 to 23")
 		}
 		a.Hour = in.Hour
 	default:
-		return nil, bad("trigger", "trigger must be record.created, record.updated or daily")
+		return nil, invalidField("trigger", "trigger must be record.created, record.updated or daily")
 	}
 	if a.Conditions.Rules == nil {
 		a.Conditions.Rules = []domain.Condition{}
 	}
+	if err := s.checkAutomationAction(ctx, a); err != nil {
+		return nil, err
+	}
+	if _, _, err := s.Records.List(ctx, domain.RecordFilter{CollectionID: collectionID, Page: domain.NewPage(1, 1), Where: &a.Conditions}); err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+func (s *Service) checkAutomationAction(ctx context.Context, a *domain.Automation) error {
 	switch a.Action {
 	case domain.ActionSetField:
 		var c struct {
@@ -104,7 +117,7 @@ func (s *Service) checkAutomation(ctx context.Context, collectionID string, in i
 			Value json.RawMessage `json:"value"`
 		}
 		if json.Unmarshal(a.Config, &c) != nil || c.Field == "" || len(c.Field) > 200 || len(c.Value) == 0 || !json.Valid(c.Value) {
-			return nil, bad("config", `set_field needs {"field": name, "value": JSON}`)
+			return invalidField("config", `set_field needs {"field": name, "value": JSON}`)
 		}
 		a.Config, _ = json.Marshal(c)
 	case domain.ActionNotify:
@@ -112,49 +125,46 @@ func (s *Service) checkAutomation(ctx context.Context, collectionID string, in i
 			Message string `json:"message"`
 		}
 		if json.Unmarshal(a.Config, &c) != nil || strings.TrimSpace(c.Message) == "" || utf8.RuneCountInString(c.Message) > maxMessage {
-			return nil, bad("config", `notify needs {"message": 1-500 characters}`)
+			return invalidField("config", `notify needs {"message": 1-500 characters}`)
 		}
 		c.Message = strings.TrimSpace(c.Message)
 		a.Config, _ = json.Marshal(c)
 	case domain.ActionEmail:
 		var c emailConfig
 		if json.Unmarshal(a.Config, &c) != nil || (c.To != emailToMe && c.To != emailToMembers) {
-			return nil, bad("config", `email needs {"to": "me" or "members", "subject", "message"}`)
+			return invalidField("config", `email needs {"to": "me" or "members", "subject", "message"}`)
 		}
 		c.Subject, c.Message = strings.TrimSpace(c.Subject), strings.TrimSpace(c.Message)
 		if n := utf8.RuneCountInString(c.Subject); n < 1 || n > maxName || strings.ContainsAny(c.Subject, "\r\n") {
-			return nil, bad("config", "the email subject must be 1-80 characters on one line")
+			return invalidField("config", "the email subject must be 1-80 characters on one line")
 		}
 		if c.Message == "" || utf8.RuneCountInString(c.Message) > maxMessage {
-			return nil, bad("config", "the email message must be 1-500 characters")
+			return invalidField("config", "the email message must be 1-500 characters")
 		}
 		a.Config, _ = json.Marshal(c)
 	case domain.ActionWebhook:
 		var c webhookConfig
 		if json.Unmarshal(a.Config, &c) != nil || validate.ID(c.WebhookID) != nil {
-			return nil, bad("config", `webhook needs {"webhook_id": one of the collection's webhooks}`)
+			return invalidField("config", `webhook needs {"webhook_id": one of the collection's webhooks}`)
 		}
-		if h, err := s.Store.Integrations().Webhook(ctx, c.WebhookID); err != nil || h.CollectionID != collectionID {
-			return nil, bad("config", "the webhook is not one of this collection's")
+		if h, err := s.Store.Integrations().Webhook(ctx, c.WebhookID); err != nil || h.CollectionID != a.CollectionID {
+			return invalidField("config", "the webhook is not one of this collection's")
 		}
 		a.Config, _ = json.Marshal(c)
 	case domain.ActionCreateRecord:
 		var c createConfig
 		if json.Unmarshal(a.Config, &c) != nil || len(c.Data) == 0 {
-			return nil, bad("config", `create_record needs {"collection_id", "data": a JSON object}`)
+			return invalidField("config", `create_record needs {"collection_id", "data": a JSON object}`)
 		}
 		// The maker must be able to write there now; each run checks again.
 		if _, err := policy.CollectionRole(ctx, s.Store.Collections(), c.CollectionID, domain.RoleEditor); err != nil {
-			return nil, err
+			return err
 		}
 		a.Config, _ = json.Marshal(c)
 	default:
-		return nil, bad("action", "action must be set_field, notify, email, webhook or create_record")
+		return invalidField("action", "action must be set_field, notify, email, webhook or create_record")
 	}
-	if _, _, err := s.Records.List(ctx, domain.RecordFilter{CollectionID: collectionID, Page: domain.NewPage(1, 1), Where: &a.Conditions}); err != nil {
-		return nil, err
-	}
-	return a, nil
+	return nil
 }
 
 func (s *Service) CreateAutomation(ctx context.Context, collectionID string, in input.AutomationInput) (*domain.Automation, error) {

@@ -3,10 +3,11 @@ package record
 import (
 	"context"
 	"encoding/json"
-	"maps"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/policy"
@@ -73,195 +74,6 @@ func (s *Service) Restore(ctx context.Context, cmd input.RestoreRecordCommand) (
 	return restored, err
 }
 
-// Import checks every record against the schema and, unless DryRun, inserts
-// the valid ones; with any invalid and not SkipInvalid it inserts none. Editors.
-func (s *Service) Import(ctx context.Context, cmd input.ImportRecordsCommand) (*input.ImportResult, error) {
-	if err := validate.ID(cmd.CollectionID); err != nil {
-		return nil, err
-	}
-	if len(cmd.Records) == 0 || len(cmd.Records) > maxImport {
-		return nil, apperror.New(apperror.CodeInvalidInput, "records must hold 1 to 5000 records").WithField("records")
-	}
-	if len(cmd.BatchKey) > maxBatchKey || strings.ContainsFunc(cmd.BatchKey, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
-		return nil, apperror.New(apperror.CodeInvalidInput, "batch_key is up to 100 printable characters").WithField("batch_key")
-	}
-	res := &input.ImportResult{Errors: []input.ImportError{}}
-	claim := cmd.BatchKey != "" && !cmd.DryRun
-	err := s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
-		if _, err := policy.CollectionRole(ctx, uow.Collections(), cmd.CollectionID, domain.RoleEditor); err != nil {
-			return err
-		}
-		// A batch key saved before is a retry whose answer was lost: its result again, nothing saved twice.
-		if claim {
-			prev, err := uow.Records().ClaimImportBatch(ctx, cmd.CollectionID, cmd.BatchKey)
-			if err != nil {
-				return err
-			}
-			if prev != nil {
-				res.Created, res.Updated, res.Replayed = prev.Created, prev.Updated, true
-				return nil
-			}
-		}
-		if err := func() error {
-			raw, err := uow.Collections().SchemaForWrite(ctx, cmd.CollectionID)
-			if err != nil {
-				return err
-			}
-			compiled, err := schema.Compile(raw) // once for the whole batch
-			if err != nil {
-				return err
-			}
-			uniques := schema.UniqueKeys(raw)
-			// Upsert: a row whose key value a record holds updates that record.
-			existing := map[int]domain.Record{}
-			if cmd.UpsertKey != "" {
-				if !slices.Contains(uniques, cmd.UpsertKey) {
-					return apperror.New(apperror.CodeInvalidInput, "upsert_key must be a unique field").WithField("upsert_key")
-				}
-				if existing, err = upsertTargets(ctx, uow, cmd.CollectionID, cmd.UpsertKey, cmd.Records); err != nil {
-					return err
-				}
-			}
-			// The server's own fields: new rows get the next number and their maker.
-			var fresh, again [][]byte
-			var freshAt, againAt []int
-			for i, d := range cmd.Records {
-				if _, ok := existing[i]; ok {
-					again, againAt = append(again, d), append(againAt, i)
-				} else {
-					fresh, freshAt = append(fresh, d), append(freshAt, i)
-				}
-			}
-			if err := fill(ctx, uow, raw, cmd.CollectionID, fresh, true); err != nil {
-				return err
-			}
-			if err := fill(ctx, uow, raw, cmd.CollectionID, again, false); err != nil {
-				return err
-			}
-			for n, i := range freshAt {
-				cmd.Records[i] = fresh[n]
-			}
-			for n, i := range againAt {
-				cmd.Records[i] = again[n]
-			}
-			// Schema first; the records that pass are then checked for unique values,
-			// against the collection and each other.
-			passed := make([]int, 0, len(cmd.Records))
-			docs := make([][]byte, 0, len(cmd.Records))
-			bad := map[int][]schema.Issue{}
-			// A record over the stored size limit is refused alone, not with its batch.
-			big, err := uow.Records().Oversized(ctx, cmd.Records)
-			if err != nil {
-				return err
-			}
-			for _, i := range big {
-				bad[i] = []schema.Issue{{Keyword: "too_large", Message: "record data is over 1 MB"}}
-			}
-			for i, data := range cmd.Records {
-				if _, ok := bad[i]; ok {
-					continue
-				}
-				issues, err := schema.Check(compiled, data)
-				if err != nil {
-					return err
-				}
-				if len(issues) > 0 {
-					bad[i] = issues
-					continue
-				}
-				passed = append(passed, i)
-				docs = append(docs, data)
-			}
-			// New rows are checked together; an updated record against the others only.
-			// shortcut: one query per updated record and unique field; batch them if upserts of thousands get slow.
-			var newDocs [][]byte
-			var newAt []int
-			for n, i := range passed {
-				if rec, ok := existing[i]; ok {
-					taken, err := takenIn(ctx, uow, cmd.CollectionID, rec.ID, uniques, [][]byte{docs[n]})
-					if err != nil {
-						return err
-					}
-					if len(taken[0]) > 0 {
-						bad[i] = taken[0]
-					}
-					continue
-				}
-				newDocs, newAt = append(newDocs, docs[n]), append(newAt, i)
-			}
-			taken, err := takenIn(ctx, uow, cmd.CollectionID, "", uniques, newDocs)
-			if err != nil {
-				return err
-			}
-			for n, issues := range taken {
-				if len(issues) > 0 {
-					bad[newAt[n]] = issues
-				}
-			}
-			missing, err := linksIn(ctx, uow, raw, cmd.CollectionID, docs)
-			if err != nil {
-				return err
-			}
-			for n, issues := range missing {
-				if len(issues) > 0 {
-					bad[passed[n]] = append(bad[passed[n]], issues...)
-				}
-			}
-			valid := make([]string, 0, len(cmd.Records))
-			var updates []int
-			for i, data := range cmd.Records {
-				if issues, ok := bad[i]; ok {
-					res.Invalid++
-					if len(res.Errors) < maxImportErrs {
-						res.Errors = append(res.Errors, input.ImportError{Index: i, Issues: issues})
-					}
-					continue
-				}
-				if _, ok := existing[i]; ok {
-					updates = append(updates, i)
-					continue
-				}
-				valid = append(valid, string(data))
-			}
-			if cmd.DryRun || len(valid)+len(updates) == 0 || (res.Invalid > 0 && !cmd.SkipInvalid) {
-				return nil
-			}
-			if len(valid) > 0 {
-				if res.Created, err = uow.Records().CreateMany(ctx, cmd.CollectionID, valid); err != nil {
-					return err
-				}
-			}
-			for _, i := range updates {
-				updated, err := uow.Records().Update(ctx, existing[i].ID, cmd.Records[i], nil)
-				if err != nil {
-					return err
-				}
-				res.Updated++
-				if err := policy.Notify(ctx, uow, cmd.CollectionID, domain.EventRecordUpdated, hookData(updated)); err != nil {
-					return err
-				}
-			}
-			if err := policy.Audit(ctx, uow, "record.import", cmd.CollectionID, map[string]any{"collection_id": cmd.CollectionID, "count": res.Created, "updated": res.Updated}); err != nil {
-				return err
-			}
-			if res.Created == 0 {
-				return nil
-			}
-			return policy.Notify(ctx, uow, cmd.CollectionID, domain.EventRecordsImported, map[string]any{"count": res.Created})
-		}(); err != nil {
-			return err
-		}
-		if claim {
-			return uow.Records().FinishImportBatch(ctx, cmd.CollectionID, cmd.BatchKey, res.Created, res.Updated)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
-}
-
 // importBatchesKept is how long a saved batch key answers a retry.
 const importBatchesKept = 7 * 24 * time.Hour
 
@@ -270,47 +82,11 @@ func (s *Service) PruneImportBatches(ctx context.Context) error {
 	return s.Repo.PruneImportBatches(ctx, time.Now().Add(-importBatchesKept))
 }
 
-// upsertTargets finds the records holding each row's key value and merges the
-// row into a copy of that record's data (in place in rows): the fields the row
-// leaves out stay as they were.
-func upsertTargets(ctx context.Context, uow output.UnitOfWork, collectionID, key string, rows []json.RawMessage) (map[int]domain.Record, error) {
-	var values []json.RawMessage
-	var at []int
-	for i, row := range rows {
-		var doc map[string]json.RawMessage
-		if json.Unmarshal(row, &doc) != nil || doc[key] == nil || string(doc[key]) == "null" {
-			continue
-		}
-		values, at = append(values, doc[key]), append(at, i)
-	}
-	found, err := uow.Records().Matching(ctx, collectionID, key, values)
-	if err != nil {
-		return nil, err
-	}
-	out := map[int]domain.Record{}
-	for n, rec := range found {
-		i := at[n]
-		var base, row map[string]json.RawMessage
-		if json.Unmarshal(rec.Data, &base) != nil || base == nil {
-			base = map[string]json.RawMessage{}
-		}
-		_ = json.Unmarshal(rows[i], &row) // an object: values found its key
-		maps.Copy(base, row)
-		merged, err := json.Marshal(base)
-		if err != nil {
-			return nil, err
-		}
-		rows[i] = merged
-		out[i] = rec
-	}
-	return out, nil
-}
-
 // Export checks access and reads the collection's name, schema and keys now;
 // its Each then streams the records in id order, in batches, so an export of
 // any size holds one batch in memory. ValidOnly leaves out records that break
 // the schema. Viewers.
-func (s *Service) Export(ctx context.Context, collectionID string, validOnly bool) (*input.Export, error) {
+func (s *Service) Export(ctx context.Context, collectionID string, options input.ExportOptions) (*input.Export, error) {
 	if _, err := policy.CollectionRole(ctx, s.Collections, collectionID, domain.RoleViewer); err != nil {
 		return nil, err
 	}
@@ -318,14 +94,21 @@ func (s *Service) Export(ctx context.Context, collectionID string, validOnly boo
 	if err != nil {
 		return nil, err
 	}
-	compiled, err := schema.Compile(c.Schema)
-	if err != nil {
-		return nil, err
+	var compiled *jsonschema.Schema
+	if options.ValidOnly {
+		compiled, err = schema.Compile(c.Schema)
+		if err != nil {
+			return nil, err
+		}
 	}
-	keys, err := s.Repo.Keys(ctx, collectionID, maxExportKeys)
-	if err != nil {
-		return nil, err
+	var keys []string
+	if options.CSV {
+		keys, err = s.Repo.Keys(ctx, collectionID, maxExportKeys)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	each := func(fn func(json.RawMessage) error) error {
 		after := ""
 		for {
@@ -334,7 +117,7 @@ func (s *Service) Export(ctx context.Context, collectionID string, validOnly boo
 				return err
 			}
 			for _, r := range batch {
-				if validOnly {
+				if options.ValidOnly {
 					issues, err := schema.Check(compiled, r.Data)
 					if err != nil {
 						return err
@@ -439,59 +222,9 @@ func (s *Service) BulkUpdate(ctx context.Context, cmd input.BulkUpdateCommand) (
 		if err != nil {
 			return err
 		}
-		if len(ids) > 1 {
-			for _, k := range schema.UniqueKeys(raw) {
-				if v, ok := cmd.Set[k]; ok && string(v) != "null" {
-					return apperror.New(apperror.CodeInvalidInput, "a unique field cannot be filled in bulk; edit its records one by one").WithField("set")
-				}
-			}
-		}
-		compiled, err := schema.Compile(raw)
+		docs, err := prepareBulkUpdate(ctx, uow, collectionID, raw, ids, cmd.Set)
 		if err != nil {
 			return err
-		}
-		docs := make([][]byte, len(ids))
-		for i, id := range ids {
-			current, err := uow.Records().FindByID(ctx, id)
-			if err != nil {
-				return err
-			}
-			var data map[string]json.RawMessage
-			if err := json.Unmarshal(current.Data, &data); err != nil || data == nil {
-				data = map[string]json.RawMessage{}
-			}
-			for k, v := range cmd.Set {
-				if string(v) == "null" {
-					delete(data, k)
-				} else {
-					data[k] = v
-				}
-			}
-			if docs[i], err = json.Marshal(data); err != nil {
-				return err
-			}
-		}
-		// Formulas and "changed by" follow the new values.
-		if err := fill(ctx, uow, raw, collectionID, docs, false); err != nil {
-			return err
-		}
-		for i, id := range ids {
-			if issues, err := schema.Check(compiled, docs[i]); err != nil || len(issues) > 0 {
-				if err == nil {
-					err = apperror.New(apperror.CodeValidationFailed, "a record would break the collection's fields").
-						WithField("set").WithDetails("issues", issues).WithDetails("id", id)
-				}
-				return err
-			}
-		}
-		if len(ids) == 1 { // one record may take a unique value nobody else holds
-			taken, err := takenIn(ctx, uow, collectionID, ids[0], schema.UniqueKeys(raw), docs)
-			if err != nil {
-				return err
-			}
-			if len(taken[0]) > 0 {
-				return apperror.New(apperror.CodeValidationFailed, "a unique field repeats another record's value").WithField("set").WithDetails("issues", taken[0])
-			}
 		}
 		missing, err := linksIn(ctx, uow, raw, collectionID, docs)
 		if err != nil {
@@ -521,6 +254,64 @@ func (s *Service) BulkUpdate(ctx context.Context, cmd input.BulkUpdateCommand) (
 		return 0, err
 	}
 	return len(ids), nil
+}
+
+func prepareBulkUpdate(ctx context.Context, uow output.UnitOfWork, collectionID string, raw []byte, ids []string, fields map[string]json.RawMessage) ([][]byte, error) {
+	if len(ids) > 1 {
+		for _, k := range schema.Metadata(raw).Unique {
+			if v, ok := fields[k]; ok && string(v) != "null" {
+				return nil, apperror.New(apperror.CodeInvalidInput, "a unique field cannot be filled in bulk; edit its records one by one").WithField("set")
+			}
+		}
+	}
+	compiled, err := schema.Compile(raw)
+	if err != nil {
+		return nil, err
+	}
+	docs := make([][]byte, len(ids))
+	for i, id := range ids {
+		current, err := uow.Records().FindByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		var data map[string]json.RawMessage
+		if err := json.Unmarshal(current.Data, &data); err != nil || data == nil {
+			data = map[string]json.RawMessage{}
+		}
+		for k, v := range fields {
+			if string(v) == "null" {
+				delete(data, k)
+			} else {
+				data[k] = v
+			}
+		}
+		if docs[i], err = json.Marshal(data); err != nil {
+			return nil, err
+		}
+	}
+	// Formulas and "changed by" follow the new values.
+	if err := fill(ctx, uow, raw, collectionID, docs, false); err != nil {
+		return nil, err
+	}
+	for i, id := range ids {
+		if issues, err := schema.Check(compiled, docs[i]); err != nil || len(issues) > 0 {
+			if err == nil {
+				err = apperror.New(apperror.CodeValidationFailed, "a record would break the collection's fields").
+					WithField("set").WithDetails("issues", issues).WithDetails("id", id)
+			}
+			return nil, err
+		}
+	}
+	if len(ids) == 1 { // one record may take a unique value nobody else holds
+		taken, err := uniqueIssues(ctx, uow, collectionID, ids[0], schema.Metadata(raw).Unique, docs[0])
+		if err != nil {
+			return nil, err
+		}
+		if len(taken) > 0 {
+			return nil, apperror.New(apperror.CodeValidationFailed, "a unique field repeats another record's value").WithField("set").WithDetails("issues", taken)
+		}
+	}
+	return docs, nil
 }
 
 const (

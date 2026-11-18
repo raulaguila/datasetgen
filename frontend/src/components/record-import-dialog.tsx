@@ -104,20 +104,27 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange }:
    * The first skip batches were saved by an earlier send of this file: they are
    * read (the batches after them must come out the same) but not sent.
    */
-  const pass = async (f: File, cols: string[] | undefined, send: boolean, skip: number, fid: string | null, onBatch: (b: Batch, res: ImportResult | null, n: number) => void) => {
+  const pass = async (f: File, cols: string[] | undefined, send: boolean, progress: SendProgress | null, selectedKey: string | undefined, onBatch: (b: Batch, res: ImportResult | null, n: number) => void) => {
     const ctl = new AbortController();
     running.current = ctl;
     const label = t(send ? "import.sending" : "import.checking");
+    const checkpointId = send && progress ? importId(collectionId, schema, f, cols, selectedKey) : null;
     let records = 0;
     let n = 0;
     setBusy({ label, read: 0, records: 0 });
-    await eachBatch(f, { schema: schema ?? null, columns: cols, upsertKey }, async (b) => {
-      const i = n++;
-      const res = b.records.length && i >= skip
+    await eachBatch(f, { schema: schema ?? null, columns: cols, upsertKey: selectedKey, legacyDuplicates: !!progress && !progress.version }, async (b) => {
+      const i = n;
+      if (b.records.length) n++;
+      if (checkpointId && progress && b.records.length && i >= progress.sent) {
+        progress.pending = i;
+        saveProgress(checkpointId, progress);
+      }
+      const res = b.records.length && i >= (progress?.sent ?? 0) && (send || i !== progress?.pending)
         ? await withRetry(
           () => records_.importBatch({
-            collection_id: collectionId, records: b.records.map((r) => r.data), upsert_key: upsertKey,
-            ...(send ? { skip_invalid: true, batch_key: `${fid}:${i}` } : { dry_run: true }),
+            collection_id: collectionId, records: b.records.map((r) => r.data), upsert_key: selectedKey,
+            ...(b.records.some((r) => r.sourceJSON) ? { sourceRecords: b.records.map((r) => r.sourceJSON ?? JSON.stringify(r.data)) } : {}),
+            ...(send ? { skip_invalid: true, batch_key: `${progress!.fid}:${i}` } : { dry_run: true }),
           }),
           (wait) => setBusy((x) => x && { ...x, wait }),
           ctl.signal)
@@ -128,18 +135,25 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange }:
     }, (read) => setBusy((x) => x && { ...x, read }), ctl.signal);
   };
 
-  const check = async (f: File, cols?: string[]) => {
+  const check = async (f: File, cols?: string[], keySelection: string = upsertKey ?? NONE) => {
+    const selectedKey = keySelection === NONE ? undefined : keySelection;
     setChecked(null);
     setError(null);
     const out: Checked = { valid: 0, invalid: 0, problems: [], saved: 0 };
     const keep = (line: number, message: string) => { out.invalid++; if (out.problems.length < KEPT_PROBLEMS) out.problems.push({ line, message }); };
     // Batches an earlier send saved are not checked again: their unique values would now read as taken.
-    const before = loadProgress(importId(collectionId, schema, f, cols, upsertKey));
+    const before = loadProgress(importId(collectionId, schema, f, cols, selectedKey));
+    out.saved = (before?.created ?? 0) + (before?.updated ?? 0);
     setResumed(before);
     try {
-      await pass(f, cols, false, before?.sent ?? 0, null, (b, res, i) => {
-        if (before && i < before.sent) { out.saved += b.records.length; return; }
+      await pass(f, cols, false, before, selectedKey, (b, res, i) => {
+        if (before && i < before.sent) return;
         for (const p of b.problems) keep(p.line, lineMessage(p));
+        if (before?.pending === i && b.records.length) {
+          // A lost acknowledgement is resolved by replaying the same batch key.
+          out.valid += b.records.length;
+          return;
+        }
         if (!res) return;
         out.valid += b.records.length - res.invalid;
         for (const e of res.errors) keep(b.records[e.index].line, e.issues.map((i) => `${i.path || "/"}: ${i.message}`).join("; "));
@@ -180,15 +194,16 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange }:
     if (!file || !checked) return;
     const cols = mapped();
     const id = importId(collectionId, schema, file, cols, upsertKey);
-    const progress: SendProgress = loadProgress(id) ?? { fid: crypto.randomUUID(), sent: 0, created: 0, updated: 0, at: Date.now() };
+    const progress: SendProgress = loadProgress(id) ?? { version: 2, fid: crypto.randomUUID(), sent: 0, created: 0, updated: 0, at: Date.now() };
     const skip = progress.sent;
     setError(null);
     try {
-      await pass(file, cols, true, skip, progress.fid, (_, res, i) => {
-        if (i < skip) return;
+      await pass(file, cols, true, progress, upsertKey, (b, res, i) => {
+        if (!b.records.length || i < skip) return;
         progress.created += res?.created ?? 0;
         progress.updated += res?.updated ?? 0;
         progress.sent = i + 1;
+        delete progress.pending;
         saveProgress(id, progress);
       });
       saveProgress(id, null);
@@ -246,7 +261,7 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange }:
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="import-upsert">{t("import.upsert")}</Label>
               <Select value={upsert} items={{ [NONE]: t("import.upsert_none"), ...Object.fromEntries(uniques.map((u) => [u.key, u.field.name])) }}
-                onValueChange={(v) => { setUpsert(String(v)); setChecked(null); if (file && !table) void check(file); }}>
+                onValueChange={(v) => { setUpsert(String(v)); setChecked(null); if (file && !table) void check(file, undefined, String(v)); }}>
                 <SelectTrigger id="import-upsert" className="w-full" disabled={!!busy}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>{t("import.upsert_none")}</SelectItem>
@@ -297,7 +312,7 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange }:
               <p>
                 {plural(t("import.summary"), checked.valid, num(checked.valid)).replace("{invalid}", num(invalid))}
               </p>
-              {resumed && resumed.sent > 0 && (
+              {resumed && (
                 <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
                   {plural(t("import.resume_note"), checked.saved, num(checked.saved))}{" "}
                   <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={startOver}>{t("import.start_over")}</Button>
@@ -326,7 +341,7 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange }:
           {busy ? <Button variant="ghost" onClick={stop}>{t("import.stop")}</Button> : <Button variant="ghost" onClick={() => close(false)}>{t("common.cancel")}</Button>}
           <Button disabled={!canSend} onClick={() => void send()}>
             
-            {t(resumed && resumed.sent > 0 ? "import.resume" : "import.send").replace("{n}", num(checked?.valid ?? 0))}
+            {t(resumed ? "import.resume" : "import.send").replace("{n}", num(checked?.valid ?? 0))}
           </Button>
         </DialogFooter>
       </DialogContent>

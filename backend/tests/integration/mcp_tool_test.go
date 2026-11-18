@@ -115,6 +115,39 @@ func TestOwnersPublishMCPTools(t *testing.T) {
 		return got, failed
 	}
 
+	checkPublishedTool(t, listed, call)
+
+	// The owners' log keeps each call in the collection, newest first; listing tools is not a call.
+	rpc("tools/call", `{"name":"search_records","arguments":{"collection_id":"`+c.ID+`"}}`)
+	checkToolCallLog(t, e, integ, owner, c.ID, key.Key.ID)
+
+	// An owner tries settings before saving them.
+	tried, total, _, err := integ.TestMCPTool(owner, c.ID, tool, map[string]json.RawMessage{"cidade": json.RawMessage(`"Manaus"`)})
+	if err != nil || total != 1 || string(tried[0].Data) != `{"nome":"caneta"}` {
+		t.Fatalf("test: %v %d %v", tried, total, err)
+	}
+	if _, _, _, err := integ.TestMCPTool(owner, c.ID, tool, nil); !apperror.IsCode(err, apperror.CodeInvalidInput) {
+		t.Fatalf("test without the required argument: %v", err)
+	}
+
+	// A disabled tool leaves the list; a key for another collection never sees it.
+	tool.Enabled = false
+	if _, err := integ.UpdateMCPTool(owner, c.ID, made.ID, tool); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(listed()); n != 19 {
+		t.Fatalf("disabled tool still listed: %d", n)
+	}
+	if err := integ.DeleteMCPTool(owner, c.ID, made.ID); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := integ.MCPTools(owner, c.ID); len(list) != 0 {
+		t.Fatalf("after delete: %v", list)
+	}
+}
+
+func checkPublishedTool(t *testing.T, listed func() []any, call func(string) (map[string]any, bool)) {
+	t.Helper()
 	all := listed()
 	i := slices.IndexFunc(all, func(x any) bool { return x.(map[string]any)["name"] == "produtos_caros" })
 	if len(all) != 20 || i < 0 {
@@ -148,53 +181,30 @@ func TestOwnersPublishMCPTools(t *testing.T) {
 	if got, _ = call(`{"cidade":"Belem","nomes":["mesa","x"]}`); got["total"].(float64) != 1 {
 		t.Fatalf("in: %v", got)
 	}
+}
 
-	// The owners' log keeps each call in the collection, newest first; listing tools is not a call.
-	rpc("tools/call", `{"name":"search_records","arguments":{"collection_id":"`+c.ID+`"}}`)
-	calls, err := integ.MCPCalls(owner, c.ID)
+func checkToolCallLog(t *testing.T, e *env, integ input.IntegrationService, owner context.Context, collectionID, keyID string) {
+	t.Helper()
+	calls, err := integ.MCPCalls(owner, collectionID)
 	if err != nil || len(calls) != 6 || calls[0].Tool != "search_records" || !calls[0].OK || calls[0].KeyName != "Assistente" {
 		t.Fatalf("calls: %v %v", calls, err)
 	}
-	if calls[0].Args != `{"collection_id":"`+c.ID+`"}` || calls[1].Args != `{"cidade":"Belem","nomes":["mesa","x"]}` {
+	if calls[0].Args != `{"collection_id":"`+collectionID+`"}` || calls[1].Args != `{"cidade":"Belem","nomes":["mesa","x"]}` {
 		t.Fatalf("arguments not kept: %q, %q", calls[0].Args, calls[1].Args)
 	}
-	if mine, _ := integ.KeyMCPCalls(owner, key.Key.ID); mine[0].Args == "" {
+	if mine, _ := integ.KeyMCPCalls(owner, keyID); mine[0].Args == "" {
 		t.Fatal("a key's log lacks the arguments")
 	}
 	if failed := slices.IndexFunc(calls, func(m domain.MCPCall) bool { return !m.OK && m.Error != "" }); failed < 0 {
 		t.Fatalf("no failed call logged: %v", calls)
 	}
 	// The key's maker reads the same calls by key, with the collection's name; nobody else does.
-	mine, err := integ.KeyMCPCalls(owner, key.Key.ID)
+	mine, err := integ.KeyMCPCalls(owner, keyID)
 	if err != nil || len(mine) != 6 || mine[0].CollectionName != "Produtos" {
 		t.Fatalf("key calls: %v %v", mine, err)
 	}
 	other := reqctx.WithActor(context.Background(), e.userID(t, e.activeUser(t)))
-	if theirs, err := integ.KeyMCPCalls(other, key.Key.ID); err != nil || len(theirs) != 0 {
+	if theirs, err := integ.KeyMCPCalls(other, keyID); err != nil || len(theirs) != 0 {
 		t.Fatalf("another member read the key's calls: %v %v", theirs, err)
-	}
-
-	// An owner tries settings before saving them.
-	tried, total, _, err := integ.TestMCPTool(owner, c.ID, tool, map[string]json.RawMessage{"cidade": json.RawMessage(`"Manaus"`)})
-	if err != nil || total != 1 || string(tried[0].Data) != `{"nome":"caneta"}` {
-		t.Fatalf("test: %v %d %v", tried, total, err)
-	}
-	if _, _, _, err := integ.TestMCPTool(owner, c.ID, tool, nil); !apperror.IsCode(err, apperror.CodeInvalidInput) {
-		t.Fatalf("test without the required argument: %v", err)
-	}
-
-	// A disabled tool leaves the list; a key for another collection never sees it.
-	tool.Enabled = false
-	if _, err := integ.UpdateMCPTool(owner, c.ID, made.ID, tool); err != nil {
-		t.Fatal(err)
-	}
-	if n := len(listed()); n != 19 {
-		t.Fatalf("disabled tool still listed: %d", n)
-	}
-	if err := integ.DeleteMCPTool(owner, c.ID, made.ID); err != nil {
-		t.Fatal(err)
-	}
-	if list, _ := integ.MCPTools(owner, c.ID); len(list) != 0 {
-		t.Fatalf("after delete: %v", list)
 	}
 }

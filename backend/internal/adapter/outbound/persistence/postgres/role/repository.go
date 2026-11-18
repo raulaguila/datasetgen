@@ -111,10 +111,6 @@ func (r *Repository) load(ctx context.Context, members bool, source, order strin
 	return roles, nil
 }
 
-// unprotectedRole matches roles the API may change (alias r0); mirrors domain.Role.Protected.
-const unprotectedRole = `NOT r0.is_superuser AND NOT EXISTS (
-	SELECT 1 FROM usr.usr_role_permission p0 WHERE p0.role_id = r0.id AND p0.resource = '*')`
-
 func (r *Repository) ForUser(ctx context.Context, userID string) ([]domain.Role, error) {
 	return r.load(ctx, false, `(SELECT r.* FROM usr.usr_role r JOIN usr.usr_user_role ur ON ur.role_id = r.id WHERE ur.user_id = ?)`, "r.name", userID)
 }

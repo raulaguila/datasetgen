@@ -1,5 +1,5 @@
 import { addField, blankField, fieldsOf, keyOf, propOf, propsOf, type Field, type FieldType } from "@/components/field-builder";
-import { parseImport, type ParsedFile, type ParsedRecord } from "@/lib/import-file";
+import { needsNumberSource, parseImport, type ParsedFile, type ParsedRecord } from "@/lib/import-file";
 
 /**
  * Our export writes ' before a cell starting with = + - @ tab or CR, so a
@@ -348,10 +348,30 @@ export function rowReader(header: string[], schema: Record<string, unknown> | nu
     }
     return [r.key, { type, nullable: storage.includes("null") }];
   }));
-  return (row, line) => ({
-    line,
-    data: Object.fromEntries(keys.flatMap((k, j) => (row[j] === undefined || row[j] === "" || !k ? [] : [[k, cellValue(row[j], types.get(k)?.type, types.get(k)?.nullable)]]))),
-  });
+  return (row, line) => {
+    const data: Record<string, unknown> = Object.create(null);
+    let exact: Map<string, string> | undefined;
+    for (const [j, key] of keys.entries()) {
+      const cell = row[j];
+      if (!key || cell === undefined || cell === "") continue;
+      const field = types.get(key);
+      const value = cellValue(cell, field?.type, field?.nullable);
+      data[key] = value;
+      exact?.delete(key); // two columns may map to the same field
+      if (!needsNumberSource(cell)) continue;
+      const text = cell.trim();
+      if (field?.type === "integer" || field?.type === "number") {
+        const number = text.replace(",", ".");
+        if (/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(number)) (exact ??= new Map()).set(key, number);
+      } else if ((typeof value === "object" || typeof value === "number") && value !== null) {
+        // Only use source from cells that successfully parsed as JSON.
+        try { JSON.parse(text); (exact ??= new Map()).set(key, text); } catch { /* e.g. a semicolon list */ }
+      }
+    }
+    const record: ParsedRecord = { line, data };
+    if (exact?.size) record.sourceJSON = "{" + Object.keys(data).map((k) => JSON.stringify(k) + ":" + (exact?.get(k) ?? JSON.stringify(data[k]))).join(",") + "}";
+    return record;
+  };
 }
 
 /** Records from table rows whose first row is the header; see rowReader. */

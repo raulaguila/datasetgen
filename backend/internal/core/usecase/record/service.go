@@ -1,6 +1,7 @@
 package record
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"maps"
@@ -332,7 +333,7 @@ func checkData(ctx context.Context, uow output.UnitOfWork, collectionID, recordI
 	data = docs[0]
 	check := raw
 	if k, ok := reqctx.Key(ctx); ok && k.Form {
-		check = schema.Optional(raw, append(slices.Collect(maps.Keys(schema.RefKeys(raw))), schema.FileKeys(raw)...))
+		check = schema.Optional(raw, append(slices.Collect(maps.Keys(schema.Metadata(raw).Refs)), schema.Metadata(raw).Files...))
 	}
 	compiled, err := schema.Compile(check)
 	if err != nil {
@@ -341,7 +342,7 @@ func checkData(ctx context.Context, uow output.UnitOfWork, collectionID, recordI
 	if err := schema.Validate(compiled, data); err != nil {
 		return nil, nil, err
 	}
-	issues, err := takenIn(ctx, uow, collectionID, recordID, schema.UniqueKeys(raw), [][]byte{data})
+	issues, err := uniqueIssues(ctx, uow, collectionID, recordID, schema.Metadata(raw).Unique, data)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -349,10 +350,10 @@ func checkData(ctx context.Context, uow output.UnitOfWork, collectionID, recordI
 	if err != nil {
 		return nil, nil, err
 	}
-	issues[0] = append(issues[0], missing[0]...)
-	if len(issues[0]) > 0 {
+	issues = append(issues, missing[0]...)
+	if len(issues) > 0 {
 		return nil, nil, apperror.New(apperror.CodeValidationFailed, "a unique field repeats another record's value").
-			WithField("data").WithDetails("issues", issues[0])
+			WithField("data").WithDetails("issues", issues)
 	}
 	return raw, data, nil
 }
@@ -367,59 +368,37 @@ func linksIn(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionI
 	return policy.MissingLinks(ctx, uow.Tools(), raw, collectionID, docs)
 }
 
-// takenIn returns, per document, the unique keys whose value another record
-// already holds or an earlier document of the same batch repeats. It takes the
-// collection's unique lock first, so the answer holds until commit.
-func takenIn(ctx context.Context, uow output.UnitOfWork, collectionID, recordID string, keys []string, docs [][]byte) ([][]schema.Issue, error) {
-	out := make([][]schema.Issue, len(docs))
+// uniqueIssues validates a single record under the same lock and JSONB equality as imports.
+func uniqueIssues(ctx context.Context, uow output.UnitOfWork, collectionID, recordID string, keys []string, data []byte) ([]schema.Issue, error) {
 	if len(keys) == 0 {
-		return out, nil
+		return nil, nil
 	}
 	if err := uow.Records().LockUnique(ctx, collectionID); err != nil {
 		return nil, err
 	}
+	if clean := bytes.TrimSpace(data); len(clean) == 0 || clean[0] != '{' {
+		return nil, nil // non-object schemas have no top-level fields
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+	var issues []schema.Issue
 	for _, key := range keys {
-		var values []json.RawMessage
-		var owners []int
-		seen := map[string]bool{}
-		for i, doc := range docs {
-			var fields map[string]json.RawMessage
-			if json.Unmarshal(doc, &fields) != nil {
-				continue
-			}
-			v, ok := fields[key]
-			if !ok || string(v) == "null" {
-				continue // missing is not a value: only `required` asks for one
-			}
-			canon, err := canonical(v)
-			if err != nil {
-				return nil, err
-			}
-			if seen[canon] {
-				out[i] = append(out[i], schema.UniqueIssue(key))
-				continue
-			}
-			seen[canon] = true
-			values = append(values, json.RawMessage(canon))
-			owners = append(owners, i)
+		v := fields[key]
+		if len(v) == 0 || string(v) == "null" {
+			continue
 		}
-		taken, err := uow.Records().TakenValues(ctx, collectionID, recordID, key, values)
+		found, err := uow.Records().UniqueValues(ctx, collectionID, key, []json.RawMessage{v})
 		if err != nil {
 			return nil, err
 		}
-		for _, n := range taken {
-			out[owners[n]] = append(out[owners[n]], schema.UniqueIssue(key))
+		for _, match := range found {
+			if match.Owner != "" && match.Owner != recordID {
+				issues = append(issues, schema.UniqueIssue(key))
+				break
+			}
 		}
 	}
-	return out, nil
-}
-
-// canonical rewrites a JSON value so equal values compare equal ("1.0" and "1", key order).
-func canonical(v json.RawMessage) (string, error) {
-	var x any
-	if err := json.Unmarshal(v, &x); err != nil {
-		return "", err
-	}
-	b, err := json.Marshal(x)
-	return string(b), err
+	return issues, nil
 }

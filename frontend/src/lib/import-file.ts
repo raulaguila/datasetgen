@@ -2,7 +2,13 @@
 export interface ParsedRecord {
   line: number;
   data: unknown;
+  /** Valid source JSON for numbers that may change in a JS number round trip. */
+  sourceJSON?: string;
 }
+
+// 15 significant decimal digits round trip through a JS number in the normal
+// exponent range. Keep the source for longer mantissas and extreme exponents.
+export const needsNumberSource = (text: string) => /[0-9.]{16}|[eE][+-]?\d{3}/.test(text);
 
 export interface ParsedFile {
   records: ParsedRecord[];

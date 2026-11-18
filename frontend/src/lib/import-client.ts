@@ -2,7 +2,7 @@ import { ApiError } from "@/lib/api/client";
 import { headerOf, inferFile, recordBatches, type Batch } from "@/lib/import-stream";
 
 /** Messages to and from lib/import.worker.ts. */
-type BatchOpts = { schema: Record<string, unknown> | null; columns?: string[]; upsertKey?: string };
+type BatchOpts = { schema: Record<string, unknown> | null; columns?: string[]; upsertKey?: string; legacyDuplicates?: boolean };
 export type WorkerRequest =
   | { op: "header"; file: File }
   | { op: "infer"; file: File }
@@ -122,7 +122,7 @@ export async function withRetry<T>(fn: () => Promise<T>, onWait: (w: RetryWait |
  * choosing the same file again continues it: fid names its batches' keys, sent
  * counts the batches the server confirmed. A week, like the server's keys.
  */
-export type SendProgress = { fid: string; sent: number; created: number; updated: number; at: number };
+export type SendProgress = { version?: 2; pending?: number; fid: string; sent: number; created: number; updated: number; at: number };
 const PROGRESS = "dataset.import-progress";
 const KEPT = 7 * 24 * 3600 * 1000;
 

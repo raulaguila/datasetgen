@@ -198,7 +198,6 @@ var arity = map[string][2]int{
 
 func (c call) eval(e *env) any {
 	arg := func(i int) any { return c.args[i].eval(e) }
-	num := func(i int) (float64, bool) { v, ok := arg(i).(float64); return v, ok }
 	switch c.fn {
 	case "IF":
 		if truthy(arg(0)) {
@@ -221,6 +220,38 @@ func (c call) eval(e *env) any {
 			}
 		}
 		return nil
+	case "ROUND", "ABS", "MIN", "MAX":
+		return c.evalNumber(e)
+	case "CONCAT":
+		var b strings.Builder
+		for i := range c.args {
+			b.WriteString(text(arg(i)))
+		}
+		return b.String()
+	case "UPPER", "LOWER", "TRIM", "LEN":
+		v := arg(0)
+		if v == nil {
+			return nil
+		}
+		s := text(v)
+		switch c.fn {
+		case "UPPER":
+			return strings.ToUpper(s)
+		case "LOWER":
+			return strings.ToLower(s)
+		case "TRIM":
+			return strings.TrimSpace(s)
+		}
+		return float64(utf8.RuneCountInString(s))
+	case "TODAY", "DAYS", "DATEADD", "YEAR", "MONTH", "DAY":
+		return c.evalDate(e)
+	}
+	return nil
+}
+
+func (c call) evalNumber(e *env) any {
+	num := func(i int) (float64, bool) { v, ok := c.args[i].eval(e).(float64); return v, ok }
+	switch c.fn {
 	case "ROUND":
 		x, ok := num(0)
 		digits := 0.0
@@ -252,27 +283,13 @@ func (c call) eval(e *env) any {
 			}
 		}
 		return out
-	case "CONCAT":
-		var b strings.Builder
-		for i := range c.args {
-			b.WriteString(text(arg(i)))
-		}
-		return b.String()
-	case "UPPER", "LOWER", "TRIM", "LEN":
-		v := arg(0)
-		if v == nil {
-			return nil
-		}
-		s := text(v)
-		switch c.fn {
-		case "UPPER":
-			return strings.ToUpper(s)
-		case "LOWER":
-			return strings.ToLower(s)
-		case "TRIM":
-			return strings.TrimSpace(s)
-		}
-		return float64(utf8.RuneCountInString(s))
+	}
+	return nil
+}
+
+func (c call) evalDate(e *env) any {
+	arg := func(i int) any { return c.args[i].eval(e) }
+	switch c.fn {
 	case "TODAY":
 		return e.today.Format(time.DateOnly)
 	case "DAYS":
@@ -284,7 +301,7 @@ func (c call) eval(e *env) any {
 		return math.Round(end.Sub(start).Hours() / 24)
 	case "DATEADD":
 		d, ok1 := day(arg(0))
-		n, ok2 := num(1)
+		n, ok2 := arg(1).(float64)
 		if !ok1 || !ok2 {
 			return nil
 		}

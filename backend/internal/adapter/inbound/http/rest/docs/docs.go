@@ -8049,6 +8049,10 @@ const docTemplate = `{
         "record.importDTO": {
             "type": "object",
             "properties": {
+                "batch_key": {
+                    "description": "BatchKey, chosen per batch (up to 100 characters), makes a retry safe: a key saved before returns that result and saves nothing again.",
+                    "type": "string"
+                },
                 "collection_id": {
                     "type": "string"
                 },
@@ -8099,6 +8103,10 @@ const docTemplate = `{
                 },
                 "invalid": {
                     "type": "integer"
+                },
+                "replayed": {
+                    "description": "Replayed: this batch_key was saved before; created and updated are from that save.",
+                    "type": "boolean"
                 },
                 "updated": {
                     "type": "integer"

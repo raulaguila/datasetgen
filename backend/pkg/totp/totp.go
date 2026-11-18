@@ -8,6 +8,7 @@ import (
 	"crypto/sha1" //nolint:gosec // RFC 6238 and every authenticator app use HMAC-SHA1
 	"encoding/base32"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -42,6 +43,9 @@ func Code(secret string, s int64) (string, error) {
 	key, err := b32.DecodeString(strings.ToUpper(strings.TrimSpace(secret)))
 	if err != nil {
 		return "", err
+	}
+	if s < 0 {
+		return "", errors.New("TOTP step must be nonnegative")
 	}
 	var msg [8]byte
 	binary.BigEndian.PutUint64(msg[:], uint64(s))

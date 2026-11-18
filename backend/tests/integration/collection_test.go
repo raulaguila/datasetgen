@@ -204,15 +204,6 @@ func TestCollectionMembersDecideAccess(t *testing.T) {
 
 func ignore[T any](_ T, err error) error { return err }
 
-func mustList(ctx context.Context, t *testing.T, svc *record.Service, collectionID string) []domain.Record {
-	t.Helper()
-	items, _, err := svc.List(ctx, domain.RecordFilter{CollectionID: collectionID, Page: domain.NewPage(1, 100)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return items
-}
-
 // Monitoring: the collection's own audit log, and the records a schema change left out of format.
 func TestCollectionAuditAndQuality(t *testing.T) {
 	e := newEnv(t)
@@ -499,45 +490,7 @@ func TestUniqueFieldsHold(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// An import refuses repeats of stored values and within the batch.
-	batch := []json.RawMessage{json.RawMessage(`{"codigo":"a3"}`), json.RawMessage(`{"codigo":"a3"}`), json.RawMessage(`{"codigo":"a1"}`)}
-	res, err := records.Import(ctx, input.ImportRecordsCommand{CollectionID: c.ID, Records: batch, SkipInvalid: true})
-	if err != nil || res.Created != 1 || res.Invalid != 2 {
-		t.Fatalf("import: %+v, %v", res, err)
-	}
-
-	// A batch key makes a retry safe: the second send answers with the first result and saves nothing.
-	keyed := input.ImportRecordsCommand{CollectionID: c.ID, Records: []json.RawMessage{json.RawMessage(`{"codigo":"k1"}`), json.RawMessage(`{"codigo":"k2"}`)}, BatchKey: "f1:0"}
-	first, err := records.Import(ctx, keyed)
-	if err != nil || first.Created != 2 || first.Replayed {
-		t.Fatalf("keyed import: %+v, %v", first, err)
-	}
-	again, err := records.Import(ctx, keyed)
-	if err != nil || again.Created != 2 || !again.Replayed {
-		t.Fatalf("retried import: %+v, %v", again, err)
-	}
-	// A dry run neither claims nor answers a key, and a batch that saved nothing leaves its key free.
-	if res, err := records.Import(ctx, input.ImportRecordsCommand{CollectionID: c.ID, Records: keyed.Records, BatchKey: "f1:1", DryRun: true}); err != nil || res.Replayed {
-		t.Fatalf("dry run: %+v, %v", res, err)
-	}
-	bad := input.ImportRecordsCommand{CollectionID: c.ID, Records: []json.RawMessage{json.RawMessage(`{"codigo":"k1"}`)}, BatchKey: "f1:2"}
-	if res, err := records.Import(ctx, bad); err != nil || res.Created != 0 || res.Invalid != 1 {
-		t.Fatalf("invalid keyed batch: %+v, %v", res, err)
-	}
-	bad.Records = []json.RawMessage{json.RawMessage(`{"codigo":"k3"}`)}
-	if res, err := records.Import(ctx, bad); err != nil || res.Created != 1 || res.Replayed {
-		t.Fatalf("fixed keyed batch: %+v, %v", res, err)
-	}
-	wantCode(t, ignore(records.Import(ctx, input.ImportRecordsCommand{CollectionID: c.ID, Records: keyed.Records, BatchKey: strings.Repeat("x", 101)})), apperror.CodeInvalidInput)
-	// A record over the stored size limit is refused alone; the rest of its batch saves.
-	huge := json.RawMessage(`{"codigo":"k4","x":"` + strings.Repeat("a", domain.RecordMaxBytes) + `"}`)
-	res, err = records.Import(ctx, input.ImportRecordsCommand{CollectionID: c.ID, Records: []json.RawMessage{huge, json.RawMessage(`{"codigo":"k5"}`)}, SkipInvalid: true})
-	if err != nil || res.Created != 1 || res.Invalid != 1 || res.Errors[0].Index != 0 || res.Errors[0].Issues[0].Keyword != "too_large" {
-		t.Fatalf("oversized import: %+v, %v", res, err)
-	}
-	if n, err := exported(records, ctx, c.ID, false); err != nil || n != 8 {
-		t.Fatalf("records after keyed imports: %d, %v", n, err)
-	}
+	checkUniqueImports(t, records, ctx, c.ID)
 
 	// Filling one value into many records would repeat it.
 	wantCode(t, ignore(collections.Fix(ctx, c.ID, domain.RecordFix{Op: domain.FixSetDefault, Field: "codigo", Value: json.RawMessage(`"z"`)})), apperror.CodeInvalidInput)
@@ -553,7 +506,7 @@ func TestUniqueFieldsHold(t *testing.T) {
 
 // exported counts the records an export streams.
 func exported(records input.RecordService, ctx context.Context, collectionID string, valid bool) (int, error) {
-	exp, err := records.Export(ctx, collectionID, valid)
+	exp, err := records.Export(ctx, collectionID, input.ExportOptions{ValidOnly: valid})
 	if err != nil {
 		return 0, err
 	}
@@ -622,5 +575,48 @@ func TestFixRestartsTheQualityCheck(t *testing.T) {
 	run(fresh)
 	if st, err := collections.Quality(helper, c.ID); err != nil || st.Run.Status != domain.QualityDone || st.Run.InvalidCount != 1 {
 		t.Fatalf("after the new run: %+v, %v", st.Run, err)
+	}
+}
+
+func checkUniqueImports(t *testing.T, records input.RecordService, ctx context.Context, collectionID string) {
+	t.Helper()
+	// An import refuses repeats of stored values and within the batch.
+	batch := []json.RawMessage{json.RawMessage(`{"codigo":"a3"}`), json.RawMessage(`{"codigo":"a3"}`), json.RawMessage(`{"codigo":"a1"}`)}
+	res, err := records.Import(ctx, input.ImportRecordsCommand{CollectionID: collectionID, Records: batch, SkipInvalid: true})
+	if err != nil || res.Created != 1 || res.Invalid != 2 {
+		t.Fatalf("import: %+v, %v", res, err)
+	}
+
+	// A batch key makes a retry safe: the second send answers with the first result and saves nothing.
+	keyed := input.ImportRecordsCommand{CollectionID: collectionID, Records: []json.RawMessage{json.RawMessage(`{"codigo":"k1"}`), json.RawMessage(`{"codigo":"k2"}`)}, BatchKey: "f1:0"}
+	first, err := records.Import(ctx, keyed)
+	if err != nil || first.Created != 2 || first.Replayed {
+		t.Fatalf("keyed import: %+v, %v", first, err)
+	}
+	again, err := records.Import(ctx, keyed)
+	if err != nil || again.Created != 2 || !again.Replayed {
+		t.Fatalf("retried import: %+v, %v", again, err)
+	}
+	// A dry run neither claims nor answers a key, and a batch that saved nothing leaves its key free.
+	if res, err := records.Import(ctx, input.ImportRecordsCommand{CollectionID: collectionID, Records: keyed.Records, BatchKey: "f1:1", DryRun: true}); err != nil || res.Replayed {
+		t.Fatalf("dry run: %+v, %v", res, err)
+	}
+	bad := input.ImportRecordsCommand{CollectionID: collectionID, Records: []json.RawMessage{json.RawMessage(`{"codigo":"k1"}`)}, BatchKey: "f1:2"}
+	if res, err := records.Import(ctx, bad); err != nil || res.Created != 0 || res.Invalid != 1 {
+		t.Fatalf("invalid keyed batch: %+v, %v", res, err)
+	}
+	bad.Records = []json.RawMessage{json.RawMessage(`{"codigo":"k3"}`)}
+	if res, err := records.Import(ctx, bad); err != nil || res.Created != 1 || res.Replayed {
+		t.Fatalf("fixed keyed batch: %+v, %v", res, err)
+	}
+	wantCode(t, ignore(records.Import(ctx, input.ImportRecordsCommand{CollectionID: collectionID, Records: keyed.Records, BatchKey: strings.Repeat("x", 101)})), apperror.CodeInvalidInput)
+	// A record over the stored size limit is refused alone; the rest of its batch saves.
+	huge := json.RawMessage(`{"codigo":"k4","x":"` + strings.Repeat("a", domain.RecordMaxBytes) + `"}`)
+	res, err = records.Import(ctx, input.ImportRecordsCommand{CollectionID: collectionID, Records: []json.RawMessage{huge, json.RawMessage(`{"codigo":"k5"}`)}, SkipInvalid: true})
+	if err != nil || res.Created != 1 || res.Invalid != 1 || res.Errors[0].Index != 0 || res.Errors[0].Issues[0].Keyword != "too_large" {
+		t.Fatalf("oversized import: %+v, %v", res, err)
+	}
+	if n, err := exported(records, ctx, collectionID, false); err != nil || n != 8 {
+		t.Fatalf("records after keyed imports: %d, %v", n, err)
 	}
 }

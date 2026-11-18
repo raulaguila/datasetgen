@@ -46,36 +46,8 @@ func (s *Service) withVirtual(ctx context.Context, collectionID string, recs []d
 		if target == "" || !readable(target) {
 			continue
 		}
-		named := make([][]string, len(docs))
-		var ids []string
-		for i, d := range docs {
-			named[i] = refIDs(d[l.Ref])
-			ids = append(ids, named[i]...)
-		}
-		vals, err := s.Repo.LookupValues(ctx, target, ids, l.Field)
-		if err != nil {
+		if err := s.fillLookup(ctx, target, key, l, docs); err != nil {
 			return err
-		}
-		for i, d := range docs {
-			var single bool
-			if raw := d[l.Ref]; len(raw) > 0 && raw[0] == '"' {
-				single = true
-			}
-			if single {
-				if v, ok := vals[named[i][0]]; ok {
-					d[key] = v
-				}
-				continue
-			}
-			list := []json.RawMessage{}
-			for _, id := range named[i] {
-				if v, ok := vals[id]; ok {
-					list = append(list, v)
-				}
-			}
-			if len(named[i]) > 0 {
-				d[key], _ = json.Marshal(list)
-			}
 		}
 	}
 	for key, r := range rollups {
@@ -104,6 +76,44 @@ func (s *Service) withVirtual(ctx context.Context, collectionID string, recs []d
 			return err
 		}
 		recs[i].Data = out
+	}
+	return nil
+}
+
+func (s *Service) fillLookup(ctx context.Context, target, key string, l schema.Lookup, docs []map[string]json.RawMessage) error {
+	named := make([][]string, len(docs))
+	var ids []string
+	for i, d := range docs {
+		named[i] = refIDs(d[l.Ref])
+		ids = append(ids, named[i]...)
+	}
+	vals, err := s.Repo.LookupValues(ctx, target, ids, l.Field)
+	if err != nil {
+		return err
+	}
+	for i, d := range docs {
+		var single bool
+		if raw := d[l.Ref]; len(raw) > 0 && raw[0] == '"' {
+			single = true
+		}
+		if single {
+			if len(named[i]) == 0 {
+				continue
+			}
+			if v, ok := vals[named[i][0]]; ok {
+				d[key] = v
+			}
+			continue
+		}
+		list := []json.RawMessage{}
+		for _, id := range named[i] {
+			if v, ok := vals[id]; ok {
+				list = append(list, v)
+			}
+		}
+		if len(named[i]) > 0 {
+			d[key], _ = json.Marshal(list)
+		}
 	}
 	return nil
 }

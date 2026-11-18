@@ -2,8 +2,8 @@ package schema
 
 import (
 	"encoding/json"
+	"maps"
 	"slices"
-	"strings"
 	"time"
 )
 
@@ -38,14 +38,7 @@ func topProps(raw []byte) map[string]map[string]any {
 
 // AutoKeys lists the filled properties, sorted by key.
 func AutoKeys(raw []byte) []AutoField {
-	var out []AutoField
-	for k, p := range topProps(raw) {
-		if kind, _ := p[AutoKeyword].(string); kind == AutoNumber || kind == AutoCreatedBy || kind == AutoUpdatedBy {
-			out = append(out, AutoField{Key: k, Kind: kind})
-		}
-	}
-	slices.SortFunc(out, func(a, b AutoField) int { return strings.Compare(a.Key, b.Key) })
-	return out
+	return slices.Clone(Metadata(raw).Autos)
 }
 
 // FormulaSpec is a formula property: its expression and the JSON type it
@@ -58,15 +51,7 @@ type FormulaSpec struct {
 
 // Formulas maps each formula property to its expression and type.
 func Formulas(raw []byte) map[string]FormulaSpec {
-	out := map[string]FormulaSpec{}
-	for k, p := range topProps(raw) {
-		if f, _ := p[FormulaKeyword].(string); f != "" {
-			t, _ := p["type"].(string)
-			format, _ := p["format"].(string)
-			out[k] = FormulaSpec{Expr: f, Type: t, Format: format}
-		}
-	}
-	return out
+	return maps.Clone(Metadata(raw).Formulas)
 }
 
 // Holds reports whether a formula's value fits the field: its JSON type and,

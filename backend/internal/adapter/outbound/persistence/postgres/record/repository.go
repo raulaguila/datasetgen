@@ -2,6 +2,7 @@ package record
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -271,9 +272,8 @@ func (r *Repository) Aggregate(ctx context.Context, filter domain.RecordFilter, 
 	if err != nil {
 		return nil, shared.WrapError(err, "record")
 	}
-	defer rows.Close()
 	var out []domain.RecordGroup
-	for rows.Next() {
+	err = scanRows(rows, func() error {
 		var k *string
 		var n int64
 		nums := make([]*float64, 4*len(numeric))
@@ -282,7 +282,7 @@ func (r *Repository) Aggregate(ctx context.Context, filter domain.RecordFilter, 
 			dest = append(dest, &nums[i])
 		}
 		if err := rows.Scan(dest...); err != nil {
-			return nil, shared.WrapError(err, "record")
+			return err
 		}
 		g := domain.RecordGroup{Count: n, Sums: map[string]float64{}, Avgs: map[string]float64{}, Mins: map[string]float64{}, Maxs: map[string]float64{}}
 		if k != nil {
@@ -294,8 +294,27 @@ func (r *Repository) Aggregate(ctx context.Context, filter domain.RecordFilter, 
 			}
 		}
 		out = append(out, g)
+		return nil
+	})
+	if err != nil {
+		return nil, shared.WrapError(err, "record")
 	}
-	return out, shared.WrapError(rows.Err(), "record")
+	return out, nil
+}
+
+// scanRows owns the cursor, including when scanning a row fails.
+func scanRows(rows *sql.Rows, scan func() error) (err error) {
+	defer func() {
+		if closeErr := rows.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+	for rows.Next() {
+		if err := scan(); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 // elementsOf is a field's list, or the field alone as a list of one, for grouping by each element;
@@ -374,26 +393,26 @@ func (r *Repository) Stats(ctx context.Context, filter domain.RecordFilter, q do
 		if err != nil {
 			return nil, shared.WrapError(err, "record")
 		}
-		defer rows.Close()
-		for rows.Next() {
+		err = scanRows(rows, func() error {
 			var f string
 			var k *string
 			var n, d, rn int64
 			if err := rows.Scan(&f, &k, &n, &d, &rn); err != nil {
-				return nil, shared.WrapError(err, "record")
+				return err
 			}
 			s := field(f)
 			s.Distinct = d
 			if rn <= int64(q.Skip) { // the first value only tells the distinct count of a later page
-				continue
+				return nil
 			}
 			g := domain.RecordGroup{Count: n}
 			if k != nil {
 				g.Key = json.RawMessage(*k)
 			}
 			s.Top = append(s.Top, g)
-		}
-		if err := rows.Err(); err != nil {
+			return nil
+		})
+		if err != nil {
 			return nil, shared.WrapError(err, "record")
 		}
 	}
@@ -408,16 +427,16 @@ func (r *Repository) Stats(ctx context.Context, filter domain.RecordFilter, q do
 		if err != nil {
 			return nil, shared.WrapError(err, "record")
 		}
-		defer rows.Close()
-		for rows.Next() {
+		err = scanRows(rows, func() error {
 			var f string
 			var c domain.DateCount
 			if err := rows.Scan(&f, &c.At, &c.Count); err != nil {
-				return nil, shared.WrapError(err, "record")
+				return err
 			}
 			field(f).Series = append(field(f).Series, c)
-		}
-		if err := rows.Err(); err != nil {
+			return nil
+		})
+		if err != nil {
 			return nil, shared.WrapError(err, "record")
 		}
 	}
@@ -511,6 +530,53 @@ func (r *Repository) Update(ctx context.Context, id string, data json.RawMessage
 		return nil, err
 	}
 	return &rec, nil
+}
+
+// UpdateMany takes the expected versions from Matching. A conflict rolls back
+// the surrounding import, including history and jobs for earlier segments.
+func (r *Repository) UpdateMany(ctx context.Context, changes []output.RecordChange) ([]domain.Record, error) {
+	if len(changes) == 0 {
+		return nil, nil
+	}
+	payload, err := json.Marshal(changes)
+	if err != nil {
+		return nil, err
+	}
+	batch := string(payload)
+	db := r.db.WithContext(ctx)
+	const incoming = `jsonb_to_recordset(?::jsonb) AS x(id uuid, version int, data jsonb)`
+	err = db.Exec(`INSERT INTO app.record_version (record_id,version,data,saved_at)
+ SELECT r.id,r.version,r.data,r.updated_at FROM app.record r JOIN `+incoming+`
+ ON r.id=x.id AND r.version=x.version ORDER BY r.id FOR UPDATE OF r
+ ON CONFLICT DO NOTHING`, batch).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "record")
+	}
+	var rows []row
+	err = db.Raw(`UPDATE app.record r SET data=x.data, version=r.version+1 FROM `+incoming+`
+ WHERE r.id=x.id AND r.version=x.version
+ RETURNING r.id,r.collection_id,r.data::text AS data,r.version,r.created_at,r.updated_at`, batch).Find(&rows).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "record")
+	}
+	if len(rows) != len(changes) {
+		return nil, apperror.New(apperror.CodeConflict, "a record was changed by someone else").WithField("version")
+	}
+	ids := make([]string, len(changes))
+	positions := make(map[string]int, len(changes))
+	for i, c := range changes {
+		ids[i] = c.ID
+		positions[c.ID] = i
+	}
+	if err := r.prune(ctx, `SELECT jsonb_array_elements_text(?::jsonb)::uuid`, jsonList(ids)); err != nil {
+		return nil, err
+	}
+	out := make([]domain.Record, len(rows))
+	for _, m := range rows {
+		rec := m.toDomain()
+		out[positions[rec.ID]] = rec
+	}
+	return out, nil
 }
 
 // keepVersions is how many earlier versions a record keeps; older ones go.
@@ -779,16 +845,12 @@ func jsonList(ids []string) string {
 }
 
 func (r *Repository) Oversized(ctx context.Context, docs []json.RawMessage) ([]int, error) {
-	parts := make([]string, len(docs))
-	for i, d := range docs {
-		parts[i] = string(d)
-	}
 	// pg_column_size of each element is what chk_app_record_data_size measures on insert.
 	var out []int
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT (n - 1)::int FROM jsonb_array_elements(?::jsonb) WITH ORDINALITY AS t(d, n)
 		WHERE pg_column_size(d) > ? ORDER BY n`,
-		"["+strings.Join(parts, ",")+"]", domain.RecordMaxBytes).Scan(&out).Error
+		rawArray(docs), domain.RecordMaxBytes).Scan(&out).Error
 	return out, shared.WrapError(err, "record")
 }
 
@@ -841,57 +903,67 @@ func (r *Repository) MaxNumber(ctx context.Context, collectionID, key string) (i
 	return n.N, nil
 }
 
-// Matching reads id and data of at most one record per value (the key is unique).
-func (r *Repository) Matching(ctx context.Context, collectionID, key string, values []json.RawMessage) (map[int]domain.Record, error) {
-	out := map[int]domain.Record{}
-	if len(values) == 0 {
-		return out, nil
-	}
-	parts := make([]string, len(values))
-	for i, v := range values {
-		parts[i] = string(v)
-	}
+// Both operations use PostgreSQL's exact JSONB equality. Containment supplies
+// an index condition for selective probes; equality also distinguishes nested
+// subsets and different array orders.
+const candidateValues = `WITH vals AS (
+ SELECT (n-1)::int AS index, val, min((n-1)::int) OVER (PARTITION BY val) AS grp
+ FROM jsonb_array_elements(?::jsonb) WITH ORDINALITY AS v(val,n)
+ WHERE val <> 'null'::jsonb
+) `
+
+const valueOwners = ` FROM vals v LEFT JOIN app.record r ON r.collection_id = ?
+ AND r.data->?::text = v.val AND r.data @> jsonb_build_object(?::text,v.val) `
+
+func (r *Repository) Matching(ctx context.Context, collectionID, key string, values []json.RawMessage) ([]output.RecordMatch, error) {
 	var rows []struct {
-		I    int       `gorm:"column:i"`
-		ID   uuid.UUID `gorm:"column:id"`
-		Data []byte    `gorm:"column:data"`
-		Ver  int       `gorm:"column:version"`
+		Index, Grp, Version int
+		ID                  string
+		Data                []byte
 	}
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT DISTINCT ON (v.i) (v.i - 1)::int AS i, rec.id, rec.data, rec.version
-		FROM jsonb_array_elements(?::jsonb) WITH ORDINALITY AS v(val, i)
-		JOIN app.record rec ON rec.collection_id = ? AND rec.data @> jsonb_build_object(?::text, v.val)
-		ORDER BY v.i, rec.created_at`,
-		"["+strings.Join(parts, ",")+"]", collectionID, key).Find(&rows).Error
+	err := r.db.WithContext(ctx).Raw(candidateValues+
+		`SELECT DISTINCT ON (v.index) v.index, v.grp, coalesce(r.id::text,'') AS id, r.data, coalesce(r.version,0) AS version`+
+		valueOwners+` AND v.index=v.grp ORDER BY v.index,r.created_at,r.id`, rawArray(values), collectionID, key, key).Scan(&rows).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "record")
 	}
-	for _, m := range rows {
-		out[m.I] = domain.Record{ID: m.ID.String(), CollectionID: collectionID, Data: m.Data, Version: m.Ver}
+	out := make([]output.RecordMatch, len(rows))
+	for i, v := range rows {
+		out[i] = output.RecordMatch{Index: v.Index, Group: v.Grp, Record: domain.Record{ID: v.ID, Data: v.Data, Version: v.Version, CollectionID: collectionID}}
 	}
 	return out, nil
 }
 
-func (r *Repository) TakenValues(ctx context.Context, collectionID, excludeID, key string, values []json.RawMessage) ([]int, error) {
-	if len(values) == 0 {
-		return nil, nil
+func (r *Repository) UniqueValues(ctx context.Context, collectionID, key string, values []json.RawMessage) ([]output.UniqueValue, error) {
+	var out []output.UniqueValue
+	err := r.db.WithContext(ctx).Raw(candidateValues+
+		`SELECT v.index, v.grp AS "group", coalesce(r.id::text,'') AS owner`+
+		valueOwners, rawArray(values), collectionID, key, key).Scan(&out).Error
+	return out, shared.WrapError(err, "record")
+}
+
+// rawArray builds one driver parameter without copying every document to a string first.
+// Empty entries stand for missing fields in a positional array.
+func rawArray(values []json.RawMessage) string {
+	size := 2 + len(values)
+	for _, v := range values {
+		size += max(len(v), 4)
 	}
-	parts := make([]string, len(values))
+	var buf strings.Builder
+	buf.Grow(size)
+	buf.WriteByte('[')
 	for i, v := range values {
-		parts[i] = string(v)
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		if len(v) == 0 {
+			buf.WriteString("null")
+		} else {
+			buf.Write(v)
+		}
 	}
-	// One containment per value: idx_app_record_data_path answers each.
-	var out []int
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT (v.i - 1)::int FROM jsonb_array_elements(?::jsonb) WITH ORDINALITY AS v(val, i)
-		WHERE EXISTS (SELECT 1 FROM app.record rec
-			WHERE rec.collection_id = ? AND rec.id::text <> ? AND rec.data @> jsonb_build_object(?::text, v.val))
-		ORDER BY v.i`,
-		"["+strings.Join(parts, ",")+"]", collectionID, excludeID, key).Scan(&out).Error
-	if err != nil {
-		return nil, shared.WrapError(err, "record")
-	}
-	return out, nil
+	buf.WriteByte(']')
+	return buf.String()
 }
 
 func (r *Repository) DuplicatedKeys(ctx context.Context, collectionID string, keys []string) ([]string, error) {

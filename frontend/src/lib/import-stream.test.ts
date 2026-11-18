@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { CsvReader, parseCsv, schemaFromFile } from "./infer-schema";
 import { JsonArrayReader, inferFile, recordBatches } from "./import-stream";
+import { records as apiRecords } from "./api/endpoints";
 import { withRetry } from "./import-client";
 import { ApiError } from "./api/client";
 import { BATCH_RECORDS, RECORD_BYTES } from "./import-file";
@@ -61,6 +62,59 @@ describe("import stream", () => {
     let passed = 0;
     for await (const b of recordBatches(chunked(lines.join("\n"), "x.jsonl", 997), { schema, upsertKey: "cod" })) passed += b.records.length;
     expect(passed).toBe(n);
+  });
+
+  it("reserves unique values only after the entire line passes", async () => {
+    const field = { type: "string", "x-unique": true };
+    const schema = { type: "object", properties: { a: field, b: field } };
+    const file = chunked('[{"a":"1","b":"x"},{"a":"2","b":"x"},{"a":"2","b":"y"}]', "input.json", 10);
+    const batches = [];
+    for await (const batch of recordBatches(file, { schema })) batches.push(batch);
+    expect(batches[0].records.map((r) => r.line)).toEqual([1, 3]);
+    expect(batches[0].problems).toEqual([{ line: 2, code: "duplicate", field: "b" }]);
+  });
+
+  it("sends distinct large numbers intact in JSON Lines and CSV", async () => {
+    const schema = { type: "object", properties: { sku: { type: "integer", "x-unique": true } } };
+    const values = ["9007199254740992", "9007199254740993"];
+    const json = values.map((v) => '{"sku":' + v + '}');
+    for (const [name, content] of [["input.jsonl", json.join("\n")], ["input.csv", ["sku", ...values].join("\n")]]) {
+      const batches = [];
+      for await (const batch of recordBatches(chunked(content, name, 8), { schema })) batches.push(batch);
+      expect(batches[0].problems).toEqual([]);
+      const sourceRecords = batches[0].records.map((r) => r.sourceJSON!);
+      expect(sourceRecords).toEqual(json);
+      const send = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({}));
+      try {
+        await apiRecords.importBatch({ collection_id: "collection", records: batches[0].records.map(r => r.data), sourceRecords });
+        const blob = send.mock.calls[0][1]?.body as Blob;
+        const payload = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(reader.error);
+          reader.readAsText(blob);
+        });
+        expect(payload).toBe('{"collection_id":"collection","records":[' + json.join(",") + ']}');
+      } finally { send.mockRestore(); }
+    }
+  });
+
+  it("passes a repeated secondary value on the same upsert target to the server", async () => {
+    const field = { type: "string", "x-unique": true };
+    const schema = { type: "object", properties: { sku: field, tag: field } };
+    const row = '{"sku":"A","tag":"blue"}';
+    const batches = [];
+    for await (const b of recordBatches(chunked(row + "\n" + row, "input.jsonl", 8), { schema, upsertKey: "sku" })) batches.push(b);
+    expect(batches[0].records).toHaveLength(2);
+    expect(batches[0].problems).toEqual([]);
+  });
+
+  it("delivers bounded errors without splitting the server's record batch", async () => {
+    const file = chunked('{}\n' + '!\n'.repeat(BATCH_RECORDS * 2 + 1) + '{}', "input.jsonl", 4096);
+    const batches = [];
+    for await (const batch of recordBatches(file, { schema: null })) batches.push(batch);
+    expect(batches.map((b) => b.problems.length)).toEqual([BATCH_RECORDS, BATCH_RECORDS, 1]);
+    expect(batches.map((b) => b.records.length)).toEqual([0, 0, 2]);
   });
 
   it("sets aside a record over the server's size cap", async () => {

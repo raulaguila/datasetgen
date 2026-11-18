@@ -21,6 +21,8 @@ type RecordRepository interface {
 	Create(ctx context.Context, r *domain.Record) error
 	// Update replaces data; with version set, a row changed since that version is a conflict.
 	Update(ctx context.Context, id string, data json.RawMessage, version *int) (*domain.Record, error)
+	// UpdateMany versions and replaces distinct records in one transaction, in input order.
+	UpdateMany(ctx context.Context, changes []RecordChange) ([]domain.Record, error)
 	// LookupValues maps each listed record of the collection that holds the
 	// top-level field to its value.
 	LookupValues(ctx context.Context, collectionID string, ids []string, field string) (map[string]json.RawMessage, error)
@@ -57,9 +59,9 @@ type RecordRepository interface {
 	// LockUnique serializes, until the transaction ends, the writes of one
 	// collection that check unique fields, so two of them cannot both pass.
 	LockUnique(ctx context.Context, collectionID string) error
-	// TakenValues returns the positions in values of those another record of the
-	// collection (not excludeID) already holds under key.
-	TakenValues(ctx context.Context, collectionID, excludeID, key string, values []json.RawMessage) ([]int, error)
+	// UniqueValues groups equal non-null field values by their first input index
+	// and identifies existing owners of each value.
+	UniqueValues(ctx context.Context, collectionID, key string, values []json.RawMessage) ([]UniqueValue, error)
 	// Comments lists a record's comments, oldest first, up to limit.
 	Comments(ctx context.Context, recordID string, limit int) ([]domain.RecordComment, error)
 	AddComment(ctx context.Context, c *domain.RecordComment) error
@@ -79,7 +81,7 @@ type RecordRepository interface {
 	// MaxNumber is the largest number the collection's records, trashed ones included, hold under key, 0 when none.
 	MaxNumber(ctx context.Context, collectionID, key string) (int64, error)
 	// Matching finds, per value (by index), the record of the collection whose key holds it.
-	Matching(ctx context.Context, collectionID, key string, values []json.RawMessage) (map[int]domain.Record, error)
+	Matching(ctx context.Context, collectionID, key string, values []json.RawMessage) ([]RecordMatch, error)
 	// DuplicatedKeys returns the listed keys that two or more records share a value of.
 	DuplicatedKeys(ctx context.Context, collectionID string, keys []string) ([]string, error)
 }
@@ -88,4 +90,24 @@ type RecordRepository interface {
 type ImportBatch struct {
 	Created int64
 	Updated int64
+}
+
+// UniqueValue uses PostgreSQL JSONB equality, including for decimal numbers and objects.
+type UniqueValue struct {
+	Index int
+	Group int
+	Owner string
+}
+
+// RecordMatch identifies equal upsert keys even when their record has yet to be created.
+type RecordMatch struct {
+	Index  int
+	Group  int
+	Record domain.Record
+}
+
+type RecordChange struct {
+	ID      string          `json:"id"`
+	Version int             `json:"version"`
+	Data    json.RawMessage `json:"data"`
 }

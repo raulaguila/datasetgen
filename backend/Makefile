@@ -199,7 +199,7 @@ init: ## Create environment file if missing
 	@echo
 
 swagger: ## Regenerate the Swagger docs from the handler annotations
-	@$(GO) run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g swagger.go -d internal/adapter/inbound/http/rest -o internal/adapter/inbound/http/rest/docs --parseInternal --outputTypes go
+	@$(GO) run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g swagger.go -d internal/adapter/inbound/http/rest,internal/adapter/inbound/mcp -o internal/adapter/inbound/http/rest/docs --parseInternal --outputTypes go
 	@echo "$(GREEN)✅ Swagger docs generated.$(RESET)"
 	@echo
 

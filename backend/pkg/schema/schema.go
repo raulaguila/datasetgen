@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -266,66 +267,23 @@ const (
 
 // RefKeys maps each reference property to the collection it points at.
 func RefKeys(raw []byte) map[string]string {
-	var doc struct {
-		Properties map[string]map[string]any `json:"properties"`
-	}
-	if json.Unmarshal(raw, &doc) != nil {
-		return nil
-	}
-	out := map[string]string{}
-	for k, p := range doc.Properties {
-		if id, _ := p[RefKeyword].(string); id != "" {
-			out[k] = id
-		}
-	}
-	return out
+	return maps.Clone(Metadata(raw).Refs)
 }
 
 // ItemRefKeys finds references inside a list of objects: for each top-level
 // array property, its item subfields marked with RefKeyword and the
 // collection each names.
 func ItemRefKeys(raw []byte) map[string]map[string]string {
-	var doc struct {
-		Properties map[string]struct {
-			Type  any `json:"type"`
-			Items struct {
-				Properties map[string]map[string]any `json:"properties"`
-			} `json:"items"`
-		} `json:"properties"`
-	}
-	if json.Unmarshal(raw, &doc) != nil {
-		return nil
-	}
-	out := map[string]map[string]string{}
-	for k, p := range doc.Properties {
-		for sub, sp := range p.Items.Properties {
-			if id, _ := sp[RefKeyword].(string); id != "" {
-				if out[k] == nil {
-					out[k] = map[string]string{}
-				}
-				out[k][sub] = id
-			}
-		}
+	out := maps.Clone(Metadata(raw).ItemRefs)
+	for k, v := range out {
+		out[k] = maps.Clone(v)
 	}
 	return out
 }
 
 // FileKeys lists the properties holding attached files, sorted.
 func FileKeys(raw []byte) []string {
-	var doc struct {
-		Properties map[string]map[string]any `json:"properties"`
-	}
-	if json.Unmarshal(raw, &doc) != nil {
-		return nil
-	}
-	var keys []string
-	for k, p := range doc.Properties {
-		if on, _ := p[FileKeyword].(bool); on {
-			keys = append(keys, k)
-		}
-	}
-	slices.Sort(keys)
-	return keys
+	return slices.Clone(Metadata(raw).Files)
 }
 
 // Optional drops keys from the top-level "required" list; raw comes back
@@ -359,20 +317,7 @@ const UniqueKeyword = "x-unique"
 
 // UniqueKeys lists the top-level properties marked unique, sorted.
 func UniqueKeys(raw []byte) []string {
-	var doc struct {
-		Properties map[string]map[string]any `json:"properties"`
-	}
-	if json.Unmarshal(raw, &doc) != nil {
-		return nil
-	}
-	var keys []string
-	for k, p := range doc.Properties {
-		if on, _ := p[UniqueKeyword].(bool); on {
-			keys = append(keys, k)
-		}
-	}
-	slices.Sort(keys)
-	return keys
+	return slices.Clone(Metadata(raw).Unique)
 }
 
 // UniqueIssue says a record repeats a value another record holds under a unique property.

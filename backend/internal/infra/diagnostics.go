@@ -104,7 +104,9 @@ func (d *Diagnostics) handler() http.Handler {
 		runtime.ReadMemStats(&mem)
 		stats := db.Stats()
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-		telemetry.WritePrometheus(w)
+		if err := telemetry.WritePrometheus(w); err != nil {
+			return
+		}
 		for _, g := range []struct {
 			name, help string
 			value      float64
@@ -119,7 +121,9 @@ func (d *Diagnostics) handler() http.Handler {
 			{"dataset_heap_bytes", "Heap in use.", float64(mem.HeapAlloc)},
 			{"dataset_goroutines", "Goroutines.", float64(runtime.NumGoroutine())},
 		} {
-			fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s gauge\n%s %g\n", g.name, g.help, g.name, g.name, g.value)
+			if _, err := fmt.Fprintf(w, "# HELP %s %s\n# TYPE %s gauge\n%s %g\n", g.name, g.help, g.name, g.name, g.value); err != nil {
+				return
+			}
 		}
 	})
 	return mux

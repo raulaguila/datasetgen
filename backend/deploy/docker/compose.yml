@@ -3,6 +3,10 @@ name: dataset
 include:
   - services.compose.yml
 
+secrets:
+  trusted_cas:
+    file: ${GO_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}
+
 services:
 
   backend:
@@ -13,6 +17,8 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/backend/${BASE:-source}.Dockerfile
+      secrets:
+        - trusted_cas
     restart: always
     stop_grace_period: 40s
     healthcheck:
@@ -56,6 +62,8 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/mailer/${BASE:-source}.Dockerfile
+      secrets:
+        - trusted_cas
     restart: always
     stop_grace_period: 60s
     healthcheck:

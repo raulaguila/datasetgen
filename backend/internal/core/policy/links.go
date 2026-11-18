@@ -16,7 +16,8 @@ import (
 // does not exist. Saving a record refuses them; the quality check reports them.
 func MissingLinks(ctx context.Context, tools output.ToolsRepository, raw []byte, collectionID string, docs [][]byte) ([][]schema.Issue, error) {
 	out := make([][]schema.Issue, len(docs))
-	refs, files, itemRefs := schema.RefKeys(raw), schema.FileKeys(raw), schema.ItemRefKeys(raw)
+	meta := schema.Metadata(raw)
+	refs, files, itemRefs := meta.Refs, meta.Files, meta.ItemRefs
 	if len(refs) == 0 && len(files) == 0 && len(itemRefs) == 0 {
 		return out, nil
 	}

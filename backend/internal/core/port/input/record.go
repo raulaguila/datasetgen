@@ -44,7 +44,7 @@ type RecordService interface {
 	// Import checks a batch against the schema and inserts it (editors).
 	Import(ctx context.Context, cmd ImportRecordsCommand) (*ImportResult, error)
 	// Export returns every record of the collection (viewers).
-	Export(ctx context.Context, collectionID string, validOnly bool) (*Export, error)
+	Export(ctx context.Context, collectionID string, options ExportOptions) (*Export, error)
 	// BulkUpdate sets the same values in several records of one collection (editors).
 	BulkUpdate(ctx context.Context, cmd BulkUpdateCommand) (int, error)
 	// PruneImportBatches drops import batch keys older than a week (the job worker).
@@ -83,6 +83,11 @@ type ImportResult struct {
 type ImportError struct {
 	Index  int
 	Issues []schema.Issue
+}
+
+type ExportOptions struct {
+	ValidOnly bool
+	CSV       bool
 }
 
 type Export struct {

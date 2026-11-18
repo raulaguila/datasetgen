@@ -1,5 +1,5 @@
 import { fieldsOf } from "@/components/field-builder";
-import { BATCH_BYTES, BATCH_RECORDS, RECORD_BYTES, type ParsedRecord } from "@/lib/import-file";
+import { BATCH_BYTES, BATCH_RECORDS, RECORD_BYTES, needsNumberSource, type ParsedRecord } from "@/lib/import-file";
 import { CsvReader, SchemaInferrer, csvRow, rowReader } from "@/lib/infer-schema";
 import { xlsxRows } from "@/lib/xlsx";
 
@@ -116,7 +116,11 @@ async function* jsonRecords(file: File, progress?: Progress): AsyncGenerator<Par
   const parse = function* (raw: string): Generator<ParsedRecord | LineProblem> {
     line++;
     if (!raw.trim()) return;
-    try { yield { line, data: JSON.parse(raw) }; } catch { yield { line, code: "parse" }; }
+    try {
+      const record: ParsedRecord = { line, data: JSON.parse(raw) };
+      if (needsNumberSource(raw)) record.sourceJSON = raw.trim();
+      yield record;
+    } catch { yield { line, code: "parse" }; }
   };
   for await (const piece of textPieces(file, progress)) {
     if (!decided) {
@@ -170,16 +174,19 @@ export async function inferFile(file: File, progress?: Progress): Promise<Record
  */
 export async function* recordBatches(
   file: File,
-  opts: { schema: Record<string, unknown> | null; columns?: string[]; upsertKey?: string },
+  opts: { schema: Record<string, unknown> | null; columns?: string[]; upsertKey?: string; legacyDuplicates?: boolean },
   progress?: Progress,
 ): AsyncGenerator<Batch> {
-  const uniques = fieldsOf(opts.schema).filter((r) => r.field.unique && r.key !== opts.upsertKey).map((r) => r.key);
+  // A patch may keep or release a secondary unique value. Only the server
+  // knows the existing record and which preceding patches were accepted.
+  const uniques = opts.upsertKey && !opts.legacyDuplicates ? [] : fieldsOf(opts.schema).filter((r) => r.field.unique && r.key !== opts.upsertKey).map((r) => r.key);
   const seen = new Map(uniques.map((k) => [k, new Set<string>()]));
   let tracked = 0;
   let records: ParsedRecord[] = [];
   let problems: LineProblem[] = [];
   let size = 0;
   const encoder = new TextEncoder();
+  const pending = new Map<string, string>();
 
   async function* source(): AsyncGenerator<ParsedRecord | LineProblem> {
     if (!isTable(file)) return yield* jsonRecords(file, progress);
@@ -192,21 +199,40 @@ export async function* recordBatches(
   }
 
   for await (const r of source()) {
+    // Error-only deliveries never advance the server batch number or split its records.
+    if (problems.length >= BATCH_RECORDS) {
+      yield { records: [], problems };
+      problems = [];
+    }
     if (!("data" in r)) { problems.push(r); continue; }
-    const bytes = encoder.encode(JSON.stringify(r.data)).length + 1;
+    if (opts.legacyDuplicates) delete r.sourceJSON;
+    const bytes = encoder.encode(r.sourceJSON ?? JSON.stringify(r.data)).length + 1;
     if (bytes > RECORD_BYTES) { problems.push({ line: r.line, code: "too_large" }); continue; }
+    pending.clear();
     const dup = uniques.find((k) => {
       const v = (r.data as Record<string, unknown> | null)?.[k];
       if (v === undefined || v === null) return false;
+      if (r.sourceJSON && (typeof v === "number" || typeof v === "object")) return false;
       const set = seen.get(k)!;
       const key = JSON.stringify(v);
       if (set.has(key)) return true;
       // shortcut: past UNIQUE_TRACKED values a repeat is left to the server, which refuses it
       // (its batch's records are already saved); raise it only if browsers hold far more memory.
-      if (tracked < UNIQUE_TRACKED) { set.add(key); tracked++; }
+      if (opts.legacyDuplicates && tracked < UNIQUE_TRACKED) {
+        // Preserve the original batch boundaries of an in-flight pre-v2 send.
+        set.add(key);
+        tracked++;
+      } else {
+        pending.set(k, key);
+      }
       return false;
     });
     if (dup) { problems.push({ line: r.line, code: "duplicate", field: dup }); continue; }
+    for (const [field, value] of pending) {
+      if (tracked >= UNIQUE_TRACKED) break;
+      seen.get(field)!.add(value);
+      tracked++;
+    }
     if (records.length && (size + bytes > BATCH_BYTES || records.length >= BATCH_RECORDS)) {
       yield { records, problems };
       records = [];

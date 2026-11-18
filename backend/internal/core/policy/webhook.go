@@ -38,25 +38,42 @@ func WithoutAutomations(ctx context.Context) context.Context {
 // for it, and a run of each automation it triggers, in the change's
 // transaction: no change, no call; no call lost.
 func Notify(ctx context.Context, uow output.UnitOfWork, collectionID, event string, data map[string]any) error {
-	if id, _ := data["id"].(string); id != "" && (event == domain.TriggerCreated || event == domain.TriggerUpdated) && ctx.Value(quietKey{}) == nil {
-		autos, err := uow.Integrations().AutomationsFor(ctx, collectionID, event)
+	return NotifyMany(ctx, uow, collectionID, event, []map[string]any{data})
+}
+
+// NotifyMany looks up subscribers once and enqueues each event in the caller's transaction.
+func NotifyMany(ctx context.Context, uow output.UnitOfWork, collectionID, event string, items []map[string]any) error {
+	if len(items) == 0 {
+		return nil
+	}
+	var autos []string
+	if (event == domain.TriggerCreated || event == domain.TriggerUpdated) && ctx.Value(quietKey{}) == nil {
+		var err error
+		autos, err = uow.Integrations().AutomationsFor(ctx, collectionID, event)
 		if err != nil {
 			return err
 		}
-		for _, a := range autos {
-			if err := EnqueueJob(ctx, uow, JobAutomation, AutomationJob{AutomationID: a, RecordID: id}); err != nil {
-				return err
-			}
-		}
 	}
 	hooks, err := uow.Integrations().WebhooksFor(ctx, collectionID, event)
-	if err != nil || len(hooks) == 0 {
+	if err != nil || (len(autos) == 0 && len(hooks) == 0) {
 		return err
 	}
-	body := map[string]any{"event": event, "collection_id": collectionID, "occurred_at": time.Now().UTC().Format(time.RFC3339), "data": data}
-	for _, h := range hooks {
-		if err := EnqueueJob(ctx, uow, JobWebhook, WebhookJob{HookID: h.ID, Body: body}); err != nil {
-			return err
+	for _, data := range items {
+		if id, _ := data["id"].(string); id != "" {
+			for _, a := range autos {
+				if err := EnqueueJob(ctx, uow, JobAutomation, AutomationJob{AutomationID: a, RecordID: id}); err != nil {
+					return err
+				}
+			}
+		}
+		if len(hooks) == 0 {
+			continue
+		}
+		body := map[string]any{"event": event, "collection_id": collectionID, "occurred_at": time.Now().UTC().Format(time.RFC3339), "data": data}
+		for _, h := range hooks {
+			if err := EnqueueJob(ctx, uow, JobWebhook, WebhookJob{HookID: h.ID, Body: body}); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

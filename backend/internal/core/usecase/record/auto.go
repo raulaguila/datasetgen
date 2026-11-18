@@ -16,7 +16,8 @@ import (
 // are dropped. creating is true for
 // new records. Docs that are not objects are left for the schema to refuse.
 func fill(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionID string, docs [][]byte, creating bool) error {
-	autos, formulas, virtual := schema.AutoKeys(raw), schema.Formulas(raw), schema.VirtualKeys(raw)
+	meta := schema.Metadata(raw)
+	autos, formulas, virtual := meta.Autos, meta.Formulas, meta.Virtual
 	if len(autos) == 0 && len(formulas) == 0 && len(virtual) == 0 {
 		return nil
 	}
@@ -51,9 +52,10 @@ func fill(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionID s
 			}
 		}
 	}
-	for i, d := range docs {
+	for i := range docs {
+		d := &docs[i]
 		var doc map[string]json.RawMessage
-		if json.Unmarshal(d, &doc) != nil || doc == nil {
+		if json.Unmarshal(*d, &doc) != nil || doc == nil {
 			continue
 		}
 		for _, k := range virtual {
@@ -73,7 +75,7 @@ func fill(ctx context.Context, uow output.UnitOfWork, raw []byte, collectionID s
 		if err != nil {
 			return err
 		}
-		docs[i] = out
+		*d = out
 	}
 	return nil
 }

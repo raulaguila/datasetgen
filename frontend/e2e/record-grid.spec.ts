@@ -273,6 +273,30 @@ test("auto fields, comments and an upsert import", async ({ page }) => {
   expect(after.items.map((r: { data: Record<string, unknown> }) => [r.data.codigo, r.data.num, r.data.total])).toEqual([["A1", 1, 9], ["B2", 2, 2]]);
 });
 
+test("a JSON Lines upsert keeps adjacent large integer keys distinct", async ({ page }) => {
+  await page.goto("/");
+  const made = await api(page, "/v1/collections", {
+    name: `inteiros-${Date.now()}`,
+    schema: { type: "object", properties: { sku: { type: "integer", title: "SKU", "x-unique": true } } },
+  });
+  const { id } = await made.json();
+  await page.goto(`/collections/${id}`);
+  await page.getByRole("button", { name: "Mais" }).click();
+  await page.getByRole("menuitem", { name: "Importar" }).click();
+  const dialog = page.getByRole("dialog", { name: "Importar" });
+  await dialog.getByLabel("Registros que já existem").click();
+  await page.getByRole("option", { name: "SKU" }).click();
+  const file = '{"sku":9007199254740992}\n{"sku":9007199254740993}\n{"sku":9007199254740992,"updated":true}';
+  await dialog.locator("#import-file").setInputFiles({ name: "items.jsonl", mimeType: "application/x-ndjson", buffer: Buffer.from(file) });
+  await dialog.getByRole("button", { name: "Importar 3" }).click();
+  await expect(page.getByText("2 criados, 1 atualizados")).toBeVisible();
+  const exported = await page.request.get(`/api/proxy/v1/records/export?collection_id=${id}&format=jsonl`);
+  expect(exported.ok()).toBe(true);
+  const text = await exported.text();
+  expect(text).toContain("9007199254740992");
+  expect(text).toContain("9007199254740993");
+});
+
 // A field holding several files: images show a thumbnail; the list names the first and counts the rest.
 test("several files in one field", async ({ page }) => {
   await page.goto("/");

@@ -97,6 +97,10 @@ func backfill(ctx context.Context, tx output.TxManager, id string) error {
 			break
 		}
 	}
+	return backfillFormulas(ctx, tx, id)
+}
+
+func backfillFormulas(ctx context.Context, tx output.TxManager, id string) error {
 	after := ""
 	for {
 		var batch int

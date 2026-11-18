@@ -52,10 +52,13 @@ func New(allowPrivate bool) *Sender {
 
 // Public is false for loopback, private, link-local, unspecified and multicast addresses.
 func Public(ip net.IP) bool {
-	return !(ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsInterfaceLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() ||
-		// 100.64.0.0/10 (carrier-grade NAT) is not in IsPrivate.
-		(ip.To4() != nil && ip.To4()[0] == 100 && ip.To4()[1]&0xC0 == 64))
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsInterfaceLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
+		return false
+	}
+	// 100.64.0.0/10 (carrier-grade NAT) is not in IsPrivate.
+	v4 := ip.To4()
+	return v4 == nil || v4[0] != 100 || v4[1]&0xc0 != 64
 }
 
 func (s *Sender) Send(ctx context.Context, url string, body []byte, headers map[string]string) (int, error) {
@@ -75,10 +78,11 @@ func (s *Sender) Send(ctx context.Context, url string, body []byte, headers map[
 		}
 		return 0, err
 	}
-	defer res.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 64*1024))
+	closeErr := res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode > 299 {
-		return res.StatusCode, fmt.Errorf("answered %d", res.StatusCode)
+		return res.StatusCode, errors.Join(fmt.Errorf("answered %d", res.StatusCode), closeErr)
 	}
+	// A 2xx acknowledges delivery even if closing the unused body failed.
 	return res.StatusCode, nil
 }

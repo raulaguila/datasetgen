@@ -124,65 +124,9 @@ func TestAPIKeysReachTheirCollections(t *testing.T) {
 		t.Fatalf("keys after removal: %+v, %v", list, err)
 	}
 
-	// Changing a key's collections takes effect at once.
-	k, err := keys.UpdateMyKey(owner, write.Key.ID, "Escrita B", []domain.KeyScope{{CollectionID: b, CanWrite: true}, {CollectionID: other}}, nil)
-	if err != nil || len(k.Scopes) != 2 || k.Name != "Escrita B" {
-		t.Fatalf("update: %+v, %v", k, err)
-	}
-	wantCode(t, ignore2(records.List(as(write.Secret), domain.RecordFilter{CollectionID: a})), apperror.CodeNotFound)
-	if _, err := records.Create(as(write.Secret), input.CreateRecordCommand{CollectionID: b, Data: json.RawMessage(`{}`)}); err != nil {
-		t.Fatal(err)
-	}
-	log, _, err = collections.AuditLog(owner, a, domain.AuditFilter{Action: "collection.key_delete", Page: domain.NewPage(1, 5)})
-	if err != nil || len(log) != 1 || log[0].Details["key"] != "Escrita" || log[0].Details["prefix"] != write.Key.Prefix {
-		t.Fatalf("key_delete audit: %+v, %v", log, err)
-	}
+	checkKeyScopeChanges(t, owner, collections, records, keys, as, write, a, b, other)
 
-	// An owner takes their collection out of a key; the key keeps the others.
-	if err := keys.DeleteKey(owner, b, write.Key.ID); err != nil {
-		t.Fatal(err)
-	}
-	wantCode(t, ignore2(records.List(as(write.Secret), domain.RecordFilter{CollectionID: b})), apperror.CodeNotFound)
-	if _, _, err := records.List(as(write.Secret), domain.RecordFilter{CollectionID: other}); err != nil {
-		t.Fatal(err)
-	}
-
-	// Deleting the key ends it.
-	if err := keys.DeleteMyKey(owner, write.Key.ID); err != nil {
-		t.Fatal(err)
-	}
-	wantCode(t, ignore(keys.AuthenticateKey(context.Background(), write.Secret)), apperror.CodeUnauthorized)
-
-	// A key with an end date works until then and not after.
-	wantCode(t, ignore(keys.CreateMyKey(owner, "Longa", []domain.KeyScope{{CollectionID: a}}, 400)), apperror.CodeInvalidInput)
-	brief, err := keys.CreateMyKey(owner, "Breve", []domain.KeyScope{{CollectionID: a}}, 30)
-	if err != nil || brief.Key.ExpiresAt == nil || time.Until(*brief.Key.ExpiresAt) < 29*24*time.Hour {
-		t.Fatalf("expiring key: %v %v", brief, err)
-	}
-	if _, err := keys.AuthenticateKey(context.Background(), brief.Secret); err != nil {
-		t.Fatal(err)
-	}
-	if err := testDB.Exec("UPDATE app.api_key SET expires_at = now() - INTERVAL '1 second' WHERE id = ?", brief.Key.ID).Error; err != nil {
-		t.Fatal(err)
-	}
-	wantCode(t, ignore(keys.AuthenticateKey(context.Background(), brief.Secret)), apperror.CodeUnauthorized)
-
-	// Renewing brings an expired key back; no renewal keeps the end; 0 removes it.
-	scope := []domain.KeyScope{{CollectionID: a}}
-	wantCode(t, ignore(keys.UpdateMyKey(owner, brief.Key.ID, "Breve", scope, pointer.Of(400))), apperror.CodeInvalidInput)
-	renewed, err := keys.UpdateMyKey(owner, brief.Key.ID, "Breve", scope, pointer.Of(90))
-	if err != nil || renewed.ExpiresAt == nil || time.Until(*renewed.ExpiresAt) < 89*24*time.Hour {
-		t.Fatalf("renew: %+v %v", renewed, err)
-	}
-	if _, err := keys.AuthenticateKey(context.Background(), brief.Secret); err != nil {
-		t.Fatalf("a renewed key does not work: %v", err)
-	}
-	if kept, err := keys.UpdateMyKey(owner, brief.Key.ID, "Breve", scope, nil); err != nil || kept.ExpiresAt == nil || !kept.ExpiresAt.Equal(*renewed.ExpiresAt) {
-		t.Fatalf("update without renewal changed the end: %+v %v", kept, err)
-	}
-	if open, err := keys.UpdateMyKey(owner, brief.Key.ID, "Breve", scope, pointer.Of(0)); err != nil || open.ExpiresAt != nil {
-		t.Fatalf("renew with no end: %+v %v", open, err)
-	}
+	checkKeyRenewal(t, keys, owner, a)
 }
 
 // Record changes queue one delivery per hook that asked for the event.
@@ -290,27 +234,7 @@ func TestTrashKeepsRecordsAndCollections(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A collection comes back with its records; purged, it is gone.
-	if err := collections.DeleteMany(owner, []string{c.ID}); err != nil {
-		t.Fatal(err)
-	}
-	gone, err := box.TrashedCollections(owner)
-	if err != nil || len(gone) != 1 || gone[0].RecordCount != 1 {
-		t.Fatalf("trashed collections: %+v, %v", gone, err)
-	}
-	if err := box.RestoreCollection(owner, c.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := records.Get(owner, r.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := collections.DeleteMany(owner, []string{c.ID}); err != nil {
-		t.Fatal(err)
-	}
-	if err := box.PurgeCollection(owner, c.ID); err != nil {
-		t.Fatal(err)
-	}
-	wantCode(t, box.RestoreCollection(owner, c.ID), apperror.CodeNotFound)
+	checkCollectionRestoreAndPurge(t, owner, collections, records, box, c.ID, r.ID)
 }
 
 // Sorting by a field, editing in bulk, references, files, field history and views.
@@ -384,31 +308,7 @@ func TestRecordToolsFollowTheFields(t *testing.T) {
 		t.Fatalf("history: %+v, %v", v, err)
 	}
 
-	// The dashboard starts empty, keeps what owners save and refuses unknown widgets.
-	if w, err := box.Dashboard(owner, tasks.ID); err != nil || string(w) != "[]" {
-		t.Fatalf("empty dashboard: %s %v", w, err)
-	}
-	widgets := json.RawMessage(`[{"kind":"count","title":"Tarefas"},{"kind":"bars","title":"Por dono","field":"dono"}]`)
-	if err := box.SaveDashboard(owner, tasks.ID, widgets); err != nil {
-		t.Fatal(err)
-	}
-	if w, err := box.Dashboard(owner, tasks.ID); err != nil || string(w) != string(widgets) {
-		t.Fatalf("dashboard: %s %v", w, err)
-	}
-	wantCode(t, box.SaveDashboard(owner, tasks.ID, json.RawMessage(`[{"kind":"pizza"}]`)), apperror.CodeInvalidInput)
-	wantCode(t, box.SaveDashboard(owner, tasks.ID, json.RawMessage(`{}`)), apperror.CodeInvalidInput)
-
-	// Views: own and shared.
-	view, err := box.CreateView(owner, tasks.ID, "Por n", "?sort=data.n", true)
-	if err != nil || view.Query != "sort=data.n" {
-		t.Fatalf("view: %+v, %v", view, err)
-	}
-	if vs, err := box.Views(owner, tasks.ID); err != nil || len(vs) != 1 || !vs[0].Mine {
-		t.Fatalf("views: %+v, %v", vs, err)
-	}
-	if err := box.DeleteView(owner, tasks.ID, view.ID); err != nil {
-		t.Fatal(err)
-	}
+	checkDashboardAndViews(t, owner, box, tasks.ID)
 }
 
 // Rules select records by comparison; groups count them and sum numbers.
@@ -483,27 +383,7 @@ func TestWhereRulesAndGroups(t *testing.T) {
 		t.Fatalf("totals: %+v, %v", total, err)
 	}
 
-	for _, d := range []string{`{"cat":"c","quando":"2026-01-05"}`, `{"cat":"c","quando":"2026-01-20T10:00:00Z"}`, `{"cat":"c","quando":"2026-03-01"}`, `{"cat":"c","quando":"2026-02-30"}`} {
-		if _, err := records.Create(owner, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(d)}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	st, err := records.Stats(owner, domain.RecordFilter{CollectionID: c.ID}, domain.StatsQuery{Filled: []string{"v", "nome"}, Numbers: []string{"v"}, Dates: []string{"quando"}, Values: []string{"cat"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	v, nome, cat, quando := st.Fields["v"], st.Fields["nome"], st.Fields["cat"], st.Fields["quando"]
-	if st.Total != 8 || v.Filled != 3 || nome.Filled != 3 || *v.Min != 5 || *v.Max != 10 || *v.Sum != 22 {
-		t.Errorf("stats: total %d, v %+v, nome %+v", st.Total, v, nome)
-	}
-	if cat.Distinct != 3 || len(cat.Top) != 3 || string(cat.Top[0].Key) != `"c"` || cat.Top[0].Count != 4 {
-		t.Errorf("cat values: %+v", cat)
-	}
-	// The invalid 2026-02-30 is skipped; the datetime counts by its date.
-	if *quando.First != "2026-01-05" || *quando.Last != "2026-03-01" || len(quando.Series) != 2 || quando.Series[0] != (domain.DateCount{At: "2026-01-01", Count: 2}) {
-		t.Errorf("dates: %+v first %v last %v", quando.Series, *quando.First, *quando.Last)
-	}
-	wantCode(t, ignore(records.Stats(owner, domain.RecordFilter{CollectionID: c.ID}, domain.StatsQuery{Bucket: "hour"})), apperror.CodeInvalidInput)
+	checkSalesStats(t, owner, records, c.ID)
 }
 
 // A share link opens one collection to anyone holding it: a form adds records,
@@ -1113,4 +993,149 @@ func TestWhereRicherRules(t *testing.T) {
 	if g, err := records.Aggregate(owner, domain.RecordFilter{CollectionID: orders.ID, Where: &domain.Where{Rules: []domain.Condition{rule("cidade", "eq", `"Recife"`)}}}, domain.GroupQuery{Numeric: []string{"valor"}}); err != nil || g[0].Sums["valor"] != 15 {
 		t.Fatalf("aggregate by lookup: %+v, %v", g, err)
 	}
+}
+
+func checkKeyRenewal(t *testing.T, keys input.IntegrationService, owner context.Context, collectionID string) {
+	t.Helper()
+	// A key with an end date works until then and not after.
+	wantCode(t, ignore(keys.CreateMyKey(owner, "Longa", []domain.KeyScope{{CollectionID: collectionID}}, 400)), apperror.CodeInvalidInput)
+	brief, err := keys.CreateMyKey(owner, "Breve", []domain.KeyScope{{CollectionID: collectionID}}, 30)
+	if err != nil || brief.Key.ExpiresAt == nil || time.Until(*brief.Key.ExpiresAt) < 29*24*time.Hour {
+		t.Fatalf("expiring key: %v %v", brief, err)
+	}
+	if _, err := keys.AuthenticateKey(context.Background(), brief.Secret); err != nil {
+		t.Fatal(err)
+	}
+	if err := testDB.Exec("UPDATE app.api_key SET expires_at = now() - INTERVAL '1 second' WHERE id = ?", brief.Key.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore(keys.AuthenticateKey(context.Background(), brief.Secret)), apperror.CodeUnauthorized)
+
+	// Renewing brings an expired key back; no renewal keeps the end; 0 removes it.
+	scope := []domain.KeyScope{{CollectionID: collectionID}}
+	wantCode(t, ignore(keys.UpdateMyKey(owner, brief.Key.ID, "Breve", scope, pointer.Of(400))), apperror.CodeInvalidInput)
+	renewed, err := keys.UpdateMyKey(owner, brief.Key.ID, "Breve", scope, pointer.Of(90))
+	if err != nil || renewed.ExpiresAt == nil || time.Until(*renewed.ExpiresAt) < 89*24*time.Hour {
+		t.Fatalf("renew: %+v %v", renewed, err)
+	}
+	if _, err := keys.AuthenticateKey(context.Background(), brief.Secret); err != nil {
+		t.Fatalf("a renewed key does not work: %v", err)
+	}
+	if kept, err := keys.UpdateMyKey(owner, brief.Key.ID, "Breve", scope, nil); err != nil || kept.ExpiresAt == nil || !kept.ExpiresAt.Equal(*renewed.ExpiresAt) {
+		t.Fatalf("update without renewal changed the end: %+v %v", kept, err)
+	}
+	if open, err := keys.UpdateMyKey(owner, brief.Key.ID, "Breve", scope, pointer.Of(0)); err != nil || open.ExpiresAt != nil {
+		t.Fatalf("renew with no end: %+v %v", open, err)
+	}
+}
+
+func checkKeyScopeChanges(t *testing.T, owner context.Context, collections input.CollectionService, records input.RecordService, keys input.IntegrationService, as func(string) context.Context, write *input.NewKey, a, b, other string) {
+	t.Helper()
+	// Changing a key's collections takes effect at once.
+	k, err := keys.UpdateMyKey(owner, write.Key.ID, "Escrita B", []domain.KeyScope{{CollectionID: b, CanWrite: true}, {CollectionID: other}}, nil)
+	if err != nil || len(k.Scopes) != 2 || k.Name != "Escrita B" {
+		t.Fatalf("update: %+v, %v", k, err)
+	}
+	wantCode(t, ignore2(records.List(as(write.Secret), domain.RecordFilter{CollectionID: a})), apperror.CodeNotFound)
+	if _, err := records.Create(as(write.Secret), input.CreateRecordCommand{CollectionID: b, Data: json.RawMessage(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	log, _, err := collections.AuditLog(owner, a, domain.AuditFilter{Action: "collection.key_delete", Page: domain.NewPage(1, 5)})
+	if err != nil || len(log) != 1 || log[0].Details["key"] != "Escrita" || log[0].Details["prefix"] != write.Key.Prefix {
+		t.Fatalf("key_delete audit: %+v, %v", log, err)
+	}
+
+	// An owner takes their collection out of a key; the key keeps the others.
+	if err := keys.DeleteKey(owner, b, write.Key.ID); err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore2(records.List(as(write.Secret), domain.RecordFilter{CollectionID: b})), apperror.CodeNotFound)
+	if _, _, err := records.List(as(write.Secret), domain.RecordFilter{CollectionID: other}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Deleting the key ends it.
+	if err := keys.DeleteMyKey(owner, write.Key.ID); err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, ignore(keys.AuthenticateKey(context.Background(), write.Secret)), apperror.CodeUnauthorized)
+}
+
+func checkCollectionRestoreAndPurge(t *testing.T, owner context.Context, collections input.CollectionService, records input.RecordService, box input.ToolsService, collectionID, recordID string) {
+	t.Helper()
+	// A collection comes back with its records; purged, it is gone.
+	if err := collections.DeleteMany(owner, []string{collectionID}); err != nil {
+		t.Fatal(err)
+	}
+	gone, err := box.TrashedCollections(owner)
+	if err != nil || len(gone) != 1 || gone[0].RecordCount != 1 {
+		t.Fatalf("trashed collections: %+v, %v", gone, err)
+	}
+	if err := box.RestoreCollection(owner, collectionID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := records.Get(owner, recordID); err != nil {
+		t.Fatal(err)
+	}
+	if err := collections.DeleteMany(owner, []string{collectionID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := box.PurgeCollection(owner, collectionID); err != nil {
+		t.Fatal(err)
+	}
+	wantCode(t, box.RestoreCollection(owner, collectionID), apperror.CodeNotFound)
+}
+
+func checkDashboardAndViews(t *testing.T, owner context.Context, box input.ToolsService, collectionID string) {
+	t.Helper()
+	// The dashboard starts empty, keeps what owners save and refuses unknown widgets.
+	if w, err := box.Dashboard(owner, collectionID); err != nil || string(w) != "[]" {
+		t.Fatalf("empty dashboard: %s %v", w, err)
+	}
+	widgets := json.RawMessage(`[{"kind":"count","title":"Tarefas"},{"kind":"bars","title":"Por dono","field":"dono"}]`)
+	if err := box.SaveDashboard(owner, collectionID, widgets); err != nil {
+		t.Fatal(err)
+	}
+	if w, err := box.Dashboard(owner, collectionID); err != nil || string(w) != string(widgets) {
+		t.Fatalf("dashboard: %s %v", w, err)
+	}
+	wantCode(t, box.SaveDashboard(owner, collectionID, json.RawMessage(`[{"kind":"pizza"}]`)), apperror.CodeInvalidInput)
+	wantCode(t, box.SaveDashboard(owner, collectionID, json.RawMessage(`{}`)), apperror.CodeInvalidInput)
+
+	// Views: own and shared.
+	view, err := box.CreateView(owner, collectionID, "Por n", "?sort=data.n", true)
+	if err != nil || view.Query != "sort=data.n" {
+		t.Fatalf("view: %+v, %v", view, err)
+	}
+	if vs, err := box.Views(owner, collectionID); err != nil || len(vs) != 1 || !vs[0].Mine {
+		t.Fatalf("views: %+v, %v", vs, err)
+	}
+	if err := box.DeleteView(owner, collectionID, view.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func checkSalesStats(t *testing.T, owner context.Context, records input.RecordService, collectionID string) {
+	t.Helper()
+	for _, d := range []string{`{"cat":"c","quando":"2026-01-05"}`, `{"cat":"c","quando":"2026-01-20T10:00:00Z"}`, `{"cat":"c","quando":"2026-03-01"}`, `{"cat":"c","quando":"2026-02-30"}`} {
+		if _, err := records.Create(owner, input.CreateRecordCommand{CollectionID: collectionID, Data: json.RawMessage(d)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, err := records.Stats(owner, domain.RecordFilter{CollectionID: collectionID}, domain.StatsQuery{Filled: []string{"v", "nome"}, Numbers: []string{"v"}, Dates: []string{"quando"}, Values: []string{"cat"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, nome, cat, quando := st.Fields["v"], st.Fields["nome"], st.Fields["cat"], st.Fields["quando"]
+	if st.Total != 8 || v.Filled != 3 || nome.Filled != 3 || *v.Min != 5 || *v.Max != 10 || *v.Sum != 22 {
+		t.Errorf("stats: total %d, v %+v, nome %+v", st.Total, v, nome)
+	}
+	if cat.Distinct != 3 || len(cat.Top) != 3 || string(cat.Top[0].Key) != `"c"` || cat.Top[0].Count != 4 {
+		t.Errorf("cat values: %+v", cat)
+	}
+	// The invalid 2026-02-30 is skipped; the datetime counts by its date.
+	if *quando.First != "2026-01-05" || *quando.Last != "2026-03-01" || len(quando.Series) != 2 || quando.Series[0] != (domain.DateCount{At: "2026-01-01", Count: 2}) {
+		t.Errorf("dates: %+v first %v last %v", quando.Series, *quando.First, *quando.Last)
+	}
+	wantCode(t, ignore(records.Stats(owner, domain.RecordFilter{CollectionID: collectionID}, domain.StatsQuery{Bucket: "hour"})), apperror.CodeInvalidInput)
 }

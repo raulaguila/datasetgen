@@ -10,10 +10,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gofiber/fiber/v3"
+
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/pkg/reqctx"
 )
+
+type mcpCall func(tool string, args any) (map[string]any, bool)
+type mcpKeyCall func(secret, tool string, args any) (map[string]any, bool)
 
 // The MCP endpoint takes only API keys and its tools see only the key's collections.
 func TestMCPToolsReadTheKeysCollections(t *testing.T) {
@@ -79,7 +84,10 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	}
 	id := 0
 	var callWith func(secret, tool string, args any) (map[string]any, bool)
-	call := func(tool string, args any) (map[string]any, bool) { t.Helper(); return callWith(key.Secret, tool, args) }
+	call := func(tool string, args any) (map[string]any, bool) {
+		t.Helper()
+		return callWith(key.Secret, tool, args)
+	}
 	callWith = func(secret, tool string, args any) (map[string]any, bool) {
 		t.Helper()
 		id++
@@ -118,6 +126,50 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 		t.Fatal(err)
 	}
 	ov := post(both.Secret, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"workspace_overview","arguments":{}}}`, 200)
+	checkMCPOverview(t, ov, call, a)
+
+	checkOrderTools(t, call, callWith, both.Secret, orders.ID, cheap, dear)
+
+	checkMCPSearch(t, call, a, cheap, dear)
+	checkMCPAggregates(t, call, a, hidden)
+	checkMCPRecordFields(t, call, a, cheap, dear, safe)
+	if _, err := toolSvc.CreateView(owner, a, "Caros", `?q=a&where={"any":false,"rules":[{"field":"preco","op":"gt","value":10}]}&sort=data.preco`, true); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := call("list_views", map[string]any{"collection_id": a})
+	if v := got["views"].([]any); len(v) != 1 || v[0].(map[string]any)["search"] != "a" || v[0].(map[string]any)["where"].(map[string]any)["rules"] == nil {
+		t.Fatalf("list_views: %v", got)
+	}
+	// A read key cannot write; a write key creates, changes some fields and deletes.
+	if _, failed := call("create_record", map[string]any{"collection_id": a, "data": map[string]any{"nome": "x"}}); !failed {
+		t.Fatal("a read key created a record")
+	}
+	writer, err := keys.UpdateMyKey(owner, key.Key.ID, "Assistente", []domain.KeyScope{{CollectionID: a, CanWrite: true}}, nil)
+	if err != nil || !writer.Scopes[0].CanWrite {
+		t.Fatalf("update key: %+v, %v", writer, err)
+	}
+	made := checkMCPRecordWrites(t, call, a, safe)
+	checkMCPRestoredHistory(t, call, a, made)
+	checkMCPBulkUpdate(t, call, records, owner, a, dear)
+
+	checkMCPHTTP(t, app, key.Secret, a, hidden)
+
+	// Outside the key's collections everything reads as missing.
+	for tool, args := range map[string]any{
+		"get_collection":   map[string]any{"collection_id": hidden},
+		"search_records":   map[string]any{"collection_id": hidden},
+		"collection_stats": map[string]any{"collection_id": hidden},
+	} {
+		if _, failed := call(tool, args); !failed {
+			t.Fatalf("%s reached a collection outside the key", tool)
+		}
+	}
+}
+
+func toolErrorText(got map[string]any) string { b, _ := json.Marshal(got["error"]); return string(b) }
+
+func checkMCPOverview(t *testing.T, ov map[string]any, call mcpCall, a string) {
+	t.Helper()
 	cols, _ := ov["result"].(map[string]any)["structuredContent"].(map[string]any)["collections"].([]any)
 	if len(cols) != 2 {
 		t.Fatalf("overview: %v", ov)
@@ -138,18 +190,20 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if got, _ := call("workspace_overview", map[string]any{}); len(got["collections"].([]any)) != 1 || got["collections"].([]any)[0].(map[string]any)["referenced_by"] != nil {
 		t.Fatalf("overview, one collection: %v", got)
 	}
+}
 
-	errText := func(got map[string]any) string { b, _ := json.Marshal(got["error"]); return string(b) }
+func checkOrderTools(t *testing.T, call mcpCall, callWith mcpKeyCall, secret, orderID, cheap, dear string) {
+	t.Helper()
 	// expand brings the product each order points at; search_everywhere finds text across the key's collections.
-	got, _ := callWith(both.Secret, "search_records", map[string]any{"collection_id": orders.ID, "expand": []string{"produto.nome"}})
+	got, _ := callWith(secret, "search_records", map[string]any{"collection_id": orderID, "expand": []string{"produto.nome"}})
 	if ex := got["records"].([]any)[0].(map[string]any)["expanded"].(map[string]any)["produto"].([]any); len(ex) != 1 ||
 		ex[0].(map[string]any)["id"] != cheap || ex[0].(map[string]any)["data"].(map[string]any)["nome"] != "lapis" || len(ex[0].(map[string]any)["data"].(map[string]any)) != 1 {
 		t.Fatalf("expand: %v", got)
 	}
-	if got, failed := callWith(both.Secret, "search_records", map[string]any{"collection_id": orders.ID, "expand": []string{"status"}}); !failed {
+	if got, failed := callWith(secret, "search_records", map[string]any{"collection_id": orderID, "expand": []string{"status"}}); !failed {
 		t.Fatalf("expand took a field that is no reference: %v", got)
 	}
-	got, _ = callWith(both.Secret, "search_everywhere", map[string]any{"search": "novo"})
+	got, _ = callWith(secret, "search_everywhere", map[string]any{"search": "novo"})
 	if c := got["collections"].([]any); len(c) != 1 || c[0].(map[string]any)["collection"] != "Pedidos" || c[0].(map[string]any)["total"].(float64) != 1 {
 		t.Fatalf("search_everywhere: %v", got)
 	}
@@ -157,25 +211,28 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 		t.Fatalf("search_everywhere beyond the key: %v", got)
 	}
 	// create_records makes all or none, naming the bad record.
-	got, failed := callWith(both.Secret, "create_records", map[string]any{"collection_id": orders.ID, "records": []any{map[string]any{"produto": dear}, map[string]any{"status": "pago"}}})
-	if !failed || !strings.Contains(errText(got), "record 1") {
+	got, failed := callWith(secret, "create_records", map[string]any{"collection_id": orderID, "records": []any{map[string]any{"produto": dear}, map[string]any{"status": "pago"}}})
+	if !failed || !strings.Contains(toolErrorText(got), "record 1") {
 		t.Fatalf("create_records with a bad record: %v", got)
 	}
-	if got, failed = callWith(both.Secret, "create_records", map[string]any{"collection_id": orders.ID, "records": []any{map[string]any{"produto": dear}, map[string]any{"produto": cheap, "status": "pago"}}}); failed || got["created"].(float64) != 2 {
+	if got, failed = callWith(secret, "create_records", map[string]any{"collection_id": orderID, "records": []any{map[string]any{"produto": dear}, map[string]any{"produto": cheap, "status": "pago"}}}); failed || got["created"].(float64) != 2 {
 		t.Fatalf("create_records: %v", got)
 	}
+}
 
-	got, _ = call("workspace_overview", map[string]any{})
+func checkMCPSearch(t *testing.T, call mcpCall, a, cheap, dear string) {
+	t.Helper()
+	got, _ := call("workspace_overview", map[string]any{})
 	if cols := got["collections"].([]any); len(cols) != 1 || cols[0].(map[string]any)["id"] != a || cols[0].(map[string]any)["access"] != "read" {
 		t.Fatalf("collections: %v", got)
 	}
 	// A field or option the collection lacks fails with what to send, instead of matching nothing.
-	got, failed = call("search_records", map[string]any{"collection_id": a, "rules": []any{map[string]any{"field": "Nome do Item", "op": "eq", "value": "lapis"}}})
-	if !failed || !strings.Contains(errText(got), `use its key \"nome\"`) || !strings.Contains(errText(got), "preco") {
+	got, failed := call("search_records", map[string]any{"collection_id": a, "rules": []any{map[string]any{"field": "Nome do Item", "op": "eq", "value": "lapis"}}})
+	if !failed || !strings.Contains(toolErrorText(got), `use its key \"nome\"`) || !strings.Contains(toolErrorText(got), "preco") {
 		t.Fatalf("unknown rule field: %v", got)
 	}
 	got, failed = call("search_records", map[string]any{"collection_id": a, "rules": []any{map[string]any{"field": "cor", "op": "in", "value": []string{"Azul", "laranja"}}}})
-	if !failed || !strings.Contains(errText(got), `use \"Laranja\"`) {
+	if !failed || !strings.Contains(toolErrorText(got), `use \"Laranja\"`) {
 		t.Fatalf("wrong option: %v", got)
 	}
 	for tool, args := range map[string]map[string]any{
@@ -210,8 +267,12 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if got, failed := call("collection_stats", map[string]any{"collection_id": a}); failed || got["records"].(float64) != 2 {
 		t.Fatalf("collection_stats: %v", got)
 	}
+}
+
+func checkMCPAggregates(t *testing.T, call mcpCall, a, hidden string) {
+	t.Helper()
 	// Totals, values, several records by id and saved views.
-	got, _ = call("aggregate_records", map[string]any{"collection_id": a, "numbers": []string{"preco"}})
+	got, _ := call("aggregate_records", map[string]any{"collection_id": a, "numbers": []string{"preco"}})
 	if g := got["groups"].([]any); len(g) != 1 || g[0].(map[string]any)["count"].(float64) != 2 || g[0].(map[string]any)["preco"].(map[string]any)["sum"].(float64) != 14 {
 		t.Fatalf("aggregate_records: %v", got)
 	}
@@ -241,6 +302,10 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if got, _ = call("field_values", map[string]any{"collection_id": a, "field": "nome"}); got["distinct"].(float64) != 2 || got["filled"].(float64) != 2 || len(got["values"].([]any)) != 2 || got["more"] != false {
 		t.Fatalf("field_values: %v", got)
 	}
+}
+
+func checkMCPRecordFields(t *testing.T, call mcpCall, a, cheap, dear, safe string) {
+	t.Helper()
 	// One value a page: the second page holds the other one; past the end, none, still with the distinct count.
 	first, _ := call("field_values", map[string]any{"collection_id": a, "field": "nome", "limit": 1})
 	second, _ := call("field_values", map[string]any{"collection_id": a, "field": "nome", "limit": 1, "page": 2})
@@ -248,14 +313,14 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 		first["values"].([]any)[0].(map[string]any)["value"] == second["values"].([]any)[0].(map[string]any)["value"] {
 		t.Fatalf("field_values pages: %v / %v", first, second)
 	}
-	if got, _ = call("field_values", map[string]any{"collection_id": a, "field": "nome", "limit": 1, "page": 5}); len(got["values"].([]any)) != 0 || got["distinct"].(float64) != 2 {
+	if got, _ := call("field_values", map[string]any{"collection_id": a, "field": "nome", "limit": 1, "page": 5}); len(got["values"].([]any)) != 0 || got["distinct"].(float64) != 2 {
 		t.Fatalf("field_values past the end: %v", got)
 	}
 	if _, failed := call("field_values", map[string]any{"collection_id": a, "field": "nome", "limit": 500}); !failed {
 		t.Fatal("field_values took 500 a page")
 	}
 	// fields cuts each record's data to what the model asks for; the listing drops the collection it names.
-	got, _ = call("search_records", map[string]any{"collection_id": a, "search": "lapis", "fields": []string{"nome"}})
+	got, _ := call("search_records", map[string]any{"collection_id": a, "search": "lapis", "fields": []string{"nome"}})
 	if r := got["records"].([]any)[0].(map[string]any); len(r["data"].(map[string]any)) != 1 || r["data"].(map[string]any)["nome"] != "lapis" || r["collection_id"] != nil || r["id"] != cheap {
 		t.Fatalf("search_records fields: %v", got)
 	}
@@ -273,22 +338,11 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if len(got["records"].([]any)) != 2 || len(got["missing"].([]any)) != 1 || got["missing"].([]any)[0] != safe {
 		t.Fatalf("get_records: %v", got)
 	}
-	if _, err := toolSvc.CreateView(owner, a, "Caros", `?q=a&where={"any":false,"rules":[{"field":"preco","op":"gt","value":10}]}&sort=data.preco`, true); err != nil {
-		t.Fatal(err)
-	}
-	got, _ = call("list_views", map[string]any{"collection_id": a})
-	if v := got["views"].([]any); len(v) != 1 || v[0].(map[string]any)["search"] != "a" || v[0].(map[string]any)["where"].(map[string]any)["rules"] == nil {
-		t.Fatalf("list_views: %v", got)
-	}
-	// A read key cannot write; a write key creates, changes some fields and deletes.
-	if _, failed := call("create_record", map[string]any{"collection_id": a, "data": map[string]any{"nome": "x"}}); !failed {
-		t.Fatal("a read key created a record")
-	}
-	writer, err := keys.UpdateMyKey(owner, key.Key.ID, "Assistente", []domain.KeyScope{{CollectionID: a, CanWrite: true}}, nil)
-	if err != nil || !writer.Scopes[0].CanWrite {
-		t.Fatalf("update key: %+v, %v", writer, err)
-	}
-	got, failed = call("create_record", map[string]any{"collection_id": a, "data": map[string]any{"nome": "borracha", "preco": 1}})
+}
+
+func checkMCPRecordWrites(t *testing.T, call mcpCall, a, safe string) string {
+	t.Helper()
+	got, failed := call("create_record", map[string]any{"collection_id": a, "data": map[string]any{"nome": "borracha", "preco": 1}})
 	if failed || got["id"] == nil {
 		t.Fatalf("create_record: %v", got)
 	}
@@ -319,8 +373,13 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if _, failed := call("get_record", map[string]any{"record_id": made}); !failed {
 		t.Fatal("a deleted record still reads")
 	}
+	return made
+}
+
+func checkMCPRestoredHistory(t *testing.T, call mcpCall, a, made string) {
+	t.Helper()
 	// The trash lists it and gives it back; its history shows what update_record changed.
-	got, _ = call("list_trash", map[string]any{"collection_id": a})
+	got, _ := call("list_trash", map[string]any{"collection_id": a})
 	if r := got["records"].([]any); len(r) != 1 || r[0].(map[string]any)["id"] != made {
 		t.Fatalf("list_trash: %v", got)
 	}
@@ -335,12 +394,16 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if ch := v[0].(map[string]any)["changes"].(map[string]any); len(ch) != 2 || ch["preco"].(map[string]any)["to"].(float64) != 3 || ch["nome"].(map[string]any)["to"] != nil {
 		t.Fatalf("record_history changes: %v", got)
 	}
+}
+
+func checkMCPBulkUpdate(t *testing.T, call mcpCall, records input.RecordService, owner context.Context, a, dear string) {
+	t.Helper()
 	// update_records wants a filter, counts with dry_run, then sets every match.
 	if _, failed := call("update_records", map[string]any{"collection_id": a, "set": map[string]any{"nome": "x"}}); !failed {
 		t.Fatal("update_records ran without a filter")
 	}
 	caros := []any{map[string]any{"field": "preco", "op": "gt", "value": 2}}
-	got, _ = call("update_records", map[string]any{"collection_id": a, "rules": caros, "set": map[string]any{"nome": "caro"}, "dry_run": true})
+	got, _ := call("update_records", map[string]any{"collection_id": a, "rules": caros, "set": map[string]any{"nome": "caro"}, "dry_run": true})
 	if got["matched"].(float64) != 2 || len(got["sample"].([]any)) != 2 {
 		t.Fatalf("update_records dry run: %v", got)
 	}
@@ -353,14 +416,17 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	if got, _ = call("field_values", map[string]any{"collection_id": a, "field": "nome", "search": "caro"}); got["values"].([]any)[0].(map[string]any)["count"].(float64) != 2 {
 		t.Fatalf("after update_records: %v", got)
 	}
+}
 
+func checkMCPHTTP(t *testing.T, app *fiber.App, secret, a, hidden string) {
+	t.Helper()
 	// Swagger asks for JSON alone and sends the key in X-API-Key; the shortcuts skip the envelope.
 	plain := func(method, path, body string, want int) map[string]any {
 		t.Helper()
 		req := httptest.NewRequest(method, path, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
-		req.Header.Set("X-API-Key", key.Secret)
+		req.Header.Set("X-API-Key", secret)
 		res, err := app.Test(req)
 		if err != nil {
 			t.Fatal(err)
@@ -393,16 +459,5 @@ func TestMCPToolsReadTheKeysCollections(t *testing.T) {
 	req := httptest.NewRequest("GET", "/v1/mcp/tools", nil)
 	if res, err := app.Test(req); err != nil || res.StatusCode != 401 {
 		t.Fatalf("GET /v1/mcp/tools without a key: %v %v", res, err)
-	}
-
-	// Outside the key's collections everything reads as missing.
-	for tool, args := range map[string]any{
-		"get_collection":   map[string]any{"collection_id": hidden},
-		"search_records":   map[string]any{"collection_id": hidden},
-		"collection_stats": map[string]any{"collection_id": hidden},
-	} {
-		if _, failed := call(tool, args); !failed {
-			t.Fatalf("%s reached a collection outside the key", tool)
-		}
 	}
 }

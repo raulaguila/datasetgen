@@ -10,13 +10,21 @@ import (
 	"path"
 )
 
+// RPCRequest is a JSON-RPC 2.0 request as an MCP client sends it.
+type RPCRequest struct {
+	JSONRPC string         `json:"jsonrpc" example:"2.0"`
+	ID      int            `json:"id" example:"1"`
+	Method  string         `json:"method" example:"tools/list"`
+	Params  map[string]any `json:"params,omitempty" swaggerignore:"true"` // tools/call: {"name": ..., "arguments": {...}}
+} // @name rest.mcpRequest
+
 // Shortcuts answers tools/list (GET) and tools/call (POST: the last path segment
 // names the tool, the body holds its arguments) as plain JSON, for the API docs
 // and quick tests. Each request goes through h as one JSON-RPC call, so the key,
 // its scopes, the member's roles and the call log apply as on /v1/mcp.
 func Shortcuts(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		call := map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+		call := RPCRequest{JSONRPC: "2.0", ID: 1, Method: "tools/list"}
 		if r.Method == http.MethodPost {
 			args, err := io.ReadAll(r.Body)
 			if len(bytes.TrimSpace(args)) == 0 {
@@ -26,8 +34,8 @@ func Shortcuts(h http.Handler) http.Handler {
 				invalid(w, "the body must be a JSON object with the tool's arguments")
 				return
 			}
-			call["method"] = "tools/call"
-			call["params"] = map[string]any{"name": path.Base(r.URL.Path), "arguments": json.RawMessage(args)}
+			call.Method = "tools/call"
+			call.Params = map[string]any{"name": path.Base(r.URL.Path), "arguments": json.RawMessage(args)}
 		}
 		body, _ := json.Marshal(call)
 		fwd := r.Clone(r.Context())

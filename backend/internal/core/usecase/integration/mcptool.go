@@ -46,22 +46,21 @@ func (s *Service) MCPTools(ctx context.Context, collectionID string) ([]domain.M
 // the fixed conditions and sort once, so a bad tool fails here and not when an
 // assistant calls it.
 func (s *Service) checkMCPTool(ctx context.Context, collectionID string, in input.MCPToolInput) (*domain.MCPTool, error) {
-	bad := func(field, msg string) error { return apperror.New(apperror.CodeInvalidInput, msg).WithField(field) }
 	t := &domain.MCPTool{
 		CollectionID: collectionID, Name: strings.TrimSpace(in.Name), Description: strings.TrimSpace(in.Description), Enabled: in.Enabled,
 		Conditions: in.Conditions, Sort: in.Sort, Order: in.Order, Limit: in.Limit,
 	}
 	if !toolName.MatchString(t.Name) || slices.Contains(domain.MCPBuiltinTools, t.Name) {
-		return nil, bad("name", "name must be 3-48 of a-z, 0-9 and _, start with a letter, and not be a built-in tool")
+		return nil, invalidField("name", "name must be 3-48 of a-z, 0-9 and _, start with a letter, and not be a built-in tool")
 	}
 	if n := utf8.RuneCountInString(t.Description); n < 1 || n > maxToolDescribe {
-		return nil, bad("description", "description must be 1-1000 characters: it is what the assistant reads to pick the tool")
+		return nil, invalidField("description", "description must be 1-1000 characters: it is what the assistant reads to pick the tool")
 	}
 	if t.Conditions.Rules == nil {
 		t.Conditions.Rules = []domain.Condition{}
 	}
 	if t.Conditions.Any && len(t.Conditions.Groups) > 0 {
-		return nil, bad("conditions", "fixed conditions with groups must be joined by AND")
+		return nil, invalidField("conditions", "fixed conditions with groups must be joined by AND")
 	}
 	if t.Sort == "" {
 		t.Sort = "updated_at"
@@ -70,51 +69,32 @@ func (s *Service) checkMCPTool(ctx context.Context, collectionID string, in inpu
 		t.Order = "desc"
 	}
 	if t.Order != "asc" && t.Order != "desc" {
-		return nil, bad("order", "order must be asc or desc")
+		return nil, invalidField("order", "order must be asc or desc")
 	}
 	if t.Limit == 0 {
 		t.Limit = 20
 	}
 	if t.Limit < 1 || t.Limit > maxToolRecords {
-		return nil, bad("limit", "limit must be 1 to 50")
+		return nil, invalidField("limit", "limit must be 1 to 50")
 	}
 	c, err := s.Store.Collections().FindByID(ctx, collectionID)
 	if err != nil {
 		return nil, err
 	}
-	if len(in.Params) > maxToolParams {
-		return nil, bad("params", "a tool takes up to 10 parameters")
-	}
-	seen := map[string]bool{}
-	for _, p := range in.Params {
-		p.Name, p.Description = strings.TrimSpace(p.Name), strings.TrimSpace(p.Description)
-		if !paramName.MatchString(p.Name) || p.Name == PageArg || seen[p.Name] {
-			return nil, bad("params", fmt.Sprintf("parameter %q: names are 1-40 of a-z, 0-9 and _, unique, and not page", p.Name))
-		}
-		seen[p.Name] = true
-		if utf8.RuneCountInString(p.Description) > 200 {
-			return nil, bad("params", fmt.Sprintf("parameter %s: description up to 200 characters", p.Name))
-		}
-		if !slices.Contains(domain.MCPToolOps, p.Op) {
-			return nil, bad("params", fmt.Sprintf("parameter %s: op must be one of %s", p.Name, strings.Join(domain.MCPToolOps, ", ")))
-		}
-		typ, list, ok := schema.ScalarType(c.Schema, p.Field)
-		if !ok || list != (p.Op == "has") || (p.Op == "contains" && typ != "string") {
-			return nil, bad("params", fmt.Sprintf("parameter %s: %s cannot be compared with %s", p.Name, p.Field, p.Op))
-		}
-		p.Type = typ
-		t.Params = append(t.Params, p)
+	t.Params, err = toolParams(in.Params, c.Schema)
+	if err != nil {
+		return nil, err
 	}
 	props := schema.PropertyOrder(c.Schema)
 	if f, isField := strings.CutPrefix(t.Sort, "data."); (isField && !slices.Contains(props, f)) || (!isField && t.Sort != "updated_at" && t.Sort != "created_at") {
-		return nil, bad("sort", "sort must be created_at, updated_at or data.<field>")
+		return nil, invalidField("sort", "sort must be created_at, updated_at or data.<field>")
 	}
 	if len(in.Fields) > maxToolFields {
-		return nil, bad("fields", "a tool returns up to 50 fields")
+		return nil, invalidField("fields", "a tool returns up to 50 fields")
 	}
 	for _, f := range in.Fields {
 		if !slices.Contains(props, f) {
-			return nil, bad("fields", fmt.Sprintf("%s is not a field of the collection", f))
+			return nil, invalidField("fields", fmt.Sprintf("%s is not a field of the collection", f))
 		}
 		if !slices.Contains(t.Fields, f) {
 			t.Fields = append(t.Fields, f)
@@ -124,6 +104,34 @@ func (s *Service) checkMCPTool(ctx context.Context, collectionID string, in inpu
 		return nil, err
 	}
 	return t, nil
+}
+
+func toolParams(params []domain.MCPToolParam, raw json.RawMessage) ([]domain.MCPToolParam, error) {
+	var out []domain.MCPToolParam
+	if len(params) > maxToolParams {
+		return nil, invalidField("params", "a tool takes up to 10 parameters")
+	}
+	seen := map[string]bool{}
+	for _, p := range params {
+		p.Name, p.Description = strings.TrimSpace(p.Name), strings.TrimSpace(p.Description)
+		if !paramName.MatchString(p.Name) || p.Name == PageArg || seen[p.Name] {
+			return nil, invalidField("params", fmt.Sprintf("parameter %q: names are 1-40 of a-z, 0-9 and _, unique, and not page", p.Name))
+		}
+		seen[p.Name] = true
+		if utf8.RuneCountInString(p.Description) > 200 {
+			return nil, invalidField("params", fmt.Sprintf("parameter %s: description up to 200 characters", p.Name))
+		}
+		if !slices.Contains(domain.MCPToolOps, p.Op) {
+			return nil, invalidField("params", fmt.Sprintf("parameter %s: op must be one of %s", p.Name, strings.Join(domain.MCPToolOps, ", ")))
+		}
+		typ, list, ok := schema.ScalarType(raw, p.Field)
+		if !ok || list != (p.Op == "has") || (p.Op == "contains" && typ != "string") {
+			return nil, invalidField("params", fmt.Sprintf("parameter %s: %s cannot be compared with %s", p.Name, p.Field, p.Op))
+		}
+		p.Type = typ
+		out = append(out, p)
+	}
+	return out, nil
 }
 
 func (s *Service) CreateMCPTool(ctx context.Context, collectionID string, in input.MCPToolInput) (*domain.MCPTool, error) {

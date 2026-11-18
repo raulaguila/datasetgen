@@ -158,8 +158,12 @@ export const records = {
   restore: (recordId: string, version: number, current_version?: number) =>
     apiFetch<DataRecord>(`/v1/records/${id(recordId)}/restore`, { method: "POST", json: { version, current_version } }),
   /** One batch of a file import; dry_run only checks. */
-  importBatch: (body: { collection_id: string; records: unknown[]; dry_run?: boolean; skip_invalid?: boolean; upsert_key?: string; batch_key?: string }) =>
-    apiFetch<ImportResult>("/v1/records/import", { method: "POST", json: body }),
+  importBatch: (body: { collection_id: string; records: unknown[]; sourceRecords?: string[]; dry_run?: boolean; skip_invalid?: boolean; upsert_key?: string; batch_key?: string }) => {
+    if (!body.sourceRecords) return apiFetch<ImportResult>("/v1/records/import", { method: "POST", json: body });
+    const prefix = JSON.stringify({ ...body, records: undefined, sourceRecords: undefined }).slice(0, -1);
+    const blob = new Blob([prefix, ',"records":[', body.sourceRecords.join(","), "]}"], { type: "application/json" });
+    return apiFetch<ImportResult>("/v1/records/import", { method: "POST", blob });
+  },
   export: (collection_id: string, format: "jsonl" | "csv", valid: boolean) =>
     apiDownload(`/v1/records/export${query({ collection_id, format, valid: valid || undefined })}`, `records.${format}`),
   /** Counts the selected records by a field (or all together) with sums and averages of numeric fields. */

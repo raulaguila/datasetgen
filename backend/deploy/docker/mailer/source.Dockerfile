@@ -5,11 +5,8 @@ WORKDIR /opt/dataset
 COPY go.mod .
 COPY go.sum .
 
-RUN git config --global url."https://github.com/golang/".insteadOf "https://go.googlesource.com/" && \
-    GOPROXY=direct \
-    GIT_SSL_NO_VERIFY=true \
-    GOINSECURE='*' \
-    go mod download
+RUN --mount=type=secret,id=trusted_cas,required=true \
+    SSL_CERT_FILE=/run/secrets/trusted_cas go mod download
 
 COPY cmd/ cmd/
 COPY config/ config/

@@ -53,12 +53,12 @@ func (t tools) runOwnTool(tool domain.MCPTool) mcp.ToolHandler {
 		var args map[string]json.RawMessage
 		if raw := req.Params.Arguments; len(raw) > 0 {
 			if err := json.Unmarshal(raw, &args); err != nil {
-				return failed("arguments must be a JSON object"), nil
+				return failed("arguments must be a JSON object")
 			}
 		}
 		items, total, page, err := t.app.Integrations.RunMCPTool(ctx, tool, args)
 		if err != nil {
-			return failed(err.Error()), nil
+			return failed(err.Error())
 		}
 		out := map[string]any{"total": total, "page": page, "records": recordsOf(items)}
 		text, _ := json.Marshal(out)
@@ -66,6 +66,7 @@ func (t tools) runOwnTool(tool domain.MCPTool) mcp.ToolHandler {
 	}
 }
 
-func failed(msg string) *mcp.CallToolResult {
-	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: msg}}}
+// Report a tool failure in the MCP result so the client can continue the session.
+func failed(msg string) (*mcp.CallToolResult, error) {
+	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: msg}}}, nil
 }

@@ -58,14 +58,7 @@ func Rollups(raw []byte) map[string]Rollup {
 
 // VirtualKeys lists the properties computed on read.
 func VirtualKeys(raw []byte) []string {
-	var out []string
-	for k, p := range topProps(raw) {
-		if p[LookupKeyword] != nil || p[RollupKeyword] != nil {
-			out = append(out, k)
-		}
-	}
-	slices.Sort(out)
-	return out
+	return slices.Clone(Metadata(raw).Virtual)
 }
 
 func decode(v any, into any) bool {

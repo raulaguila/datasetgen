@@ -14,16 +14,6 @@ const MAX_BODY = 8 * 1024 * 1024 + 4096; // the backend's limit (maxBodyBytes): 
 const TOKEN_PATHS = /^v1\/auth\/(login|refresh|logout|register|activate|password-reset)(\/|$)/;
 // The download headers keep an attached file from running as a page on this origin.
 const PASSTHROUGH = ["content-type", "content-disposition", "retry-after", "x-request-id", "x-content-type-options", "content-security-policy", "cache-control"];
-const COMPRESSIBLE = /^(application\/json|text\/)/;
-const MIN_GZIP = 1024; // below this the gzip header costs more than it saves
-
-/** Gzips JSON and text when the browser takes it: Next compresses pages, not route handler streams. */
-function compressed(req: NextRequest, upstream: Response): ReadableStream<Uint8Array> | null {
-  const length = Number(upstream.headers.get("content-length") ?? Infinity);
-  if (!upstream.body || length < MIN_GZIP || !COMPRESSIBLE.test(upstream.headers.get("content-type") ?? "")) return null;
-  if (!/\bgzip\b/.test(req.headers.get("accept-encoding") ?? "")) return null;
-  return upstream.body.pipeThrough(new CompressionStream("gzip"));
-}
 
 async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
@@ -90,12 +80,9 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] 
     return out;
   }
 
-  const gzip = compressed(req, upstream);
-  const out = new NextResponse(gzip ?? upstream.body, { status: upstream.status });
-  if (gzip) {
-    out.headers.set("content-encoding", "gzip");
-    out.headers.set("vary", "accept-encoding");
-  }
+  // Next handles HTTP compression and removes route-supplied Content-Encoding.
+  // Stream the decoded fetch body so JSON and exports reach the client intact.
+  const out = new NextResponse(upstream.body, { status: upstream.status });
   for (const name of PASSTHROUGH) {
     const value = upstream.headers.get(name);
     if (value) out.headers.set(name, value);

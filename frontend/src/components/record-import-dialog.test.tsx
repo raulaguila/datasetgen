@@ -1,3 +1,4 @@
+import { importId, loadProgress } from "@/lib/import-client";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
@@ -39,4 +40,44 @@ it("shows inferred subfields and sends objects and lists intact through validati
   fireEvent.click(screen.getByRole("button", { name: "Importar 1" }));
   await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   expect(importBatch).toHaveBeenNthCalledWith(2, expect.objectContaining({ skip_invalid: true, records: [data] }));
+});
+
+it("replays the first unacknowledged batch after reopening the dialog", async () => {
+  const schema = { type: "object", properties: { sku: { type: "string", "x-unique": true } } };
+  const file = new File(['{"sku":"A"}'], "items.jsonl");
+  Object.defineProperty(file, "text", { value: async () => '{"sku":"A"}' });
+  const id = importId("resume-test", schema, file, undefined, undefined);
+  const onClose = vi.fn();
+  const mount = () => render(
+    <QueryClientProvider client={new QueryClient()}>
+      <I18nProvider initial="pt-BR">
+        <RecordImportDialog collectionId="resume-test" schema={schema} open onOpenChange={onClose} />
+      </I18nProvider>
+    </QueryClientProvider>,
+  );
+  const pick = () => fireEvent.change(document.getElementById("import-file")!, { target: { files: [file] } });
+  let pendingKey: string | undefined;
+  const request = vi.spyOn(records, "importBatch").mockImplementation(async (body) => {
+    if (body.dry_run) return { created: 0, updated: 0, invalid: 0, errors: [] };
+    const checkpoint = loadProgress(id);
+    expect(checkpoint?.pending).toBe(0);
+    expect(body.batch_key).toBe(`${checkpoint?.fid}:0`);
+    if (!pendingKey) {
+      pendingKey = body.batch_key;
+      throw new Error("acknowledgement lost");
+    }
+    expect(body.batch_key).toBe(pendingKey);
+    return { created: 1, updated: 0, invalid: 0, errors: [], replayed: true };
+  });
+  const first = mount();
+  pick();
+  fireEvent.click(await screen.findByRole("button", { name: "Importar 1" }));
+  await waitFor(() => expect(pendingKey).toBeTruthy());
+  first.unmount();
+  mount();
+  pick();
+  fireEvent.click(await screen.findByRole("button", { name: /retomar|continuar/i }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledWith(false));
+  expect(request).toHaveBeenCalledTimes(3);
+  expect(loadProgress(id)).toBeNull();
 });

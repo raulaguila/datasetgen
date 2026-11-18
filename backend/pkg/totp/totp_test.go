@@ -35,3 +35,13 @@ func TestMatchTakesTheNeighbouringSteps(t *testing.T) {
 		t.Fatal("a short code matched")
 	}
 }
+
+func TestCodeRejectsNegativeCounter(t *testing.T) {
+	const key = "JBSWY3DPEHPK3PXP"
+	if _, err := Code(key, -1); err == nil {
+		t.Fatal("negative counter accepted")
+	}
+	if _, err := Code(key, 0); err != nil {
+		t.Fatal(err)
+	}
+}

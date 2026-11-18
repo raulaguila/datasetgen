@@ -101,14 +101,6 @@ func mountMCP(app *fiber.App, a *input.Application, version string) {
 	mcpCallTool(app, short)
 }
 
-// mcpRequest is a JSON-RPC 2.0 request as an MCP client sends it.
-type mcpRequest struct {
-	JSONRPC string         `json:"jsonrpc" example:"2.0"`
-	ID      int            `json:"id" example:"1"`
-	Method  string         `json:"method" example:"tools/list"`
-	Params  map[string]any `json:"params,omitempty" swaggerignore:"true"` // tools/call: {"name": ..., "arguments": {...}}
-}
-
 // mcpRPC is the endpoint assistants use.
 //
 //	@Summary		MCP endpoint for AI assistants (JSON-RPC 2.0, streamable HTTP, stateless)
@@ -117,7 +109,7 @@ type mcpRequest struct {
 //	@Accept			json
 //	@Produce		json
 //	@Param			X-API-Key	header	string		true	"API key (dsk_...)"
-//	@Param			body		body	mcpRequest	true	"JSON-RPC request"
+//	@Param			body		body	mcpserver.RPCRequest	true	"JSON-RPC request"
 //	@Success		200			{object}	object
 //	@Failure		401			{string}	string
 //	@Router			/v1/mcp [post]

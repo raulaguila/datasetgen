@@ -44,22 +44,29 @@ func HTTPStats() any {
 
 // WritePrometheus writes the HTTP counters in the Prometheus text format, with
 // the latency buckets made cumulative as a histogram needs.
-func WritePrometheus(w io.Writer) {
-	fmt.Fprintln(w, "# HELP dataset_http_requests_total HTTP requests served.")
-	fmt.Fprintln(w, "# TYPE dataset_http_requests_total counter")
-	fmt.Fprintf(w, "dataset_http_requests_total %d\n", count.Load())
-	fmt.Fprintln(w, "# HELP dataset_http_server_errors_total HTTP answers with a 5xx status.")
-	fmt.Fprintln(w, "# TYPE dataset_http_server_errors_total counter")
-	fmt.Fprintf(w, "dataset_http_server_errors_total %d\n", serverErrors.Load())
-	fmt.Fprintln(w, "# HELP dataset_http_request_duration_seconds Time to answer HTTP requests.")
-	fmt.Fprintln(w, "# TYPE dataset_http_request_duration_seconds histogram")
+func WritePrometheus(w io.Writer) error {
+	const counters = "# HELP dataset_http_requests_total HTTP requests served.\n" +
+		"# TYPE dataset_http_requests_total counter\n" +
+		"dataset_http_requests_total %d\n" +
+		"# HELP dataset_http_server_errors_total HTTP answers with a 5xx status.\n" +
+		"# TYPE dataset_http_server_errors_total counter\n" +
+		"dataset_http_server_errors_total %d\n" +
+		"# HELP dataset_http_request_duration_seconds Time to answer HTTP requests.\n" +
+		"# TYPE dataset_http_request_duration_seconds histogram\n"
+	if _, err := fmt.Fprintf(w, counters, count.Load(), serverErrors.Load()); err != nil {
+		return err
+	}
 	var sum int64
 	for i, limit := range bounds {
 		sum += latencyBuckets[i].Load()
-		fmt.Fprintf(w, "dataset_http_request_duration_seconds_bucket{le=\"%g\"} %d\n", float64(limit)/1000, sum)
+		if _, err := fmt.Fprintf(w, "dataset_http_request_duration_seconds_bucket{le=\"%g\"} %d\n", float64(limit)/1000, sum); err != nil {
+			return err
+		}
 	}
 	sum += latencyBuckets[len(bounds)].Load()
-	fmt.Fprintf(w, "dataset_http_request_duration_seconds_bucket{le=\"+Inf\"} %d\n", sum)
-	fmt.Fprintf(w, "dataset_http_request_duration_seconds_sum %g\n", float64(durationNS.Load())/1e9)
-	fmt.Fprintf(w, "dataset_http_request_duration_seconds_count %d\n", sum)
+	const totals = "dataset_http_request_duration_seconds_bucket{le=\"+Inf\"} %d\n" +
+		"dataset_http_request_duration_seconds_sum %g\n" +
+		"dataset_http_request_duration_seconds_count %d\n"
+	_, err := fmt.Fprintf(w, totals, sum, float64(durationNS.Load())/1e9, sum)
+	return err
 }

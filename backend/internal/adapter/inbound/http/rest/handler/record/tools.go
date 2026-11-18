@@ -176,9 +176,9 @@ func (h *Handler) Export(c fiber.Ctx) error {
 	}
 	// The body streams after this handler returns, when the request's context is
 	// cancelled and c is reused: the export gets its own context and copies.
-	id := c.Query("collection_id")
+	id := strings.Clone(c.Query("collection_id"))
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Context()), exportTimeout)
-	exp, err := h.svc.Export(ctx, id, fiber.Query[bool](c, "valid"))
+	exp, err := h.svc.Export(ctx, id, input.ExportOptions{ValidOnly: fiber.Query[bool](c, "valid"), CSV: format == "csv"})
 	if err != nil {
 		cancel()
 		return mapper.WriteError(c, err)
