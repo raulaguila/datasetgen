@@ -21,6 +21,8 @@ make admin-bootstrap # asks name, email and password of the first admin
 
 The API answers on `API_PORT` (9977 in the generated file). Swagger UI is at `/swagger/index.html` outside protected environments.
 
+The Go modules are downloaded during the image build with the CA bundle in `GO_CA_BUNDLE` (default `/etc/ssl/certs/ca-certificates.crt`), passed as a build secret. Behind a proxy that inspects TLS, point it at a bundle that also holds the proxy's certificate; TLS checks stay on.
+
 The network has a fixed range (`DOCKER_SUBNET`, default `172.30.97.0/24`) and the backend trusts `X-Real-IP` only from `WEB_IP` (default `172.30.97.10`), the address of the web container. Moving an existing stack to the fixed range needs `make compose-down` first, since Docker cannot change the range of a live network.
 
 `make migrate-down` reverses one migration.
