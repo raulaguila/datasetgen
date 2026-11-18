@@ -101,6 +101,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {/* Top-level pages already name themselves in the h1; the trail starts one level down. */}
               {crumb && parent ? (
                 <nav aria-label="breadcrumb" className="flex min-w-0 items-center gap-1.5">
+                  {/* A collection's pages start at the list, so the trail says where you are and the way back. */}
+                  {parent.href.startsWith("/collections/") && (
+                    <>
+                      <Link href="/collections" className="hidden shrink-0 text-muted-foreground hover:text-foreground hover:underline sm:inline">{t("nav.collections")}</Link>
+                      <ChevronRight className="hidden size-3.5 shrink-0 text-muted-foreground sm:block" />
+                    </>
+                  )}
                   <Link href={parent.href} className="min-w-0 truncate font-medium hover:underline">{parent.label}</Link>
                   {/* On a phone the h1 names the page; the trail keeps only its parent. */}
                   <ChevronRight className="hidden size-3.5 shrink-0 text-muted-foreground sm:block" />

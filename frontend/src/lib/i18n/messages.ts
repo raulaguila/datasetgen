@@ -11,7 +11,6 @@ export const LOCALES: { value: Locale; label: string; flag: string }[] = [
 const ptBR = {
   "nav.collections": "Coleções",
   "nav.manage": "Gerenciar",
-  "nav.all_collections": "Todas as coleções",
   "nav.manage_collections": "Gerenciar coleções",
   "nav.section.data": "Dados",
   "nav.section.flows": "Fluxos",
@@ -1624,7 +1623,6 @@ export type MessageKey = keyof typeof ptBR;
 const enUS: Record<MessageKey, string> = {
   "nav.collections": "Collections",
   "nav.manage": "Manage",
-  "nav.all_collections": "All collections",
   "nav.manage_collections": "Manage collections",
   "nav.section.data": "Data",
   "nav.section.flows": "Flows",
