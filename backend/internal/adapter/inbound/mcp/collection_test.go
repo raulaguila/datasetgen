@@ -197,3 +197,53 @@ func TestCollectionIDCanBeCorrectedUsingOverview(t *testing.T) {
 		t.Fatalf("hidden collection was exposed: %s", result)
 	}
 }
+
+type everywhereCollectionsStub struct{ collectionReadStub }
+
+func (everywhereCollectionsStub) Options(context.Context) ([]domain.Collection, error) {
+	return []domain.Collection{{ID: testCollectionID, Name: "Example collection"}}, nil
+}
+
+func TestSearchEverywhereMinimumLength(t *testing.T) {
+	records := &collectionRecordsStub{}
+	h := Handler(&input.Application{Integrations: collectionKeyStub{}, Collections: everywhereCollectionsStub{}, Records: records}, "test")
+
+	listed := collectionRPC(t, h, "tools/list", map[string]any{})
+	type tool struct {
+		Name        string `json:"name"`
+		InputSchema struct {
+			Properties map[string]struct {
+				Type      json.RawMessage `json:"type"`
+				MinLength *int            `json:"minLength"`
+			} `json:"properties"`
+			Required []string `json:"required"`
+		} `json:"inputSchema"`
+	}
+	var tools []tool
+	if err := json.Unmarshal(listed["tools"], &tools); err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(tools, func(x tool) bool { return x.Name == "search_everywhere" })
+	if i < 0 {
+		t.Fatal("search_everywhere not listed")
+	}
+	search := tools[i].InputSchema.Properties["search"]
+	if string(search.Type) != `"string"` || search.MinLength == nil || *search.MinLength != 2 || !slices.Contains(tools[i].InputSchema.Required, "search") {
+		t.Fatalf("search schema: type %s minLength %v required %v", search.Type, search.MinLength, tools[i].InputSchema.Required)
+	}
+
+	// Too short after trimming, counted in characters: refused before any record is read.
+	for _, bad := range []string{"", "á", " a "} {
+		result := collectionRPC(t, h, "tools/call", map[string]any{"name": "search_everywhere", "arguments": map[string]any{"search": bad}})
+		if string(result["isError"]) != "true" || records.listed != 0 {
+			t.Fatalf("%q accepted (listed %d): %s", bad, records.listed, result)
+		}
+	}
+	for _, good := range []string{"ab", " aí "} {
+		before := records.listed
+		result := collectionRPC(t, h, "tools/call", map[string]any{"name": "search_everywhere", "arguments": map[string]any{"search": good}})
+		if string(result["isError"]) == "true" || records.listed != before+1 {
+			t.Fatalf("%q refused: %s", good, result)
+		}
+	}
+}

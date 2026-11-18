@@ -8,7 +8,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
@@ -40,7 +42,7 @@ func (t tools) addRecordTools(s *mcp.Server) {
 		Annotations: readOnly}, t.listViews)
 	mcp.AddTool(s, &mcp.Tool{Name: "search_everywhere", Description: "Find free text in every collection this key reaches at once, when you do not know which collection holds it: " +
 		"per collection with matches, how many and the newest 3. Then search that collection with search_records.",
-		Annotations: readOnly}, t.searchEverywhere)
+		InputSchema: everywhereSchema(), Annotations: readOnly}, t.searchEverywhere)
 	mcp.AddTool(s, &mcp.Tool{Name: "list_trash", Description: "The newest 50 records in a collection's trash, with when and by whom they were deleted. Needs write access.",
 		Annotations: readOnly}, t.listTrash)
 
@@ -404,9 +406,23 @@ type everywhereIn struct {
 
 const everywhereShown = 3
 
+// everywhereMin is the shortest search, in characters after trimming: one letter would match nearly every record.
+const everywhereMin = 2
+
+// everywhereSchema publishes the minimum, so clients can check the search before calling.
+func everywhereSchema() *jsonschema.Schema {
+	s, err := jsonschema.For[everywhereIn](nil)
+	if err != nil {
+		panic(err) // a fixed struct: fails at startup or never
+	}
+	s.Properties["search"].MinLength = pointer.Of(everywhereMin)
+	return s
+}
+
 func (t tools) searchEverywhere(ctx context.Context, _ *mcp.CallToolRequest, in everywhereIn) (*mcp.CallToolResult, any, error) {
-	if len(strings.TrimSpace(in.Search)) < 2 {
-		return nil, nil, apperror.New(apperror.CodeInvalidInput, "search needs at least 2 characters").WithField("search")
+	// The schema counts spaces too: " a " passes it and is refused here, by characters, not bytes ("á" is one).
+	if utf8.RuneCountInString(strings.TrimSpace(in.Search)) < everywhereMin {
+		return nil, nil, apperror.New(apperror.CodeInvalidInput, fmt.Sprintf("search needs at least %d characters", everywhereMin)).WithField("search")
 	}
 	key, _ := reqctx.Key(ctx)
 	// shortcut: picks names from the member's first 1000 collections (Options); a key reaches at most 50.
