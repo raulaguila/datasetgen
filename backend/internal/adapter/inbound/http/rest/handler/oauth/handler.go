@@ -23,12 +23,6 @@ func New(svc input.IntegrationService) *Handler {
 	return &Handler{svc: svc}
 }
 
-func fail(c fiber.Ctx, err error) error { return mapper.WriteError(c, err) }
-
-func badBody(c fiber.Ctx) error {
-	return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
-}
-
 // Routes mounts on /v1/oauth. register and token are public (the
 // assistant calls them, rate limited); client and approve are the member's
 // consent page, behind the session.
@@ -60,7 +54,7 @@ func oauthError(c fiber.Ctx, code string, err error) error {
 	if errors.As(err, &app) {
 		msg = app.Message
 	} else if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": code, "error_description": msg})
 }
@@ -111,7 +105,7 @@ func (h *Handler) OAuthRegister(c fiber.Ctx) error {
 func (h *Handler) OAuthClient(c fiber.Ctx) error {
 	name, err := h.svc.OAuthClient(c.Context(), c.Query("client_id"), c.Query("redirect_uri"))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(fiber.Map{"client_name": name})
 }
@@ -143,14 +137,14 @@ type oauthApproveDTO struct {
 func (h *Handler) OAuthApprove(c fiber.Ctx) error {
 	var body oauthApproveDTO
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	code, err := h.svc.ApproveOAuth(c.Context(), input.OAuthGrant{
 		ClientID: body.ClientID, RedirectURI: body.RedirectURI, Challenge: body.CodeChallenge, ChallengeMethod: body.CodeChallengeMethod,
 		Name: body.Name, Scopes: apikey.KeyScopes(body.Scopes), Days: body.ExpiresInDays,
 	})
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(fiber.Map{"code": code})
 }

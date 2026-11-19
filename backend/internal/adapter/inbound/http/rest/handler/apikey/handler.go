@@ -11,7 +11,6 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
-	"github.com/raulaguila/dataset/pkg/apperror"
 )
 
 type Handler struct {
@@ -34,12 +33,6 @@ func (h *Handler) MeRoutes(r fiber.Router) {
 func (h *Handler) CollectionRoutes(at fiber.Router) {
 	at.Get("/keys", h.Keys)
 	at.Delete("/keys/:keyId", h.DeleteKey)
-}
-
-func fail(c fiber.Ctx, err error) error { return mapper.WriteError(c, err) }
-
-func badBody(c fiber.Ctx) error {
-	return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 }
 
 // ScopeDTO is one collection a key reaches.
@@ -94,7 +87,7 @@ func keyList(keys []domain.APIKey) fiber.Map {
 func (h *Handler) Keys(c fiber.Ctx) error {
 	keys, err := h.svc.Keys(c.Context(), middleware.CollectionID(c))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(keyList(keys))
 }
@@ -115,7 +108,7 @@ func (h *Handler) Keys(c fiber.Ctx) error {
 // @Router /v1/collections/{owner}/{slug}/keys/{keyId} [delete]
 func (h *Handler) DeleteKey(c fiber.Ctx) error {
 	if err := h.svc.DeleteKey(c.Context(), middleware.CollectionID(c), c.Params("keyId")); err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
@@ -158,7 +151,7 @@ type newKeyDTO struct {
 func (h *Handler) MyKeys(c fiber.Ctx) error {
 	keys, err := h.svc.MyKeys(c.Context())
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(keyList(keys))
 }
@@ -181,11 +174,11 @@ func (h *Handler) MyKeys(c fiber.Ctx) error {
 func (h *Handler) CreateMyKey(c fiber.Ctx) error {
 	var body keyBodyDTO
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	k, err := h.svc.CreateMyKey(c.Context(), body.Name, body.scopes(), body.ExpiresInDays)
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(newKeyDTO{keyDTO: toKeyDTO(k.Key), Secret: k.Secret})
 }
@@ -207,11 +200,11 @@ func (h *Handler) CreateMyKey(c fiber.Ctx) error {
 func (h *Handler) UpdateMyKey(c fiber.Ctx) error {
 	var body keyBodyDTO
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	k, err := h.svc.UpdateMyKey(c.Context(), c.Params("keyId"), body.Name, body.scopes(), body.RenewDays)
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(toKeyDTO(*k))
 }
@@ -228,7 +221,7 @@ func (h *Handler) UpdateMyKey(c fiber.Ctx) error {
 // @Router /v1/me/keys/{keyId} [delete]
 func (h *Handler) DeleteMyKey(c fiber.Ctx) error {
 	if err := h.svc.DeleteMyKey(c.Context(), c.Params("keyId")); err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }

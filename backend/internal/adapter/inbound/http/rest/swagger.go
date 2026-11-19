@@ -165,7 +165,6 @@ func mcpListTools(app *fiber.App, h fiber.Handler) {
 //	@Security		ApiKeyAuth
 //	@Failure		400 {object} mapper.errorBody
 //	@Failure		401 {string} string
-//	@Failure		404 {object} mapper.errorBody
 //	@Failure		429 {object} mapper.errorBody
 //	@ID		mcpCallTool
 //	@Router		/v1/mcp/tools/{name} [post]

@@ -10,7 +10,6 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
-	"github.com/raulaguila/dataset/pkg/apperror"
 )
 
 type Handler struct {
@@ -30,12 +29,6 @@ func (h *Handler) Routes(at fiber.Router) {
 	at.Post("/webhooks/:hookId/test", h.TestWebhook)
 	at.Get("/webhooks/:hookId/deliveries", h.Deliveries)
 	at.Post("/webhooks/:hookId/deliveries/:deliveryId/redeliver", h.Redeliver)
-}
-
-func fail(c fiber.Ctx, err error) error { return mapper.WriteError(c, err) }
-
-func badBody(c fiber.Ctx) error {
-	return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 }
 
 type webhookDTO struct {
@@ -71,7 +64,7 @@ func toHookDTO(w domain.Webhook) webhookDTO {
 func (h *Handler) Webhooks(c fiber.Ctx) error {
 	hooks, err := h.svc.Webhooks(c.Context(), middleware.CollectionID(c))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	out := make([]webhookDTO, 0, len(hooks))
 	for _, w := range hooks {
@@ -111,11 +104,11 @@ type newHookDTO struct {
 func (h *Handler) CreateWebhook(c fiber.Ctx) error {
 	var body createHookDTO
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	w, err := h.svc.CreateWebhook(c.Context(), middleware.CollectionID(c), body.URL, body.Events)
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(newHookDTO{webhookDTO: toHookDTO(w.Webhook), Secret: w.Secret})
 }
@@ -148,11 +141,11 @@ type updateHookDTO struct {
 func (h *Handler) UpdateWebhook(c fiber.Ctx) error {
 	var body updateHookDTO
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	w, err := h.svc.UpdateWebhook(c.Context(), middleware.CollectionID(c), c.Params("hookId"), body.URL, body.Events, body.Enabled)
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(toHookDTO(*w))
 }
@@ -172,7 +165,7 @@ func (h *Handler) UpdateWebhook(c fiber.Ctx) error {
 // @Router /v1/collections/{owner}/{slug}/webhooks/{hookId} [delete]
 func (h *Handler) DeleteWebhook(c fiber.Ctx) error {
 	if err := h.svc.DeleteWebhook(c.Context(), middleware.CollectionID(c), c.Params("hookId")); err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
@@ -194,7 +187,7 @@ func (h *Handler) DeleteWebhook(c fiber.Ctx) error {
 func (h *Handler) TestWebhook(c fiber.Ctx) error {
 	w, err := h.svc.TestWebhook(c.Context(), middleware.CollectionID(c), c.Params("hookId"))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(toHookDTO(*w))
 }
@@ -228,7 +221,7 @@ func toDeliveryDTO(d domain.WebhookDelivery) deliveryDTO {
 func (h *Handler) Deliveries(c fiber.Ctx) error {
 	list, err := h.svc.Deliveries(c.Context(), middleware.CollectionID(c), c.Params("hookId"))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	out := make([]deliveryDTO, 0, len(list))
 	for _, d := range list {
@@ -255,7 +248,7 @@ func (h *Handler) Deliveries(c fiber.Ctx) error {
 func (h *Handler) Redeliver(c fiber.Ctx) error {
 	d, err := h.svc.Redeliver(c.Context(), middleware.CollectionID(c), c.Params("hookId"), c.Params("deliveryId"))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(toDeliveryDTO(*d))
 }

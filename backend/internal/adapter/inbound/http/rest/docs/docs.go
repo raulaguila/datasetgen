@@ -5528,6 +5528,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/Error"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
@@ -5686,12 +5692,6 @@ const docTemplate = `{
                         "description": "Unauthorized",
                         "schema": {
                             "type": "string"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
@@ -7430,6 +7430,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/Error"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
@@ -7710,6 +7716,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/Error"
                         }

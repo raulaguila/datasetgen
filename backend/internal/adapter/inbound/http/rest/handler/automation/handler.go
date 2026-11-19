@@ -11,7 +11,6 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
-	"github.com/raulaguila/dataset/pkg/apperror"
 )
 
 type Handler struct {
@@ -29,12 +28,6 @@ func (h *Handler) Routes(at fiber.Router) {
 	at.Put("/automations/:autoId", h.UpdateAutomation)
 	at.Delete("/automations/:autoId", h.DeleteAutomation)
 	at.Post("/automations/:autoId/run", h.RunAutomation)
-}
-
-func fail(c fiber.Ctx, err error) error { return mapper.WriteError(c, err) }
-
-func badBody(c fiber.Ctx) error {
-	return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 }
 
 type automationDTO struct {
@@ -87,7 +80,7 @@ func (b automationBody) input() input.AutomationInput {
 func (h *Handler) Automations(c fiber.Ctx) error {
 	list, err := h.svc.Automations(c.Context(), middleware.CollectionID(c))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	out := make([]automationDTO, 0, len(list))
 	for _, a := range list {
@@ -116,11 +109,11 @@ func (h *Handler) Automations(c fiber.Ctx) error {
 func (h *Handler) CreateAutomation(c fiber.Ctx) error {
 	var body automationBody
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	a, err := h.svc.CreateAutomation(c.Context(), middleware.CollectionID(c), body.input())
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(toAutomationDTO(*a))
 }
@@ -145,11 +138,11 @@ func (h *Handler) CreateAutomation(c fiber.Ctx) error {
 func (h *Handler) UpdateAutomation(c fiber.Ctx) error {
 	var body automationBody
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	a, err := h.svc.UpdateAutomation(c.Context(), middleware.CollectionID(c), c.Params("autoId"), body.input())
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(toAutomationDTO(*a))
 }
@@ -169,7 +162,7 @@ func (h *Handler) UpdateAutomation(c fiber.Ctx) error {
 // @Router /v1/collections/{owner}/{slug}/automations/{autoId} [delete]
 func (h *Handler) DeleteAutomation(c fiber.Ctx) error {
 	if err := h.svc.DeleteAutomation(c.Context(), middleware.CollectionID(c), c.Params("autoId")); err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
@@ -191,7 +184,7 @@ func (h *Handler) DeleteAutomation(c fiber.Ctx) error {
 func (h *Handler) RunAutomation(c fiber.Ctx) error {
 	a, err := h.svc.RunAutomation(c.Context(), middleware.CollectionID(c), c.Params("autoId"))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(toAutomationDTO(*a))
 }

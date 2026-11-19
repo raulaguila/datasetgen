@@ -11,7 +11,6 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
-	"github.com/raulaguila/dataset/pkg/apperror"
 )
 
 type Handler struct {
@@ -29,12 +28,6 @@ func (h *Handler) Routes(at fiber.Router) {
 	at.Get("/views", h.Views)
 	at.Post("/views", h.CreateView)
 	at.Delete("/views/:viewId", h.DeleteView)
-}
-
-func fail(c fiber.Ctx, err error) error { return mapper.WriteError(c, err) }
-
-func badBody(c fiber.Ctx) error {
-	return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 }
 
 type viewDTO struct {
@@ -66,7 +59,7 @@ func toViewDTO(v domain.SavedView) viewDTO {
 func (h *Handler) Dashboard(c fiber.Ctx) error {
 	widgets, err := h.svc.Dashboard(c.Context(), middleware.CollectionID(c))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(fiber.Map{"widgets": widgets})
 }
@@ -93,10 +86,10 @@ type dashboardDTO struct {
 func (h *Handler) SaveDashboard(c fiber.Ctx) error {
 	var body dashboardDTO
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	if err := h.svc.SaveDashboard(c.Context(), middleware.CollectionID(c), body.Widgets); err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
@@ -117,7 +110,7 @@ func (h *Handler) SaveDashboard(c fiber.Ctx) error {
 func (h *Handler) Views(c fiber.Ctx) error {
 	items, err := h.svc.Views(c.Context(), middleware.CollectionID(c))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	out := make([]viewDTO, 0, len(items))
 	for _, v := range items {
@@ -151,11 +144,11 @@ type createViewDTO struct {
 func (h *Handler) CreateView(c fiber.Ctx) error {
 	var body createViewDTO
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	v, err := h.svc.CreateView(c.Context(), middleware.CollectionID(c), body.Name, body.Query, body.Shared)
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(toViewDTO(*v))
 }
@@ -175,7 +168,7 @@ func (h *Handler) CreateView(c fiber.Ctx) error {
 // @Router /v1/collections/{owner}/{slug}/views/{viewId} [delete]
 func (h *Handler) DeleteView(c fiber.Ctx) error {
 	if err := h.svc.DeleteView(c.Context(), middleware.CollectionID(c), c.Params("viewId")); err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }

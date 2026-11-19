@@ -10,7 +10,6 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
-	"github.com/raulaguila/dataset/pkg/apperror"
 )
 
 type Handler struct {
@@ -26,12 +25,6 @@ func (h *Handler) Routes(at fiber.Router) {
 	at.Get("/shares", h.Shares)
 	at.Post("/shares", h.CreateShare)
 	at.Delete("/shares/:shareId", h.DeleteShare)
-}
-
-func fail(c fiber.Ctx, err error) error { return mapper.WriteError(c, err) }
-
-func badBody(c fiber.Ctx) error {
-	return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 }
 
 type shareDTO struct {
@@ -63,7 +56,7 @@ func toShareDTO(s domain.Share) shareDTO {
 func (h *Handler) Shares(c fiber.Ctx) error {
 	shares, err := h.svc.Shares(c.Context(), middleware.CollectionID(c))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	out := make([]shareDTO, 0, len(shares))
 	for _, s := range shares {
@@ -94,11 +87,11 @@ func (h *Handler) CreateShare(c fiber.Ctx) error {
 		ExpiresInDays int    `json:"expires_in_days"`
 	}
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	s, err := h.svc.CreateShare(c.Context(), middleware.CollectionID(c), body.Kind, body.ExpiresInDays)
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(toShareDTO(*s))
 }
@@ -118,7 +111,7 @@ func (h *Handler) CreateShare(c fiber.Ctx) error {
 // @Router /v1/collections/{owner}/{slug}/shares/{shareId} [delete]
 func (h *Handler) DeleteShare(c fiber.Ctx) error {
 	if err := h.svc.DeleteShare(c.Context(), middleware.CollectionID(c), c.Params("shareId")); err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }

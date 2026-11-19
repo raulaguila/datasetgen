@@ -31,8 +31,6 @@ func (h *Handler) Routes(r fiber.Router) {
 	r.Get("/:id", h.Download)
 }
 
-func fail(c fiber.Ctx, err error) error { return mapper.WriteError(c, err) }
-
 type fileDTO struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -60,7 +58,7 @@ func (h *Handler) Upload(c fiber.Ctx) error {
 	contentType, _, _ := mime.ParseMediaType(c.Get(fiber.HeaderContentType))
 	f, err := h.svc.UploadFile(c.Context(), middleware.CollectionID(c), c.Query("name"), contentType, c.Body())
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(fileDTO{ID: f.ID, Name: f.Name, Size: f.Size, Type: f.ContentType})
 }
@@ -76,6 +74,7 @@ var inline = []string{"image/png", "image/jpeg", "image/gif", "image/webp"}
 // @Success 200 {file} binary
 // @Security ApiKeyAuth
 // @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
 // @ID fileDownload
@@ -83,7 +82,7 @@ var inline = []string{"image/png", "image/jpeg", "image/gif", "image/webp"}
 func (h *Handler) Download(c fiber.Ctx) error {
 	f, data, err := h.svc.File(c.Context(), c.Params("id"))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	disposition := "attachment"
 	contentType := f.ContentType

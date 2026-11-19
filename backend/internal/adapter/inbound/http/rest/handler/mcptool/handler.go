@@ -12,7 +12,6 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
-	"github.com/raulaguila/dataset/pkg/apperror"
 )
 
 type Handler struct {
@@ -36,12 +35,6 @@ func (h *Handler) Routes(at fiber.Router) {
 // KeyRoutes mounts one key's call log on /v1/me/keys.
 func (h *Handler) KeyRoutes(r fiber.Router) {
 	r.Get("/:keyId/calls", h.KeyMCPCalls)
-}
-
-func fail(c fiber.Ctx, err error) error { return mapper.WriteError(c, err) }
-
-func badBody(c fiber.Ctx) error {
-	return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 }
 
 type mcpParamDTO struct {
@@ -118,7 +111,7 @@ func (b mcpToolBody) input() input.MCPToolInput {
 func (h *Handler) MCPTools(c fiber.Ctx) error {
 	list, err := h.svc.MCPTools(c.Context(), middleware.CollectionID(c))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	out := make([]mcpToolDTO, 0, len(list))
 	for _, t := range list {
@@ -148,11 +141,11 @@ func (h *Handler) MCPTools(c fiber.Ctx) error {
 func (h *Handler) CreateMCPTool(c fiber.Ctx) error {
 	var body mcpToolBody
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	t, err := h.svc.CreateMCPTool(c.Context(), middleware.CollectionID(c), body.input())
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(toMCPToolDTO(*t))
 }
@@ -177,11 +170,11 @@ func (h *Handler) CreateMCPTool(c fiber.Ctx) error {
 func (h *Handler) UpdateMCPTool(c fiber.Ctx) error {
 	var body mcpToolBody
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	t, err := h.svc.UpdateMCPTool(c.Context(), middleware.CollectionID(c), c.Params("toolId"), body.input())
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(toMCPToolDTO(*t))
 }
@@ -201,7 +194,7 @@ func (h *Handler) UpdateMCPTool(c fiber.Ctx) error {
 // @Router /v1/collections/{owner}/{slug}/mcp-tools/{toolId} [delete]
 func (h *Handler) DeleteMCPTool(c fiber.Ctx) error {
 	if err := h.svc.DeleteMCPTool(c.Context(), middleware.CollectionID(c), c.Params("toolId")); err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
@@ -243,11 +236,11 @@ type mcpTestDTO struct {
 func (h *Handler) TestMCPTool(c fiber.Ctx) error {
 	var body mcpTestBody
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	items, total, page, err := h.svc.TestMCPTool(c.Context(), middleware.CollectionID(c), body.Tool.input(), body.Args)
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	out := mcpTestDTO{Total: total, Page: page, Records: make([]mcpTestRecordDTO, len(items))}
 	for i, r := range items {
@@ -285,7 +278,7 @@ type mcpCallDTO struct {
 func (h *Handler) MCPCalls(c fiber.Ctx) error {
 	list, err := h.svc.MCPCalls(c.Context(), middleware.CollectionID(c))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(fiber.Map{"items": toMCPCallDTOs(list)})
 }
@@ -305,7 +298,7 @@ func (h *Handler) MCPCalls(c fiber.Ctx) error {
 func (h *Handler) KeyMCPCalls(c fiber.Ctx) error {
 	list, err := h.svc.KeyMCPCalls(c.Context(), c.Params("keyId"))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(fiber.Map{"items": toMCPCallDTOs(list)})
 }

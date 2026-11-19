@@ -20,6 +20,11 @@ type errorBody struct {
 	Details map[string]any `json:"details,omitempty"`
 } // @name Error
 
+// BadBody answers 400 INVALID_INPUT for a body that does not decode.
+func BadBody(c fiber.Ctx) error {
+	return WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
+}
+
 // WriteError maps apperror (or generic error) to an HTTP JSON response.
 func WriteError(c fiber.Ctx, err error) error {
 	var appErr *apperror.Error

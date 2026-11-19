@@ -146,6 +146,7 @@ func (h *Handler) Comments(c fiber.Ctx) error {
 // @Security ApiKeyAuth
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
 // @ID recordAddComment
@@ -524,6 +525,7 @@ type bulkDTO struct {
 // @Security ApiKeyAuth
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
 // @Failure 422 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
 // @ID recordBulkUpdate

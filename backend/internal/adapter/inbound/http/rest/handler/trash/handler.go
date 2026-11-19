@@ -11,7 +11,6 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
-	"github.com/raulaguila/dataset/pkg/apperror"
 )
 
 type Handler struct {
@@ -36,12 +35,6 @@ func (h *Handler) CollectionRoutes(at fiber.Router) {
 	at.Get("/trash", h.TrashedRecords)
 	at.Post("/trash/restore", h.RestoreRecords)
 	at.Post("/trash/purge", h.PurgeRecords)
-}
-
-func fail(c fiber.Ctx, err error) error { return mapper.WriteError(c, err) }
-
-func badBody(c fiber.Ctx) error {
-	return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 }
 
 type idsDTO struct {
@@ -76,7 +69,7 @@ type trashedRecordDTO struct {
 func (h *Handler) TrashedRecords(c fiber.Ctx) error {
 	items, err := h.svc.TrashedRecords(c.Context(), middleware.CollectionID(c))
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	out := make([]trashedRecordDTO, 0, len(items))
 	for _, r := range items {
@@ -109,11 +102,11 @@ type countDTO struct {
 func (h *Handler) RestoreRecords(c fiber.Ctx) error {
 	var body restoreDTO
 	if err := c.Bind().Body(&body); err != nil {
-		return badBody(c)
+		return mapper.BadBody(c)
 	}
 	n, err := h.svc.RestoreRecords(c.Context(), middleware.CollectionID(c), body.IDs, body.Values)
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(countDTO{Count: int64(n)})
 }
@@ -139,12 +132,12 @@ func (h *Handler) PurgeRecords(c fiber.Ctx) error {
 	var body idsDTO
 	if len(c.Body()) > 0 {
 		if err := c.Bind().Body(&body); err != nil {
-			return badBody(c)
+			return mapper.BadBody(c)
 		}
 	}
 	n, err := h.svc.PurgeRecords(c.Context(), middleware.CollectionID(c), body.IDs)
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.JSON(countDTO{Count: n})
 }
@@ -169,7 +162,7 @@ type trashedCollectionDTO struct {
 func (h *Handler) TrashedCollections(c fiber.Ctx) error {
 	items, err := h.svc.TrashedCollections(c.Context())
 	if err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	out := make([]trashedCollectionDTO, 0, len(items))
 	for _, t := range items {
@@ -190,7 +183,7 @@ func (h *Handler) TrashedCollections(c fiber.Ctx) error {
 // @Router /v1/collections/trash/{id}/restore [post]
 func (h *Handler) RestoreCollection(c fiber.Ctx) error {
 	if err := h.svc.RestoreCollection(c.Context(), c.Params("id")); err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
@@ -207,7 +200,7 @@ func (h *Handler) RestoreCollection(c fiber.Ctx) error {
 // @Router /v1/collections/trash/{id} [delete]
 func (h *Handler) PurgeCollection(c fiber.Ctx) error {
 	if err := h.svc.PurgeCollection(c.Context(), c.Params("id")); err != nil {
-		return fail(c, err)
+		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
