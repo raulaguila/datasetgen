@@ -33,19 +33,6 @@ func ActionNames(a Action) []string {
 	return out
 }
 
-// ParseActions is the inverse of ActionNames. It reports false on an unknown name.
-func ParseActions(names []string) (Action, bool) {
-	var out Action
-	for _, name := range names {
-		action, ok := actionNames[name]
-		if !ok {
-			return 0, false
-		}
-		out |= action
-	}
-	return out, true
-}
-
 // Resources the routes check, or the sentinel "*". A grant may name only these
 // (chk_usr_role_permission_resource); collections and records follow membership.
 const (

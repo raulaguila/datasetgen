@@ -56,10 +56,6 @@ func TestFormulas(t *testing.T) {
 			t.Errorf("%q: want a parse error", src)
 		}
 	}
-	f, _ := ParseFormula("a * (b + c) + IF(d, e, 1)")
-	if got := f.Fields(); len(got) != 5 || got[0] != "a" || got[4] != "e" {
-		t.Errorf("fields: %v", got)
-	}
 }
 
 func TestAutoKeys(t *testing.T) {

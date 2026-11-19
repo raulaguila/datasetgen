@@ -332,29 +332,6 @@ func (f *Formula) Eval(vals map[string]json.RawMessage, today time.Time) (any, b
 	return v, v != nil
 }
 
-// Fields lists the keys the formula reads.
-func (f *Formula) Fields() []string {
-	var out []string
-	var walk func(n node)
-	walk = func(n node) {
-		switch x := n.(type) {
-		case field:
-			out = append(out, string(x))
-		case neg:
-			walk(x.x)
-		case bin:
-			walk(x.l)
-			walk(x.r)
-		case call:
-			for _, a := range x.args {
-				walk(a)
-			}
-		}
-	}
-	walk(f.root)
-	return out
-}
-
 type parser struct {
 	src string
 	pos int

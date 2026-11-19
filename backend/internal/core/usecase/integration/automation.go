@@ -256,19 +256,19 @@ func (s *Service) RunAutomation(ctx context.Context, collectionID, id string) (*
 }
 
 func (s *Service) Schedule(ctx context.Context) error {
-	ids, err := s.Store.Integrations().DueDaily(ctx)
-	if err != nil {
-		return err
-	}
-	for _, id := range ids {
-		err := s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
-			return policy.EnqueueJob(ctx, uow, policy.JobAutomation, policy.AutomationJob{AutomationID: id})
-		})
+	// One transaction: an automation is marked run today only with its job queued.
+	return s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		ids, err := uow.Integrations().DueDaily(ctx)
 		if err != nil {
 			return err
 		}
-	}
-	return nil
+		for _, id := range ids {
+			if err := policy.EnqueueJob(ctx, uow, policy.JobAutomation, policy.AutomationJob{AutomationID: id}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *Service) runJob(ctx context.Context, payload []byte) error {

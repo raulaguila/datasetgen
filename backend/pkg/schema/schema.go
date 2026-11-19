@@ -270,22 +270,6 @@ func RefKeys(raw []byte) map[string]string {
 	return maps.Clone(Metadata(raw).Refs)
 }
 
-// ItemRefKeys finds references inside a list of objects: for each top-level
-// array property, its item subfields marked with RefKeyword and the
-// collection each names.
-func ItemRefKeys(raw []byte) map[string]map[string]string {
-	out := maps.Clone(Metadata(raw).ItemRefs)
-	for k, v := range out {
-		out[k] = maps.Clone(v)
-	}
-	return out
-}
-
-// FileKeys lists the properties holding attached files, sorted.
-func FileKeys(raw []byte) []string {
-	return slices.Clone(Metadata(raw).Files)
-}
-
 // Optional drops keys from the top-level "required" list; raw comes back
 // unchanged when none of them is required.
 func Optional(raw []byte, keys []string) []byte {
