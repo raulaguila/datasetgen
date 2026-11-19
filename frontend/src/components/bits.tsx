@@ -16,7 +16,7 @@ import type { UserStatus } from "@/lib/api/types";
  */
 export function useDocumentTitle(title?: string) {
   useEffect(() => {
-    if (title) document.title = `${title} - ${APP_NAME}`;
+    if (title) document.title = `${APP_NAME} - ${title}`;
   }, [title]);
 }
 
