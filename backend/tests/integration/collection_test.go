@@ -440,8 +440,16 @@ func TestRecordFixesAndDuplicate(t *testing.T) {
 	if run := runQuality(helper, t, collections, c.ID); run.InvalidCount != 2 {
 		t.Fatalf("quality: %+v", run)
 	}
+	var invalidIDs []string
+	if err := testDB.Raw(`SELECT id::text FROM app.record WHERE collection_id = ?`, c.ID).Scan(&invalidIDs).Error; err != nil {
+		t.Fatal(err)
+	}
 	if n, err := collections.DeleteInvalid(helper, c.ID); err != nil || n != 2 {
 		t.Fatalf("delete invalid: %d, %v", n, err)
+	}
+	var leftVersions int64
+	if err := testDB.Raw(`SELECT count(*) FROM app.record_version WHERE record_id::text IN ?`, invalidIDs).Scan(&leftVersions).Error; err != nil || leftVersions != 0 || len(invalidIDs) != 2 {
+		t.Fatalf("versions left after delete invalid: %d of %v, %v", leftVersions, invalidIDs, err)
 	}
 
 	if _, err := records.Create(owner, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{"nome":"z"}`)}); err != nil {

@@ -828,10 +828,16 @@ func (r *Repository) Fix(ctx context.Context, collectionID string, fix domain.Re
 
 func (r *Repository) DeleteListed(ctx context.Context, collectionID string, ids []string, unchangedSince time.Time) ([]string, error) {
 	var deleted []string
+	// The versions go too: record_version has no foreign key, so nothing else would remove them.
 	err := r.db.WithContext(ctx).Raw(`
-		DELETE FROM app.record WHERE collection_id = ? AND updated_at <= ?
-			AND id IN (SELECT jsonb_array_elements_text(?::jsonb)::uuid)
-		RETURNING id::text`, collectionID, unchangedSince, jsonList(ids)).Find(&deleted).Error
+		WITH gone AS (
+			DELETE FROM app.record WHERE collection_id = ? AND updated_at <= ?
+				AND id IN (SELECT jsonb_array_elements_text(?::jsonb)::uuid)
+			RETURNING id
+		), versions AS (
+			DELETE FROM app.record_version WHERE record_id IN (SELECT id FROM gone)
+		)
+		SELECT id::text FROM gone`, collectionID, unchangedSince, jsonList(ids)).Find(&deleted).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "record")
 	}

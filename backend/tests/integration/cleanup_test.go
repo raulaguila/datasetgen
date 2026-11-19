@@ -2,11 +2,15 @@ package integration_test
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"strings"
 	"testing"
 
+	"github.com/raulaguila/dataset/internal/adapter/outbound/persistence/postgres/job"
 	"github.com/raulaguila/dataset/internal/core/domain"
+	"github.com/raulaguila/dataset/internal/core/port/input"
+	"github.com/raulaguila/dataset/pkg/reqctx"
 )
 
 func TestCleanupRemovesAbandonedSignups(t *testing.T) {
@@ -62,5 +66,53 @@ func TestCleanupRemovesOnlyOldHistory(t *testing.T) {
 	}
 	if len(left) != 1 || left[0] != recent {
 		t.Fatalf("left %v", left)
+	}
+}
+
+// The worker's hourly Cleanup empties the trash past its 30 days, versions included.
+func TestCleanupPurgesOldTrash(t *testing.T) {
+	e := newEnv(t)
+	collections, records := collectionServices(e)
+	owner := reqctx.WithActor(context.Background(), e.userID(t, e.activeUser(t)))
+	c, err := collections.Create(owner, input.CreateCollectionCommand{Name: "Purga", Schema: json.RawMessage(`{"type":"object"}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, data := range []string{`{"a":1}`, `{"a":2}`} {
+		r, err := records.Create(owner, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(data)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := records.Update(owner, input.UpdateRecordCommand{ID: r.ID, Data: json.RawMessage(`{"a":3}`)}); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, r.ID)
+	}
+	if err := records.DeleteMany(owner, ids); err != nil {
+		t.Fatal(err)
+	}
+	old, recent := ids[0], ids[1]
+	if err := testDB.Exec(`UPDATE app.record_trash SET deleted_at = now() - INTERVAL '31 days' WHERE id = ?`, old).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := job.NewRepository(testDB).Cleanup(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	count := func(table, id string) (n int64) {
+		col := "id"
+		if table == "app.record_version" {
+			col = "record_id"
+		}
+		if err := testDB.Table(table).Where(col+" = ?", id).Count(&n).Error; err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if count("app.record_trash", old) != 0 || count("app.record_version", old) != 0 {
+		t.Fatal("an old trashed record or its versions survived the cleanup")
+	}
+	if count("app.record_trash", recent) != 1 || count("app.record_version", recent) != 1 {
+		t.Fatal("the cleanup removed a recently trashed record")
 	}
 }
