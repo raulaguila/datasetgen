@@ -24,17 +24,18 @@ const docTemplate = `{
                     "Health"
                 ],
                 "summary": "Service status",
+                "operationId": "healthGet",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/health.responseDTO"
+                            "$ref": "#/definitions/Health"
                         }
                     },
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/health.responseDTO"
+                            "$ref": "#/definitions/Health"
                         }
                     }
                 }
@@ -54,6 +55,7 @@ const docTemplate = `{
                     "Audit"
                 ],
                 "summary": "List the audit log, newest first",
+                "operationId": "auditList",
                 "parameters": [
                     {
                         "type": "integer",
@@ -103,11 +105,11 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/audit.recordDTO"
+                                        "$ref": "#/definitions/AuditEntry"
                                     }
                                 },
                                 "pagination": {
-                                    "$ref": "#/definitions/mapper.PaginationDTO"
+                                    "$ref": "#/definitions/Pagination"
                                 }
                             }
                         }
@@ -115,25 +117,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -153,6 +155,7 @@ const docTemplate = `{
                     "Audit"
                 ],
                 "summary": "Download the audit log as CSV, newest first, with the filters of the list",
+                "operationId": "auditExport",
                 "parameters": [
                     {
                         "type": "string",
@@ -189,25 +192,25 @@ const docTemplate = `{
                     "400": {
                         "description": "bad filter, or more than 10000 records",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -225,6 +228,7 @@ const docTemplate = `{
                     "Registration"
                 ],
                 "summary": "Activate an account, set its password and, optionally, choose its username",
+                "operationId": "authActivate",
                 "parameters": [
                     {
                         "description": "Request",
@@ -232,7 +236,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.activateDTO"
+                            "$ref": "#/definitions/ActivateInput"
                         }
                     }
                 ],
@@ -243,25 +247,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "ALREADY_EXISTS: the username is taken",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -269,6 +273,7 @@ const docTemplate = `{
         },
         "/v1/auth/login": {
             "post": {
+                "description": "With two-step login on, a right password answers 401 MFA_REQUIRED; send the same body again with code (an authenticator or recovery code). Repeated failures lock the account for a while (429 with Retry-After).",
                 "consumes": [
                     "application/json"
                 ],
@@ -279,6 +284,7 @@ const docTemplate = `{
                     "Auth"
                 ],
                 "summary": "Log in",
+                "operationId": "authLogin",
                 "parameters": [
                     {
                         "description": "Request",
@@ -286,7 +292,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.loginDTO"
+                            "$ref": "#/definitions/LoginInput"
                         }
                     }
                 ],
@@ -294,25 +300,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/auth.tokenPairDTO"
+                            "$ref": "#/definitions/TokenPair"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "MFA_REQUIRED: send the same body again with code",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -332,6 +338,7 @@ const docTemplate = `{
                     "Auth"
                 ],
                 "summary": "End the current session",
+                "operationId": "authLogout",
                 "responses": {
                     "204": {
                         "description": "No Content"
@@ -339,13 +346,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -363,6 +370,7 @@ const docTemplate = `{
                     "Password reset"
                 ],
                 "summary": "Set a new password with a reset token",
+                "operationId": "authConfirmPasswordReset",
                 "parameters": [
                     {
                         "description": "Request",
@@ -370,7 +378,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.resetConfirmDTO"
+                            "$ref": "#/definitions/PasswordResetConfirmInput"
                         }
                     }
                 ],
@@ -381,19 +389,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -411,6 +419,7 @@ const docTemplate = `{
                     "Password reset"
                 ],
                 "summary": "Send a password reset email",
+                "operationId": "authRequestPasswordReset",
                 "parameters": [
                     {
                         "description": "Request",
@@ -418,7 +427,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.resetRequestDTO"
+                            "$ref": "#/definitions/PasswordResetRequestInput"
                         }
                     }
                 ],
@@ -440,13 +449,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -464,6 +473,7 @@ const docTemplate = `{
                     "Auth"
                 ],
                 "summary": "Rotate the refresh token",
+                "operationId": "authRefresh",
                 "parameters": [
                     {
                         "description": "Request",
@@ -471,7 +481,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.refreshDTO"
+                            "$ref": "#/definitions/RefreshInput"
                         }
                     }
                 ],
@@ -479,31 +489,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/auth.tokenPairDTO"
+                            "$ref": "#/definitions/TokenPair"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -521,6 +531,7 @@ const docTemplate = `{
                     "Registration"
                 ],
                 "summary": "Create an account and send its activation email",
+                "operationId": "authRegister",
                 "parameters": [
                     {
                         "description": "Request",
@@ -528,7 +539,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.registerDTO"
+                            "$ref": "#/definitions/RegisterInput"
                         }
                     }
                 ],
@@ -553,13 +564,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -574,11 +585,18 @@ const docTemplate = `{
                     "Auth"
                 ],
                 "summary": "Whether single sign-on is on, and its button label",
+                "operationId": "authSSOInfo",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/auth.ssoInfoDTO"
+                            "$ref": "#/definitions/SSOInfo"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -597,6 +615,7 @@ const docTemplate = `{
                     "Auth"
                 ],
                 "summary": "Finish single sign-on",
+                "operationId": "authSSOCallback",
                 "parameters": [
                     {
                         "description": "Request",
@@ -604,7 +623,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.ssoCallbackDTO"
+                            "$ref": "#/definitions/SSOCallbackInput"
                         }
                     }
                 ],
@@ -612,31 +631,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/auth.tokenPairDTO"
+                            "$ref": "#/definitions/TokenPair"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -652,23 +671,24 @@ const docTemplate = `{
                     "Auth"
                 ],
                 "summary": "Start single sign-on",
+                "operationId": "authSSOStart",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/auth.ssoStartDTO"
+                            "$ref": "#/definitions/SSOStart"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -688,6 +708,7 @@ const docTemplate = `{
                     "Collections"
                 ],
                 "summary": "List collections, with their record counts and without schemas",
+                "operationId": "collectionList",
                 "parameters": [
                     {
                         "type": "integer",
@@ -748,11 +769,11 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/collection.collectionDTO"
+                                        "$ref": "#/definitions/Collection"
                                     }
                                 },
                                 "pagination": {
-                                    "$ref": "#/definitions/mapper.PaginationDTO"
+                                    "$ref": "#/definitions/Pagination"
                                 }
                             }
                         }
@@ -760,25 +781,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -799,6 +820,7 @@ const docTemplate = `{
                     "Collections"
                 ],
                 "summary": "Create a collection; schema is a JSON Schema (draft 2020-12) without external $ref",
+                "operationId": "collectionCreate",
                 "parameters": [
                     {
                         "description": "Request",
@@ -806,7 +828,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/collection.createDTO"
+                            "$ref": "#/definitions/CollectionCreateInput"
                         }
                     }
                 ],
@@ -814,37 +836,37 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/collection.collectionDTO"
+                            "$ref": "#/definitions/Collection"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -857,6 +879,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Deleted collections go to the trash under /v1/collections/trash, where their owner restores them or deletes them for good. A deleted collection frees its address.",
                 "consumes": [
                     "application/json"
                 ],
@@ -867,6 +890,7 @@ const docTemplate = `{
                     "Collections"
                 ],
                 "summary": "Delete collections; all or none, and only collections without records",
+                "operationId": "collectionDelete",
                 "parameters": [
                     {
                         "description": "Collection IDs, 1 to 100",
@@ -874,7 +898,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/collection.idsDTO"
+                            "$ref": "#/definitions/CollectionIDs"
                         }
                     }
                 ],
@@ -885,43 +909,43 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
             }
         },
-        "/v1/collections/list": {
+        "/v1/collections/options": {
             "get": {
                 "security": [
                     {
@@ -935,6 +959,7 @@ const docTemplate = `{
                     "Collections"
                 ],
                 "summary": "List collections as id, name and the caller's role, for pickers (up to 1000, by name)",
+                "operationId": "collectionOptions",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -944,7 +969,7 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/collection.optionDTO"
+                                        "$ref": "#/definitions/CollectionOption"
                                     }
                                 }
                             }
@@ -953,19 +978,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -985,6 +1010,7 @@ const docTemplate = `{
                     "Trash"
                 ],
                 "summary": "Deleted collections the caller owns",
+                "operationId": "trashListCollections",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -994,10 +1020,22 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/tools.trashedCollectionDTO"
+                                        "$ref": "#/definitions/TrashedCollection"
                                     }
                                 }
                             }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -1014,6 +1052,7 @@ const docTemplate = `{
                     "Trash"
                 ],
                 "summary": "Delete a deleted collection for good, records included; owners",
+                "operationId": "trashPurgeCollection",
                 "parameters": [
                     {
                         "type": "string",
@@ -1026,6 +1065,24 @@ const docTemplate = `{
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
                     }
                 }
             }
@@ -1041,6 +1098,7 @@ const docTemplate = `{
                     "Trash"
                 ],
                 "summary": "Restore a deleted collection; owners",
+                "operationId": "trashRestoreCollection",
                 "parameters": [
                     {
                         "type": "string",
@@ -1053,6 +1111,24 @@ const docTemplate = `{
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
                     }
                 }
             }
@@ -1071,6 +1147,7 @@ const docTemplate = `{
                     "Collections"
                 ],
                 "summary": "Get a collection with its schema",
+                "operationId": "collectionGet",
                 "parameters": [
                     {
                         "type": "string",
@@ -1091,31 +1168,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/collection.collectionDTO"
+                            "$ref": "#/definitions/Collection"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -1136,6 +1213,7 @@ const docTemplate = `{
                     "Collections"
                 ],
                 "summary": "Update a collection; records are not checked again against a new schema",
+                "operationId": "collectionUpdate",
                 "parameters": [
                     {
                         "description": "Request",
@@ -1143,7 +1221,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/collection.updateDTO"
+                            "$ref": "#/definitions/CollectionUpdateInput"
                         }
                     },
                     {
@@ -1165,43 +1243,43 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/collection.collectionDTO"
+                            "$ref": "#/definitions/Collection"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -1218,9 +1296,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Collections"
+                    "Audit"
                 ],
                 "summary": "A collection's audit log: its changes, its records' and its members'; owners only",
+                "operationId": "collectionAuditLog",
                 "parameters": [
                     {
                         "type": "string",
@@ -1284,11 +1363,11 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/collection.auditDTO"
+                                        "$ref": "#/definitions/CollectionAuditEntry"
                                     }
                                 },
                                 "pagination": {
-                                    "$ref": "#/definitions/mapper.PaginationDTO"
+                                    "$ref": "#/definitions/Pagination"
                                 }
                             }
                         }
@@ -1296,31 +1375,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -1340,6 +1419,7 @@ const docTemplate = `{
                     "Automations"
                 ],
                 "summary": "A collection's automations; owners",
+                "operationId": "automationList",
                 "parameters": [
                     {
                         "type": "string",
@@ -1365,16 +1445,34 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/tools.automationDTO"
+                                        "$ref": "#/definitions/Automation"
                                     }
                                 }
                             }
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -1396,6 +1494,7 @@ const docTemplate = `{
                     "Automations"
                 ],
                 "summary": "Make an automation; owners",
+                "operationId": "automationCreate",
                 "parameters": [
                     {
                         "type": "string",
@@ -1417,7 +1516,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.automationBody"
+                            "$ref": "#/definitions/AutomationInput"
                         }
                     }
                 ],
@@ -1425,13 +1524,37 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/tools.automationDTO"
+                            "$ref": "#/definitions/Automation"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -1454,6 +1577,7 @@ const docTemplate = `{
                     "Automations"
                 ],
                 "summary": "Change an automation; owners",
+                "operationId": "automationUpdate",
                 "parameters": [
                     {
                         "type": "string",
@@ -1482,7 +1606,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.automationBody"
+                            "$ref": "#/definitions/AutomationInput"
                         }
                     }
                 ],
@@ -1490,19 +1614,37 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/tools.automationDTO"
+                            "$ref": "#/definitions/Automation"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -1517,6 +1659,7 @@ const docTemplate = `{
                     "Automations"
                 ],
                 "summary": "Delete an automation; owners",
+                "operationId": "automationDelete",
                 "parameters": [
                     {
                         "type": "string",
@@ -1544,10 +1687,28 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -1567,6 +1728,7 @@ const docTemplate = `{
                     "Automations"
                 ],
                 "summary": "Run an automation now on every matching record (up to 100); owners",
+                "operationId": "automationRun",
                 "parameters": [
                     {
                         "type": "string",
@@ -1594,13 +1756,31 @@ const docTemplate = `{
                     "200": {
                         "description": "with the run's result",
                         "schema": {
-                            "$ref": "#/definitions/tools.automationDTO"
+                            "$ref": "#/definitions/Automation"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -1617,9 +1797,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Collections"
+                    "Views \u0026 dashboards"
                 ],
                 "summary": "The collection's dashboard widgets; members",
+                "operationId": "viewDashboard",
                 "parameters": [
                     {
                         "type": "string",
@@ -1650,6 +1831,30 @@ const docTemplate = `{
                                 }
                             }
                         }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
                     }
                 }
             },
@@ -1663,9 +1868,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Collections"
+                    "Views \u0026 dashboards"
                 ],
                 "summary": "Replace the collection's dashboard widgets (kinds count, sum, avg, min, max, bars, list); owners",
+                "operationId": "viewSaveDashboard",
                 "parameters": [
                     {
                         "type": "string",
@@ -1687,13 +1893,43 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.dashboardDTO"
+                            "$ref": "#/definitions/Dashboard"
                         }
                     }
                 ],
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
                     }
                 }
             }
@@ -1716,6 +1952,7 @@ const docTemplate = `{
                     "Collections"
                 ],
                 "summary": "Copy a collection into a new one the caller owns",
+                "operationId": "collectionDuplicate",
                 "parameters": [
                     {
                         "type": "string",
@@ -1737,7 +1974,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/collection.duplicateDTO"
+                            "$ref": "#/definitions/CollectionDuplicateInput"
                         }
                     }
                 ],
@@ -1745,37 +1982,37 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/collection.collectionDTO"
+                            "$ref": "#/definitions/Collection"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -1796,9 +2033,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Collections"
+                    "Files"
                 ],
                 "summary": "Upload a file to attach to the collection's records; editors",
+                "operationId": "fileUpload",
                 "parameters": [
                     {
                         "type": "string",
@@ -1826,7 +2064,31 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/tools.fileDTO"
+                            "$ref": "#/definitions/File"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -1847,6 +2109,7 @@ const docTemplate = `{
                     "API keys"
                 ],
                 "summary": "The API keys that reach a collection; owners",
+                "operationId": "apikeyCollectionList",
                 "parameters": [
                     {
                         "type": "string",
@@ -1872,22 +2135,34 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/tools.keyDTO"
+                                        "$ref": "#/definitions/APIKey"
                                     }
                                 }
                             }
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -1905,6 +2180,7 @@ const docTemplate = `{
                     "API keys"
                 ],
                 "summary": "Take the collection out of an API key; owners",
+                "operationId": "apikeyCollectionDelete",
                 "parameters": [
                     {
                         "type": "string",
@@ -1932,10 +2208,28 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -1949,9 +2243,10 @@ const docTemplate = `{
                     }
                 ],
                 "tags": [
-                    "Collections"
+                    "Members"
                 ],
                 "summary": "Leave a collection; the last owner cannot",
+                "operationId": "collectionLeave",
                 "parameters": [
                     {
                         "type": "string",
@@ -1975,25 +2270,31 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2010,9 +2311,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "MCP"
+                    "MCP tools"
                 ],
                 "summary": "What AI assistants did in a collection through MCP (newest 100, last 30 days); owners",
+                "operationId": "mcptoolCalls",
                 "parameters": [
                     {
                         "type": "string",
@@ -2038,16 +2340,34 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/tools.mcpCallDTO"
+                                        "$ref": "#/definitions/MCPCall"
                                     }
                                 }
                             }
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2064,9 +2384,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "MCP"
+                    "MCP tools"
                 ],
                 "summary": "A collection's MCP tools; owners",
+                "operationId": "mcptoolList",
                 "parameters": [
                     {
                         "type": "string",
@@ -2092,16 +2413,34 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/tools.mcpToolDTO"
+                                        "$ref": "#/definitions/MCPTool"
                                     }
                                 }
                             }
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2120,9 +2459,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "MCP"
+                    "MCP tools"
                 ],
                 "summary": "Publish an MCP tool; owners",
+                "operationId": "mcptoolCreate",
                 "parameters": [
                     {
                         "type": "string",
@@ -2144,7 +2484,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.mcpToolBody"
+                            "$ref": "#/definitions/MCPToolInput"
                         }
                     }
                 ],
@@ -2152,19 +2492,43 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/tools.mcpToolDTO"
+                            "$ref": "#/definitions/MCPTool"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2185,9 +2549,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "MCP"
+                    "MCP tools"
                 ],
                 "summary": "Try an MCP tool before saving it; owners",
+                "operationId": "mcptoolTest",
                 "parameters": [
                     {
                         "type": "string",
@@ -2209,7 +2574,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.mcpTestBody"
+                            "$ref": "#/definitions/MCPToolTestInput"
                         }
                     }
                 ],
@@ -2217,13 +2582,37 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/tools.mcpTestDTO"
+                            "$ref": "#/definitions/MCPToolTest"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2243,9 +2632,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "MCP"
+                    "MCP tools"
                 ],
                 "summary": "Change an MCP tool; owners",
+                "operationId": "mcptoolUpdate",
                 "parameters": [
                     {
                         "type": "string",
@@ -2274,7 +2664,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.mcpToolBody"
+                            "$ref": "#/definitions/MCPToolInput"
                         }
                     }
                 ],
@@ -2282,19 +2672,37 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/tools.mcpToolDTO"
+                            "$ref": "#/definitions/MCPTool"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2306,9 +2714,10 @@ const docTemplate = `{
                     }
                 ],
                 "tags": [
-                    "MCP"
+                    "MCP tools"
                 ],
                 "summary": "Delete an MCP tool; owners",
+                "operationId": "mcptoolDelete",
                 "parameters": [
                     {
                         "type": "string",
@@ -2336,10 +2745,28 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2356,9 +2783,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Collections"
+                    "Members"
                 ],
                 "summary": "List a collection's members; owners only",
+                "operationId": "collectionMembers",
                 "parameters": [
                     {
                         "type": "string",
@@ -2384,7 +2812,7 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/collection.memberDTO"
+                                        "$ref": "#/definitions/Member"
                                     }
                                 }
                             }
@@ -2393,25 +2821,25 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2422,6 +2850,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "The member joins at once with the role sent. An email without an account needs name: the account is created pending and gets an activation email.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2429,9 +2858,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Collections"
+                    "Members"
                 ],
                 "summary": "Add a member by email; an email without an account is invited and joins at once",
+                "operationId": "collectionAddMember",
                 "parameters": [
                     {
                         "type": "string",
@@ -2453,7 +2883,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/collection.addMemberDTO"
+                            "$ref": "#/definitions/AddMemberInput"
                         }
                     }
                 ],
@@ -2461,43 +2891,43 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/collection.addedMemberDTO"
+                            "$ref": "#/definitions/AddedMember"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2511,9 +2941,10 @@ const docTemplate = `{
                     }
                 ],
                 "tags": [
-                    "Collections"
+                    "Members"
                 ],
                 "summary": "Remove a member; a collection keeps at least one owner",
+                "operationId": "collectionRemoveMember",
                 "parameters": [
                     {
                         "type": "string",
@@ -2544,37 +2975,37 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2589,9 +3020,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Collections"
+                    "Members"
                 ],
                 "summary": "Change a member's role; a collection keeps at least one owner",
+                "operationId": "collectionSetMemberRole",
                 "parameters": [
                     {
                         "type": "string",
@@ -2620,7 +3052,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/collection.roleDTO"
+                            "$ref": "#/definitions/MemberRoleInput"
                         }
                     }
                 ],
@@ -2631,37 +3063,37 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2678,9 +3110,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Collections"
+                    "Data quality"
                 ],
                 "summary": "The latest check of the records against the current schema; editors and owners",
+                "operationId": "collectionQuality",
                 "parameters": [
                     {
                         "type": "string",
@@ -2701,31 +3134,31 @@ const docTemplate = `{
                     "200": {
                         "description": "invalid holds the first 100, with their issues",
                         "schema": {
-                            "$ref": "#/definitions/collection.qualityDTO"
+                            "$ref": "#/definitions/QualityReport"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2740,9 +3173,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Collections"
+                    "Data quality"
                 ],
                 "summary": "Start a check of the records in the background, unless one is running; editors and owners",
+                "operationId": "collectionStartQuality",
                 "parameters": [
                     {
                         "type": "string",
@@ -2763,31 +3197,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/collection.qualityDTO"
+                            "$ref": "#/definitions/QualityReport"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2805,9 +3239,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Collections"
+                    "Data quality"
                 ],
                 "summary": "Delete the records the latest quality check found invalid; editors and owners",
+                "operationId": "collectionDeleteInvalid",
                 "parameters": [
                     {
                         "type": "string",
@@ -2828,37 +3263,37 @@ const docTemplate = `{
                     "200": {
                         "description": "records deleted",
                         "schema": {
-                            "$ref": "#/definitions/collection.countDTO"
+                            "$ref": "#/definitions/CollectionCount"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2879,9 +3314,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Collections"
+                    "Data quality"
                 ],
                 "summary": "Change the data of every record at once; editors and owners",
+                "operationId": "collectionFix",
                 "parameters": [
                     {
                         "type": "string",
@@ -2903,7 +3339,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/collection.fixDTO"
+                            "$ref": "#/definitions/QualityFixInput"
                         }
                     }
                 ],
@@ -2911,37 +3347,37 @@ const docTemplate = `{
                     "200": {
                         "description": "records changed, or that would change with dry_run",
                         "schema": {
-                            "$ref": "#/definitions/collection.countDTO"
+                            "$ref": "#/definitions/CollectionCount"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -2952,6 +3388,9 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Each item's data is a preview: only its top-level strings, numbers, booleans and lists of strings (first 10), strings cut to 120 characters. GET /v1/records/{id} returns the full data.",
@@ -2962,6 +3401,7 @@ const docTemplate = `{
                     "Records"
                 ],
                 "summary": "List the records of one collection",
+                "operationId": "recordList",
                 "parameters": [
                     {
                         "type": "string",
@@ -3044,11 +3484,11 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/record.recordDTO"
+                                        "$ref": "#/definitions/Record"
                                     }
                                 },
                                 "pagination": {
-                                    "$ref": "#/definitions/mapper.PaginationDTO"
+                                    "$ref": "#/definitions/Pagination"
                                 }
                             }
                         }
@@ -3056,25 +3496,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -3083,6 +3529,9 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "consumes": [
@@ -3095,6 +3544,7 @@ const docTemplate = `{
                     "Records"
                 ],
                 "summary": "Create a record; data must match the collection schema (VALIDATION_FAILED lists the issues in details)",
+                "operationId": "recordCreate",
                 "parameters": [
                     {
                         "type": "string",
@@ -3116,7 +3566,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/record.createDTO"
+                            "$ref": "#/definitions/RecordCreateInput"
                         }
                     }
                 ],
@@ -3124,37 +3574,37 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/record.recordDTO"
+                            "$ref": "#/definitions/Record"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -3165,6 +3615,9 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "produces": [
@@ -3174,6 +3627,7 @@ const docTemplate = `{
                     "Records"
                 ],
                 "summary": "Count the selected records, by a field (group) or all together, with the sum, average, least and greatest of numeric fields (sum, comma separated, up to 5)",
+                "operationId": "recordAggregate",
                 "parameters": [
                     {
                         "type": "string",
@@ -3217,7 +3671,7 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/record.groupDTO"
+                                        "$ref": "#/definitions/AggregateGroup"
                                     }
                                 }
                             }
@@ -3226,19 +3680,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -3249,6 +3715,9 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "JSON Lines holds one record's data per line. \"collection\" is JSON Lines whose first line is {\"$collection\":{name, description, icon, schema}}: the whole collection, which the new-collection page recreates in one go. CSV has one column per field, in the form's order, then any other keys; lists and objects are written as JSON. Streamed, any number of records; CSV columns past the form come from up to 1 000 keys.",
@@ -3259,6 +3728,7 @@ const docTemplate = `{
                     "Records"
                 ],
                 "summary": "Download every record of a collection as JSON Lines or CSV",
+                "operationId": "recordExport",
                 "parameters": [
                     {
                         "type": "string",
@@ -3303,31 +3773,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -3338,6 +3808,9 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Up to 5000 records within the body limit; clients send a large file in batches. With dry_run nothing is written. With invalid records and no skip_invalid, none are written. With upsert_key (a unique field) a row whose value a record already holds updates that record.",
@@ -3351,6 +3824,7 @@ const docTemplate = `{
                     "Records"
                 ],
                 "summary": "Check a batch of records against the schema and add them; editors and owners",
+                "operationId": "recordImport",
                 "parameters": [
                     {
                         "type": "string",
@@ -3372,7 +3846,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/record.importDTO"
+                            "$ref": "#/definitions/ImportInput"
                         }
                     }
                 ],
@@ -3380,53 +3854,56 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/record.importResultDTO"
+                            "$ref": "#/definitions/ImportResult"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "413": {
                         "description": "Request Entity Too Large",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
             }
         },
-        "/v1/collections/{owner}/{slug}/records/stats": {
+        "/v1/collections/{owner}/{slug}/records/profile": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "How many of the selected records fill each field, the range of numbers and dates, a count per date bucket and the commonest values. Viewer or above.",
@@ -3437,6 +3914,7 @@ const docTemplate = `{
                     "Records"
                 ],
                 "summary": "Profile records field by field",
+                "operationId": "recordProfile",
                 "parameters": [
                     {
                         "type": "string",
@@ -3504,7 +3982,7 @@ const docTemplate = `{
                                 "fields": {
                                     "type": "object",
                                     "additionalProperties": {
-                                        "$ref": "#/definitions/record.fieldStatsDTO"
+                                        "$ref": "#/definitions/FieldProfile"
                                     }
                                 },
                                 "total": {
@@ -3516,19 +3994,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -3548,6 +4038,7 @@ const docTemplate = `{
                     "Collections"
                 ],
                 "summary": "Earlier fields of the collection, newest first (up to 50); owners",
+                "operationId": "collectionSchemaVersions",
                 "parameters": [
                     {
                         "type": "string",
@@ -3573,10 +4064,34 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/tools.schemaVersionDTO"
+                                        "$ref": "#/definitions/SchemaVersion"
                                     }
                                 }
                             }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -3596,6 +4111,7 @@ const docTemplate = `{
                     "Share links"
                 ],
                 "summary": "A collection's share links; owners",
+                "operationId": "shareList",
                 "parameters": [
                     {
                         "type": "string",
@@ -3621,22 +4137,34 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/tools.shareDTO"
+                                        "$ref": "#/definitions/ShareLink"
                                     }
                                 }
                             }
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -3657,6 +4185,7 @@ const docTemplate = `{
                     "Share links"
                 ],
                 "summary": "Make a share link: a public form (kind form) or a read-only list (kind view); owners",
+                "operationId": "shareCreate",
                 "parameters": [
                     {
                         "type": "string",
@@ -3694,19 +4223,37 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/tools.shareDTO"
+                            "$ref": "#/definitions/ShareLink"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -3723,6 +4270,7 @@ const docTemplate = `{
                     "Share links"
                 ],
                 "summary": "Delete a share link; owners",
+                "operationId": "shareDelete",
                 "parameters": [
                     {
                         "type": "string",
@@ -3750,10 +4298,28 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -3773,6 +4339,7 @@ const docTemplate = `{
                     "Collections"
                 ],
                 "summary": "A collection's overview: totals, records per day and top contributors of the last 30 days",
+                "operationId": "collectionStats",
                 "parameters": [
                     {
                         "type": "string",
@@ -3800,31 +4367,37 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/collection.statsDTO"
+                            "$ref": "#/definitions/CollectionStats"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -3848,6 +4421,7 @@ const docTemplate = `{
                     "Collections"
                 ],
                 "summary": "Move the collection's address to another owner member",
+                "operationId": "collectionTransfer",
                 "parameters": [
                     {
                         "type": "string",
@@ -3869,7 +4443,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/collection.transferDTO"
+                            "$ref": "#/definitions/TransferInput"
                         }
                     }
                 ],
@@ -3877,31 +4451,37 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/collection.collectionDTO"
+                            "$ref": "#/definitions/Collection"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -3921,6 +4501,7 @@ const docTemplate = `{
                     "Trash"
                 ],
                 "summary": "The collection's deleted records, newest first (up to 200); editors",
+                "operationId": "trashListRecords",
                 "parameters": [
                     {
                         "type": "string",
@@ -3946,10 +4527,34 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/tools.trashedRecordDTO"
+                                        "$ref": "#/definitions/TrashedRecord"
                                     }
                                 }
                             }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -3973,6 +4578,7 @@ const docTemplate = `{
                     "Trash"
                 ],
                 "summary": "Delete trashed records for good; owners",
+                "operationId": "trashPurgeRecords",
                 "parameters": [
                     {
                         "type": "string",
@@ -3993,7 +4599,7 @@ const docTemplate = `{
                         "name": "body",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/tools.idsDTO"
+                            "$ref": "#/definitions/TrashIDs"
                         }
                     }
                 ],
@@ -4001,7 +4607,37 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/tools.countDTO"
+                            "$ref": "#/definitions/TrashCount"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4025,6 +4661,7 @@ const docTemplate = `{
                     "Trash"
                 ],
                 "summary": "Restore deleted records; editors",
+                "operationId": "trashRestoreRecords",
                 "parameters": [
                     {
                         "type": "string",
@@ -4046,7 +4683,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.restoreDTO"
+                            "$ref": "#/definitions/TrashRestoreInput"
                         }
                     }
                 ],
@@ -4054,7 +4691,37 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/tools.countDTO"
+                            "$ref": "#/definitions/TrashCount"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4071,9 +4738,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Collections"
+                    "Views \u0026 dashboards"
                 ],
                 "summary": "The caller's saved views of the record list and the shared ones; viewers",
+                "operationId": "viewList",
                 "parameters": [
                     {
                         "type": "string",
@@ -4099,10 +4767,34 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/tools.viewDTO"
+                                        "$ref": "#/definitions/View"
                                     }
                                 }
                             }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4120,9 +4812,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Collections"
+                    "Views \u0026 dashboards"
                 ],
                 "summary": "Save a view of the record list; shared views need an editor",
+                "operationId": "viewCreate",
                 "parameters": [
                     {
                         "type": "string",
@@ -4144,7 +4837,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.createViewDTO"
+                            "$ref": "#/definitions/ViewCreateInput"
                         }
                     }
                 ],
@@ -4152,7 +4845,37 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/tools.viewDTO"
+                            "$ref": "#/definitions/View"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4166,9 +4889,10 @@ const docTemplate = `{
                     }
                 ],
                 "tags": [
-                    "Collections"
+                    "Views \u0026 dashboards"
                 ],
                 "summary": "Delete one of the caller's saved views",
+                "operationId": "viewDelete",
                 "parameters": [
                     {
                         "type": "string",
@@ -4195,6 +4919,30 @@ const docTemplate = `{
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
                     }
                 }
             }
@@ -4213,6 +4961,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "A collection's webhooks; owners",
+                "operationId": "webhookList",
                 "parameters": [
                     {
                         "type": "string",
@@ -4238,10 +4987,34 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/tools.webhookDTO"
+                                        "$ref": "#/definitions/Webhook"
                                     }
                                 }
                             }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4263,6 +5036,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Add a webhook; owners",
+                "operationId": "webhookCreate",
                 "parameters": [
                     {
                         "type": "string",
@@ -4284,7 +5058,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.createHookDTO"
+                            "$ref": "#/definitions/WebhookCreateInput"
                         }
                     }
                 ],
@@ -4292,13 +5066,37 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/tools.newHookDTO"
+                            "$ref": "#/definitions/NewWebhook"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4315,6 +5113,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Delete a webhook; owners",
+                "operationId": "webhookDelete",
                 "parameters": [
                     {
                         "type": "string",
@@ -4341,6 +5140,30 @@ const docTemplate = `{
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
                     }
                 }
             },
@@ -4361,6 +5184,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Change, pause or resume a webhook; owners",
+                "operationId": "webhookUpdate",
                 "parameters": [
                     {
                         "type": "string",
@@ -4389,7 +5213,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.updateHookDTO"
+                            "$ref": "#/definitions/WebhookUpdateInput"
                         }
                     }
                 ],
@@ -4397,19 +5221,37 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/tools.webhookDTO"
+                            "$ref": "#/definitions/Webhook"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4429,6 +5271,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "A webhook's newest calls (up to 50) and their answers; owners",
+                "operationId": "webhookDeliveries",
                 "parameters": [
                     {
                         "type": "string",
@@ -4461,16 +5304,34 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/tools.deliveryDTO"
+                                        "$ref": "#/definitions/WebhookDelivery"
                                     }
                                 }
                             }
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4490,6 +5351,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Send a webhook call again now, with the same body; owners",
+                "operationId": "webhookRedeliver",
                 "parameters": [
                     {
                         "type": "string",
@@ -4524,13 +5386,31 @@ const docTemplate = `{
                     "200": {
                         "description": "the new call",
                         "schema": {
-                            "$ref": "#/definitions/tools.deliveryDTO"
+                            "$ref": "#/definitions/WebhookDelivery"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4550,6 +5430,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Send a ping to a webhook now; owners",
+                "operationId": "webhookTest",
                 "parameters": [
                     {
                         "type": "string",
@@ -4577,7 +5458,31 @@ const docTemplate = `{
                     "200": {
                         "description": "with the answer",
                         "schema": {
-                            "$ref": "#/definitions/tools.webhookDTO"
+                            "$ref": "#/definitions/Webhook"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4588,15 +5493,19 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "produces": [
                     "application/octet-stream"
                 ],
                 "tags": [
-                    "Collections"
+                    "Files"
                 ],
                 "summary": "Download an attached file; viewers of its collection (API keys too)",
+                "operationId": "fileDownload",
                 "parameters": [
                     {
                         "type": "string",
@@ -4613,10 +5522,22 @@ const docTemplate = `{
                             "type": "file"
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4624,6 +5545,11 @@ const docTemplate = `{
         },
         "/v1/mcp": {
             "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "description": "The address an assistant connects to. Takes an API key only (X-API-Key, or \"Authorization: Bearer dsk_...\" from assistants). Methods: initialize, tools/list, tools/call ({\"name\":\"workspace_overview\",\"arguments\":{}}). Tools, limited to the key's collections: workspace_overview (start here: every collection with its counts, fields and references), get_collection, search_records, get_record, related_records, collection_stats, aggregate_records, field_values, get_records, record_history, list_views, search_everywhere; with a write scope list_trash, create_record, create_records, update_record, update_records (dry_run first), delete_records and restore_records; plus the tools collection owners publish. GET /v1/mcp/tools and POST /v1/mcp/tools/{name} do the same without the JSON-RPC envelope.",
                 "consumes": [
                     "application/json"
@@ -4635,21 +5561,15 @@ const docTemplate = `{
                     "MCP"
                 ],
                 "summary": "MCP endpoint for AI assistants (JSON-RPC 2.0, streamable HTTP, stateless)",
+                "operationId": "mcpRPC",
                 "parameters": [
-                    {
-                        "type": "string",
-                        "description": "API key (dsk_...)",
-                        "name": "X-API-Key",
-                        "in": "header",
-                        "required": true
-                    },
                     {
                         "description": "JSON-RPC request",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/rest.mcpRequest"
+                            "$ref": "#/definitions/JSONRPCRequest"
                         }
                     }
                 ],
@@ -4665,12 +5585,23 @@ const docTemplate = `{
                         "schema": {
                             "type": "string"
                         }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
                     }
                 }
             }
         },
         "/v1/mcp/tools": {
             "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "description": "The built-in tools, write tools when the key has a write scope, and the tools owners published in the key's collections, each with its description and inputSchema (the arguments POST /v1/mcp/tools/{name} takes).",
                 "produces": [
                     "application/json"
@@ -4679,15 +5610,7 @@ const docTemplate = `{
                     "MCP"
                 ],
                 "summary": "List the MCP tools an API key gets",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "API key (dsk_...)",
-                        "name": "X-API-Key",
-                        "in": "header",
-                        "required": true
-                    }
-                ],
+                "operationId": "mcpListTools",
                 "responses": {
                     "200": {
                         "description": "tools: name, description, inputSchema",
@@ -4700,12 +5623,23 @@ const docTemplate = `{
                         "schema": {
                             "type": "string"
                         }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
                     }
                 }
             }
         },
         "/v1/mcp/tools/{name}": {
             "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
                 "description": "Runs the tool as an assistant would, with the key's scopes and the member's roles, and logs the call. The body holds the arguments from the tool's inputSchema; send {} for none. The answer is the MCP result: structuredContent holds the data; isError true means the tool refused (the reason is in content). An unknown tool or arguments outside the schema answer 400.",
                 "consumes": [
                     "application/json"
@@ -4717,14 +5651,8 @@ const docTemplate = `{
                     "MCP"
                 ],
                 "summary": "Call one MCP tool",
+                "operationId": "mcpCallTool",
                 "parameters": [
-                    {
-                        "type": "string",
-                        "description": "API key (dsk_...)",
-                        "name": "X-API-Key",
-                        "in": "header",
-                        "required": true
-                    },
                     {
                         "type": "string",
                         "description": "Tool name, e.g. workspace_overview",
@@ -4751,13 +5679,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
                             "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4777,23 +5717,24 @@ const docTemplate = `{
                     "Profile"
                 ],
                 "summary": "Current user, with live permissions and preferences",
+                "operationId": "authMe",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/auth.meDTO"
+                            "$ref": "#/definitions/Me"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4814,6 +5755,7 @@ const docTemplate = `{
                     "Profile"
                 ],
                 "summary": "Change the name or username of the current user",
+                "operationId": "authRename",
                 "parameters": [
                     {
                         "description": "Request",
@@ -4821,7 +5763,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.renameDTO"
+                            "$ref": "#/definitions/RenameInput"
                         }
                     }
                 ],
@@ -4829,25 +5771,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/auth.meDTO"
+                            "$ref": "#/definitions/Me"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4869,6 +5811,7 @@ const docTemplate = `{
                     "Profile"
                 ],
                 "summary": "Get the profile picture",
+                "operationId": "authAvatar",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -4879,19 +5822,19 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4912,6 +5855,7 @@ const docTemplate = `{
                     "Profile"
                 ],
                 "summary": "Set the profile picture",
+                "operationId": "authSetAvatar",
                 "parameters": [
                     {
                         "description": "Image bytes",
@@ -4930,19 +5874,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4957,6 +5901,7 @@ const docTemplate = `{
                     "Profile"
                 ],
                 "summary": "Remove the profile picture",
+                "operationId": "authRemoveAvatar",
                 "responses": {
                     "204": {
                         "description": "No Content"
@@ -4964,13 +5909,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -4990,6 +5935,7 @@ const docTemplate = `{
                     "API keys"
                 ],
                 "summary": "The signed in member's API keys",
+                "operationId": "apikeyList",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -4999,10 +5945,22 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/tools.keyDTO"
+                                        "$ref": "#/definitions/APIKey"
                                     }
                                 }
                             }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5024,6 +5982,7 @@ const docTemplate = `{
                     "API keys"
                 ],
                 "summary": "Make an API key",
+                "operationId": "apikeyCreate",
                 "parameters": [
                     {
                         "description": "Key",
@@ -5031,7 +5990,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.keyBodyDTO"
+                            "$ref": "#/definitions/APIKeyInput"
                         }
                     }
                 ],
@@ -5039,25 +5998,37 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/tools.newKeyDTO"
+                            "$ref": "#/definitions/NewAPIKey"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5080,6 +6051,7 @@ const docTemplate = `{
                     "API keys"
                 ],
                 "summary": "Rename an API key and set its collections",
+                "operationId": "apikeyUpdate",
                 "parameters": [
                     {
                         "type": "string",
@@ -5094,7 +6066,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.keyBodyDTO"
+                            "$ref": "#/definitions/APIKeyInput"
                         }
                     }
                 ],
@@ -5102,19 +6074,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/tools.keyDTO"
+                            "$ref": "#/definitions/APIKey"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5129,6 +6113,7 @@ const docTemplate = `{
                     "API keys"
                 ],
                 "summary": "Delete an API key",
+                "operationId": "apikeyDelete",
                 "parameters": [
                     {
                         "type": "string",
@@ -5142,10 +6127,22 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5162,9 +6159,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "API keys"
+                    "MCP tools"
                 ],
                 "summary": "What one of the caller's keys did through MCP (newest 100, last 30 days)",
+                "operationId": "mcptoolKeyCalls",
                 "parameters": [
                     {
                         "type": "string",
@@ -5183,7 +6181,7 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/tools.mcpCallDTO"
+                                        "$ref": "#/definitions/MCPCall"
                                     }
                                 }
                             }
@@ -5192,7 +6190,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5212,17 +6228,24 @@ const docTemplate = `{
                     "Profile"
                 ],
                 "summary": "Whether two-step login is on",
+                "operationId": "authMFAStatus",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/auth.mfaStatusDTO"
+                            "$ref": "#/definitions/MFAStatus"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5242,6 +6265,7 @@ const docTemplate = `{
                     "Profile"
                 ],
                 "summary": "Turn two-step login off",
+                "operationId": "authDisableMFA",
                 "parameters": [
                     {
                         "description": "Request",
@@ -5249,7 +6273,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.mfaDisableDTO"
+                            "$ref": "#/definitions/MFADisableInput"
                         }
                     }
                 ],
@@ -5260,19 +6284,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5296,6 +6320,7 @@ const docTemplate = `{
                     "Profile"
                 ],
                 "summary": "Turn two-step login on with a code from the app",
+                "operationId": "authEnableMFA",
                 "parameters": [
                     {
                         "description": "Request",
@@ -5303,7 +6328,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.mfaCodeDTO"
+                            "$ref": "#/definitions/MFACodeInput"
                         }
                     }
                 ],
@@ -5311,31 +6336,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/auth.mfaRecoveryDTO"
+                            "$ref": "#/definitions/MFARecoveryCodes"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5356,23 +6381,30 @@ const docTemplate = `{
                     "Profile"
                 ],
                 "summary": "Start two-step login: a new secret for an authenticator app",
+                "operationId": "authSetupMFA",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/auth.mfaSetupDTO"
+                            "$ref": "#/definitions/MFASetup"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5392,6 +6424,7 @@ const docTemplate = `{
                     "Notifications"
                 ],
                 "summary": "List the notifications of the current user, newest first",
+                "operationId": "notificationList",
                 "parameters": [
                     {
                         "type": "integer",
@@ -5417,11 +6450,11 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/notification.notificationDTO"
+                                        "$ref": "#/definitions/Notification"
                                     }
                                 },
                                 "pagination": {
-                                    "$ref": "#/definitions/mapper.PaginationDTO"
+                                    "$ref": "#/definitions/Pagination"
                                 }
                             }
                         }
@@ -5429,13 +6462,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5455,6 +6488,7 @@ const docTemplate = `{
                     "Notifications"
                 ],
                 "summary": "Count unread notifications of the current user",
+                "operationId": "notificationCount",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -5470,13 +6504,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5499,13 +6533,14 @@ const docTemplate = `{
                     "Notifications"
                 ],
                 "summary": "Mark notifications as read: the listed ones (all or none), or every one when the body is empty",
+                "operationId": "notificationMarkRead",
                 "parameters": [
                     {
                         "description": "Notification IDs, 1 to 100; leave out to mark all",
                         "name": "body",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/notification.idsDTO"
+                            "$ref": "#/definitions/NotificationIDs"
                         }
                     }
                 ],
@@ -5516,25 +6551,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5554,6 +6589,7 @@ const docTemplate = `{
                     "Profile"
                 ],
                 "summary": "Change the password and end the other sessions",
+                "operationId": "authChangePassword",
                 "parameters": [
                     {
                         "description": "Request",
@@ -5561,7 +6597,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.changePasswordDTO"
+                            "$ref": "#/definitions/ChangePasswordInput"
                         }
                     }
                 ],
@@ -5572,19 +6608,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5604,23 +6640,24 @@ const docTemplate = `{
                     "Preferences"
                 ],
                 "summary": "Preferences of the current user",
+                "operationId": "preferenceGet",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/mapper.PreferencesDTO"
+                            "$ref": "#/definitions/Preferences"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5641,6 +6678,7 @@ const docTemplate = `{
                     "Preferences"
                 ],
                 "summary": "Replace the preferences of the current user",
+                "operationId": "preferenceUpdate",
                 "parameters": [
                     {
                         "description": "Request",
@@ -5648,7 +6686,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/mapper.PreferencesDTO"
+                            "$ref": "#/definitions/Preferences"
                         }
                     }
                 ],
@@ -5656,25 +6694,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/mapper.PreferencesDTO"
+                            "$ref": "#/definitions/Preferences"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5694,6 +6732,7 @@ const docTemplate = `{
                     "Sessions"
                 ],
                 "summary": "List the live sessions of the current user",
+                "operationId": "sessionList",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -5703,7 +6742,7 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/session.sessionDTO"
+                                        "$ref": "#/definitions/Session"
                                     }
                                 }
                             }
@@ -5712,13 +6751,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5738,6 +6777,7 @@ const docTemplate = `{
                     "Sessions"
                 ],
                 "summary": "End every session of the current user except this one",
+                "operationId": "sessionRevokeOthers",
                 "responses": {
                     "204": {
                         "description": "No Content"
@@ -5745,13 +6785,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5771,6 +6811,7 @@ const docTemplate = `{
                     "Sessions"
                 ],
                 "summary": "End one session of the current user",
+                "operationId": "sessionRevoke",
                 "parameters": [
                     {
                         "type": "string",
@@ -5787,25 +6828,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5829,6 +6870,7 @@ const docTemplate = `{
                     "OAuth"
                 ],
                 "summary": "Approve an assistant's access; returns the code for its redirect",
+                "operationId": "oauthApprove",
                 "parameters": [
                     {
                         "description": "Approval",
@@ -5836,7 +6878,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.oauthApproveDTO"
+                            "$ref": "#/definitions/OAuthApproveInput"
                         }
                     }
                 ],
@@ -5855,13 +6897,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5881,6 +6935,7 @@ const docTemplate = `{
                     "OAuth"
                 ],
                 "summary": "The client a consent page asks for",
+                "operationId": "oauthClient",
                 "parameters": [
                     {
                         "type": "string",
@@ -5912,7 +6967,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5931,6 +6998,7 @@ const docTemplate = `{
                     "OAuth"
                 ],
                 "summary": "Register an OAuth client (RFC 7591)",
+                "operationId": "oauthRegister",
                 "parameters": [
                     {
                         "description": "Client",
@@ -5938,7 +7006,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.oauthRegisterDTO"
+                            "$ref": "#/definitions/OAuthRegisterInput"
                         }
                     }
                 ],
@@ -5946,7 +7014,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/tools.oauthClientDTO"
+                            "$ref": "#/definitions/OAuthClient"
                         }
                     },
                     "400": {
@@ -5961,6 +7029,12 @@ const docTemplate = `{
                                     "type": "string"
                                 }
                             }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -5979,6 +7053,7 @@ const docTemplate = `{
                     "OAuth"
                 ],
                 "summary": "Trade an approved code for an access token (an API key)",
+                "operationId": "oauthToken",
                 "parameters": [
                     {
                         "type": "string",
@@ -6047,6 +7122,12 @@ const docTemplate = `{
                                 }
                             }
                         }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
                     }
                 }
             }
@@ -6060,6 +7141,7 @@ const docTemplate = `{
                     "Public"
                 ],
                 "summary": "What a share link opens: a form or a read-only list",
+                "operationId": "publicGet",
                 "parameters": [
                     {
                         "type": "string",
@@ -6073,13 +7155,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/public.linkDTO"
+                            "$ref": "#/definitions/PublicLink"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -6095,6 +7183,7 @@ const docTemplate = `{
                     "Public"
                 ],
                 "summary": "The records behind a read-only link, newest first",
+                "operationId": "publicRecords",
                 "parameters": [
                     {
                         "type": "string",
@@ -6133,11 +7222,11 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/public.recordDTO"
+                                        "$ref": "#/definitions/PublicRecord"
                                     }
                                 },
                                 "pagination": {
-                                    "$ref": "#/definitions/mapper.PaginationDTO"
+                                    "$ref": "#/definitions/Pagination"
                                 }
                             }
                         }
@@ -6145,7 +7234,13 @@ const docTemplate = `{
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -6161,6 +7256,7 @@ const docTemplate = `{
                     "Public"
                 ],
                 "summary": "Send a form: adds one record, checked against the collection's fields",
+                "operationId": "publicSubmit",
                 "parameters": [
                     {
                         "type": "string",
@@ -6175,7 +7271,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/public.submitDTO"
+                            "$ref": "#/definitions/PublicSubmitInput"
                         }
                     }
                 ],
@@ -6194,29 +7290,102 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
             }
         },
-        "/v1/records/bulk-update": {
+        "/v1/records/delete": {
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Deleted records go to the collection's trash, where editors restore them or delete them for good. If one id is missing or out of reach, nothing is deleted.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Records"
+                ],
+                "summary": "Delete records; all or none",
+                "operationId": "recordDelete",
+                "parameters": [
+                    {
+                        "description": "Record IDs, 1 to 100",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/RecordIDs"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/records/update": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "null removes a field. Every record must still pass the collection's fields, or none changes.",
@@ -6230,6 +7399,7 @@ const docTemplate = `{
                     "Records"
                 ],
                 "summary": "Set the same values in several records of one collection; editors",
+                "operationId": "recordBulkUpdate",
                 "parameters": [
                     {
                         "description": "Ids (1 to 100) and values",
@@ -6237,7 +7407,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/tools.bulkDTO"
+                            "$ref": "#/definitions/BulkUpdateInput"
                         }
                     }
                 ],
@@ -6245,78 +7415,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/tools.countDTO"
+                            "$ref": "#/definitions/RecordCount"
                         }
-                    },
-                    "422": {
-                        "description": "Unprocessable Entity",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/records/delete": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Records"
-                ],
-                "summary": "Delete records; all or none",
-                "parameters": [
-                    {
-                        "description": "Record IDs, 1 to 100",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/record.idsDTO"
-                        }
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
-                    "403": {
-                        "description": "Forbidden",
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -6327,6 +7450,9 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "produces": [
@@ -6336,6 +7462,7 @@ const docTemplate = `{
                     "Records"
                 ],
                 "summary": "Get a record",
+                "operationId": "recordGet",
                 "parameters": [
                     {
                         "type": "string",
@@ -6349,31 +7476,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/record.recordDTO"
+                            "$ref": "#/definitions/Record"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -6382,8 +7509,12 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
+                "description": "Send version, the version you read, to refuse a lost update: a newer row answers 409 CONFLICT. Without it the last write wins. The old data is kept as a version.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6394,6 +7525,7 @@ const docTemplate = `{
                     "Records"
                 ],
                 "summary": "Replace the data of a record; it must match the collection schema",
+                "operationId": "recordUpdate",
                 "parameters": [
                     {
                         "description": "Request",
@@ -6401,7 +7533,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/record.updateDTO"
+                            "$ref": "#/definitions/RecordUpdateInput"
                         }
                     },
                     {
@@ -6416,43 +7548,43 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/record.recordDTO"
+                            "$ref": "#/definitions/Record"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -6463,15 +7595,19 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Records"
+                    "Comments"
                 ],
                 "summary": "A record's comments, oldest first (up to 200)",
+                "operationId": "recordComments",
                 "parameters": [
                     {
                         "type": "string",
@@ -6490,16 +7626,28 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/record.commentDTO"
+                                        "$ref": "#/definitions/Comment"
                                     }
                                 }
                             }
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -6508,6 +7656,9 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "consumes": [
@@ -6517,9 +7668,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Records"
+                    "Comments"
                 ],
                 "summary": "Comment on a record; any member",
+                "operationId": "recordAddComment",
                 "parameters": [
                     {
                         "type": "string",
@@ -6547,19 +7699,31 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/record.commentDTO"
+                            "$ref": "#/definitions/Comment"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -6570,12 +7734,16 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "tags": [
-                    "Records"
+                    "Comments"
                 ],
                 "summary": "Delete a comment; its author or an owner",
+                "operationId": "recordDeleteComment",
                 "parameters": [
                     {
                         "type": "string",
@@ -6596,16 +7764,28 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -6616,6 +7796,9 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "Up to 10 newest records (previews) per field, in collections the caller can read.",
@@ -6626,6 +7809,7 @@ const docTemplate = `{
                     "Records"
                 ],
                 "summary": "The records pointing at this one, per collection and reference field",
+                "operationId": "recordLinks",
                 "parameters": [
                     {
                         "type": "string",
@@ -6644,16 +7828,28 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/record.linksDTO"
+                                        "$ref": "#/definitions/RecordLinks"
                                     }
                                 }
                             }
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -6664,6 +7860,9 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "description": "The old data must match the current schema (422 with issues otherwise).",
@@ -6677,6 +7876,7 @@ const docTemplate = `{
                     "Records"
                 ],
                 "summary": "Write an earlier version back as the record's new version",
+                "operationId": "recordRestore",
                 "parameters": [
                     {
                         "type": "string",
@@ -6691,7 +7891,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/record.restoreDTO"
+                            "$ref": "#/definitions/RecordRestoreInput"
                         }
                     }
                 ],
@@ -6699,49 +7899,49 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/record.recordDTO"
+                            "$ref": "#/definitions/Record"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -6752,6 +7952,9 @@ const docTemplate = `{
                 "security": [
                     {
                         "BearerAuth": []
+                    },
+                    {
+                        "ApiKeyAuth": []
                     }
                 ],
                 "produces": [
@@ -6761,6 +7964,7 @@ const docTemplate = `{
                     "Records"
                 ],
                 "summary": "A record's earlier versions, newest first (up to 50)",
+                "operationId": "recordVersions",
                 "parameters": [
                     {
                         "type": "string",
@@ -6779,7 +7983,7 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/record.versionDTO"
+                                        "$ref": "#/definitions/RecordVersion"
                                     }
                                 }
                             }
@@ -6788,25 +7992,25 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -6826,6 +8030,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "List users, without those holding a protected role",
+                "operationId": "userList",
                 "parameters": [
                     {
                         "type": "integer",
@@ -6899,11 +8104,11 @@ const docTemplate = `{
                                 "items": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/definitions/user.userDTO"
+                                        "$ref": "#/definitions/User"
                                     }
                                 },
                                 "pagination": {
-                                    "$ref": "#/definitions/mapper.PaginationDTO"
+                                    "$ref": "#/definitions/Pagination"
                                 }
                             }
                         }
@@ -6911,25 +8116,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -6950,6 +8155,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Create an account for someone and send its activation email",
+                "operationId": "userInvite",
                 "parameters": [
                     {
                         "description": "Request",
@@ -6957,7 +8163,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/user.inviteDTO"
+                            "$ref": "#/definitions/InviteInput"
                         }
                     }
                 ],
@@ -6982,31 +8188,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -7029,6 +8235,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Disable users and end their sessions; all or none",
+                "operationId": "userDisable",
                 "parameters": [
                     {
                         "description": "User IDs, 1 to 100; not your own",
@@ -7036,7 +8243,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/user.idsDTO"
+                            "$ref": "#/definitions/UserIDs"
                         }
                     }
                 ],
@@ -7047,31 +8254,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -7094,6 +8301,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Enable users; one who never set a password goes back to pending. All or none",
+                "operationId": "userEnable",
                 "parameters": [
                     {
                         "description": "User IDs, 1 to 100",
@@ -7101,7 +8309,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/user.idsDTO"
+                            "$ref": "#/definitions/UserIDs"
                         }
                     }
                 ],
@@ -7112,31 +8320,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -7159,6 +8367,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Let users sign in again: lift the account lock and forget recent failed logins. All or none",
+                "operationId": "userUnlock",
                 "parameters": [
                     {
                         "description": "User IDs, 1 to 100",
@@ -7166,7 +8375,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/user.idsDTO"
+                            "$ref": "#/definitions/UserIDs"
                         }
                     }
                 ],
@@ -7177,31 +8386,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -7221,6 +8430,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Get a user with their roles",
+                "operationId": "userGet",
                 "parameters": [
                     {
                         "type": "string",
@@ -7234,37 +8444,37 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/user.detailsDTO"
+                            "$ref": "#/definitions/UserDetails"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -7285,6 +8495,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Make a new activation link for a pending user, to hand over by hand",
+                "operationId": "userActivationLink",
                 "parameters": [
                     {
                         "type": "string",
@@ -7318,37 +8529,37 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -7368,6 +8579,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Send a pending account a new activation email",
+                "operationId": "userReinvite",
                 "parameters": [
                     {
                         "type": "string",
@@ -7398,37 +8610,37 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -7448,6 +8660,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "End every session of another user",
+                "operationId": "userRevokeSessions",
                 "parameters": [
                     {
                         "type": "string",
@@ -7464,31 +8677,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     },
                     "429": {
                         "description": "Too Many Requests",
                         "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
+                            "$ref": "#/definitions/Error"
                         }
                     }
                 }
@@ -7496,7 +8709,172 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "audit.recordDTO": {
+        "APIKey": {
+            "type": "object",
+            "properties": {
+                "can_write": {
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "creator_name": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_used_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "prefix": {
+                    "type": "string"
+                },
+                "scopes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/KeyScope"
+                    }
+                }
+            }
+        },
+        "APIKeyInput": {
+            "type": "object",
+            "properties": {
+                "expires_in_days": {
+                    "description": "ExpiresInDays (1-365) ends the key that many days after it is made; 0 or absent never ends. Ignored on update.",
+                    "type": "integer",
+                    "example": 90
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Assistente"
+                },
+                "renew_days": {
+                    "description": "RenewDays, on update only, gives the key a new end that many days from now (0: no end); absent keeps it.",
+                    "type": "integer",
+                    "example": 90
+                },
+                "scopes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/KeyScope"
+                    }
+                }
+            }
+        },
+        "ActivateInput": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "username": {
+                    "description": "Username is optional: empty keeps the one made from the email. Collections live at /username/slug.",
+                    "type": "string",
+                    "example": "ana-silva"
+                }
+            }
+        },
+        "ActivityDay": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "day": {
+                    "type": "string",
+                    "example": "2026-11-12"
+                }
+            }
+        },
+        "AddMemberInput": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "ana@example.com"
+                },
+                "name": {
+                    "description": "Name is needed only when the email has no account: it is then invited.",
+                    "type": "string",
+                    "example": "Ana"
+                },
+                "role": {
+                    "type": "string",
+                    "enum": [
+                        "owner",
+                        "editor",
+                        "viewer"
+                    ],
+                    "example": "editor"
+                }
+            }
+        },
+        "AddedMember": {
+            "type": "object",
+            "properties": {
+                "activation_token": {
+                    "description": "ActivationToken is set only for an invite with manual delivery.",
+                    "type": "string"
+                },
+                "invited": {
+                    "type": "boolean"
+                },
+                "member": {
+                    "$ref": "#/definitions/Member"
+                }
+            }
+        },
+        "AggregateGroup": {
+            "type": "object",
+            "properties": {
+                "avgs": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "key": {
+                    "type": "object"
+                },
+                "maxs": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "mins": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "sums": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                }
+            }
+        },
+        "AuditEntry": {
             "type": "object",
             "properties": {
                 "action": {
@@ -7545,23 +8923,106 @@ const docTemplate = `{
                 }
             }
         },
-        "auth.activateDTO": {
+        "Automation": {
             "type": "object",
             "properties": {
-                "password": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                },
-                "username": {
-                    "description": "Username is optional: empty keeps the one made from the email. Collections live at /username/slug.",
+                "action": {
                     "type": "string",
-                    "example": "ana-silva"
+                    "example": "notify"
+                },
+                "conditions": {
+                    "type": "object"
+                },
+                "config": {
+                    "type": "object"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "hour": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_error": {
+                    "type": "string"
+                },
+                "last_run_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "runs": {
+                    "type": "integer"
+                },
+                "trigger": {
+                    "type": "string",
+                    "example": "record.created"
                 }
             }
         },
-        "auth.changePasswordDTO": {
+        "AutomationInput": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": [
+                        "set_field",
+                        "notify",
+                        "email",
+                        "webhook",
+                        "create_record"
+                    ],
+                    "example": "notify"
+                },
+                "conditions": {
+                    "type": "object"
+                },
+                "config": {
+                    "type": "object"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "hour": {
+                    "type": "integer",
+                    "example": 8
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Avisar urgentes"
+                },
+                "trigger": {
+                    "type": "string",
+                    "enum": [
+                        "record.created",
+                        "record.updated",
+                        "daily"
+                    ],
+                    "example": "record.created"
+                }
+            }
+        },
+        "BulkUpdateInput": {
+            "type": "object",
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "set": {
+                    "type": "object"
+                }
+            }
+        },
+        "ChangePasswordInput": {
             "type": "object",
             "properties": {
                 "current_password": {
@@ -7572,331 +9033,7 @@ const docTemplate = `{
                 }
             }
         },
-        "auth.loginDTO": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "description": "Code is the authenticator or recovery code; send it again after MFA_REQUIRED.",
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.meDTO": {
-            "type": "object",
-            "properties": {
-                "session_id": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/auth.userDTO"
-                }
-            }
-        },
-        "auth.mfaCodeDTO": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.mfaDisableDTO": {
-            "type": "object",
-            "properties": {
-                "password": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.mfaRecoveryDTO": {
-            "type": "object",
-            "properties": {
-                "recovery_codes": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "auth.mfaSetupDTO": {
-            "type": "object",
-            "properties": {
-                "secret": {
-                    "type": "string"
-                },
-                "uri": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.mfaStatusDTO": {
-            "type": "object",
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                },
-                "recovery_left": {
-                    "type": "integer"
-                }
-            }
-        },
-        "auth.refreshDTO": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.registerDTO": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.renameDTO": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "example": "Ana Silva"
-                },
-                "username": {
-                    "description": "Username is the account's part of collection URLs; old paths keep opening.",
-                    "type": "string",
-                    "example": "ana-silva"
-                }
-            }
-        },
-        "auth.resetConfirmDTO": {
-            "type": "object",
-            "properties": {
-                "password": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.resetRequestDTO": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.ssoCallbackDTO": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "flow": {
-                    "type": "string"
-                },
-                "state": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.ssoInfoDTO": {
-            "type": "object",
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.ssoStartDTO": {
-            "type": "object",
-            "properties": {
-                "flow": {
-                    "description": "keep it (an httpOnly cookie) and send it back to the callback",
-                    "type": "string"
-                },
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.tokenPairDTO": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string"
-                },
-                "expires_in": {
-                    "type": "integer"
-                },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "token_type": {
-                    "type": "string"
-                },
-                "user": {
-                    "description": "missing only if the profile failed to load",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/auth.userDTO"
-                        }
-                    ]
-                }
-            }
-        },
-        "auth.userDTO": {
-            "type": "object",
-            "properties": {
-                "avatar_at": {
-                    "description": "AvatarAt is when the picture was last set; absent when there is none. Use it\nas a cache buster on /v1/me/avatar.",
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "is_superuser": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "permissions": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        }
-                    }
-                },
-                "preferences": {
-                    "$ref": "#/definitions/mapper.PreferencesDTO"
-                },
-                "roles": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "status": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "collection.addMemberDTO": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "ana@example.com"
-                },
-                "name": {
-                    "description": "Name is needed only when the email has no account: it is then invited.",
-                    "type": "string",
-                    "example": "Ana"
-                },
-                "role": {
-                    "type": "string",
-                    "enum": [
-                        "owner",
-                        "editor",
-                        "viewer"
-                    ],
-                    "example": "editor"
-                }
-            }
-        },
-        "collection.addedMemberDTO": {
-            "type": "object",
-            "properties": {
-                "activation_token": {
-                    "description": "ActivationToken is set only for an invite with manual delivery.",
-                    "type": "string"
-                },
-                "invited": {
-                    "type": "boolean"
-                },
-                "member": {
-                    "$ref": "#/definitions/collection.memberDTO"
-                }
-            }
-        },
-        "collection.auditDTO": {
-            "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "example": "record.update"
-                },
-                "actor_email": {
-                    "type": "string"
-                },
-                "actor_id": {
-                    "type": "string"
-                },
-                "actor_name": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "details": {
-                    "type": "object",
-                    "additionalProperties": {}
-                },
-                "id": {
-                    "type": "string"
-                },
-                "request_id": {
-                    "type": "string"
-                },
-                "target_gone": {
-                    "type": "boolean"
-                },
-                "target_id": {
-                    "type": "string"
-                },
-                "target_label": {
-                    "type": "string"
-                },
-                "target_owner": {
-                    "description": "a collection target's address: /target_owner/target_slug",
-                    "type": "string",
-                    "example": "ana"
-                },
-                "target_slug": {
-                    "type": "string",
-                    "example": "livros"
-                }
-            }
-        },
-        "collection.collectionDTO": {
+        "Collection": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -7960,24 +9097,56 @@ const docTemplate = `{
                 }
             }
         },
-        "collection.contributorDTO": {
+        "CollectionAuditEntry": {
             "type": "object",
             "properties": {
-                "created": {
-                    "type": "integer"
+                "action": {
+                    "type": "string",
+                    "example": "record.update"
                 },
-                "edited": {
-                    "type": "integer"
-                },
-                "name": {
+                "actor_email": {
                     "type": "string"
                 },
-                "user_id": {
+                "actor_id": {
                     "type": "string"
+                },
+                "actor_name": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "id": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "target_gone": {
+                    "type": "boolean"
+                },
+                "target_id": {
+                    "type": "string"
+                },
+                "target_label": {
+                    "type": "string"
+                },
+                "target_owner": {
+                    "description": "a collection target's address: /target_owner/target_slug",
+                    "type": "string",
+                    "example": "ana"
+                },
+                "target_slug": {
+                    "type": "string",
+                    "example": "livros"
                 }
             }
         },
-        "collection.countDTO": {
+        "CollectionCount": {
             "type": "object",
             "properties": {
                 "count": {
@@ -7985,7 +9154,7 @@ const docTemplate = `{
                 }
             }
         },
-        "collection.createDTO": {
+        "CollectionCreateInput": {
             "type": "object",
             "properties": {
                 "description": {
@@ -8004,19 +9173,7 @@ const docTemplate = `{
                 }
             }
         },
-        "collection.dayDTO": {
-            "type": "object",
-            "properties": {
-                "count": {
-                    "type": "integer"
-                },
-                "day": {
-                    "type": "string",
-                    "example": "2026-11-12"
-                }
-            }
-        },
-        "collection.duplicateDTO": {
+        "CollectionDuplicateInput": {
             "type": "object",
             "properties": {
                 "name": {
@@ -8028,33 +9185,7 @@ const docTemplate = `{
                 }
             }
         },
-        "collection.fixDTO": {
-            "type": "object",
-            "properties": {
-                "dry_run": {
-                    "description": "DryRun answers how many records would change, changing none.",
-                    "type": "boolean"
-                },
-                "field": {
-                    "type": "string"
-                },
-                "op": {
-                    "type": "string",
-                    "enum": [
-                        "set_default",
-                        "rename",
-                        "remove"
-                    ]
-                },
-                "to": {
-                    "type": "string"
-                },
-                "value": {
-                    "type": "object"
-                }
-            }
-        },
-        "collection.idsDTO": {
+        "CollectionIDs": {
             "type": "object",
             "properties": {
                 "ids": {
@@ -8065,7 +9196,350 @@ const docTemplate = `{
                 }
             }
         },
-        "collection.invalidRecordDTO": {
+        "CollectionOption": {
+            "type": "object",
+            "properties": {
+                "icon": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "member": {
+                    "description": "false for a platform admin outside the collection",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "role": {
+                    "description": "the caller's role",
+                    "type": "string",
+                    "enum": [
+                        "owner",
+                        "editor",
+                        "viewer"
+                    ]
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "CollectionStats": {
+            "type": "object",
+            "properties": {
+                "contributors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Contributor"
+                    }
+                },
+                "last_update": {
+                    "type": "string"
+                },
+                "members": {
+                    "type": "integer"
+                },
+                "per_day": {
+                    "description": "PerDay holds the days with records created in the last 30, oldest first.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ActivityDay"
+                    }
+                },
+                "records": {
+                    "type": "integer"
+                }
+            }
+        },
+        "CollectionUpdateInput": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "icon": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "schema": {
+                    "type": "object"
+                },
+                "version": {
+                    "description": "Version is the version the client read; when sent, a newer row is a 409 conflict.",
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "Comment": {
+            "type": "object",
+            "properties": {
+                "author_id": {
+                    "type": "string"
+                },
+                "author_name": {
+                    "type": "string"
+                },
+                "body": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                }
+            }
+        },
+        "Contributor": {
+            "type": "object",
+            "properties": {
+                "created": {
+                    "type": "integer"
+                },
+                "edited": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "CurrentUser": {
+            "type": "object",
+            "properties": {
+                "avatar_at": {
+                    "description": "AvatarAt is when the picture was last set; absent when there is none. Use it\nas a cache buster on /v1/me/avatar.",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_superuser": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "preferences": {
+                    "$ref": "#/definitions/Preferences"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "status": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "Dashboard": {
+            "type": "object",
+            "properties": {
+                "widgets": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                }
+            }
+        },
+        "DateCount": {
+            "type": "object",
+            "properties": {
+                "at": {
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "Error": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "field": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "FieldProfile": {
+            "type": "object",
+            "properties": {
+                "avg": {
+                    "type": "number"
+                },
+                "distinct": {
+                    "type": "integer"
+                },
+                "filled": {
+                    "type": "integer"
+                },
+                "first": {
+                    "type": "string"
+                },
+                "last": {
+                    "type": "string"
+                },
+                "max": {
+                    "type": "number"
+                },
+                "min": {
+                    "type": "number"
+                },
+                "series": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/DateCount"
+                    }
+                },
+                "sum": {
+                    "type": "number"
+                },
+                "top": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ValueCount"
+                    }
+                }
+            }
+        },
+        "File": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "Health": {
+            "type": "object",
+            "properties": {
+                "checks": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "ImportError": {
+            "type": "object",
+            "properties": {
+                "index": {
+                    "description": "Index is the record's position in this request.",
+                    "type": "integer"
+                },
+                "issues": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/RecordIssue"
+                    }
+                }
+            }
+        },
+        "ImportInput": {
+            "type": "object",
+            "properties": {
+                "batch_key": {
+                    "description": "BatchKey, chosen per batch (up to 100 characters), makes a retry safe: a key saved before returns that result and saves nothing again.",
+                    "type": "string"
+                },
+                "dry_run": {
+                    "type": "boolean"
+                },
+                "records": {
+                    "type": "array",
+                    "items": {
+                        "type": "object"
+                    }
+                },
+                "skip_invalid": {
+                    "type": "boolean"
+                },
+                "upsert_key": {
+                    "description": "UpsertKey, a unique field: a record already holding a row's value is updated (its other fields stay).",
+                    "type": "string"
+                }
+            }
+        },
+        "ImportResult": {
+            "type": "object",
+            "properties": {
+                "created": {
+                    "type": "integer"
+                },
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ImportError"
+                    }
+                },
+                "invalid": {
+                    "type": "integer"
+                },
+                "replayed": {
+                    "description": "Replayed: this batch_key was saved before; created and updated are from that save.",
+                    "type": "boolean"
+                },
+                "updated": {
+                    "type": "integer"
+                }
+            }
+        },
+        "InvalidRecord": {
             "type": "object",
             "properties": {
                 "data": {
@@ -8077,7 +9551,7 @@ const docTemplate = `{
                 "issues": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/collection.issueDTO"
+                        "$ref": "#/definitions/QualityIssue"
                     }
                 },
                 "updated_at": {
@@ -8085,22 +9559,344 @@ const docTemplate = `{
                 }
             }
         },
-        "collection.issueDTO": {
+        "InviteInput": {
             "type": "object",
             "properties": {
-                "keyword": {
-                    "type": "string",
-                    "example": "required"
-                },
-                "message": {
+                "email": {
                     "type": "string"
                 },
-                "path": {
+                "name": {
                     "type": "string"
                 }
             }
         },
-        "collection.memberDTO": {
+        "JSONRPCRequest": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "jsonrpc": {
+                    "type": "string",
+                    "example": "2.0"
+                },
+                "method": {
+                    "type": "string",
+                    "example": "tools/list"
+                }
+            }
+        },
+        "KeyScope": {
+            "type": "object",
+            "properties": {
+                "can_write": {
+                    "type": "boolean"
+                },
+                "collection_id": {
+                    "type": "string"
+                },
+                "collection_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "LoginInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "Code is the authenticator or recovery code; send it again after MFA_REQUIRED.",
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "MCPCall": {
+            "type": "object",
+            "properties": {
+                "args": {
+                    "description": "the arguments as JSON, cut to 500 characters",
+                    "type": "string",
+                    "example": "{\"collection_id\":\"…\",\"rules\":[{\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}]}"
+                },
+                "collection_id": {
+                    "type": "string"
+                },
+                "collection_name": {
+                    "description": "in a key's log only",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "key_live": {
+                    "description": "false once the key is deleted",
+                    "type": "boolean"
+                },
+                "key_name": {
+                    "type": "string"
+                },
+                "ok": {
+                    "type": "boolean"
+                },
+                "tool": {
+                    "type": "string",
+                    "example": "search_records"
+                },
+                "user_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "MCPTool": {
+            "type": "object",
+            "properties": {
+                "conditions": {
+                    "type": "object"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "name": {
+                    "type": "string",
+                    "example": "clientes_por_cidade"
+                },
+                "order": {
+                    "type": "string",
+                    "example": "desc"
+                },
+                "params": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/MCPToolParam"
+                    }
+                },
+                "sort": {
+                    "type": "string",
+                    "example": "updated_at"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "MCPToolInput": {
+            "type": "object",
+            "properties": {
+                "conditions": {
+                    "type": "object"
+                },
+                "description": {
+                    "type": "string",
+                    "example": "Clientes ativos de uma cidade, com nome e telefone."
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "name": {
+                    "type": "string",
+                    "example": "clientes_por_cidade"
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ],
+                    "example": "desc"
+                },
+                "params": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/MCPToolParam"
+                    }
+                },
+                "sort": {
+                    "type": "string",
+                    "example": "updated_at"
+                }
+            }
+        },
+        "MCPToolParam": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "example": "Cidade do cliente"
+                },
+                "field": {
+                    "type": "string",
+                    "example": "cidade"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "cidade"
+                },
+                "op": {
+                    "type": "string",
+                    "enum": [
+                        "eq",
+                        "neq",
+                        "contains",
+                        "gt",
+                        "gte",
+                        "lt",
+                        "lte",
+                        "in",
+                        "has"
+                    ],
+                    "example": "eq"
+                },
+                "required": {
+                    "type": "boolean"
+                },
+                "type": {
+                    "description": "set by the server from the schema",
+                    "type": "string",
+                    "example": "string"
+                }
+            }
+        },
+        "MCPToolTest": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "records": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/MCPToolTestRecord"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "MCPToolTestInput": {
+            "type": "object",
+            "properties": {
+                "args": {
+                    "type": "object"
+                },
+                "tool": {
+                    "$ref": "#/definitions/MCPToolInput"
+                }
+            }
+        },
+        "MCPToolTestRecord": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "object"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "MFACodeInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                }
+            }
+        },
+        "MFADisableInput": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "MFARecoveryCodes": {
+            "type": "object",
+            "properties": {
+                "recovery_codes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "MFASetup": {
+            "type": "object",
+            "properties": {
+                "secret": {
+                    "type": "string"
+                },
+                "uri": {
+                    "type": "string"
+                }
+            }
+        },
+        "MFAStatus": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "recovery_left": {
+                    "type": "integer"
+                }
+            }
+        },
+        "Me": {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/CurrentUser"
+                }
+            }
+        },
+        "Member": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -8137,87 +9933,7 @@ const docTemplate = `{
                 }
             }
         },
-        "collection.optionDTO": {
-            "type": "object",
-            "properties": {
-                "icon": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "member": {
-                    "description": "false for a platform admin outside the collection",
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "owner": {
-                    "type": "string"
-                },
-                "role": {
-                    "description": "the caller's role",
-                    "type": "string",
-                    "enum": [
-                        "owner",
-                        "editor",
-                        "viewer"
-                    ]
-                },
-                "slug": {
-                    "type": "string"
-                }
-            }
-        },
-        "collection.qualityDTO": {
-            "type": "object",
-            "properties": {
-                "checked": {
-                    "type": "integer"
-                },
-                "current_version": {
-                    "type": "integer"
-                },
-                "error": {
-                    "type": "string"
-                },
-                "finished_at": {
-                    "type": "string"
-                },
-                "invalid": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/collection.invalidRecordDTO"
-                    }
-                },
-                "invalid_count": {
-                    "type": "integer"
-                },
-                "started_at": {
-                    "type": "string"
-                },
-                "status": {
-                    "description": "Status is none (never ran), running, done or failed.",
-                    "type": "string",
-                    "enum": [
-                        "none",
-                        "running",
-                        "done",
-                        "failed"
-                    ]
-                },
-                "truncated": {
-                    "description": "Truncated means the check stopped at 500 000 records.",
-                    "type": "boolean"
-                },
-                "version": {
-                    "description": "Version is the collection version checked; a lower one than current_version is stale.",
-                    "type": "integer"
-                }
-            }
-        },
-        "collection.roleDTO": {
+        "MemberRoleInput": {
             "type": "object",
             "properties": {
                 "role": {
@@ -8231,138 +9947,86 @@ const docTemplate = `{
                 }
             }
         },
-        "collection.statsDTO": {
+        "NewAPIKey": {
             "type": "object",
             "properties": {
-                "contributors": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/collection.contributorDTO"
-                    }
+                "can_write": {
+                    "type": "boolean"
                 },
-                "last_update": {
+                "created_at": {
                     "type": "string"
                 },
-                "members": {
-                    "type": "integer"
-                },
-                "per_day": {
-                    "description": "PerDay holds the days with records created in the last 30, oldest first.",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/collection.dayDTO"
-                    }
-                },
-                "records": {
-                    "type": "integer"
-                }
-            }
-        },
-        "collection.transferDTO": {
-            "type": "object",
-            "properties": {
-                "user_id": {
-                    "description": "UserID is an owner member who takes the collection's address.",
-                    "type": "string"
-                }
-            }
-        },
-        "collection.updateDTO": {
-            "type": "object",
-            "properties": {
-                "description": {
+                "creator_name": {
                     "type": "string"
                 },
-                "icon": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_used_at": {
                     "type": "string"
                 },
                 "name": {
                     "type": "string"
                 },
-                "schema": {
-                    "type": "object"
+                "prefix": {
+                    "type": "string"
                 },
-                "version": {
-                    "description": "Version is the version the client read; when sent, a newer row is a 409 conflict.",
-                    "type": "integer",
-                    "example": 3
-                }
-            }
-        },
-        "health.responseDTO": {
-            "type": "object",
-            "properties": {
-                "checks": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
+                "scopes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/KeyScope"
                     }
                 },
-                "status": {
+                "secret": {
+                    "description": "Secret is shown once: send it as \"Authorization: Bearer \u003csecret\u003e\" or \"X-API-Key: \u003csecret\u003e\".",
                     "type": "string"
                 }
             }
         },
-        "mapper.PaginationDTO": {
+        "NewWebhook": {
             "type": "object",
             "properties": {
-                "limit": {
-                    "type": "integer"
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "total_items": {
-                    "type": "integer"
-                },
-                "total_pages": {
-                    "type": "integer"
-                }
-            }
-        },
-        "mapper.PreferencesDTO": {
-            "type": "object",
-            "properties": {
-                "language": {
-                    "type": "string",
-                    "example": "pt-BR"
-                },
-                "theme": {
-                    "type": "string",
-                    "example": "system"
-                }
-            }
-        },
-        "mapper.errorBody": {
-            "type": "object",
-            "properties": {
-                "code": {
+                "created_at": {
                     "type": "string"
                 },
-                "details": {
-                    "type": "object",
-                    "additionalProperties": {}
-                },
-                "field": {
-                    "type": "string"
-                },
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "notification.idsDTO": {
-            "type": "object",
-            "properties": {
-                "ids": {
+                "events": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
+                },
+                "failures": {
+                    "description": "Failures counts failed calls in a row; at 10 the hook pauses (paused_at) until resumed.",
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_at": {
+                    "type": "string"
+                },
+                "last_error": {
+                    "type": "string"
+                },
+                "last_status": {
+                    "type": "integer"
+                },
+                "paused_at": {
+                    "type": "string"
+                },
+                "secret": {
+                    "description": "Secret signs every call (X-Dataset-Signature: t=\u003cunix\u003e,v1=\u003cHMAC-SHA256 of \"\u003ct\u003e.\u003cbody\u003e\"\u003e); shown once.",
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
                 }
             }
         },
-        "notification.notificationDTO": {
+        "Notification": {
             "type": "object",
             "properties": {
                 "collection_owner": {
@@ -8406,173 +10070,7 @@ const docTemplate = `{
                 }
             }
         },
-        "public.linkDTO": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "icon": {
-                    "type": "string"
-                },
-                "kind": {
-                    "type": "string",
-                    "example": "form"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "schema": {
-                    "type": "object"
-                },
-                "searchable": {
-                    "description": "Searchable is false when the collection has private fields: search would reveal their values.",
-                    "type": "boolean"
-                }
-            }
-        },
-        "public.recordDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "data": {
-                    "type": "object"
-                },
-                "id": {
-                    "type": "string"
-                }
-            }
-        },
-        "public.submitDTO": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "object"
-                }
-            }
-        },
-        "record.commentDTO": {
-            "type": "object",
-            "properties": {
-                "author_id": {
-                    "type": "string"
-                },
-                "author_name": {
-                    "type": "string"
-                },
-                "body": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                }
-            }
-        },
-        "record.createDTO": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "object"
-                }
-            }
-        },
-        "record.dateCountDTO": {
-            "type": "object",
-            "properties": {
-                "at": {
-                    "type": "string"
-                },
-                "count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "record.fieldStatsDTO": {
-            "type": "object",
-            "properties": {
-                "avg": {
-                    "type": "number"
-                },
-                "distinct": {
-                    "type": "integer"
-                },
-                "filled": {
-                    "type": "integer"
-                },
-                "first": {
-                    "type": "string"
-                },
-                "last": {
-                    "type": "string"
-                },
-                "max": {
-                    "type": "number"
-                },
-                "min": {
-                    "type": "number"
-                },
-                "series": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/record.dateCountDTO"
-                    }
-                },
-                "sum": {
-                    "type": "number"
-                },
-                "top": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/record.valueCountDTO"
-                    }
-                }
-            }
-        },
-        "record.groupDTO": {
-            "type": "object",
-            "properties": {
-                "avgs": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "number",
-                        "format": "float64"
-                    }
-                },
-                "count": {
-                    "type": "integer"
-                },
-                "key": {
-                    "type": "object"
-                },
-                "maxs": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "number",
-                        "format": "float64"
-                    }
-                },
-                "mins": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "number",
-                        "format": "float64"
-                    }
-                },
-                "sums": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "number",
-                        "format": "float64"
-                    }
-                }
-            }
-        },
-        "record.idsDTO": {
+        "NotificationIDs": {
             "type": "object",
             "properties": {
                 "ids": {
@@ -8583,801 +10081,7 @@ const docTemplate = `{
                 }
             }
         },
-        "record.importDTO": {
-            "type": "object",
-            "properties": {
-                "batch_key": {
-                    "description": "BatchKey, chosen per batch (up to 100 characters), makes a retry safe: a key saved before returns that result and saves nothing again.",
-                    "type": "string"
-                },
-                "dry_run": {
-                    "type": "boolean"
-                },
-                "records": {
-                    "type": "array",
-                    "items": {
-                        "type": "object"
-                    }
-                },
-                "skip_invalid": {
-                    "type": "boolean"
-                },
-                "upsert_key": {
-                    "description": "UpsertKey, a unique field: a record already holding a row's value is updated (its other fields stay).",
-                    "type": "string"
-                }
-            }
-        },
-        "record.importErrorDTO": {
-            "type": "object",
-            "properties": {
-                "index": {
-                    "description": "Index is the record's position in this request.",
-                    "type": "integer"
-                },
-                "issues": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/record.issueDTO"
-                    }
-                }
-            }
-        },
-        "record.importResultDTO": {
-            "type": "object",
-            "properties": {
-                "created": {
-                    "type": "integer"
-                },
-                "errors": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/record.importErrorDTO"
-                    }
-                },
-                "invalid": {
-                    "type": "integer"
-                },
-                "replayed": {
-                    "description": "Replayed: this batch_key was saved before; created and updated are from that save.",
-                    "type": "boolean"
-                },
-                "updated": {
-                    "type": "integer"
-                }
-            }
-        },
-        "record.issueDTO": {
-            "type": "object",
-            "properties": {
-                "keyword": {
-                    "type": "string",
-                    "example": "required"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "path": {
-                    "type": "string"
-                }
-            }
-        },
-        "record.linksDTO": {
-            "type": "object",
-            "properties": {
-                "collection_id": {
-                    "type": "string"
-                },
-                "collection_name": {
-                    "type": "string"
-                },
-                "field": {
-                    "type": "string"
-                },
-                "owner": {
-                    "description": "the collection's address: /owner/slug",
-                    "type": "string",
-                    "example": "ana"
-                },
-                "records": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/record.recordDTO"
-                    }
-                },
-                "schema": {
-                    "type": "object"
-                },
-                "slug": {
-                    "type": "string",
-                    "example": "livros"
-                },
-                "sub": {
-                    "description": "the reference subfield of each item when Field is a list of objects",
-                    "type": "string"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "record.recordDTO": {
-            "type": "object",
-            "properties": {
-                "collection_id": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "data": {
-                    "type": "object"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "version": {
-                    "type": "integer"
-                }
-            }
-        },
-        "record.restoreDTO": {
-            "type": "object",
-            "properties": {
-                "current_version": {
-                    "description": "CurrentVersion is the version the client read; when sent, a newer row is a 409 conflict.",
-                    "type": "integer",
-                    "example": 5
-                },
-                "version": {
-                    "type": "integer",
-                    "example": 2
-                }
-            }
-        },
-        "record.updateDTO": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "object"
-                },
-                "version": {
-                    "description": "Version is the version the client read; when sent, a newer row is a 409 conflict.",
-                    "type": "integer",
-                    "example": 3
-                }
-            }
-        },
-        "record.valueCountDTO": {
-            "type": "object",
-            "properties": {
-                "count": {
-                    "type": "integer"
-                },
-                "key": {
-                    "type": "object"
-                }
-            }
-        },
-        "record.versionDTO": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "object"
-                },
-                "saved_at": {
-                    "type": "string"
-                },
-                "version": {
-                    "type": "integer"
-                }
-            }
-        },
-        "rest.mcpRequest": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer",
-                    "example": 1
-                },
-                "jsonrpc": {
-                    "type": "string",
-                    "example": "2.0"
-                },
-                "method": {
-                    "type": "string",
-                    "example": "tools/list"
-                }
-            }
-        },
-        "session.sessionDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "current": {
-                    "type": "boolean"
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "ip_address": {
-                    "type": "string"
-                },
-                "last_seen_at": {
-                    "type": "string"
-                },
-                "user_agent": {
-                    "type": "string"
-                }
-            }
-        },
-        "tools.automationBody": {
-            "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": [
-                        "set_field",
-                        "notify",
-                        "email",
-                        "webhook",
-                        "create_record"
-                    ],
-                    "example": "notify"
-                },
-                "conditions": {
-                    "type": "object"
-                },
-                "config": {
-                    "type": "object"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "hour": {
-                    "type": "integer",
-                    "example": 8
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Avisar urgentes"
-                },
-                "trigger": {
-                    "type": "string",
-                    "enum": [
-                        "record.created",
-                        "record.updated",
-                        "daily"
-                    ],
-                    "example": "record.created"
-                }
-            }
-        },
-        "tools.automationDTO": {
-            "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "example": "notify"
-                },
-                "conditions": {
-                    "type": "object"
-                },
-                "config": {
-                    "type": "object"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "hour": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "last_error": {
-                    "type": "string"
-                },
-                "last_run_at": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "runs": {
-                    "type": "integer"
-                },
-                "trigger": {
-                    "type": "string",
-                    "example": "record.created"
-                }
-            }
-        },
-        "tools.bulkDTO": {
-            "type": "object",
-            "properties": {
-                "ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "set": {
-                    "type": "object"
-                }
-            }
-        },
-        "tools.countDTO": {
-            "type": "object",
-            "properties": {
-                "count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "tools.createHookDTO": {
-            "type": "object",
-            "properties": {
-                "events": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "record.created"
-                    ]
-                },
-                "url": {
-                    "type": "string",
-                    "example": "https://example.com/hooks/dataset"
-                }
-            }
-        },
-        "tools.createViewDTO": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "query": {
-                    "type": "string",
-                    "example": "sort=data.nome\u0026order=asc"
-                },
-                "shared": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "tools.dashboardDTO": {
-            "type": "object",
-            "properties": {
-                "widgets": {
-                    "type": "array",
-                    "items": {
-                        "type": "object"
-                    }
-                }
-            }
-        },
-        "tools.deliveryDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "error": {
-                    "type": "string"
-                },
-                "event": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "integer"
-                }
-            }
-        },
-        "tools.fileDTO": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "size": {
-                    "type": "integer"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "tools.idsDTO": {
-            "type": "object",
-            "properties": {
-                "ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "tools.keyBodyDTO": {
-            "type": "object",
-            "properties": {
-                "expires_in_days": {
-                    "description": "ExpiresInDays (1-365) ends the key that many days after it is made; 0 or absent never ends. Ignored on update.",
-                    "type": "integer",
-                    "example": 90
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Assistente"
-                },
-                "renew_days": {
-                    "description": "RenewDays, on update only, gives the key a new end that many days from now (0: no end); absent keeps it.",
-                    "type": "integer",
-                    "example": 90
-                },
-                "scopes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/tools.scopeDTO"
-                    }
-                }
-            }
-        },
-        "tools.keyDTO": {
-            "type": "object",
-            "properties": {
-                "can_write": {
-                    "type": "boolean"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "creator_name": {
-                    "type": "string"
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "last_used_at": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "prefix": {
-                    "type": "string"
-                },
-                "scopes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/tools.scopeDTO"
-                    }
-                }
-            }
-        },
-        "tools.mcpCallDTO": {
-            "type": "object",
-            "properties": {
-                "args": {
-                    "description": "the arguments as JSON, cut to 500 characters",
-                    "type": "string",
-                    "example": "{\"collection_id\":\"…\",\"rules\":[{\"field\":\"status\",\"op\":\"eq\",\"value\":\"Pago\"}]}"
-                },
-                "collection_id": {
-                    "type": "string"
-                },
-                "collection_name": {
-                    "description": "in a key's log only",
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "error": {
-                    "type": "string"
-                },
-                "key_live": {
-                    "description": "false once the key is deleted",
-                    "type": "boolean"
-                },
-                "key_name": {
-                    "type": "string"
-                },
-                "ok": {
-                    "type": "boolean"
-                },
-                "tool": {
-                    "type": "string",
-                    "example": "search_records"
-                },
-                "user_name": {
-                    "type": "string"
-                }
-            }
-        },
-        "tools.mcpParamDTO": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "example": "Cidade do cliente"
-                },
-                "field": {
-                    "type": "string",
-                    "example": "cidade"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "cidade"
-                },
-                "op": {
-                    "type": "string",
-                    "enum": [
-                        "eq",
-                        "neq",
-                        "contains",
-                        "gt",
-                        "gte",
-                        "lt",
-                        "lte",
-                        "in",
-                        "has"
-                    ],
-                    "example": "eq"
-                },
-                "required": {
-                    "type": "boolean"
-                },
-                "type": {
-                    "description": "set by the server from the schema",
-                    "type": "string",
-                    "example": "string"
-                }
-            }
-        },
-        "tools.mcpTestBody": {
-            "type": "object",
-            "properties": {
-                "args": {
-                    "type": "object"
-                },
-                "tool": {
-                    "$ref": "#/definitions/tools.mcpToolBody"
-                }
-            }
-        },
-        "tools.mcpTestDTO": {
-            "type": "object",
-            "properties": {
-                "page": {
-                    "type": "integer"
-                },
-                "records": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/tools.mcpTestRecordDTO"
-                    }
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "tools.mcpTestRecordDTO": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "object"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "tools.mcpToolBody": {
-            "type": "object",
-            "properties": {
-                "conditions": {
-                    "type": "object"
-                },
-                "description": {
-                    "type": "string",
-                    "example": "Clientes ativos de uma cidade, com nome e telefone."
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "fields": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "limit": {
-                    "type": "integer",
-                    "example": 20
-                },
-                "name": {
-                    "type": "string",
-                    "example": "clientes_por_cidade"
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ],
-                    "example": "desc"
-                },
-                "params": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/tools.mcpParamDTO"
-                    }
-                },
-                "sort": {
-                    "type": "string",
-                    "example": "updated_at"
-                }
-            }
-        },
-        "tools.mcpToolDTO": {
-            "type": "object",
-            "properties": {
-                "conditions": {
-                    "type": "object"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "fields": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "id": {
-                    "type": "string"
-                },
-                "limit": {
-                    "type": "integer",
-                    "example": 20
-                },
-                "name": {
-                    "type": "string",
-                    "example": "clientes_por_cidade"
-                },
-                "order": {
-                    "type": "string",
-                    "example": "desc"
-                },
-                "params": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/tools.mcpParamDTO"
-                    }
-                },
-                "sort": {
-                    "type": "string",
-                    "example": "updated_at"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "tools.newHookDTO": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "events": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "failures": {
-                    "description": "Failures counts failed calls in a row; at 10 the hook pauses (paused_at) until resumed.",
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "last_at": {
-                    "type": "string"
-                },
-                "last_error": {
-                    "type": "string"
-                },
-                "last_status": {
-                    "type": "integer"
-                },
-                "paused_at": {
-                    "type": "string"
-                },
-                "secret": {
-                    "description": "Secret signs every call (X-Dataset-Signature: t=\u003cunix\u003e,v1=\u003cHMAC-SHA256 of \"\u003ct\u003e.\u003cbody\u003e\"\u003e); shown once.",
-                    "type": "string"
-                },
-                "url": {
-                    "type": "string"
-                }
-            }
-        },
-        "tools.newKeyDTO": {
-            "type": "object",
-            "properties": {
-                "can_write": {
-                    "type": "boolean"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "creator_name": {
-                    "type": "string"
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "last_used_at": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "prefix": {
-                    "type": "string"
-                },
-                "scopes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/tools.scopeDTO"
-                    }
-                },
-                "secret": {
-                    "description": "Secret is shown once: send it as \"Authorization: Bearer \u003csecret\u003e\" or \"X-API-Key: \u003csecret\u003e\".",
-                    "type": "string"
-                }
-            }
-        },
-        "tools.oauthApproveDTO": {
+        "OAuthApproveInput": {
             "type": "object",
             "properties": {
                 "client_id": {
@@ -9404,12 +10108,12 @@ const docTemplate = `{
                 "scopes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/tools.scopeDTO"
+                        "$ref": "#/definitions/KeyScope"
                     }
                 }
             }
         },
-        "tools.oauthClientDTO": {
+        "OAuthClient": {
             "type": "object",
             "properties": {
                 "client_id": {
@@ -9441,7 +10145,7 @@ const docTemplate = `{
                 }
             }
         },
-        "tools.oauthRegisterDTO": {
+        "OAuthRegisterInput": {
             "type": "object",
             "properties": {
                 "client_name": {
@@ -9456,10 +10160,406 @@ const docTemplate = `{
                 }
             }
         },
-        "tools.restoreDTO": {
-            "type": "object"
+        "Pagination": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total_items": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
         },
-        "tools.schemaVersionDTO": {
+        "PasswordResetConfirmInput": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "PasswordResetRequestInput": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "Preferences": {
+            "type": "object",
+            "properties": {
+                "language": {
+                    "type": "string",
+                    "example": "pt-BR"
+                },
+                "theme": {
+                    "type": "string",
+                    "example": "system"
+                }
+            }
+        },
+        "PublicLink": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "icon": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string",
+                    "example": "form"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "schema": {
+                    "type": "object"
+                },
+                "searchable": {
+                    "description": "Searchable is false when the collection has private fields: search would reveal their values.",
+                    "type": "boolean"
+                }
+            }
+        },
+        "PublicRecord": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "object"
+                },
+                "id": {
+                    "type": "string"
+                }
+            }
+        },
+        "PublicSubmitInput": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "object"
+                }
+            }
+        },
+        "QualityFixInput": {
+            "type": "object",
+            "properties": {
+                "dry_run": {
+                    "description": "DryRun answers how many records would change, changing none.",
+                    "type": "boolean"
+                },
+                "field": {
+                    "type": "string"
+                },
+                "op": {
+                    "type": "string",
+                    "enum": [
+                        "set_default",
+                        "rename",
+                        "remove"
+                    ]
+                },
+                "to": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "object"
+                }
+            }
+        },
+        "QualityIssue": {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string",
+                    "example": "required"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                }
+            }
+        },
+        "QualityReport": {
+            "type": "object",
+            "properties": {
+                "checked": {
+                    "type": "integer"
+                },
+                "current_version": {
+                    "type": "integer"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "finished_at": {
+                    "type": "string"
+                },
+                "invalid": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/InvalidRecord"
+                    }
+                },
+                "invalid_count": {
+                    "type": "integer"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status is none (never ran), running, done or failed.",
+                    "type": "string",
+                    "enum": [
+                        "none",
+                        "running",
+                        "done",
+                        "failed"
+                    ]
+                },
+                "truncated": {
+                    "description": "Truncated means the check stopped at 500 000 records.",
+                    "type": "boolean"
+                },
+                "version": {
+                    "description": "Version is the collection version checked; a lower one than current_version is stale.",
+                    "type": "integer"
+                }
+            }
+        },
+        "Record": {
+            "type": "object",
+            "properties": {
+                "collection_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "object"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "RecordCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "RecordCreateInput": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "object"
+                }
+            }
+        },
+        "RecordIDs": {
+            "type": "object",
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "RecordIssue": {
+            "type": "object",
+            "properties": {
+                "keyword": {
+                    "type": "string",
+                    "example": "required"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                }
+            }
+        },
+        "RecordLinks": {
+            "type": "object",
+            "properties": {
+                "collection_id": {
+                    "type": "string"
+                },
+                "collection_name": {
+                    "type": "string"
+                },
+                "field": {
+                    "type": "string"
+                },
+                "owner": {
+                    "description": "the collection's address: /owner/slug",
+                    "type": "string",
+                    "example": "ana"
+                },
+                "records": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Record"
+                    }
+                },
+                "schema": {
+                    "type": "object"
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "livros"
+                },
+                "sub": {
+                    "description": "the reference subfield of each item when Field is a list of objects",
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "RecordRestoreInput": {
+            "type": "object",
+            "properties": {
+                "current_version": {
+                    "description": "CurrentVersion is the version the client read; when sent, a newer row is a 409 conflict.",
+                    "type": "integer",
+                    "example": 5
+                },
+                "version": {
+                    "type": "integer",
+                    "example": 2
+                }
+            }
+        },
+        "RecordUpdateInput": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "object"
+                },
+                "version": {
+                    "description": "Version is the version the client read; when sent, a newer row is a 409 conflict.",
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "RecordVersion": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "object"
+                },
+                "saved_at": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "RefreshInput": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "RegisterInput": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "RenameInput": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "Ana Silva"
+                },
+                "username": {
+                    "description": "Username is the account's part of collection URLs; old paths keep opening.",
+                    "type": "string",
+                    "example": "ana-silva"
+                }
+            }
+        },
+        "SSOCallbackInput": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "flow": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "SSOInfo": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "SSOStart": {
+            "type": "object",
+            "properties": {
+                "flow": {
+                    "description": "keep it (an httpOnly cookie) and send it back to the callback",
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "SchemaVersion": {
             "type": "object",
             "properties": {
                 "saved_at": {
@@ -9476,21 +10576,33 @@ const docTemplate = `{
                 }
             }
         },
-        "tools.scopeDTO": {
+        "Session": {
             "type": "object",
             "properties": {
-                "can_write": {
-                    "type": "boolean"
-                },
-                "collection_id": {
+                "created_at": {
                     "type": "string"
                 },
-                "collection_name": {
+                "current": {
+                    "type": "boolean"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "ip_address": {
+                    "type": "string"
+                },
+                "last_seen_at": {
+                    "type": "string"
+                },
+                "user_agent": {
                     "type": "string"
                 }
             }
         },
-        "tools.shareDTO": {
+        "ShareLink": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -9514,7 +10626,74 @@ const docTemplate = `{
                 }
             }
         },
-        "tools.trashedCollectionDTO": {
+        "TokenPair": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
+                },
+                "user": {
+                    "description": "missing only if the profile failed to load",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/CurrentUser"
+                        }
+                    ]
+                }
+            }
+        },
+        "TransferInput": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "description": "UserID is an owner member who takes the collection's address.",
+                    "type": "string"
+                }
+            }
+        },
+        "TrashCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "TrashIDs": {
+            "type": "object",
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "TrashRestoreInput": {
+            "type": "object",
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "values": {
+                    "type": "object"
+                }
+            }
+        },
+        "TrashedCollection": {
             "type": "object",
             "properties": {
                 "deleted_at": {
@@ -9534,7 +10713,7 @@ const docTemplate = `{
                 }
             }
         },
-        "tools.trashedRecordDTO": {
+        "TrashedRecord": {
             "type": "object",
             "properties": {
                 "data": {
@@ -9551,30 +10730,134 @@ const docTemplate = `{
                 }
             }
         },
-        "tools.updateHookDTO": {
+        "User": {
             "type": "object",
             "properties": {
-                "enabled": {
-                    "description": "Enabled false pauses the hook; true resumes it and clears its failures.",
-                    "type": "boolean",
-                    "example": true
+                "created_at": {
+                    "type": "string"
                 },
-                "events": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "record.created"
-                    ]
+                "email": {
+                    "type": "string"
                 },
-                "url": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
                     "type": "string",
-                    "example": "https://example.com/hooks/dataset"
+                    "example": "active"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string",
+                    "example": "ana-silva"
                 }
             }
         },
-        "tools.viewDTO": {
+        "UserAccess": {
+            "type": "object",
+            "properties": {
+                "activation_expires_at": {
+                    "description": "ActivationExpiresAt is when the live activation link stops working; null when there is none.",
+                    "type": "string"
+                },
+                "active_sessions": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "failed_logins": {
+                    "description": "toward the account lock",
+                    "type": "integer"
+                },
+                "last_login_at": {
+                    "type": "string"
+                },
+                "locked_until": {
+                    "description": "past or null: not locked",
+                    "type": "string"
+                },
+                "recent_failures": {
+                    "description": "inside the login email window",
+                    "type": "integer"
+                }
+            }
+        },
+        "UserDetails": {
+            "type": "object",
+            "properties": {
+                "access": {
+                    "$ref": "#/definitions/UserAccess"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/UserRole"
+                    }
+                },
+                "status": {
+                    "type": "string",
+                    "example": "active"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string",
+                    "example": "ana-silva"
+                }
+            }
+        },
+        "UserIDs": {
+            "type": "object",
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "UserRole": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "support"
+                }
+            }
+        },
+        "ValueCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "key": {
+                    "type": "object"
+                }
+            }
+        },
+        "View": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -9597,7 +10880,22 @@ const docTemplate = `{
                 }
             }
         },
-        "tools.webhookDTO": {
+        "ViewCreateInput": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "query": {
+                    "type": "string",
+                    "example": "sort=data.nome\u0026order=asc"
+                },
+                "shared": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "Webhook": {
             "type": "object",
             "properties": {
                 "created_at": {
@@ -9633,136 +10931,77 @@ const docTemplate = `{
                 }
             }
         },
-        "user.accessDTO": {
+        "WebhookCreateInput": {
             "type": "object",
             "properties": {
-                "activation_expires_at": {
-                    "description": "ActivationExpiresAt is when the live activation link stops working; null when there is none.",
-                    "type": "string"
-                },
-                "active_sessions": {
-                    "type": "integer",
-                    "example": 2
-                },
-                "failed_logins": {
-                    "description": "toward the account lock",
-                    "type": "integer"
-                },
-                "last_login_at": {
-                    "type": "string"
-                },
-                "locked_until": {
-                    "description": "past or null: not locked",
-                    "type": "string"
-                },
-                "recent_failures": {
-                    "description": "inside the login email window",
-                    "type": "integer"
-                }
-            }
-        },
-        "user.detailsDTO": {
-            "type": "object",
-            "properties": {
-                "access": {
-                    "$ref": "#/definitions/user.accessDTO"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "roles": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/user.roleDTO"
-                    }
-                },
-                "status": {
-                    "type": "string",
-                    "example": "active"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string",
-                    "example": "ana-silva"
-                }
-            }
-        },
-        "user.idsDTO": {
-            "type": "object",
-            "properties": {
-                "ids": {
+                "events": {
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
-                }
-            }
-        },
-        "user.inviteDTO": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
+                    },
+                    "example": [
+                        "record.created"
+                    ]
                 },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "user.roleDTO": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                },
-                "name": {
+                "url": {
                     "type": "string",
-                    "example": "support"
+                    "example": "https://example.com/hooks/dataset"
                 }
             }
         },
-        "user.userDTO": {
+        "WebhookDelivery": {
             "type": "object",
             "properties": {
                 "created_at": {
                     "type": "string"
                 },
-                "email": {
+                "error": {
+                    "type": "string"
+                },
+                "event": {
                     "type": "string"
                 },
                 "id": {
                     "type": "string"
                 },
-                "name": {
-                    "type": "string"
-                },
                 "status": {
-                    "type": "string",
-                    "example": "active"
+                    "type": "integer"
+                }
+            }
+        },
+        "WebhookUpdateInput": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "description": "Enabled false pauses the hook; true resumes it and clears its failures.",
+                    "type": "boolean",
+                    "example": true
                 },
-                "updated_at": {
-                    "type": "string"
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "record.created"
+                    ]
                 },
-                "username": {
+                "url": {
                     "type": "string",
-                    "example": "ana-silva"
+                    "example": "https://example.com/hooks/dataset"
                 }
             }
         }
     },
     "securityDefinitions": {
+        "ApiKeyAuth": {
+            "description": "An API key (dsk_...). Routes that take one list ApiKeyAuth.",
+            "type": "apiKey",
+            "name": "X-API-Key",
+            "in": "header"
+        },
         "BearerAuth": {
+            "description": "Bearer \u003caccess token\u003e",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"
@@ -9786,7 +11025,7 @@ const docTemplate = `{
             "name": "Password reset"
         },
         {
-            "description": "The current user: identity, live permissions and password",
+            "description": "The current user: identity, avatar, live permissions, password and two-step login",
             "name": "Profile"
         },
         {
@@ -9798,7 +11037,7 @@ const docTemplate = `{
             "name": "Preferences"
         },
         {
-            "description": "Security notices for the current user",
+            "description": "Notices for the current user: security events, collection invites, automation results",
             "name": "Notifications"
         },
         {
@@ -9806,16 +11045,36 @@ const docTemplate = `{
             "name": "Users"
         },
         {
-            "description": "Log of administrative changes",
+            "description": "Log of administrative changes, platform-wide or for one collection",
             "name": "Audit"
         },
         {
-            "description": "Collections and the JSON Schema their records follow",
+            "description": "Collections, the JSON Schema their records follow, and its versions",
             "name": "Collections"
         },
         {
-            "description": "Records of a collection, validated against its schema",
+            "description": "Who reaches a collection and with what role",
+            "name": "Members"
+        },
+        {
+            "description": "Records of a collection, validated against its schema. API keys reach these routes too",
             "name": "Records"
+        },
+        {
+            "description": "Discussion on one record",
+            "name": "Comments"
+        },
+        {
+            "description": "Saved filters of the record list and the collection's dashboard",
+            "name": "Views \u0026 dashboards"
+        },
+        {
+            "description": "Check every record against the current schema, then fix or delete the invalid ones",
+            "name": "Data quality"
+        },
+        {
+            "description": "Files attached to records: upload into a collection, download by id",
+            "name": "Files"
         },
         {
             "description": "Deleted records and collections, to restore or delete for good",
@@ -9842,11 +11101,15 @@ const docTemplate = `{
             "name": "Automations"
         },
         {
-            "description": "Model Context Protocol for AI assistants with an API key, the tools owners publish for it and what assistants did",
+            "description": "Model Context Protocol endpoint for AI assistants with an API key",
             "name": "MCP"
         },
         {
-            "description": "How an assistant that cannot take a pasted key (the ChatGPT app) gets one: register, the member approves, the code becomes a key.",
+            "description": "Tools a collection's owners publish for assistants, and the log of what assistants did",
+            "name": "MCP tools"
+        },
+        {
+            "description": "How an assistant that cannot take a pasted key (the ChatGPT app) gets one: register, the member approves, the code becomes a key",
             "name": "OAuth"
         }
     ],
@@ -9885,7 +11148,12 @@ const docTemplate = `{
             "name": "Data",
             "tags": [
                 "Collections",
+                "Members",
                 "Records",
+                "Comments",
+                "Views \u0026 dashboards",
+                "Data quality",
+                "Files",
                 "Trash"
             ]
         },
@@ -9898,6 +11166,7 @@ const docTemplate = `{
                 "Webhooks",
                 "Automations",
                 "MCP",
+                "MCP tools",
                 "OAuth"
             ]
         }
@@ -9911,7 +11180,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "Dataset API",
-	Description:      "Identity service. Logging in from this page fills Authorize with the access token.",
+	Description:      "Collections of JSON records with a schema, their members, files and history, and the integrations around them: API keys, share links, webhooks, automations and MCP for AI assistants. Logging in from this page fills Authorize with the access token.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

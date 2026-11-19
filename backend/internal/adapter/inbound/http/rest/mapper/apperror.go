@@ -18,7 +18,7 @@ type errorBody struct {
 	Message string         `json:"message"`
 	Field   string         `json:"field,omitempty"`
 	Details map[string]any `json:"details,omitempty"`
-}
+} // @name Error
 
 // WriteError maps apperror (or generic error) to an HTTP JSON response.
 func WriteError(c fiber.Ctx, err error) error {

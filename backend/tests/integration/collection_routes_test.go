@@ -86,7 +86,7 @@ func TestHTTPCollectionRoutesUseTheAddress(t *testing.T) {
 	if got := call("GET", at+"/records", "", byKey, 200); len(got["items"].([]any)) != 1 {
 		t.Fatalf("records by key: %v", got)
 	}
-	call("GET", at+"/records/stats", "", byKey, 200)
+	call("GET", at+"/records/profile", "", byKey, 200)
 	call("POST", at+"/records", `{"data":{"t":"b"}}`, byKey, 403) // the key reads only
 	call("GET", "/v1/collections/"+other.Owner+"/"+other.Slug+"/records", "", byKey, 404)
 	call("GET", at+"/members", "", byKey, 401) // a key reaches records, not the collection's settings

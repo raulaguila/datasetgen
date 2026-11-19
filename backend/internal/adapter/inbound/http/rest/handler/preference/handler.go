@@ -31,6 +31,7 @@ func (h *Handler) Routes(r fiber.Router) {
 // @Success 200 {object} mapper.PreferencesDTO
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID preferenceGet
 // @Router /v1/me/preferences [get]
 func (h *Handler) Get(c fiber.Ctx) error {
 	prefs, err := h.svc.Preferences(c.Context(), middleware.UserID(c))
@@ -50,6 +51,7 @@ func (h *Handler) Get(c fiber.Ctx) error {
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID preferenceUpdate
 // @Router /v1/me/preferences [put]
 func (h *Handler) Update(c fiber.Ctx) error {
 	var body mapper.PreferencesDTO

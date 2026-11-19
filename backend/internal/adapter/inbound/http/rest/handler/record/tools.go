@@ -25,7 +25,7 @@ type versionDTO struct {
 	Version int             `json:"version"`
 	Data    json.RawMessage `json:"data" swaggertype:"object"`
 	SavedAt time.Time       `json:"saved_at"`
-}
+} // @name RecordVersion
 
 // @Summary A record's earlier versions, newest first (up to 50)
 // @Tags Records
@@ -33,10 +33,12 @@ type versionDTO struct {
 // @Param id path string true "Record ID"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]versionDTO}
+// @Security ApiKeyAuth
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID recordVersions
 // @Router /v1/records/{id}/versions [get]
 func (h *Handler) Versions(c fiber.Ctx) error {
 	items, err := h.svc.Versions(c.Context(), c.Params("id"))
@@ -54,7 +56,7 @@ type restoreDTO struct {
 	Version int `json:"version" example:"2"`
 	// CurrentVersion is the version the client read; when sent, a newer row is a 409 conflict.
 	CurrentVersion *int `json:"current_version" example:"5"`
-}
+} // @name RecordRestoreInput
 
 // @Summary Write an earlier version back as the record's new version
 // @Description The old data must match the current schema (422 with issues otherwise).
@@ -65,6 +67,7 @@ type restoreDTO struct {
 // @Param body body restoreDTO true "Version"
 // @Security BearerAuth
 // @Success 200 {object} recordDTO
+// @Security ApiKeyAuth
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
@@ -72,6 +75,7 @@ type restoreDTO struct {
 // @Failure 409 {object} mapper.errorBody
 // @Failure 422 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID recordRestore
 // @Router /v1/records/{id}/restore [post]
 func (h *Handler) Restore(c fiber.Ctx) error {
 	var body restoreDTO
@@ -93,7 +97,7 @@ type importDTO struct {
 	UpsertKey string `json:"upsert_key,omitempty"`
 	// BatchKey, chosen per batch (up to 100 characters), makes a retry safe: a key saved before returns that result and saves nothing again.
 	BatchKey string `json:"batch_key,omitempty"`
-}
+} // @name ImportInput
 
 type importResultDTO struct {
 	Created int64            `json:"created"`
@@ -102,20 +106,20 @@ type importResultDTO struct {
 	Errors  []importErrorDTO `json:"errors"`
 	// Replayed: this batch_key was saved before; created and updated are from that save.
 	Replayed bool `json:"replayed,omitempty"`
-}
+} // @name ImportResult
 
 type importErrorDTO struct {
 	// Index is the record's position in this request.
 	Index  int        `json:"index"`
 	Issues []issueDTO `json:"issues"`
-}
+} // @name ImportError
 
 // issueDTO mirrors schema.Issue, which swag does not read.
 type issueDTO struct {
 	Path    string `json:"path"`
 	Keyword string `json:"keyword" example:"required"`
 	Message string `json:"message"`
-}
+} // @name RecordIssue
 
 // @Summary Check a batch of records against the schema and add them; editors and owners
 // @Description Up to 5000 records within the body limit; clients send a large file in batches. With dry_run nothing is written. With invalid records and no skip_invalid, none are written. With upsert_key (a unique field) a row whose value a record already holds updates that record.
@@ -127,12 +131,14 @@ type issueDTO struct {
 // @Param body body importDTO true "Batch"
 // @Security BearerAuth
 // @Success 200 {object} importResultDTO
+// @Security ApiKeyAuth
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 413 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID recordImport
 // @Router /v1/collections/{owner}/{slug}/records/import [post]
 func (h *Handler) Import(c fiber.Ctx) error {
 	var body importDTO
@@ -166,11 +172,13 @@ func (h *Handler) Import(c fiber.Ctx) error {
 // @Param valid query bool false "Only records that match the current schema"
 // @Security BearerAuth
 // @Success 200 {string} string
+// @Security ApiKeyAuth
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID recordExport
 // @Router /v1/collections/{owner}/{slug}/records/export [get]
 func (h *Handler) Export(c fiber.Ctx) error {
 	format := c.Query("format", "jsonl")

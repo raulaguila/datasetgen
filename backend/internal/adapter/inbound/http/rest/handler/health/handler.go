@@ -18,7 +18,7 @@ func NewHandler(svc input.HealthChecker) *Handler {
 type responseDTO struct {
 	Status string            `json:"status"`
 	Checks map[string]string `json:"checks"`
-}
+} // @name Health
 
 // Get handles GET /health.
 //
@@ -27,6 +27,7 @@ type responseDTO struct {
 // @Produce json
 // @Success 200 {object} responseDTO
 // @Failure 503 {object} responseDTO
+// @ID healthGet
 // @Router /health [get]
 func (h *Handler) Get(c fiber.Ctx) error {
 	report, err := h.svc.Check(c.Context())

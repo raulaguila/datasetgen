@@ -25,7 +25,7 @@ export async function collectionIdOf(page: Page, url: string): Promise<string> {
 
 /** The API address of the collection with this id: /v1/collections/<owner>/<slug>. */
 export async function colOf(page: Page, id: string): Promise<string> {
-  const list = (await (await page.request.get("/api/proxy/v1/collections/list")).json()).items as { id: string; owner: string; slug: string }[];
+  const list = (await (await page.request.get("/api/proxy/v1/collections/options")).json()).items as { id: string; owner: string; slug: string }[];
   const c = list.find((x) => x.id === id);
   expect(c, `collection ${id}`).toBeTruthy();
   return `/v1/collections/${c!.owner}/${c!.slug}`;

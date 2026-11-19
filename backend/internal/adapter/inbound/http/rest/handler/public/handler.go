@@ -67,7 +67,7 @@ type linkDTO struct {
 	Schema      json.RawMessage `json:"schema" swaggertype:"object"`
 	// Searchable is false when the collection has private fields: search would reveal their values.
 	Searchable bool `json:"searchable"`
-}
+} // @name PublicLink
 
 // @Summary What a share link opens: a form or a read-only list
 // @Tags Public
@@ -75,6 +75,8 @@ type linkDTO struct {
 // @Param token path string true "Link token"
 // @Success 200 {object} linkDTO
 // @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID publicGet
 // @Router /v1/public/{token} [get]
 func (h *Handler) Get(c fiber.Ctx) error {
 	col, err := h.collections.Get(c.Context(), collection(c))
@@ -98,7 +100,7 @@ type recordDTO struct {
 	ID        string          `json:"id"`
 	Data      json.RawMessage `json:"data" swaggertype:"object"`
 	CreatedAt time.Time       `json:"created_at"`
-}
+} // @name PublicRecord
 
 // @Summary The records behind a read-only link, newest first
 // @Description Each item's data is a preview, as in GET /v1/records.
@@ -110,6 +112,8 @@ type recordDTO struct {
 // @Param search query string false "Text anywhere in the record JSON"
 // @Success 200 {object} object{items=[]recordDTO,pagination=mapper.PaginationDTO}
 // @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID publicRecords
 // @Router /v1/public/{token}/records [get]
 func (h *Handler) Records(c fiber.Ctx) error {
 	if kind(c) != domain.ShareView {
@@ -143,7 +147,7 @@ func (h *Handler) Records(c fiber.Ctx) error {
 
 type submitDTO struct {
 	Data json.RawMessage `json:"data" swaggertype:"object"`
-}
+} // @name PublicSubmitInput
 
 // @Summary Send a form: adds one record, checked against the collection's fields
 // @Tags Public
@@ -155,6 +159,7 @@ type submitDTO struct {
 // @Failure 400 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID publicSubmit
 // @Router /v1/public/{token}/records [post]
 func (h *Handler) Submit(c fiber.Ctx) error {
 	if kind(c) != domain.ShareForm {

@@ -44,7 +44,7 @@ type recordDTO struct {
 	TargetOwner string         `json:"target_owner,omitempty" example:"ana"` // a collection target's address: /target_owner/target_slug
 	TargetSlug  string         `json:"target_slug,omitempty" example:"livros"`
 	Details     map[string]any `json:"details"`
-}
+} // @name AuditEntry
 
 // @Summary List the audit log, newest first
 // @Tags Audit
@@ -61,6 +61,7 @@ type recordDTO struct {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID auditList
 // @Router /v1/audit [get]
 func (h *Handler) List(c fiber.Ctx) error {
 	filter, err := mapper.AuditFilter(c, domain.NewPage(fiber.Query[int](c, "page"), fiber.Query[int](c, "limit")))
@@ -94,6 +95,7 @@ const maxExport = 10_000
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID auditExport
 // @Router /v1/audit/export [get]
 func (h *Handler) Export(c fiber.Ctx) error {
 	// A one-row page first: refusing must not cost the 10000 rows.

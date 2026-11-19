@@ -16,7 +16,7 @@ type RPCRequest struct {
 	ID      int            `json:"id" example:"1"`
 	Method  string         `json:"method" example:"tools/list"`
 	Params  map[string]any `json:"params,omitempty" swaggerignore:"true"` // tools/call: {"name": ..., "arguments": {...}}
-} // @name rest.mcpRequest
+} // @name JSONRPCRequest
 
 // Shortcuts answers tools/list (GET) and tools/call (POST: the last path segment
 // names the tool, the body holds its arguments) as plain JSON, for the API docs

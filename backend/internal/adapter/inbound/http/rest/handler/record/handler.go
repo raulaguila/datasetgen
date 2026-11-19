@@ -32,7 +32,7 @@ func (h *Handler) CollectionRoutes(r fiber.Router) {
 	r.Post("/", h.Create)
 	r.Get("/export", h.Export)
 	r.Get("/aggregate", h.Aggregate)
-	r.Get("/stats", h.Stats)
+	r.Get("/profile", h.Stats)
 	r.Post("/import", h.Import)
 }
 
@@ -46,6 +46,7 @@ func (h *Handler) Routes(r fiber.Router) {
 	r.Post("/:id/restore", h.Restore)
 	r.Put("/:id", h.Update)
 	r.Post("/delete", h.Delete)
+	r.Post("/update", h.BulkUpdate)
 }
 
 type recordDTO struct {
@@ -55,7 +56,7 @@ type recordDTO struct {
 	Version      int             `json:"version"`
 	CreatedAt    time.Time       `json:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"`
-}
+} // @name Record
 
 type linksDTO struct {
 	CollectionID   string          `json:"collection_id"`
@@ -67,7 +68,7 @@ type linksDTO struct {
 	Schema         json.RawMessage `json:"schema" swaggertype:"object"`
 	Total          int64           `json:"total"`
 	Records        []recordDTO     `json:"records"`
-}
+} // @name RecordLinks
 
 // @Summary The records pointing at this one, per collection and reference field
 // @Description Up to 10 newest records (previews) per field, in collections the caller can read.
@@ -76,7 +77,11 @@ type linksDTO struct {
 // @Param id path string true "Record ID"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]linksDTO}
+// @Security ApiKeyAuth
+// @Failure 401 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID recordLinks
 // @Router /v1/records/{id}/links [get]
 func (h *Handler) Links(c fiber.Ctx) error {
 	links, err := h.svc.Links(c.Context(), c.Params("id"))
@@ -100,19 +105,23 @@ type commentDTO struct {
 	AuthorName string    `json:"author_name,omitempty"`
 	Body       string    `json:"body"`
 	CreatedAt  time.Time `json:"created_at"`
-}
+} // @name Comment
 
 func toCommentDTO(c domain.RecordComment) commentDTO {
 	return commentDTO{ID: c.ID, AuthorID: c.UserID, AuthorName: c.AuthorName, Body: c.Body, CreatedAt: c.CreatedAt}
 }
 
 // @Summary A record's comments, oldest first (up to 200)
-// @Tags Records
+// @Tags Comments
 // @Produce json
 // @Param id path string true "Record ID"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]commentDTO}
+// @Security ApiKeyAuth
+// @Failure 401 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID recordComments
 // @Router /v1/records/{id}/comments [get]
 func (h *Handler) Comments(c fiber.Ctx) error {
 	list, err := h.svc.Comments(c.Context(), c.Params("id"))
@@ -127,15 +136,19 @@ func (h *Handler) Comments(c fiber.Ctx) error {
 }
 
 // @Summary Comment on a record; any member
-// @Tags Records
+// @Tags Comments
 // @Accept json
 // @Produce json
 // @Param id path string true "Record ID"
 // @Param body body object{body=string} true "Comment"
 // @Security BearerAuth
 // @Success 201 {object} commentDTO
+// @Security ApiKeyAuth
 // @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID recordAddComment
 // @Router /v1/records/{id}/comments [post]
 func (h *Handler) AddComment(c fiber.Ctx) error {
 	var body struct {
@@ -152,13 +165,17 @@ func (h *Handler) AddComment(c fiber.Ctx) error {
 }
 
 // @Summary Delete a comment; its author or an owner
-// @Tags Records
+// @Tags Comments
 // @Param id path string true "Record ID"
 // @Param commentId path string true "Comment ID"
 // @Security BearerAuth
 // @Success 204
+// @Security ApiKeyAuth
+// @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID recordDeleteComment
 // @Router /v1/records/{id}/comments/{commentId} [delete]
 func (h *Handler) DeleteComment(c fiber.Ctx) error {
 	if err := h.svc.DeleteComment(c.Context(), c.Params("id"), c.Params("commentId")); err != nil {
@@ -169,13 +186,13 @@ func (h *Handler) DeleteComment(c fiber.Ctx) error {
 
 type createDTO struct {
 	Data json.RawMessage `json:"data" swaggertype:"object"`
-}
+} // @name RecordCreateInput
 
 type updateDTO struct {
 	Data json.RawMessage `json:"data" swaggertype:"object"`
 	// Version is the version the client read; when sent, a newer row is a 409 conflict.
 	Version *int `json:"version" example:"3"`
-}
+} // @name RecordUpdateInput
 
 func toDTO(r domain.Record) recordDTO {
 	return recordDTO{
@@ -225,10 +242,13 @@ func listFilter(c fiber.Ctx) (domain.RecordFilter, error) {
 // @Param filter query string false "JSON object of top-level fields and exact values, up to 10, such as {'category': 'trigger'} with double quotes"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]recordDTO,pagination=mapper.PaginationDTO}
+// @Security ApiKeyAuth
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID recordList
 // @Router /v1/collections/{owner}/{slug}/records [get]
 func (h *Handler) List(c fiber.Ctx) error {
 	filter, err := listFilter(c)
@@ -252,10 +272,12 @@ func (h *Handler) List(c fiber.Ctx) error {
 // @Param id path string true "Record ID"
 // @Security BearerAuth
 // @Success 200 {object} recordDTO
+// @Security ApiKeyAuth
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID recordGet
 // @Router /v1/records/{id} [get]
 func (h *Handler) Get(c fiber.Ctx) error {
 	item, err := h.svc.Get(c.Context(), c.Params("id"))
@@ -274,11 +296,13 @@ func (h *Handler) Get(c fiber.Ctx) error {
 // @Param body body createDTO true "Request"
 // @Security BearerAuth
 // @Success 201 {object} recordDTO
+// @Security ApiKeyAuth
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID recordCreate
 // @Router /v1/collections/{owner}/{slug}/records [post]
 func (h *Handler) Create(c fiber.Ctx) error {
 	var body createDTO
@@ -293,6 +317,7 @@ func (h *Handler) Create(c fiber.Ctx) error {
 }
 
 // @Summary Replace the data of a record; it must match the collection schema
+// @Description Send version, the version you read, to refuse a lost update: a newer row answers 409 CONFLICT. Without it the last write wins. The old data is kept as a version.
 // @Tags Records
 // @Produce json
 // @Accept json
@@ -300,12 +325,14 @@ func (h *Handler) Create(c fiber.Ctx) error {
 // @Param id path string true "Record ID"
 // @Security BearerAuth
 // @Success 200 {object} recordDTO
+// @Security ApiKeyAuth
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID recordUpdate
 // @Router /v1/records/{id} [put]
 func (h *Handler) Update(c fiber.Ctx) error {
 	var body updateDTO
@@ -321,20 +348,23 @@ func (h *Handler) Update(c fiber.Ctx) error {
 
 type idsDTO struct {
 	IDs []string `json:"ids"`
-}
+} // @name RecordIDs
 
 // @Summary Delete records; all or none
+// @Description Deleted records go to the collection's trash, where editors restore them or delete them for good. If one id is missing or out of reach, nothing is deleted.
 // @Tags Records
 // @Accept json
 // @Produce json
 // @Param body body idsDTO true "Record IDs, 1 to 100"
 // @Security BearerAuth
 // @Success 204
+// @Security ApiKeyAuth
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID recordDelete
 // @Router /v1/records/delete [post]
 func (h *Handler) Delete(c fiber.Ctx) error {
 	var body idsDTO
@@ -354,7 +384,7 @@ type groupDTO struct {
 	Avgs  map[string]float64 `json:"avgs"`
 	Mins  map[string]float64 `json:"mins"`
 	Maxs  map[string]float64 `json:"maxs"`
-}
+} // @name AggregateGroup
 
 // @Summary Count the selected records, by a field (group) or all together, with the sum, average, least and greatest of numeric fields (sum, comma separated, up to 5)
 // @Tags Records
@@ -366,9 +396,13 @@ type groupDTO struct {
 // @Param where query string false "Rules as JSON, as in the list"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]groupDTO}
+// @Security ApiKeyAuth
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID recordAggregate
 // @Router /v1/collections/{owner}/{slug}/records/aggregate [get]
 func (h *Handler) Aggregate(c fiber.Ctx) error {
 	filter, err := listFilter(c)
@@ -393,12 +427,12 @@ func (h *Handler) Aggregate(c fiber.Ctx) error {
 type dateCountDTO struct {
 	At    string `json:"at"`
 	Count int64  `json:"count"`
-}
+} // @name DateCount
 
 type valueCountDTO struct {
 	Key   json.RawMessage `json:"key" swaggertype:"object"`
 	Count int64           `json:"count"`
-}
+} // @name ValueCount
 
 type fieldStatsDTO struct {
 	Filled   *int64          `json:"filled,omitempty"`
@@ -411,7 +445,7 @@ type fieldStatsDTO struct {
 	Distinct *int64          `json:"distinct,omitempty"`
 	Top      []valueCountDTO `json:"top,omitempty"`
 	Series   []dateCountDTO  `json:"series,omitempty"`
-}
+} // @name FieldProfile
 
 func splitList(v string) []string {
 	if v == "" {
@@ -436,10 +470,14 @@ func splitList(v string) []string {
 // @Param bucket query string false "Series bucket: day, week, month (default) or year"
 // @Security BearerAuth
 // @Success 200 {object} object{total=int,fields=map[string]fieldStatsDTO}
+// @Security ApiKeyAuth
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
-// @Router /v1/collections/{owner}/{slug}/records/stats [get]
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID recordProfile
+// @Router /v1/collections/{owner}/{slug}/records/profile [get]
 func (h *Handler) Stats(c fiber.Ctx) error {
 	filter, err := listFilter(c)
 	if err != nil {
@@ -469,3 +507,39 @@ func (h *Handler) Stats(c fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"total": st.Total, "fields": fields})
 }
+
+type bulkDTO struct {
+	IDs []string                   `json:"ids"`
+	Set map[string]json.RawMessage `json:"set" swaggertype:"object"`
+} // @name BulkUpdateInput
+
+// @Summary Set the same values in several records of one collection; editors
+// @Description null removes a field. Every record must still pass the collection's fields, or none changes.
+// @Tags Records
+// @Accept json
+// @Produce json
+// @Param body body bulkDTO true "Ids (1 to 100) and values"
+// @Security BearerAuth
+// @Success 200 {object} countDTO
+// @Security ApiKeyAuth
+// @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
+// @Failure 422 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID recordBulkUpdate
+// @Router /v1/records/update [post]
+func (h *Handler) BulkUpdate(c fiber.Ctx) error {
+	var body bulkDTO
+	if err := c.Bind().Body(&body); err != nil {
+		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
+	}
+	n, err := h.svc.BulkUpdate(c.Context(), input.BulkUpdateCommand{IDs: body.IDs, Set: body.Set})
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	return c.JSON(countDTO{Count: int64(n)})
+}
+
+type countDTO struct {
+	Count int64 `json:"count"`
+} // @name RecordCount

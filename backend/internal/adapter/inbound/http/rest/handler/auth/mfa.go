@@ -10,24 +10,24 @@ import (
 type mfaStatusDTO struct {
 	Enabled      bool `json:"enabled"`
 	RecoveryLeft int  `json:"recovery_left"`
-}
+} // @name MFAStatus
 
 type mfaSetupDTO struct {
 	Secret string `json:"secret"`
 	URI    string `json:"uri"`
-}
+} // @name MFASetup
 
 type mfaCodeDTO struct {
 	Code string `json:"code"`
-}
+} // @name MFACodeInput
 
 type mfaRecoveryDTO struct {
 	RecoveryCodes []string `json:"recovery_codes"`
-}
+} // @name MFARecoveryCodes
 
 type mfaDisableDTO struct {
 	Password string `json:"password"`
-}
+} // @name MFADisableInput
 
 // @Summary Whether two-step login is on
 // @Tags Profile
@@ -35,6 +35,8 @@ type mfaDisableDTO struct {
 // @Security BearerAuth
 // @Success 200 {object} mfaStatusDTO
 // @Failure 401 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID authMFAStatus
 // @Router /v1/me/mfa [get]
 func (h *Handler) MFAStatus(c fiber.Ctx) error {
 	st, err := h.svc.MFAStatus(c.Context())
@@ -52,6 +54,8 @@ func (h *Handler) MFAStatus(c fiber.Ctx) error {
 // @Success 200 {object} mfaSetupDTO
 // @Failure 401 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID authSetupMFA
 // @Router /v1/me/mfa/setup [post]
 func (h *Handler) SetupMFA(c fiber.Ctx) error {
 	secret, uri, err := h.svc.SetupMFA(c.Context())
@@ -73,6 +77,7 @@ func (h *Handler) SetupMFA(c fiber.Ctx) error {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authEnableMFA
 // @Router /v1/me/mfa/enable [post]
 func (h *Handler) EnableMFA(c fiber.Ctx) error {
 	var body mfaCodeDTO
@@ -95,6 +100,7 @@ func (h *Handler) EnableMFA(c fiber.Ctx) error {
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authDisableMFA
 // @Router /v1/me/mfa/disable [post]
 func (h *Handler) DisableMFA(c fiber.Ctx) error {
 	var body mfaDisableDTO

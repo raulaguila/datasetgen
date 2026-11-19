@@ -12,23 +12,25 @@ import (
 type ssoInfoDTO struct {
 	Enabled bool   `json:"enabled"`
 	Name    string `json:"name,omitempty"`
-}
+} // @name SSOInfo
 
 type ssoStartDTO struct {
 	URL  string `json:"url"`
 	Flow string `json:"flow"` // keep it (an httpOnly cookie) and send it back to the callback
-}
+} // @name SSOStart
 
 type ssoCallbackDTO struct {
 	Code  string `json:"code"`
 	State string `json:"state"`
 	Flow  string `json:"flow"`
-}
+} // @name SSOCallbackInput
 
 // @Summary Whether single sign-on is on, and its button label
 // @Tags Auth
 // @Produce json
 // @Success 200 {object} ssoInfoDTO
+// @Failure 429 {object} mapper.errorBody
+// @ID authSSOInfo
 // @Router /v1/auth/sso [get]
 func (h *Handler) SSOInfo(c fiber.Ctx) error {
 	name := h.svc.SSOName()
@@ -42,6 +44,7 @@ func (h *Handler) SSOInfo(c fiber.Ctx) error {
 // @Success 200 {object} ssoStartDTO
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authSSOStart
 // @Router /v1/auth/sso/start [post]
 func (h *Handler) SSOStart(c fiber.Ctx) error {
 	url, flow, err := h.svc.SSOStart(c.Context())
@@ -62,6 +65,7 @@ func (h *Handler) SSOStart(c fiber.Ctx) error {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authSSOCallback
 // @Router /v1/auth/sso/callback [post]
 func (h *Handler) SSOCallback(c fiber.Ctx) error {
 	var body ssoCallbackDTO

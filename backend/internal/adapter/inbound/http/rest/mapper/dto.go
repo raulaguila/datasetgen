@@ -8,7 +8,7 @@ type PaginationDTO struct {
 	Limit      int   `json:"limit"`
 	TotalItems int64 `json:"total_items"`
 	TotalPages int64 `json:"total_pages"`
-}
+} // @name Pagination
 
 // Pagination describes the page answered out of total rows.
 func Pagination(page domain.Page, total int64) PaginationDTO {
@@ -25,7 +25,7 @@ func Pagination(page domain.Page, total int64) PaginationDTO {
 type PreferencesDTO struct {
 	Theme    string `json:"theme" example:"system"`
 	Language string `json:"language" example:"pt-BR"`
-}
+} // @name Preferences
 
 // Preferences converts the domain value.
 func Preferences(p domain.Preferences) PreferencesDTO {

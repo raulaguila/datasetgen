@@ -53,18 +53,18 @@ type userDTO struct {
 	Status    string    `json:"status" example:"active"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-}
+} // @name User
 
 type roleDTO struct {
 	ID   string `json:"id"`
 	Name string `json:"name" example:"support"`
-}
+} // @name UserRole
 
 type detailsDTO struct {
 	userDTO
 	Roles  []roleDTO  `json:"roles"`
 	Access *accessDTO `json:"access,omitempty"`
-}
+} // @name UserDetails
 
 type accessDTO struct {
 	LastLoginAt    *time.Time `json:"last_login_at"`
@@ -74,7 +74,7 @@ type accessDTO struct {
 	ActiveSessions int        `json:"active_sessions" example:"2"`
 	// ActivationExpiresAt is when the live activation link stops working; null when there is none.
 	ActivationExpiresAt *time.Time `json:"activation_expires_at"`
-}
+} // @name UserAccess
 
 func toDTO(u domain.User) userDTO {
 	return userDTO{ID: u.ID, Name: u.Name, Username: u.Username, Email: u.Email, Status: u.Status, CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt}
@@ -96,6 +96,7 @@ func toDTO(u domain.User) userDTO {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID userList
 // @Router /v1/users [get]
 func (h *Handler) List(c fiber.Ctx) error {
 	filter := domain.UserFilter{
@@ -128,6 +129,7 @@ func (h *Handler) List(c fiber.Ctx) error {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID userGet
 // @Router /v1/users/{id} [get]
 func (h *Handler) Get(c fiber.Ctx) error {
 	user, err := h.svc.Get(c.Context(), c.Params("id"))
@@ -146,7 +148,7 @@ func (h *Handler) Get(c fiber.Ctx) error {
 
 type idsDTO struct {
 	IDs []string `json:"ids"`
-}
+} // @name UserIDs
 
 func (h *Handler) bindIDs(c fiber.Ctx) ([]string, error) {
 	var body idsDTO
@@ -168,6 +170,7 @@ func (h *Handler) bindIDs(c fiber.Ctx) ([]string, error) {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID userDisable
 // @Router /v1/users/disable [post]
 func (h *Handler) Disable(c fiber.Ctx) error {
 	ids, err := h.bindIDs(c)
@@ -192,6 +195,7 @@ func (h *Handler) Disable(c fiber.Ctx) error {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID userEnable
 // @Router /v1/users/enable [post]
 func (h *Handler) Enable(c fiber.Ctx) error {
 	ids, err := h.bindIDs(c)
@@ -216,6 +220,7 @@ func (h *Handler) Enable(c fiber.Ctx) error {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID userUnlock
 // @Router /v1/users/unlock [post]
 func (h *Handler) Unlock(c fiber.Ctx) error {
 	ids, err := h.bindIDs(c)
@@ -231,7 +236,7 @@ func (h *Handler) Unlock(c fiber.Ctx) error {
 type inviteDTO struct {
 	Name  string `json:"name"`
 	Email string `json:"email"`
-}
+} // @name InviteInput
 
 // @Summary Create an account for someone and send its activation email
 // @Tags Users
@@ -245,6 +250,7 @@ type inviteDTO struct {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID userInvite
 // @Router /v1/users [post]
 func (h *Handler) Invite(c fiber.Ctx) error {
 	var body inviteDTO
@@ -278,6 +284,7 @@ func inviteAnswer(res *input.RegisterResult) fiber.Map {
 // @Failure 404 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID userReinvite
 // @Router /v1/users/{id}/invite [post]
 func (h *Handler) Reinvite(c fiber.Ctx) error {
 	res, err := h.inviter.Reinvite(c.Context(), c.Params("id"))
@@ -301,6 +308,7 @@ func (h *Handler) Reinvite(c fiber.Ctx) error {
 // @Failure 404 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID userActivationLink
 // @Router /v1/users/{id}/activation-link [post]
 func (h *Handler) ActivationLink(c fiber.Ctx) error {
 	res, err := h.inviter.ActivationLink(c.Context(), c.Params("id"))
@@ -321,6 +329,7 @@ func (h *Handler) ActivationLink(c fiber.Ctx) error {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID userRevokeSessions
 // @Router /v1/users/{id}/sessions [delete]
 func (h *Handler) RevokeSessions(c fiber.Ctx) error {
 	if err := h.svc.RevokeSessions(c.Context(), middleware.UserID(c), c.Params("id")); err != nil {

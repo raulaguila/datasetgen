@@ -39,7 +39,7 @@ type notificationDTO struct {
 	// The address of params.collection_id (/collection_owner/collection_slug), while it exists.
 	CollectionOwner string `json:"collection_owner,omitempty" example:"ana"`
 	CollectionSlug  string `json:"collection_slug,omitempty" example:"livros"`
-}
+} // @name Notification
 
 // @Summary List the notifications of the current user, newest first
 // @Tags Notifications
@@ -50,6 +50,7 @@ type notificationDTO struct {
 // @Success 200 {object} object{items=[]notificationDTO,pagination=mapper.PaginationDTO}
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID notificationList
 // @Router /v1/me/notifications [get]
 func (h *Handler) List(c fiber.Ctx) error {
 	page := domain.NewPage(fiber.Query[int](c, "page"), fiber.Query[int](c, "limit"))
@@ -74,6 +75,7 @@ func (h *Handler) List(c fiber.Ctx) error {
 // @Success 200 {object} object{unread=int}
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID notificationCount
 // @Router /v1/me/notifications/count [get]
 func (h *Handler) Count(c fiber.Ctx) error {
 	unread, err := h.svc.CountUnread(c.Context(), middleware.UserID(c))
@@ -85,7 +87,7 @@ func (h *Handler) Count(c fiber.Ctx) error {
 
 type idsDTO struct {
 	IDs []string `json:"ids"`
-}
+} // @name NotificationIDs
 
 // @Summary Mark notifications as read: the listed ones (all or none), or every one when the body is empty
 // @Tags Notifications
@@ -98,6 +100,7 @@ type idsDTO struct {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID notificationMarkRead
 // @Router /v1/me/notifications/read [put]
 func (h *Handler) MarkRead(c fiber.Ctx) error {
 	var body idsDTO // no body leaves IDs nil: every notification

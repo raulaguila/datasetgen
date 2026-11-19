@@ -15,11 +15,16 @@ import (
 )
 
 //	@title						Dataset API
-//	@description				Identity service. Logging in from this page fills Authorize with the access token.
+//	@description				Collections of JSON records with a schema, their members, files and history, and the integrations around them: API keys, share links, webhooks, automations and MCP for AI assistants. Logging in from this page fills Authorize with the access token.
 //	@BasePath					/
 //	@securityDefinitions.apikey	BearerAuth
 //	@in							header
 //	@name						Authorization
+//	@description				Bearer <access token>
+//	@securityDefinitions.apikey	ApiKeyAuth
+//	@in							header
+//	@name						X-API-Key
+//	@description				An API key (dsk_...). Routes that take one list ApiKeyAuth.
 
 // One @tag.name per subject, then one x-tagGroups entry per group. The page
 // follows the @tag.name order, so keep each group's tags together.
@@ -33,21 +38,31 @@ import (
 //	@tag.name			Password reset
 //	@tag.description	Forgotten password, by email
 //	@tag.name			Profile
-//	@tag.description	The current user: identity, live permissions and password
+//	@tag.description	The current user: identity, avatar, live permissions, password and two-step login
 //	@tag.name			Sessions
 //	@tag.description	Devices logged in to the current account
 //	@tag.name			Preferences
 //	@tag.description	Interface choices of the current user
 //	@tag.name			Notifications
-//	@tag.description	Security notices for the current user
+//	@tag.description	Notices for the current user: security events, collection invites, automation results
 //	@tag.name			Users
 //	@tag.description	Accounts of other people and their sessions. Platform admins stay out of reach; the admin CLI promotes one
 //	@tag.name			Audit
-//	@tag.description	Log of administrative changes
+//	@tag.description	Log of administrative changes, platform-wide or for one collection
 //	@tag.name			Collections
-//	@tag.description	Collections and the JSON Schema their records follow
+//	@tag.description	Collections, the JSON Schema their records follow, and its versions
+//	@tag.name			Members
+//	@tag.description	Who reaches a collection and with what role
 //	@tag.name			Records
-//	@tag.description	Records of a collection, validated against its schema
+//	@tag.description	Records of a collection, validated against its schema. API keys reach these routes too
+//	@tag.name			Comments
+//	@tag.description	Discussion on one record
+//	@tag.name			Views & dashboards
+//	@tag.description	Saved filters of the record list and the collection's dashboard
+//	@tag.name			Data quality
+//	@tag.description	Check every record against the current schema, then fix or delete the invalid ones
+//	@tag.name			Files
+//	@tag.description	Files attached to records: upload into a collection, download by id
 //	@tag.name			Trash
 //	@tag.description	Deleted records and collections, to restore or delete for good
 //	@tag.name			API keys
@@ -61,10 +76,12 @@ import (
 //	@tag.name			Automations
 //	@tag.description	Actions run when records change or daily; owners
 //	@tag.name			MCP
-//	@tag.description	Model Context Protocol for AI assistants with an API key, the tools owners publish for it and what assistants did
+//	@tag.description	Model Context Protocol endpoint for AI assistants with an API key
+//	@tag.name			MCP tools
+//	@tag.description	Tools a collection's owners publish for assistants, and the log of what assistants did
 //	@tag.name			OAuth
-//	@tag.description	How an assistant that cannot take a pasted key (the ChatGPT app) gets one: register, the member approves, the code becomes a key.
-//	@x-tagGroups		[{"name":"System","tags":["Health"]},{"name":"Authentication","tags":["Auth","Registration","Password reset"]},{"name":"Account","tags":["Profile","Sessions","Preferences","Notifications"]},{"name":"Administration","tags":["Users","Audit"]},{"name":"Data","tags":["Collections","Records","Trash"]},{"name":"Integrations","tags":["API keys","Share links","Public","Webhooks","Automations","MCP","OAuth"]}]
+//	@tag.description	How an assistant that cannot take a pasted key (the ChatGPT app) gets one: register, the member approves, the code becomes a key
+//	@x-tagGroups		[{"name":"System","tags":["Health"]},{"name":"Authentication","tags":["Auth","Registration","Password reset"]},{"name":"Account","tags":["Profile","Sessions","Preferences","Notifications"]},{"name":"Administration","tags":["Users","Audit"]},{"name":"Data","tags":["Collections","Members","Records","Comments","Views & dashboards","Data quality","Files","Trash"]},{"name":"Integrations","tags":["API keys","Share links","Public","Webhooks","Automations","MCP","MCP tools","OAuth"]}]
 
 var (
 	//go:embed docs/swagger.css
@@ -105,14 +122,16 @@ func mountMCP(app *fiber.App, a *input.Application, version string) {
 //
 //	@Summary		MCP endpoint for AI assistants (JSON-RPC 2.0, streamable HTTP, stateless)
 //	@Description	The address an assistant connects to. Takes an API key only (X-API-Key, or "Authorization: Bearer dsk_..." from assistants). Methods: initialize, tools/list, tools/call ({"name":"workspace_overview","arguments":{}}). Tools, limited to the key's collections: workspace_overview (start here: every collection with its counts, fields and references), get_collection, search_records, get_record, related_records, collection_stats, aggregate_records, field_values, get_records, record_history, list_views, search_everywhere; with a write scope list_trash, create_record, create_records, update_record, update_records (dry_run first), delete_records and restore_records; plus the tools collection owners publish. GET /v1/mcp/tools and POST /v1/mcp/tools/{name} do the same without the JSON-RPC envelope.
-//	@Tags			MCP
+//	@Tags		MCP
 //	@Accept			json
 //	@Produce		json
-//	@Param			X-API-Key	header	string		true	"API key (dsk_...)"
 //	@Param			body		body	mcpserver.RPCRequest	true	"JSON-RPC request"
 //	@Success		200			{object}	object
-//	@Failure		401			{string}	string
-//	@Router			/v1/mcp [post]
+//	@Security		ApiKeyAuth
+//	@Failure		401 {string} string
+//	@Failure		429 {object} mapper.errorBody
+//	@ID		mcpRPC
+//	@Router		/v1/mcp [post]
 func mcpRPC(app *fiber.App, h http.Handler) {
 	app.Post("/v1/mcp", adaptor.HTTPHandler(h))
 }
@@ -121,12 +140,14 @@ func mcpRPC(app *fiber.App, h http.Handler) {
 //
 //	@Summary		List the MCP tools an API key gets
 //	@Description	The built-in tools, write tools when the key has a write scope, and the tools owners published in the key's collections, each with its description and inputSchema (the arguments POST /v1/mcp/tools/{name} takes).
-//	@Tags			MCP
+//	@Tags		MCP
 //	@Produce		json
-//	@Param			X-API-Key	header	string	true	"API key (dsk_...)"
 //	@Success		200			{object}	object	"tools: name, description, inputSchema"
-//	@Failure		401			{string}	string
-//	@Router			/v1/mcp/tools [get]
+//	@Security		ApiKeyAuth
+//	@Failure		401 {string} string
+//	@Failure		429 {object} mapper.errorBody
+//	@ID		mcpListTools
+//	@Router		/v1/mcp/tools [get]
 func mcpListTools(app *fiber.App, h fiber.Handler) {
 	app.Get("/v1/mcp/tools", h)
 }
@@ -135,16 +156,19 @@ func mcpListTools(app *fiber.App, h fiber.Handler) {
 //
 //	@Summary		Call one MCP tool
 //	@Description	Runs the tool as an assistant would, with the key's scopes and the member's roles, and logs the call. The body holds the arguments from the tool's inputSchema; send {} for none. The answer is the MCP result: structuredContent holds the data; isError true means the tool refused (the reason is in content). An unknown tool or arguments outside the schema answer 400.
-//	@Tags			MCP
+//	@Tags		MCP
 //	@Accept			json
 //	@Produce		json
-//	@Param			X-API-Key	header	string	true	"API key (dsk_...)"
 //	@Param			name		path	string	true	"Tool name, e.g. workspace_overview"
 //	@Param			body		body	object	false	"Arguments from the tool inputSchema; {} for none"
 //	@Success		200			{object}	object
-//	@Failure		400			{object}	mapper.errorBody
-//	@Failure		401			{string}	string
-//	@Router			/v1/mcp/tools/{name} [post]
+//	@Security		ApiKeyAuth
+//	@Failure		400 {object} mapper.errorBody
+//	@Failure		401 {string} string
+//	@Failure		404 {object} mapper.errorBody
+//	@Failure		429 {object} mapper.errorBody
+//	@ID		mcpCallTool
+//	@Router		/v1/mcp/tools/{name} [post]
 func mcpCallTool(app *fiber.App, h fiber.Handler) {
 	app.Post("/v1/mcp/tools/:name", h)
 }

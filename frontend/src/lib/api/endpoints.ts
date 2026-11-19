@@ -128,7 +128,7 @@ export const collections = {
   list: (p: { page: number; limit: number; search?: string; sort?: string; order?: SortOrder; details?: boolean }, signal?: AbortSignal) =>
     apiFetch<Paged<Collection>>(`/v1/collections${query(p)}`, { signal }),
   /** Every collection the caller reaches (up to 1000) as id, name and role, without counts: for pickers. */
-  options: (signal?: AbortSignal) => apiFetch<{ items: CollectionOption[] }>("/v1/collections/list", { signal }),
+  options: (signal?: AbortSignal) => apiFetch<{ items: CollectionOption[] }>("/v1/collections/options", { signal }),
   /**
    * The address of a collection known by id (a reference field, an audit entry), from
    * the picker list, read once per 30 s; a miss reads it again, for a collection just made.
@@ -200,13 +200,13 @@ export const records = {
     apiFetch<{ items: RecordGroup[] }>(`${col(c)}/records/aggregate${query(withTz(p))}`, { signal }),
   /** Field lists are comma separated: filled counts, number ranges, date ranges with a series, common values. */
   stats: (c: At, p: { where?: string; filled?: string; numbers?: string; dates?: string; values?: string; bucket?: StatsBucket }, signal?: AbortSignal) =>
-    apiFetch<RecordStats>(`${col(c)}/records/stats${query(withTz(p))}`, { signal }),
+    apiFetch<RecordStats>(`${col(c)}/records/profile${query(withTz(p))}`, { signal }),
   get: (recordId: string) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`),
   create: (c: At, data: unknown) => apiFetch<DataRecord>(`${col(c)}/records`, { method: "POST", json: { data } }),
   update: (recordId: string, data: unknown, version?: number) => apiFetch<DataRecord>(`/v1/records/${id(recordId)}`, { method: "PUT", json: { data, version } }),
   remove: (ids: string[]) => apiFetch<void>("/v1/records/delete", { method: "POST", json: { ids } }),
   /** Sets the same fields on records of one collection, all or none; null removes a field. */
-  bulkUpdate: (ids: string[], set: Record<string, unknown>) => apiFetch<{ count: number }>("/v1/records/bulk-update", { method: "POST", json: { ids, set } }),
+  bulkUpdate: (ids: string[], set: Record<string, unknown>) => apiFetch<{ count: number }>("/v1/records/update", { method: "POST", json: { ids, set } }),
   links: (recordId: string) => apiFetch<{ items: RecordLinks[] }>(`/v1/records/${id(recordId)}/links`),
   comments: (recordId: string) => apiFetch<{ items: RecordComment[] }>(`/v1/records/${id(recordId)}/comments`),
   addComment: (recordId: string, body: string) => apiFetch<RecordComment>(`/v1/records/${id(recordId)}/comments`, { method: "POST", json: { body } }),

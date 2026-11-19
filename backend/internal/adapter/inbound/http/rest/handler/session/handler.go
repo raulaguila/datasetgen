@@ -33,7 +33,7 @@ type sessionDTO struct {
 	LastSeenAt time.Time `json:"last_seen_at"`
 	ExpiresAt  time.Time `json:"expires_at"`
 	Current    bool      `json:"current"`
-}
+} // @name Session
 
 // @Summary List the live sessions of the current user
 // @Tags Sessions
@@ -42,6 +42,7 @@ type sessionDTO struct {
 // @Success 200 {object} object{items=[]sessionDTO}
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID sessionList
 // @Router /v1/me/sessions [get]
 func (h *Handler) List(c fiber.Ctx) error {
 	sessions, err := h.svc.Sessions(c.Context(), middleware.UserID(c))
@@ -69,6 +70,7 @@ func (h *Handler) List(c fiber.Ctx) error {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID sessionRevoke
 // @Router /v1/me/sessions/{id} [delete]
 func (h *Handler) Revoke(c fiber.Ctx) error {
 	if err := h.svc.RevokeSession(c.Context(), middleware.UserID(c), c.Params("id")); err != nil {
@@ -84,6 +86,7 @@ func (h *Handler) Revoke(c fiber.Ctx) error {
 // @Success 204
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID sessionRevokeOthers
 // @Router /v1/me/sessions/others [delete]
 func (h *Handler) RevokeOthers(c fiber.Ctx) error {
 	if err := h.svc.RevokeOtherSessions(c.Context(), middleware.UserID(c), middleware.SessionID(c)); err != nil {

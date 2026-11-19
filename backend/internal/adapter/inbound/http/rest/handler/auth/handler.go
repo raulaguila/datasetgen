@@ -55,45 +55,45 @@ func (h *Handler) Routes(r fiber.Router, bearer, authLimit, passwordLimit fiber.
 type registerDTO struct {
 	Name  string `json:"name"`
 	Email string `json:"email"`
-}
+} // @name RegisterInput
 
 type activateDTO struct {
 	Token    string `json:"token"`
 	Password string `json:"password"`
 	// Username is optional: empty keeps the one made from the email. Collections live at /username/slug.
 	Username string `json:"username,omitempty" example:"ana-silva"`
-}
+} // @name ActivateInput
 
 type loginDTO struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	// Code is the authenticator or recovery code; send it again after MFA_REQUIRED.
 	Code string `json:"code,omitempty"`
-}
+} // @name LoginInput
 
 type refreshDTO struct {
 	RefreshToken string `json:"refresh_token"`
-}
+} // @name RefreshInput
 
 type renameDTO struct {
 	Name *string `json:"name" example:"Ana Silva"`
 	// Username is the account's part of collection URLs; old paths keep opening.
 	Username *string `json:"username" example:"ana-silva"`
-}
+} // @name RenameInput
 
 type changePasswordDTO struct {
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`
-}
+} // @name ChangePasswordInput
 
 type resetRequestDTO struct {
 	Email string `json:"email"`
-}
+} // @name PasswordResetRequestInput
 
 type resetConfirmDTO struct {
 	Token    string `json:"token"`
 	Password string `json:"password"`
-}
+} // @name PasswordResetConfirmInput
 
 // userDTO is the same object in login, refresh and /me.
 type userDTO struct {
@@ -110,7 +110,7 @@ type userDTO struct {
 	// AvatarAt is when the picture was last set; absent when there is none. Use it
 	// as a cache buster on /v1/me/avatar.
 	AvatarAt *time.Time `json:"avatar_at,omitempty"`
-}
+} // @name CurrentUser
 
 type tokenPairDTO struct {
 	AccessToken  string   `json:"access_token"`
@@ -118,12 +118,12 @@ type tokenPairDTO struct {
 	ExpiresIn    int64    `json:"expires_in"`
 	TokenType    string   `json:"token_type"`
 	User         *userDTO `json:"user,omitempty"` // missing only if the profile failed to load
-}
+} // @name TokenPair
 
 type meDTO struct {
 	User      userDTO `json:"user"`
 	SessionID string  `json:"session_id"`
-}
+} // @name Me
 
 func toUserDTO(p *domain.Profile) userDTO {
 	return userDTO{
@@ -168,6 +168,7 @@ func (h *Handler) sendTokens(c fiber.Ctx, pair *domain.TokenPair) error {
 // @Success 201 {object} object{user_id=string,status=string,activation_token=string} "activation_token only with manual delivery"
 // @Failure 400 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authRegister
 // @Router /v1/auth/register [post]
 func (h *Handler) Register(c fiber.Ctx) error {
 	var body registerDTO
@@ -198,6 +199,7 @@ func (h *Handler) Register(c fiber.Ctx) error {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody "ALREADY_EXISTS: the username is taken"
 // @Failure 429 {object} mapper.errorBody
+// @ID authActivate
 // @Router /v1/auth/activate [post]
 func (h *Handler) Activate(c fiber.Ctx) error {
 	var body activateDTO
@@ -211,6 +213,7 @@ func (h *Handler) Activate(c fiber.Ctx) error {
 }
 
 // @Summary Log in
+// @Description With two-step login on, a right password answers 401 MFA_REQUIRED; send the same body again with code (an authenticator or recovery code). Repeated failures lock the account for a while (429 with Retry-After).
 // @Tags Auth
 // @Produce json
 // @Accept json
@@ -219,6 +222,7 @@ func (h *Handler) Activate(c fiber.Ctx) error {
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody "MFA_REQUIRED: send the same body again with code"
 // @Failure 429 {object} mapper.errorBody
+// @ID authLogin
 // @Router /v1/auth/login [post]
 func (h *Handler) Login(c fiber.Ctx) error {
 	var body loginDTO
@@ -250,6 +254,7 @@ func (h *Handler) Login(c fiber.Ctx) error {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authRefresh
 // @Router /v1/auth/refresh [post]
 func (h *Handler) Refresh(c fiber.Ctx) error {
 	var body refreshDTO
@@ -270,6 +275,7 @@ func (h *Handler) Refresh(c fiber.Ctx) error {
 // @Success 204
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authLogout
 // @Router /v1/auth/logout [post]
 func (h *Handler) Logout(c fiber.Ctx) error {
 	if err := h.svc.Logout(c.Context(), middleware.SessionID(c)); err != nil {
@@ -285,6 +291,7 @@ func (h *Handler) Logout(c fiber.Ctx) error {
 // @Success 200 {object} meDTO
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authMe
 // @Router /v1/me [get]
 func (h *Handler) Me(c fiber.Ctx) error {
 	profile, err := h.account.Profile(c.Context(), middleware.UserID(c))
@@ -304,6 +311,7 @@ func (h *Handler) Me(c fiber.Ctx) error {
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authRename
 // @Router /v1/me [patch]
 func (h *Handler) Rename(c fiber.Ctx) error {
 	var body renameDTO
@@ -325,6 +333,7 @@ func (h *Handler) Rename(c fiber.Ctx) error {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authAvatar
 // @Router /v1/me/avatar [get]
 func (h *Handler) Avatar(c fiber.Ctx) error {
 	image, contentType, err := h.account.Avatar(c.Context(), middleware.UserID(c))
@@ -348,6 +357,7 @@ func (h *Handler) Avatar(c fiber.Ctx) error {
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authSetAvatar
 // @Router /v1/me/avatar [put]
 func (h *Handler) SetAvatar(c fiber.Ctx) error {
 	if err := h.account.SetAvatar(c.Context(), middleware.UserID(c), c.Body()); err != nil {
@@ -362,6 +372,7 @@ func (h *Handler) SetAvatar(c fiber.Ctx) error {
 // @Success 204
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authRemoveAvatar
 // @Router /v1/me/avatar [delete]
 func (h *Handler) RemoveAvatar(c fiber.Ctx) error {
 	if err := h.account.RemoveAvatar(c.Context(), middleware.UserID(c)); err != nil {
@@ -379,6 +390,7 @@ func (h *Handler) RemoveAvatar(c fiber.Ctx) error {
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authChangePassword
 // @Router /v1/me/password [post]
 func (h *Handler) ChangePassword(c fiber.Ctx) error {
 	var body changePasswordDTO
@@ -405,6 +417,7 @@ func (h *Handler) ChangePassword(c fiber.Ctx) error {
 // @Success 200 {object} object{ok=bool,reset_token=string} "reset_token only with manual delivery"
 // @Failure 400 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authRequestPasswordReset
 // @Router /v1/auth/password-reset/request [post]
 func (h *Handler) RequestPasswordReset(c fiber.Ctx) error {
 	var body resetRequestDTO
@@ -431,6 +444,7 @@ func (h *Handler) RequestPasswordReset(c fiber.Ctx) error {
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
+// @ID authConfirmPasswordReset
 // @Router /v1/auth/password-reset/confirm [post]
 func (h *Handler) ConfirmPasswordReset(c fiber.Ctx) error {
 	var body resetConfirmDTO

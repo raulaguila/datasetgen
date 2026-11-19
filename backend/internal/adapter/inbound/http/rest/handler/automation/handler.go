@@ -1,4 +1,5 @@
-package tools
+// Package automation serves a collection's automations.
+package automation
 
 import (
 	"encoding/json"
@@ -6,62 +7,34 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
+	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/mapper"
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
+	"github.com/raulaguila/dataset/pkg/apperror"
 )
 
-type deliveryDTO struct {
-	ID        string    `json:"id"`
-	Event     string    `json:"event"`
-	Status    *int      `json:"status,omitempty"`
-	Error     string    `json:"error,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+type Handler struct {
+	svc input.IntegrationService
 }
 
-func toDeliveryDTO(d domain.WebhookDelivery) deliveryDTO {
-	return deliveryDTO{ID: d.ID, Event: d.Event, Status: d.Status, Error: d.Error, CreatedAt: d.CreatedAt}
+func New(svc input.IntegrationService) *Handler {
+	return &Handler{svc: svc}
 }
 
-// @Summary A webhook's newest calls (up to 50) and their answers; owners
-// @Tags Webhooks
-// @Produce json
-// @Param owner path string true "Owner's username"
-// @Param slug path string true "Collection slug"
-// @Param hookId path string true "Webhook ID"
-// @Security BearerAuth
-// @Success 200 {object} object{items=[]deliveryDTO}
-// @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{owner}/{slug}/webhooks/{hookId}/deliveries [get]
-func (h *Handler) Deliveries(c fiber.Ctx) error {
-	list, err := h.integrations.Deliveries(c.Context(), middleware.CollectionID(c), c.Params("hookId"))
-	if err != nil {
-		return fail(c, err)
-	}
-	out := make([]deliveryDTO, 0, len(list))
-	for _, d := range list {
-		out = append(out, toDeliveryDTO(d))
-	}
-	return c.JSON(fiber.Map{"items": out})
+// Routes mounts on /v1/collections/:owner/:slug.
+func (h *Handler) Routes(at fiber.Router) {
+	at.Get("/automations", h.Automations)
+	at.Post("/automations", h.CreateAutomation)
+	at.Put("/automations/:autoId", h.UpdateAutomation)
+	at.Delete("/automations/:autoId", h.DeleteAutomation)
+	at.Post("/automations/:autoId/run", h.RunAutomation)
 }
 
-// @Summary Send a webhook call again now, with the same body; owners
-// @Tags Webhooks
-// @Produce json
-// @Param owner path string true "Owner's username"
-// @Param slug path string true "Collection slug"
-// @Param hookId path string true "Webhook ID"
-// @Param deliveryId path string true "Delivery ID"
-// @Security BearerAuth
-// @Success 200 {object} deliveryDTO "the new call"
-// @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{owner}/{slug}/webhooks/{hookId}/deliveries/{deliveryId}/redeliver [post]
-func (h *Handler) Redeliver(c fiber.Ctx) error {
-	d, err := h.integrations.Redeliver(c.Context(), middleware.CollectionID(c), c.Params("hookId"), c.Params("deliveryId"))
-	if err != nil {
-		return fail(c, err)
-	}
-	return c.JSON(toDeliveryDTO(*d))
+func fail(c fiber.Ctx, err error) error { return mapper.WriteError(c, err) }
+
+func badBody(c fiber.Ctx) error {
+	return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 }
 
 type automationDTO struct {
@@ -77,7 +50,7 @@ type automationDTO struct {
 	LastRunAt  *time.Time      `json:"last_run_at,omitempty"`
 	LastError  string          `json:"last_error,omitempty"`
 	Runs       int             `json:"runs"`
-}
+} // @name Automation
 
 func toAutomationDTO(a domain.Automation) automationDTO {
 	return automationDTO{ID: a.ID, Name: a.Name, Enabled: a.Enabled, Trigger: a.Trigger, Hour: a.Hour, Conditions: a.Conditions,
@@ -92,7 +65,7 @@ type automationBody struct {
 	Conditions domain.Where    `json:"conditions" swaggertype:"object"`
 	Action     string          `json:"action" example:"notify" enums:"set_field,notify,email,webhook,create_record"`
 	Config     json.RawMessage `json:"config" swaggertype:"object"`
-}
+} // @name AutomationInput
 
 func (b automationBody) input() input.AutomationInput {
 	return input.AutomationInput{Name: b.Name, Enabled: b.Enabled, Trigger: b.Trigger, Hour: b.Hour, Conditions: b.Conditions, Action: b.Action, Config: b.Config}
@@ -105,10 +78,14 @@ func (b automationBody) input() input.AutomationInput {
 // @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]automationDTO}
+// @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID automationList
 // @Router /v1/collections/{owner}/{slug}/automations [get]
 func (h *Handler) Automations(c fiber.Ctx) error {
-	list, err := h.integrations.Automations(c.Context(), middleware.CollectionID(c))
+	list, err := h.svc.Automations(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return fail(c, err)
 	}
@@ -130,13 +107,18 @@ func (h *Handler) Automations(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Success 201 {object} automationDTO
 // @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID automationCreate
 // @Router /v1/collections/{owner}/{slug}/automations [post]
 func (h *Handler) CreateAutomation(c fiber.Ctx) error {
 	var body automationBody
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	a, err := h.integrations.CreateAutomation(c.Context(), middleware.CollectionID(c), body.input())
+	a, err := h.svc.CreateAutomation(c.Context(), middleware.CollectionID(c), body.input())
 	if err != nil {
 		return fail(c, err)
 	}
@@ -154,14 +136,18 @@ func (h *Handler) CreateAutomation(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Success 200 {object} automationDTO
 // @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID automationUpdate
 // @Router /v1/collections/{owner}/{slug}/automations/{autoId} [put]
 func (h *Handler) UpdateAutomation(c fiber.Ctx) error {
 	var body automationBody
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	a, err := h.integrations.UpdateAutomation(c.Context(), middleware.CollectionID(c), c.Params("autoId"), body.input())
+	a, err := h.svc.UpdateAutomation(c.Context(), middleware.CollectionID(c), c.Params("autoId"), body.input())
 	if err != nil {
 		return fail(c, err)
 	}
@@ -175,10 +161,14 @@ func (h *Handler) UpdateAutomation(c fiber.Ctx) error {
 // @Param autoId path string true "Automation ID"
 // @Security BearerAuth
 // @Success 204
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID automationDelete
 // @Router /v1/collections/{owner}/{slug}/automations/{autoId} [delete]
 func (h *Handler) DeleteAutomation(c fiber.Ctx) error {
-	if err := h.integrations.DeleteAutomation(c.Context(), middleware.CollectionID(c), c.Params("autoId")); err != nil {
+	if err := h.svc.DeleteAutomation(c.Context(), middleware.CollectionID(c), c.Params("autoId")); err != nil {
 		return fail(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -192,10 +182,14 @@ func (h *Handler) DeleteAutomation(c fiber.Ctx) error {
 // @Param autoId path string true "Automation ID"
 // @Security BearerAuth
 // @Success 200 {object} automationDTO "with the run's result"
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID automationRun
 // @Router /v1/collections/{owner}/{slug}/automations/{autoId}/run [post]
 func (h *Handler) RunAutomation(c fiber.Ctx) error {
-	a, err := h.integrations.RunAutomation(c.Context(), middleware.CollectionID(c), c.Params("autoId"))
+	a, err := h.svc.RunAutomation(c.Context(), middleware.CollectionID(c), c.Params("autoId"))
 	if err != nil {
 		return fail(c, err)
 	}

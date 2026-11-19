@@ -95,7 +95,7 @@ export interface User {
 }
 
 /** The user list's size: everyone it shows, and those waiting on an action. */
-/** A collection as pickers need it: GET /v1/collections/list, up to 1000 by name. */
+/** A collection as pickers need it: GET /v1/collections/options, up to 1000 by name. */
 export interface CollectionOption {
   id: string;
   /** owner and slug make the collection's address: /<owner>/<slug>. */

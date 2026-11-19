@@ -8,17 +8,25 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/recover"
 
 	"github.com/raulaguila/dataset/config"
+	apikeyhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/apikey"
 	audithttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/audit"
 	authhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/auth"
+	automationhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/automation"
 	collectionhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/collection"
+	filehttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/file"
 	healthhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/health"
+	mcptoolhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/mcptool"
 	notificationhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/notification"
+	oauthhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/oauth"
 	preferencehttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/preference"
 	publichttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/public"
 	recordhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/record"
 	sessionhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/session"
-	toolshttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/tools"
+	sharehttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/share"
+	trashhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/trash"
 	usershttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/user"
+	viewhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/view"
+	webhookhttp "github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/handler/webhook"
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/mapper"
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
@@ -94,10 +102,12 @@ func New(cfg *config.Environment, app *input.Application, hits middleware.Hits, 
 	sessionhttp.New(app.Account).Routes(me.Group("/sessions"))
 	preferencehttp.New(app.Account).Routes(me.Group("/preferences"))
 	notificationhttp.New(app.Account).Routes(me.Group("/notifications"))
-	tools := toolshttp.New(app.Integrations, app.Tools, app.Records)
-	tools.MeRoutes(me.Group("/keys"))
+	apiKeys, mcpTools := apikeyhttp.New(app.Integrations), mcptoolhttp.New(app.Integrations)
+	keys := me.Group("/keys")
+	apiKeys.MeRoutes(keys)
+	mcpTools.KeyRoutes(keys)
 	// Assistants that cannot take a pasted key (the ChatGPT app) get one through OAuth.
-	tools.OAuthRoutes(v1.Group("/oauth"), bearer, middleware.RateLimit("oauth", cfg.API.AuthRateLimit, hits))
+	oauthhttp.New(app.Integrations).Routes(v1.Group("/oauth"), bearer, middleware.RateLimit("oauth", cfg.API.AuthRateLimit, hits))
 
 	users := v1.Group("/users", token)
 	usershttp.New(app.Users, app.Auth).Routes(users, app.Authorizer)
@@ -110,14 +120,20 @@ func New(cfg *config.Environment, app *input.Application, hits middleware.Hits, 
 	// Registered before the collection group: its Bearer-only middleware would refuse a key.
 	recordHandler.CollectionRoutes(v1.Group("/collections/:owner/:slug/records", keyOrBearer, at))
 	collections := v1.Group("/collections", bearer)
-	tools.TrashRoutes(collections) // before the :owner/:slug group, whose lookup would take "trash" for a username
+	trash, files := trashhttp.New(app.Tools), filehttp.New(app.Tools)
+	trash.Routes(collections) // before the :owner/:slug group, whose lookup would take "trash" for a username
 	collectionAt := collections.Group("/:owner/:slug", at)
-	tools.CollectionRoutes(collectionAt)
-	collectionhttp.New(app.Collections).Routes(collections, collectionAt, app.Authorizer)
-	records := v1.Group("/records", keyOrBearer)
-	tools.RecordRoutes(records)
-	recordHandler.Routes(records)
-	tools.FileRoutes(v1.Group("/files", keyOrBearer))
+	collectionhttp.New(app.Collections, app.Tools).Routes(collections, collectionAt, app.Authorizer)
+	trash.CollectionRoutes(collectionAt)
+	files.CollectionRoutes(collectionAt)
+	viewhttp.New(app.Tools).Routes(collectionAt)
+	apiKeys.CollectionRoutes(collectionAt)
+	sharehttp.New(app.Integrations).Routes(collectionAt)
+	webhookhttp.New(app.Integrations).Routes(collectionAt)
+	automationhttp.New(app.Integrations).Routes(collectionAt)
+	mcpTools.Routes(collectionAt)
+	recordHandler.Routes(v1.Group("/records", keyOrBearer))
+	files.Routes(v1.Group("/files", keyOrBearer))
 	audithttp.New(app.Audit).Routes(v1.Group("/audit", token), app.Authorizer)
 	// Share links: no session; the token is the access. Form posts share the sign-in limit.
 	publichttp.New(app.Integrations, app.Collections, app.Records).Routes(v1.Group("/public"), middleware.RateLimit("public", cfg.API.AuthRateLimit, hits))
