@@ -54,10 +54,12 @@ func TestCollectionPathsFollowTheOwner(t *testing.T) {
 	if livros.Owner != username(anaID) || livros.Slug != "livros-lidos" {
 		t.Fatalf("path %s/%s", livros.Owner, livros.Slug)
 	}
-	// The same name twice under one owner takes the next free slug; another owner keeps the plain one.
-	if again := create(ana, "Livros  lidos!"); again.Slug != "livros-lidos-2" {
-		t.Fatalf("second slug %q", again.Slug)
-	}
+	// The slug is the name, as on GitHub: a name that gives the same slug under one owner
+	// is refused, on create and on rename; another owner keeps the plain one.
+	_, err := collections.Create(ana, input.CreateCollectionCommand{Name: "Livros  lidos!", Schema: json.RawMessage(`{"type":"object"}`)})
+	wantCode(t, err, apperror.CodeAlreadyExists)
+	other := create(ana, "Outra")
+	wantCode(t, ignore(collections.Update(ana, input.UpdateCollectionCommand{ID: other.ID, Name: pointer.Of("LIVROS lidos")})), apperror.CodeAlreadyExists)
 	if hers := create(bia, "Livros Lidos"); hers.Slug != "livros-lidos" {
 		t.Fatalf("other owner's slug %q", hers.Slug)
 	}
@@ -106,13 +108,19 @@ func TestCollectionPathsFollowTheOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantCode(t, ignore(open(bia, "bia-nova", "leituras")), apperror.CodeNotFound)
-	if fresh := create(bia, "Leituras"); fresh.Slug != "leituras" {
+	fresh := create(bia, "Leituras")
+	if fresh.Slug != "leituras" {
 		t.Fatalf("slug of a deleted collection not freed: %q", fresh.Slug)
+	}
+	// A restore whose name is taken again is refused until one of them is renamed.
+	wantCode(t, e.store.Tools().RestoreCollection(context.Background(), livros.ID), apperror.CodeAlreadyExists)
+	if _, err := collections.Update(bia, input.UpdateCollectionCommand{ID: fresh.ID, Name: pointer.Of("Leituras novas")}); err != nil {
+		t.Fatal(err)
 	}
 	if err := e.store.Tools().RestoreCollection(context.Background(), livros.ID); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := collections.Get(bia, livros.ID); err != nil || got.Slug != "leituras-2" {
+	if got, err := collections.Get(bia, livros.ID); err != nil || got.Slug != "leituras" {
 		t.Fatalf("restored: %+v, %v", got, err)
 	}
 }

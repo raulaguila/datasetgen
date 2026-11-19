@@ -43,6 +43,7 @@ const BY_MESSAGE: [string, MessageKey][] = [
   ["this username is taken", "error.msg.username_taken"],
   ["this person owns the collection's address", "error.msg.url_owner"],
   ["the new owner must be an owner member", "error.msg.transfer_owner"],
+  ["the owner already has a collection with this name", "error.msg.collection_name_taken"],
 ];
 
 /**

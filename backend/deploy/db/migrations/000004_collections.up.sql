@@ -36,7 +36,8 @@ CREATE INDEX idx_app_collection_name_trgm ON app.collection USING gin (name gin_
 CREATE INDEX idx_app_collection_created ON app.collection (created_at DESC, id DESC);
 CREATE INDEX idx_app_collection_owner ON app.collection (owner_id);
 CREATE INDEX idx_app_collection_deleted ON app.collection (deleted_at) WHERE deleted_at IS NOT NULL;
--- A deleted collection gives its path up; a restore picks a free one (trigger below).
+-- The slug is the name, as on GitHub: one per owner among live collections. A deleted
+-- collection gives its path up; a create, rename, transfer or restore onto a taken one fails here.
 CREATE UNIQUE INDEX uq_app_collection_owner_slug ON app.collection (owner_id, slug) WHERE deleted_at IS NULL;
 
 CREATE TRIGGER trg_app_collection_set_updated_at BEFORE UPDATE ON app.collection
@@ -69,42 +70,22 @@ CREATE TABLE app.collection_path (
 );
 CREATE INDEX idx_app_collection_path_collection ON app.collection_path (collection_id);
 
--- The first free slug from name under owner, skipping the collection itself.
-CREATE FUNCTION app.fn_free_slug(owner UUID, name TEXT, except_id UUID) RETURNS TEXT
-LANGUAGE plpgsql AS $$
-DECLARE
-  root TEXT := coalesce(nullif(public.fn_slugify(name, 90), ''), 'collection');
-  candidate TEXT := root;
-  n INTEGER := 1;
-BEGIN
-  LOOP
-    EXIT WHEN NOT EXISTS (SELECT 1 FROM app.collection
-      WHERE owner_id = owner AND slug = candidate AND deleted_at IS NULL AND id IS DISTINCT FROM except_id);
-    n := n + 1;
-    candidate := root || '-' || n;
-  END LOOP;
-  RETURN candidate;
-END $$;
-
 CREATE FUNCTION app.fn_remember_path(username TEXT, slug TEXT, collection_id UUID) RETURNS VOID
 LANGUAGE sql AS $$
   INSERT INTO app.collection_path (username, slug, collection_id) VALUES (username, slug, collection_id)
   ON CONFLICT (username, slug) DO UPDATE SET collection_id = EXCLUDED.collection_id, created_at = now()
 $$;
 
--- A new collection, a rename and a restore take a free slug; the old path is remembered.
+-- A new collection, a rename, a transfer and a restore take the slug of the name; the
+-- unique index refuses one the owner already has. The old path is remembered.
 CREATE FUNCTION app.fn_collection_path() RETURNS TRIGGER
 LANGUAGE plpgsql AS $$
 BEGIN
-  IF TG_OP = 'INSERT' THEN
-    NEW.slug := app.fn_free_slug(NEW.owner_id, NEW.name, NEW.id);
-    RETURN NEW;
-  END IF;
-  IF NEW.name IS DISTINCT FROM OLD.name OR NEW.owner_id IS DISTINCT FROM OLD.owner_id
+  IF TG_OP = 'INSERT' OR NEW.name IS DISTINCT FROM OLD.name OR NEW.owner_id IS DISTINCT FROM OLD.owner_id
      OR (OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL) THEN
-    NEW.slug := app.fn_free_slug(NEW.owner_id, NEW.name, NEW.id);
+    NEW.slug := coalesce(nullif(public.fn_slugify(NEW.name, 90), ''), 'collection');
   END IF;
-  IF NEW.slug IS DISTINCT FROM OLD.slug OR NEW.owner_id IS DISTINCT FROM OLD.owner_id THEN
+  IF TG_OP = 'UPDATE' AND (NEW.slug IS DISTINCT FROM OLD.slug OR NEW.owner_id IS DISTINCT FROM OLD.owner_id) THEN
     PERFORM app.fn_remember_path((SELECT username FROM usr.usr_user WHERE id = OLD.owner_id), OLD.slug, OLD.id);
   END IF;
   RETURN NEW;

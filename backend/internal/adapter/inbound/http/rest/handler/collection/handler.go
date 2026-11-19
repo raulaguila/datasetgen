@@ -68,6 +68,7 @@ type transferDTO struct {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
+// @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
 // @ID collectionTransfer
 // @Router /v1/collections/{owner}/{slug}/transfer [post]
@@ -680,6 +681,7 @@ type duplicateDTO struct {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
+// @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
 // @ID collectionDuplicate
 // @Router /v1/collections/{owner}/{slug}/duplicate [post]

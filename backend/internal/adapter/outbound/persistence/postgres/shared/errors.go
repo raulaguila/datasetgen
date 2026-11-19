@@ -29,6 +29,9 @@ func WrapError(err error, resource string) error {
 	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 		switch pgErr.Code {
 		case "23505": // unique_violation
+			if pgErr.ConstraintName == "uq_app_collection_owner_slug" { // the slug is the name, as on GitHub
+				return apperror.New(apperror.CodeAlreadyExists, "the owner already has a collection with this name").WithField("name")
+			}
 			return apperror.New(apperror.CodeAlreadyExists, resource+" already exists").WithDetails("resource", resource)
 		case "23503": // foreign_key_violation
 			return apperror.New(apperror.CodeResourceInUse, resource+" is in use").WithDetails("resource", resource)

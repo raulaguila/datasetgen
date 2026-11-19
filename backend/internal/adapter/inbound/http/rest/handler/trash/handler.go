@@ -178,6 +178,7 @@ func (h *Handler) TrashedCollections(c fiber.Ctx) error {
 // @Success 204
 // @Failure 401 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
+// @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
 // @ID trashRestoreCollection
 // @Router /v1/collections/trash/{id}/restore [post]
