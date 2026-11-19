@@ -431,9 +431,9 @@ compose-build: ## Build, create and start containers
 	@echo
 	@$(clean_dangling_images)
 
-db-up: ## Start postgres and backup, then migrate: the app roles exist before backend and mailer start
+db-up: ## Start postgres, wait for it, then migrate: the app roles exist before backend and mailer start
 	$(call require_env_file)
-	@$(COMPOSE_SERVICE) up -d --wait
+	@$(COMPOSE_SERVICE) up -d --wait postgres  # not backup: its healthcheck runs hourly
 	@$(MAKE) --no-print-directory migrate-up
 
 compose-services: ## Build, create and start services containers
