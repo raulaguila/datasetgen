@@ -31,7 +31,7 @@ func (r *Repository) Record(ctx context.Context, e domain.AuditEntry) error {
 		}
 	}
 	return shared.WrapError(r.db.WithContext(ctx).Exec(`
-		INSERT INTO usr.usr_audit_log (actor_id, request_id, action, target_id, details)
+		INSERT INTO sys.audit_log (actor_id, request_id, action, target_id, details)
 		VALUES (NULLIF(?, '')::uuid, NULLIF(?, ''), ?, NULLIF(?, '')::uuid, ?::jsonb)
 	`, e.ActorID, e.RequestID, e.Action, e.TargetID, string(details)).Error, "audit log")
 }
@@ -81,7 +81,7 @@ func (r *Repository) List(ctx context.Context, filter domain.AuditFilter) ([]dom
 	// The log is never cleaned, so the count stops at countCap: past it the total
 	// reads "more than 10 000" and the caller narrows the filters, as the export asks.
 	var total int64
-	if err := r.db.WithContext(ctx).Raw(`SELECT count(*) FROM (SELECT 1 FROM usr.usr_audit_log a WHERE `+where+` LIMIT ?) capped`, append(args[:len(args):len(args)], countCap)...).Find(&total).Error; err != nil {
+	if err := r.db.WithContext(ctx).Raw(`SELECT count(*) FROM (SELECT 1 FROM sys.audit_log a WHERE `+where+` LIMIT ?) capped`, append(args[:len(args):len(args)], countCap)...).Find(&total).Error; err != nil {
 		return nil, 0, shared.WrapError(err, "audit log")
 	}
 	var rows []recordRow
@@ -91,16 +91,16 @@ func (r *Repository) List(ctx context.Context, filter domain.AuditFilter) ([]dom
 		       COALESCE(tu.email::text, tr.name, (
 		         -- Any other target (every module): the newest name the log recorded for it,
 		         -- which outlives a delete and needs no join per module.
-		         SELECT n.details->>'name' FROM usr.usr_audit_log n
+		         SELECT n.details->>'name' FROM sys.audit_log n
 		         WHERE n.target_id = a.target_id AND n.details->>'name' IS NOT NULL
 		         ORDER BY n.created_at DESC LIMIT 1
 		       )) AS target_label,
 		       -- A later delete of the target; the log keeps its entries, the target is gone.
-		       EXISTS (SELECT 1 FROM usr.usr_audit_log d WHERE d.target_id = a.target_id
+		       EXISTS (SELECT 1 FROM sys.audit_log d WHERE d.target_id = a.target_id
 		         AND d.action IN ('record.delete', 'collection.delete', 'role.delete')) AS target_gone,
 		       tco.username AS target_owner, tc.slug AS target_slug,
 		       a.details
-		FROM usr.usr_audit_log a
+		FROM sys.audit_log a
 		LEFT JOIN usr.usr_user au ON au.id = a.actor_id
 		LEFT JOIN usr.usr_user tu ON tu.id = a.target_id
 		LEFT JOIN usr.usr_role tr ON tr.id = a.target_id

@@ -26,19 +26,14 @@ services:
   postgres:
 
     container_name: dataset_postgres
-    image: dataset_postgres
+    image: postgres:17.2-alpine
     hostname: postgres
-    build:
-      context: ./postgres
-      dockerfile: Dockerfile
     restart: always
     volumes:
       - postgres_volume:/var/lib/postgresql/data
     command: >
       postgres
       -p ${POSTGRES_PORT}
-      -c shared_preload_libraries='pg_cron'
-      -c cron.database_name='${POSTGRES_BASE}'
     ports:
       - 127.0.0.1:${POSTGRES_PORT}:${POSTGRES_PORT}  # host tools only; never publish publicly
     environment:
@@ -63,7 +58,7 @@ services:
   backup:
 
     container_name: dataset_backup
-    image: dataset_postgres
+    image: postgres:17.2-alpine
     restart: always
     entrypoint: ["/bin/sh", "/backup.sh"]
     command: ["loop"]

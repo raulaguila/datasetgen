@@ -24,6 +24,6 @@ Derivado de `config/validate.go`, CHECKs SQL e comentários de tabela.
 
 - Só `usr_user.status = active` autoriza login
 - HTTP não ecoa `failure_kind`
-- Authz: `is_superuser` ou `resource='*'`; bits CRUD; catálogo `usr_resource`
-- Sentinela `*` não é linha de `usr_resource`
+- Authz: `is_superuser` ou `resource='*'`; bits CRUD; nomes de resource fixos no CHECK `chk_usr_role_permission_resource`
+- Sentinela `*` é aceita pelo CHECK
 - Módulo exemplo `products` no schema `app`; sem multi-tenant SMTP / dashboard hexago na v1

@@ -9,7 +9,7 @@ import (
 var usernamePattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 // reservedUsernames are the frontend's top-level routes and a few names kept for
-// later. usr.fn_username_reserved (migration 000030) holds the same list; both change together.
+// later. usr.fn_username_reserved (migration 000002) holds the same list; both change together.
 var reservedUsernames = []string{
 	"about", "account", "activate", "admin", "api", "api-access", "app", "assets", "c", "collections",
 	"dashboard", "dataset", "docs", "explore", "f", "fonts", "forgot-password", "help", "home", "login",

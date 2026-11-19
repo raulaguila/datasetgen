@@ -104,3 +104,14 @@ func marked(res *gorm.DB) error {
 	}
 	return nil
 }
+
+// Cleanup deletes what expired (sys.fn_cleanup) and empties the trash past its
+// retention (app.fn_purge_trash). The worker runs it hourly, so no database
+// scheduler is needed.
+func (r *Repository) Cleanup(ctx context.Context) error {
+	db := r.db.WithContext(ctx)
+	if err := db.Exec(`SELECT sys.fn_cleanup()`).Error; err != nil {
+		return shared.WrapError(err, "cleanup")
+	}
+	return shared.WrapError(db.Exec(`SELECT app.fn_purge_trash()`).Error, "trash purge")
+}

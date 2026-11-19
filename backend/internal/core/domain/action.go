@@ -46,19 +46,12 @@ func ParseActions(names []string) (Action, bool) {
 	return out, true
 }
 
-// Resource names are catalog codes (usr_resource) or the sentinel "*".
+// Resources the routes check, or the sentinel "*". A grant may name only these
+// (chk_usr_role_permission_resource); collections and records follow membership.
 const (
 	ResourceAll         = "*"
 	ResourceAudit       = "audit"
 	ResourceCollections = "collections"
-	ResourceRecords     = "records"
 	ResourceRoles       = "roles"
 	ResourceUsers       = "users"
 )
-
-// Resource is an entry of the catalog that grants may name.
-type Resource struct {
-	Code        string
-	Description string
-	Actions     Action // the actions its routes check; grants outside them are refused
-}

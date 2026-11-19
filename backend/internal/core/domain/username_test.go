@@ -20,7 +20,7 @@ func TestValidUsername(t *testing.T) {
 
 // The database refuses the same names: its list must match.
 func TestReservedUsernamesMatchTheMigration(t *testing.T) {
-	sql, err := os.ReadFile("../../../deploy/db/migrations/000030_username_collection_path.up.sql")
+	sql, err := os.ReadFile("../../../deploy/db/migrations/000002_identity.up.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

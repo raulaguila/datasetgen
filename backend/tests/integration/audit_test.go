@@ -34,7 +34,7 @@ func TestChangesLeaveAnAuditTrail(t *testing.T) {
 		RequestID string
 		Action    string
 	}
-	if err := testDB.Raw(`SELECT actor_id::text AS actor_id, request_id, action FROM usr.usr_audit_log WHERE actor_id = ? AND request_id = 'req-1'`, actor).Scan(&rows).Error; err != nil {
+	if err := testDB.Raw(`SELECT actor_id::text AS actor_id, request_id, action FROM sys.audit_log WHERE actor_id = ? AND request_id = 'req-1'`, actor).Scan(&rows).Error; err != nil {
 		t.Fatal(err)
 	}
 	if len(rows) != 1 || rows[0].Action != "collection.create" || rows[0].ActorID != actor || rows[0].RequestID != "req-1" {
@@ -44,8 +44,8 @@ func TestChangesLeaveAnAuditTrail(t *testing.T) {
 
 func TestAppCannotRewriteTheAuditLog(t *testing.T) {
 	for _, sql := range []string{
-		"DELETE FROM usr.usr_audit_log WHERE false",
-		"UPDATE usr.usr_audit_log SET action = action WHERE false",
+		"DELETE FROM sys.audit_log WHERE false",
+		"UPDATE sys.audit_log SET action = action WHERE false",
 	} {
 		err := testDB.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Exec("SET LOCAL ROLE dataset_app").Error; err != nil {

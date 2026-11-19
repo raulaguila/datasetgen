@@ -60,7 +60,7 @@ func (r *Repository) Access(ctx context.Context, id string, failuresSince, now t
 		LockedUntil    *time.Time `gorm:"column:locked_until"`
 		RecentFailures int        `gorm:"column:recent_failures"`
 		ActiveSessions int        `gorm:"column:active_sessions"`
-		// One live token per user and purpose (uni_usr_token_live), so the subquery reads one row.
+		// One live token per user and purpose (uq_usr_token_live), so the subquery reads one row.
 		ActivationExpiresAt *time.Time `gorm:"column:activation_expires_at"`
 	}
 	err := r.db.WithContext(ctx).Raw(`

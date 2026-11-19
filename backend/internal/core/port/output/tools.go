@@ -33,6 +33,8 @@ type IntegrationRepository interface {
 	// Grant finds a key by its hash; its member must still be active. It marks
 	// the key used (at most once a minute). NotFound when nothing matches.
 	Grant(ctx context.Context, hash []byte) (*domain.KeyGrant, error)
+	// ShareGrant finds a live share link by the SHA-256 of its token.
+	ShareGrant(ctx context.Context, hash []byte) (*domain.KeyGrant, error)
 
 	Webhooks(ctx context.Context, collectionID string) ([]domain.Webhook, error)
 	// WebhooksFor lists the hooks of a collection that ask for event, with sealed secrets.

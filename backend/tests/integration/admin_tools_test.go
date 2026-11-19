@@ -144,7 +144,7 @@ func TestActivationLinkHandsOverATokenWithoutEmail(t *testing.T) {
 		t.Fatalf("access: %+v %v", access, err)
 	}
 	var audited int64
-	if err := testDB.Raw("SELECT count(*) FROM usr.usr_audit_log WHERE action = 'user.activation_link' AND target_id = ?", first.UserID).Row().Scan(&audited); err != nil || audited != 1 {
+	if err := testDB.Raw("SELECT count(*) FROM sys.audit_log WHERE action = 'user.activation_link' AND target_id = ?", first.UserID).Row().Scan(&audited); err != nil || audited != 1 {
 		t.Fatalf("audited %d %v", audited, err)
 	}
 	_, err = e.svc.ActivationLink(ctx, first.UserID)
@@ -164,7 +164,7 @@ func TestActivationLinkHandsOverATokenWithoutEmail(t *testing.T) {
 func TestAuditCountStopsAtTheCap(t *testing.T) {
 	e := newEnv(t)
 	target := uuid.NewString()
-	if err := testDB.Exec(`INSERT INTO usr.usr_audit_log (action, target_id) SELECT 'cap.test', ? FROM generate_series(1, 10050)`, target).Error; err != nil {
+	if err := testDB.Exec(`INSERT INTO sys.audit_log (action, target_id) SELECT 'cap.test', ? FROM generate_series(1, 10050)`, target).Error; err != nil {
 		t.Fatal(err)
 	}
 	records, total, err := audit.New(e.store.Audit()).List(context.Background(), domain.AuditFilter{Page: domain.NewPage(1, 10), UserID: target})

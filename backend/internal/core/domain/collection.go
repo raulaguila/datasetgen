@@ -117,6 +117,11 @@ type CollectionMember struct {
 	CreatedAt time.Time
 }
 
+// QualityMaxInvalidIDs caps the invalid record ids a check keeps for "delete the
+// invalid records" (chk_app_collection_quality_invalid_ids); the delete queues a
+// new check, which finds the rest.
+const QualityMaxInvalidIDs = 10_000
+
 // QualityRun is the latest background check of a collection's records against
 // its schema (app.collection_quality).
 type QualityRun struct {
@@ -126,7 +131,7 @@ type QualityRun struct {
 	InvalidCount  int
 	Truncated     bool            // stopped at the cap before the end of the collection
 	Invalid       json.RawMessage // the first invalid records with their issues
-	InvalidIDs    []string        // every invalid record found
+	InvalidIDs    []string        // the invalid records found, at most QualityMaxInvalidIDs
 	Error         string
 	StartedAt     time.Time
 	FinishedAt    *time.Time

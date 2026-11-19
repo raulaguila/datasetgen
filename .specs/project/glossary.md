@@ -13,4 +13,4 @@
 - **schema `app`**: domínio de aplicação (products exemplo).
 - **schema `sys`**: infraestrutura (outbox de e-mail).
 - **schema `usr`**: identidade (users, credenciais, sessões, tokens, tentativas, RBAC).
-- **`usr_resource`**: catálogo de nomes de resource para a API.
+- **`chk_usr_role_permission_resource`**: CHECK com os nomes de resource válidos (o catálogo `usr_resource` saiu no squash das migrations).

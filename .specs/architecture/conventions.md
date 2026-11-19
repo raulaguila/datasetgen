@@ -15,7 +15,7 @@ Regras do SQL, da config e de `pkg`. Aplicar ao implementar HTTP e domínio. RBA
 - Papel `is_default` no activate; um default no banco.
 - Authz: `is_superuser` **ou** effective `resource='*'`; senão `Allows(have, need)` por resource. View não expande `*`.
 - Access JWT sem mapa de permissões; load ao vivo (view).
-- Actions CRUD: `create`, `read`, `update`, `delete`. Resources dinâmicos via `usr_resource`.
+- Actions CRUD: `create`, `read`, `update`, `delete`. Nomes de resource fixos no CHECK `chk_usr_role_permission_resource`.
 - Grants granulares (incl. mutação em `users`) via API com superuser/`*`.
 
 ## E-mail

@@ -453,7 +453,7 @@ func (r *Repository) List(ctx context.Context, filter domain.RecordFilter) ([]do
 	if filter.Order == "asc" {
 		direction = "ASC"
 	}
-	sort := "created_at" // idx_app_record_collection
+	sort := "created_at" // idx_app_record_collection_created
 	if filter.Sort == "updated_at" {
 		sort = "updated_at" // idx_app_record_collection_updated
 	}
@@ -674,7 +674,7 @@ func (r *Repository) CollectionsOf(ctx context.Context, ids []string) (map[strin
 
 func (r *Repository) Scan(ctx context.Context, collectionID, afterID string, limit int) ([]domain.Record, error) {
 	var rows []row
-	// The zero uuid starts the scan; idx_app_record_collection_key serves the keyset.
+	// The zero uuid starts the scan; idx_app_record_collection_id serves the keyset.
 	if afterID == "" {
 		afterID = uuid.Nil.String()
 	}
@@ -693,7 +693,7 @@ func (r *Repository) Scan(ctx context.Context, collectionID, afterID string, lim
 
 func (r *Repository) WithoutNumber(ctx context.Context, collectionID, key string, limit int) ([]domain.Record, error) {
 	var rows []row
-	// idx_app_record_collection serves the order; the filter reads the rows it walks.
+	// idx_app_record_collection_created serves the order; the filter reads the rows it walks.
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT id, data::text AS data FROM app.record
 		WHERE collection_id = ? AND jsonb_typeof(data) = 'object' AND jsonb_typeof(data -> ?) IS DISTINCT FROM 'number'

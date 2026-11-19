@@ -16,16 +16,11 @@ verify() {
 	[ -n "$dump" ] || { echo "verify: no dump in $DIR"; return 1; }
 	pg dropdb --if-exists "$CHECK_DB" || return 1
 	pg createdb "$CHECK_DB" || return 1
-	# pg_cron lives only in the cluster's main database: the scratch copy leaves its extension and jobs out.
-	list=$(mktemp)
-	pg_restore -l "$dump" | grep -v -E '(EXTENSION - pg_cron|EXTENSION pg_cron| cron (job|job_run_details|jobid_seq|runid_seq) )' > "$list"
-	if ! pg pg_restore --no-owner --exit-on-error -L "$list" -d "$CHECK_DB" "$dump" >/dev/null; then
-		rm -f "$list"
+	if ! pg pg_restore --no-owner --exit-on-error -d "$CHECK_DB" "$dump" >/dev/null; then
 		pg dropdb --if-exists "$CHECK_DB"
 		echo "verify: $dump does not restore"
 		return 1
 	fi
-	rm -f "$list"
 	counts=$(pg psql -X -tA -d "$CHECK_DB" -c "SELECT (SELECT count(*) FROM app.collection) || ' collections, ' || (SELECT count(*) FROM app.record) || ' records, ' || (SELECT count(*) FROM app.file) || ' files'")
 	pg dropdb --if-exists "$CHECK_DB"
 	[ -n "$counts" ] || { echo "verify: $dump restored without the app tables"; return 1; }

@@ -6,29 +6,8 @@ import (
 	"github.com/raulaguila/dataset/internal/core/domain"
 )
 
-func TestCatalogHoldsEveryResourceTheCodeChecks(t *testing.T) {
-	var resources []struct {
-		Code    string
-		Actions int
-	}
-	if err := testDB.Raw(`SELECT code, actions FROM usr.usr_resource`).Scan(&resources).Error; err != nil {
-		t.Fatal(err)
-	}
-	found := map[string]bool{}
-	for _, r := range resources {
-		found[r.Code] = true
-		if r.Actions == 0 {
-			t.Errorf("%s takes no action", r.Code)
-		}
-	}
-	for _, code := range []string{domain.ResourceAudit, domain.ResourceRoles, domain.ResourceUsers} {
-		if !found[code] {
-			t.Errorf("%s is missing from usr_resource: %v", code, resources)
-		}
-	}
-}
-
-func TestGrantsOnlyNameCatalogResources(t *testing.T) {
+// A grant may name only a resource the routes check, or the sentinel.
+func TestGrantsOnlyNameKnownResources(t *testing.T) {
 	var roleID string
 	if err := testDB.Raw(`
 		INSERT INTO usr.usr_role (name) VALUES ('catalog_test') RETURNING id
@@ -45,15 +24,11 @@ func TestGrantsOnlyNameCatalogResources(t *testing.T) {
 	}
 
 	if err := grant("unknown"); err == nil {
-		t.Fatal("a grant on a resource outside the catalog must fail")
+		t.Fatal("a grant on a resource no route checks must fail")
 	}
-	if err := grant(domain.ResourceAll); err != nil {
-		t.Fatalf("the sentinel stays allowed: %v", err)
-	}
-	if err := grant(domain.ResourceAudit); err != nil {
-		t.Fatal(err)
-	}
-	if err := testDB.Exec("DELETE FROM usr.usr_resource WHERE code = ?", domain.ResourceAudit).Error; err == nil {
-		t.Fatal("a resource with grants must stay in the catalog")
+	for _, r := range []string{domain.ResourceAll, domain.ResourceAudit, domain.ResourceCollections, domain.ResourceRoles, domain.ResourceUsers} {
+		if err := grant(r); err != nil {
+			t.Fatalf("%s: %v", r, err)
+		}
 	}
 }

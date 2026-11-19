@@ -15,7 +15,7 @@ make init
 
 `make rename` rewrites the Go module path and the name `dataset` in every
 tracked file: imports, Docker images and containers, the database roles
-`<name>_app` and `<name>_mailer`, the pg_cron jobs and titles. `NAME` must be
+`<name>_app` and `<name>_mailer`, and titles. `NAME` must be
 lowercase letters, digits and `_`, since it becomes Postgres role names. Then
 point the `origin` remote at the new repository. Backend paths below are relative to
 `backend/`. The frontend follows (`cd ../frontend && make init`): the visible name
@@ -23,13 +23,13 @@ lives in `frontend/src/lib/brand.ts` and the mark in `frontend/src/components/br
 
 ## Add a module
 
-The `products` example module was removed (migration 000020) and `make module` with it. To add a module, copy the products files from git history (`git show eab7529:backend/internal/core/usecase/product/service.go` and the paths below) and follow the steps; they still describe the pattern. The table below is what a module touches. The architecture test (`tests/architecture`) fails
+The `products` example module was removed before the first release, and `make module` with it. To add a module, copy the products files from git history (`git show eab7529:backend/internal/core/usecase/product/service.go` and the paths below) and follow the steps; they still describe the pattern. The table below is what a module touches. The architecture test (`tests/architecture`) fails
 if the core imports an adapter, GORM, Fiber or the config.
 
 | Step | File (products) | What goes there |
 |------|-----------------|-----------------|
-| 1. Schema | `deploy/db/migrations/000004_products.*.sql` | Table in schema `app`, indexes, `updated_at` trigger, and the RBAC resource row in `usr.usr_resource`. Add a new numbered pair; never edit a released one. |
-| 2. Resource | `internal/core/domain/action.go` | Constant with the resource code, equal to the row in `usr.usr_resource`. |
+| 1. Schema | `deploy/db/migrations/00000N_products.*.sql` | Table in schema `app`, indexes, `updated_at` trigger, and the resource name added to `chk_usr_role_permission_resource`. Add a new numbered pair; never edit a released one. |
+| 2. Resource | `internal/core/domain/action.go` | Constant with the resource code, one of the names the CHECK allows. |
 | 3. Domain | `internal/core/domain/product.go` | Entity, filter and patch types. No tags, no imports from adapters. |
 | 4. Ports | `internal/core/port/input/product.go`, `internal/core/port/output/product.go` | The service the handler calls and the repository the service needs. |
 | 5. Use case | `internal/core/usecase/product/service.go` | Validation and rules. Errors are `apperror` codes. Administrative changes call `policy.Audit` inside the transaction; record `"name"` in the details (create, rename, delete) so the audit log can label the record, even after it is deleted. |

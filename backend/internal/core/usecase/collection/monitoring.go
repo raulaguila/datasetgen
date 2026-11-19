@@ -110,7 +110,7 @@ func Jobs(repo output.CollectionRepository, records output.RecordRepository, too
 	}
 }
 
-// checkRecords walks the records by id (idx_app_record_collection_key) in
+// checkRecords walks the records by id (idx_app_record_collection_id) in
 // batches; a failure is stored in the run rather than retried.
 func checkRecords(ctx context.Context, repo output.CollectionRepository, records output.RecordRepository, tools output.ToolsRepository, id string) domain.QualityRun {
 	run := domain.QualityRun{Status: domain.QualityDone}
@@ -158,7 +158,9 @@ func checkRecords(ctx context.Context, repo output.CollectionRepository, records
 			issues = append(issues, missing[n]...)
 			if len(issues) > 0 {
 				run.InvalidCount++
-				run.InvalidIDs = append(run.InvalidIDs, r.ID)
+				if len(run.InvalidIDs) < domain.QualityMaxInvalidIDs {
+					run.InvalidIDs = append(run.InvalidIDs, r.ID)
+				}
 				if len(invalid) < invalidList {
 					invalid = append(invalid, input.InvalidRecord{ID: r.ID, Data: r.Data, UpdatedAt: r.UpdatedAt, Issues: issues})
 				}

@@ -293,9 +293,6 @@ func (s *Service) AuthenticateKey(ctx context.Context, secret string) (*domain.K
 		}
 		return nil, err
 	}
-	if g.Share != "" {
-		return nil, bad
-	}
 	return g, nil
 }
 
@@ -382,15 +379,12 @@ func (s *Service) AuthenticateShare(ctx context.Context, token string) (*domain.
 	if !strings.HasPrefix(token, domain.SharePrefix) || len(token) > 100 {
 		return nil, bad
 	}
-	g, err := s.Store.Integrations().Grant(ctx, tokenhash.SHA256Bytes(token))
+	g, err := s.Store.Integrations().ShareGrant(ctx, tokenhash.SHA256Bytes(token))
 	if err != nil {
 		if apperror.IsCode(err, apperror.CodeNotFound) {
 			return nil, bad
 		}
 		return nil, err
-	}
-	if g.Share == "" {
-		return nil, bad
 	}
 	return g, nil
 }

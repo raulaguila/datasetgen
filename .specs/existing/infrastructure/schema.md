@@ -1,14 +1,17 @@
 # Schema
 
-Fonte: `deploy/db/migrations`. Schema `usr` = identidade; `sys` = outbox, jobs e rate limit; `app` = products. `public` guarda extensões e `fn_set_updated_at`. Clock de negócio na aplicação; o trigger só preenche `updated_at`. Volume local antigo: `make compose-remove`.
+Fonte: `deploy/db/migrations`. Schema `usr` = identidade; `sys` = outbox, jobs, rate limit e auditoria; `app` = coleções, registros e integrações. `public` guarda extensões, `fn_set_updated_at` e `fn_slugify`. Clock de negócio na aplicação; o trigger só preenche `updated_at`. Volume local antigo: `make compose-remove`.
 
 ## Ordem
 
 ```text
-000001_foundation  # citext, schemas usr/sys/app, fn_set_updated_at, role dataset_app
-000002_identity    # tabelas usr, RBAC, view, usr_resource, papeis user/admin, notificações, auditoria
-000003_system      # sys.outbox, sys.job, sys.rate_limit, sys.fn_cleanup, pg_cron
-000004_products    # app.product (com version) e recurso products no catalogo
+000001_foundation    # citext/pg_trgm/unaccent, schemas usr/sys/app, fn_set_updated_at, fn_slugify, roles dataset_app/dataset_mailer
+000002_identity      # tabelas usr (username), RBAC, view, papeis user/admin, preferências, notificações
+000003_system        # sys.outbox, sys.job, sys.rate_limit, sys.audit_log, sys.fn_cleanup
+000004_collections   # app.collection e endereços, membros, records, versões, lixeira, qualidade, views, arquivos, comentários
+000005_integrations  # app.api_key (pessoais), app.share_link, webhooks, automações, MCP tools e log
+
+Squash antes da primeira release: cada tabela nasce na forma final. Depois da release, só pares novos.
 ```
 
 ## Status (`usr_user.status`)
@@ -33,20 +36,24 @@ Fonte: `deploy/db/migrations`. Schema `usr` = identidade; `sys` = outbox, jobs e
 
 ## RBAC (ADR-004)
 
-- Catálogo `usr_resource` (códigos seed: `users`, `roles`, `audit`, `products`; não há `permissions`: ler o catálogo faz parte de `roles:read`). Sem tabela `usr_permission`.
-- Uma linha `(role_id, resource)` com `actions INT4`. `catalog_code` (`NULLIF(resource, '*')`, coluna gerada) tem FK para o catálogo: grant de recurso desconhecido falha e recurso com grant não sai do catálogo; `*` passa sem linha. `GET /v1/permissions/resources` lista o catálogo.
+- Sem catálogo: `chk_usr_role_permission_resource` fixa os nomes (`*`, `audit`, `collections`, `roles`, `users`); grant de recurso desconhecido falha. Recurso novo amplia o CHECK numa migration nova. Sem tabela `usr_permission`.
+- Uma linha `(role_id, resource)` com `actions INT4`.
 - Bits CRUD: `create=1`, `read=2`, `update=4`, `delete=8` (4–30 livres). `CHECK (actions >= 0)`.
-- `resource` é tipo do catálogo ou sentinela `*`. Não é UUID de instância.
+- `resource` é nome do CHECK ou sentinela `*`. Não é UUID de instância.
 - `usr_role`: nome `^[a-z0-9_-]{2,40}$`; no máximo um `is_default`; `is_superuser` (bypass no Go).
 - `usr_user_role`: DELETE de role com users falha (`RESTRICT`).
 - `vw_user_effective_permissions`: `bit_or(actions)` por user+resource nos papéis `enabled`; não expande `*`. Superuser fora da view (`EXISTS` no Go).
 
-Seed: papel `user` (default, zero linhas, `is_superuser=false`). Papel `admin` com `is_superuser=true` e `resource='*'` / `actions=0x7FFFFFFF`. Grants granulares via API.
+Seed: papel `user` (default, `collections` = create, `is_superuser=false`). Papel `admin` com `is_superuser=true` e `resource='*'` / `actions=0x7FFFFFFF`. Sem rotas HTTP de papéis: `cmd/admin` promove ou rebaixa.
 
 ## Schema `sys`
 
-- `sys.outbox`: eventos de e-mail (`purpose` activation|password_reset; `status` pending|processing|sent|failed; `payload` JSONB). Backend INSERT; mailer consome com `SKIP LOCKED`. Índice parcial em `pending`.
+- `sys.outbox`: eventos de e-mail (`purpose` activation|password_reset|automation; `status` pending|processing|sent|failed; `payload` JSONB). Backend INSERT; mailer consome com `SKIP LOCKED`. Índice parcial em `pending`.
+- `sys.job`: fila de jobs do backend. `sys.rate_limit`: UNLOGGED, contadores por minuto.
+- `sys.audit_log`: eventos de admin e de coleção; app role só INSERT (sem UPDATE/DELETE); sem limpeza.
+- `sys.fn_cleanup()` e `app.fn_purge_trash()`: chamadas de hora em hora pelo worker do backend.
 
 ## Schema `app`
 
-- `app.product`: exemplo CRUD (`name`, `price`, `enabled`) para exercitar resource `products`.
+- `app.collection` (endereço `owner_id` + `slug`), `collection_member`, `collection_path` (endereços antigos), `record` (data JSONB, 1 MB), `record_version`, `record_trash`, `collection_quality` (`invalid_ids` até 10 000), views, dashboards, arquivos, comentários, `import_batch`.
+- `app.api_key`: chaves pessoais (só hash); `app.share_link`: links públicos `form`|`view` com token selado.

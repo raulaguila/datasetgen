@@ -438,7 +438,7 @@ func (r *Repository) Stats(ctx context.Context, id, tz string, days int) (*domai
 	}
 	since := time.Now().AddDate(0, 0, -days)
 	var perDay []dayRow
-	// idx_app_record_collection (collection_id, created_at) serves the window.
+	// idx_app_record_collection_created (collection_id, created_at) serves the window.
 	err = db.Raw(`
 		SELECT to_char(created_at AT TIME ZONE ?, 'YYYY-MM-DD') AS day, count(*) AS count
 		FROM app.record WHERE collection_id = ? AND created_at >= ?
@@ -447,13 +447,13 @@ func (r *Repository) Stats(ctx context.Context, id, tz string, days int) (*domai
 	if err != nil {
 		return nil, shared.WrapError(err, "collection")
 	}
-	// Records carry no author; the audit log does (idx_usr_audit_log_collection).
+	// Records carry no author; the audit log does (idx_sys_audit_log_collection).
 	var people []contributorRow
 	err = db.Raw(`
 		SELECT a.actor_id AS user_id, u.name,
 		       count(*) FILTER (WHERE a.action = 'record.create') AS created,
 		       count(*) FILTER (WHERE a.action = 'record.update') AS edited
-		FROM usr.usr_audit_log a JOIN usr.usr_user u ON u.id = a.actor_id
+		FROM sys.audit_log a JOIN usr.usr_user u ON u.id = a.actor_id
 		WHERE a.details->>'collection_id' = ? AND a.created_at >= ? AND a.action IN ('record.create', 'record.update')
 		GROUP BY a.actor_id, u.name ORDER BY count(*) DESC, u.name LIMIT 10
 	`, id, since).Find(&people).Error

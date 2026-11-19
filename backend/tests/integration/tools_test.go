@@ -439,7 +439,7 @@ func TestShareLinks(t *testing.T) {
 		t.Fatalf("list: %d, %v", total, err)
 	}
 	// An expired link stops working.
-	if err := testDB.Exec(`UPDATE app.api_key SET expires_at = now() - interval '1 minute' WHERE id = ?`, form.ID).Error; err != nil {
+	if err := testDB.Exec(`UPDATE app.share_link SET expires_at = now() - interval '1 minute' WHERE id = ?`, form.ID).Error; err != nil {
 		t.Fatal(err)
 	}
 	wantCode(t, ignore(keys.AuthenticateShare(context.Background(), form.Token)), apperror.CodeNotFound)

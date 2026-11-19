@@ -79,14 +79,17 @@ func NewJobs(cfg *config.Environment, res *infra.Resources, log *logger.Logger) 
 	maps.Copy(handlers, collection.Jobs(store.Collections(), store.Records(), store.Tools()))
 	maps.Copy(handlers, record.Jobs(store))
 	files := &tools.Service{Store: store, Tx: store, Files: NewFiles(cfg.Storage)}
+	jobRepo := job.NewRepository(res.PostgresDB)
 	return &jobs.Worker{
-		Repo:     job.NewRepository(res.PostgresDB),
+		Repo:     jobRepo,
 		Handlers: handlers,
 		Log:      log,
 		Clock:    output.RealClock{},
-		// Daily automations are checked once a minute; unused files, old MCP call logs and import batch keys are swept hourly.
-		Every:    time.Minute,
-		Periodic: periodic(integrations.Schedule, hourly(files.SweepFiles), hourly(integrations.PruneMCPCalls),
+		// Daily automations are checked once a minute. Hourly: expired rows and the trash
+		// past retention (before the file sweep, which removes the bytes a purge left),
+		// unused files, old MCP call logs and import batch keys.
+		Every: time.Minute,
+		Periodic: periodic(integrations.Schedule, hourly(jobRepo.Cleanup), hourly(files.SweepFiles), hourly(integrations.PruneMCPCalls),
 			hourly(record.New(store.Records(), store.Collections(), store).PruneImportBatches)),
 	}
 }
