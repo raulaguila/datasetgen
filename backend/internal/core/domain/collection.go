@@ -22,7 +22,12 @@ type CollectionFilter struct {
 
 // Collection groups records that follow one JSON Schema (app.collection).
 type Collection struct {
-	ID          string
+	ID string
+	// OwnerID is the account in the URL, /<Owner>/<Slug>; it stays an owner member
+	// until a transfer. Owner is that account's username. Slug follows the name.
+	OwnerID     string
+	Owner       string
+	Slug        string
 	Name        string
 	Description string
 	Schema      json.RawMessage // JSON Schema, draft 2020-12
@@ -105,6 +110,7 @@ func (r MemberRole) Allows(need MemberRole) bool {
 type CollectionMember struct {
 	UserID    string
 	Name      string
+	Username  string
 	Email     string
 	Status    string // UserStatus*
 	Role      MemberRole

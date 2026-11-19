@@ -28,6 +28,7 @@ import { useI18n } from "@/lib/i18n/provider";
 import { plural } from "@/lib/i18n/plural";
 import { can, roleAllows } from "@/lib/permissions";
 import { useUIStore } from "@/lib/store/ui";
+import { collectionPath } from "@/lib/paths";
 
 // shortcut: one request of up to 100 collections, grouped in the browser; a search goes to the server too, so it
 // reaches past the first 100. Page on the server when one person holds more than 100.
@@ -167,7 +168,7 @@ function Row({ c, pinned, onPin, onRemove, onDuplicate }: RowProps) {
   const router = useRouter();
   const relative = useRelativeTime();
   const number = new Intl.NumberFormat(locale);
-  const base = `/collections/${c.id}`;
+  const base = collectionPath(c);
   const open = () => router.push(`${base}/overview`);
   const owner = roleAllows(c.role, "owner");
   const activity = relative(c.last_activity ?? c.updated_at);

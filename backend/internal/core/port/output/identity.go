@@ -18,6 +18,8 @@ type UserRepository interface {
 	LockStatus(ctx context.Context, id string) (string, error)
 	Create(ctx context.Context, user *domain.User) error
 	UpdateName(ctx context.Context, id, name string) error
+	// UpdateUsername fails with AlreadyExists when another account holds username.
+	UpdateUsername(ctx context.Context, id, username string) error
 	// AvatarAt reads when the user last set a picture; nil when there is none.
 	AvatarAt(ctx context.Context, id string) (*time.Time, error)
 	SetAvatarAt(ctx context.Context, id string, at *time.Time) error

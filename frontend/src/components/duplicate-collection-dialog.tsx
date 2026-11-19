@@ -17,6 +17,7 @@ import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
 import { plural } from "@/lib/i18n/plural";
 import { collectionName } from "@/lib/validation";
+import { collectionPath } from "@/lib/paths";
 
 /** Copies fields, description and icon (and the records when asked) into a new collection the caller owns. */
 export function DuplicateCollectionDialog({ source, onClose }: { source: Collection; onClose: () => void }) {
@@ -37,7 +38,7 @@ export function DuplicateCollectionDialog({ source, onClose }: { source: Collect
       toast.success(t("duplicate.done"));
       void client.invalidateQueries({ queryKey: ["collections"] });
       onClose();
-      router.push(`/collections/${created.id}/overview`);
+      router.push(collectionPath(created, "overview"));
     } catch (err) {
       setError(errorMessage(err, "common.save_failed", t));
       setBusy(false);

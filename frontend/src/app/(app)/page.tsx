@@ -7,6 +7,7 @@ import { ListSkeleton } from "@/components/skeletons";
 import { collections } from "@/lib/api/endpoints";
 import { useMe } from "@/lib/context/me";
 import { useUIStore } from "@/lib/store/ui";
+import { collectionPath } from "@/lib/paths";
 
 /**
  * There is no home page: the app opens inside a collection, as the reference app
@@ -24,7 +25,7 @@ export default function Home() {
     if (list.isPending) return;
     const items = list.data?.items ?? [];
     const target = items.find((c) => c.id === storedId) ?? items[0];
-    router.replace(target ? `/collections/${target.id}/overview` : "/collections");
+    router.replace(target ? collectionPath(target, "overview") : "/collections");
   }, [loading, user, list.isPending, list.data, storedId, router]);
 
   return <div className="p-[var(--space-page)]"><ListSkeleton rows={3} /></div>;

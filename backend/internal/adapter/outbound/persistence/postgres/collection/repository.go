@@ -26,6 +26,9 @@ func NewRepository(db *gorm.DB) *Repository {
 
 type row struct {
 	ID           uuid.UUID `gorm:"column:id"`
+	OwnerID      string    `gorm:"column:owner_id"`
+	Owner        string    `gorm:"column:owner"`
+	Slug         string    `gorm:"column:slug"`
 	Name         string    `gorm:"column:name"`
 	Description  string    `gorm:"column:description"`
 	Icon         string    `gorm:"column:icon"`
@@ -43,7 +46,7 @@ type row struct {
 
 func (m row) toDomain() domain.Collection {
 	return domain.Collection{
-		ID: m.ID.String(), Name: m.Name, Description: m.Description, Icon: m.Icon, Member: m.Member, Schema: json.RawMessage(m.Schema),
+		ID: m.ID.String(), OwnerID: m.OwnerID, Owner: m.Owner, Slug: m.Slug, Name: m.Name, Description: m.Description, Icon: m.Icon, Member: m.Member, Schema: json.RawMessage(m.Schema),
 		RecordCount: m.RecordCount, MemberCount: m.MemberCount, FieldCount: m.FieldCount, LastActivity: m.LastActivity, Role: domain.MemberRole(m.Role), Version: m.Version, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt,
 	}
 }
@@ -65,7 +68,10 @@ func visible(q *gorm.DB, userID string) *gorm.DB {
 		Where("c.deleted_at IS NULL AND (m.user_id IS NOT NULL OR "+platformAdmin+")", userID)
 }
 
-const columns = "id, name, description, icon, schema::text AS schema, version, created_at, updated_at"
+// path is the collection's URL: /<owner>/<slug>. Read with the alias c.
+const path = "c.owner_id::text AS owner_id, c.slug, (SELECT ou.username FROM usr.usr_user ou WHERE ou.id = c.owner_id) AS owner"
+
+const columns = "c.id, " + path + ", c.name, c.description, c.icon, c.schema::text AS schema, c.version, c.created_at, c.updated_at"
 
 // List leaves the schema out (the list screen does not show it) and counts records per row.
 func (r *Repository) List(ctx context.Context, filter domain.CollectionFilter) ([]domain.Collection, int64, error) {
@@ -90,7 +96,7 @@ func (r *Repository) List(ctx context.Context, filter domain.CollectionFilter) (
 	}
 	var rows []row
 	err := matching().
-		Select(`c.id, c.name, c.description, c.icon, c.version, c.created_at, c.updated_at, m.user_id IS NOT NULL AS member,
+		Select(`c.id, `+path+`, c.name, c.description, c.icon, c.version, c.created_at, c.updated_at, m.user_id IS NOT NULL AS member,
 			(SELECT count(*) FROM app.record rc WHERE rc.collection_id = c.id) AS record_count,
 			CASE WHEN `+platformAdmin+` THEN 'owner' ELSE m.role END AS role`+listDetails(filter.Details), filter.UserID).
 		Order("c." + column + " " + direction + ", c.id").
@@ -129,7 +135,7 @@ func (r *Repository) Overview(ctx context.Context, userID string, ids []string) 
 		LastRecordChange *time.Time `gorm:"column:last_record_change"`
 	}
 	err := visible(r.db.WithContext(ctx).Table("app.collection c"), userID).
-		Select(`c.id, c.name, c.description, c.schema::text AS schema, c.updated_at,
+		Select(`c.id, `+path+`, c.name, c.description, c.schema::text AS schema, c.updated_at,
 			CASE WHEN `+platformAdmin+` THEN 'owner' ELSE m.role END AS role,
 			(SELECT count(*) FROM app.record rc WHERE rc.collection_id = c.id) AS record_count,
 			(SELECT count(*) FROM app.record_trash t WHERE t.collection_id = c.id) AS trash_count,
@@ -151,7 +157,7 @@ func (r *Repository) Overview(ctx context.Context, userID string, ids []string) 
 func (r *Repository) ListOptions(ctx context.Context, userID string, limit int) ([]domain.Collection, error) {
 	var rows []row
 	err := visible(r.db.WithContext(ctx).Table("app.collection c"), userID).
-		Select(`c.id, c.name, m.user_id IS NOT NULL AS member,
+		Select(`c.id, `+path+`, c.name, c.icon, m.user_id IS NOT NULL AS member,
 			CASE WHEN `+platformAdmin+` THEN 'owner' ELSE m.role END AS role`, userID).
 		Order("c.name, c.id").Limit(limit).Find(&rows).Error
 	if err != nil {
@@ -166,7 +172,7 @@ func (r *Repository) ListOptions(ctx context.Context, userID string, limit int) 
 
 func (r *Repository) FindByID(ctx context.Context, id string) (*domain.Collection, error) {
 	var m row
-	err := r.db.WithContext(ctx).Raw(`SELECT `+columns+` FROM app.collection WHERE id = ? AND deleted_at IS NULL`, id).Take(&m).Error
+	err := r.db.WithContext(ctx).Raw(`SELECT `+columns+` FROM app.collection c WHERE c.id = ? AND c.deleted_at IS NULL`, id).Take(&m).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "collection")
 	}
@@ -186,8 +192,8 @@ func (r *Repository) SchemaForWrite(ctx context.Context, id string) (json.RawMes
 func (r *Repository) Create(ctx context.Context, c *domain.Collection) error {
 	var m row
 	err := r.db.WithContext(ctx).Raw(`
-		INSERT INTO app.collection (name, description, icon, schema) VALUES (?, ?, ?, ?::json)
-		RETURNING `+columns, c.Name, c.Description, c.Icon, string(c.Schema)).Take(&m).Error
+		INSERT INTO app.collection AS c (owner_id, name, description, icon, schema) VALUES (?, ?, ?, ?, ?::json)
+		RETURNING `+columns, c.OwnerID, c.Name, c.Description, c.Icon, string(c.Schema)).Take(&m).Error
 	if err != nil {
 		return shared.WrapError(err, "collection")
 	}
@@ -203,13 +209,13 @@ func (r *Repository) Update(ctx context.Context, id string, patch domain.Collect
 	}
 	var rows []row
 	err := r.db.WithContext(ctx).Raw(`
-		UPDATE app.collection
+		UPDATE app.collection c
 		SET name = COALESCE(?::text, name),
 		    description = COALESCE(?::text, description),
 		    icon = COALESCE(?::text, icon),
 		    schema = COALESCE(?::json, schema),
 		    version = version + 1
-		WHERE id = ? AND (?::integer IS NULL OR version = ?)
+		WHERE c.id = ? AND (?::integer IS NULL OR c.version = ?)
 		RETURNING `+columns, patch.Name, patch.Description, patch.Icon, schema, id, patch.Version, patch.Version).Find(&rows).Error
 	if err != nil {
 		return nil, shared.WrapError(err, "collection")
@@ -234,6 +240,49 @@ func missOrStale(ctx context.Context, db *gorm.DB, table, resource, id string, v
 		return shared.WrapError(gorm.ErrRecordNotFound, resource)
 	}
 	return apperror.New(apperror.CodeConflict, "the record was changed by someone else").WithField("version")
+}
+
+// FindIDByPath reads the collection at /<username>/<slug>, current paths before old ones.
+// It does not check access: the caller reads the collection through Get.
+func (r *Repository) FindIDByPath(ctx context.Context, username, slug string) (string, error) {
+	var ids []string
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT id FROM (
+			SELECT c.id::text AS id, 0 AS rank FROM app.collection c JOIN usr.usr_user u ON u.id = c.owner_id
+			WHERE u.username = ? AND c.slug = ? AND c.deleted_at IS NULL
+			UNION ALL
+			SELECT p.collection_id::text, 1 FROM app.collection_path p JOIN app.collection c ON c.id = p.collection_id
+			WHERE p.username = ? AND p.slug = ? AND c.deleted_at IS NULL
+		) found ORDER BY rank LIMIT 1`, username, slug, username, slug).Find(&ids).Error
+	if err == nil && len(ids) == 0 {
+		err = gorm.ErrRecordNotFound
+	}
+	if err != nil {
+		return "", shared.WrapError(err, "collection")
+	}
+	return ids[0], nil
+}
+
+func (r *Repository) OwnerOf(ctx context.Context, id string) (string, error) {
+	var owner []string
+	err := r.db.WithContext(ctx).Raw(`SELECT owner_id::text FROM app.collection WHERE id = ? AND deleted_at IS NULL`, id).Find(&owner).Error
+	if err == nil && len(owner) == 0 {
+		err = gorm.ErrRecordNotFound
+	}
+	if err != nil {
+		return "", shared.WrapError(err, "collection")
+	}
+	return owner[0], nil
+}
+
+// SetOwner moves the collection to userID; the slug stays unless the new owner
+// already has one like it (trg_app_collection_path), and the old path is kept.
+func (r *Repository) SetOwner(ctx context.Context, id, userID string) error {
+	res := r.db.WithContext(ctx).Exec(`UPDATE app.collection SET owner_id = ? WHERE id = ? AND deleted_at IS NULL`, userID, id)
+	if res.Error == nil && res.RowsAffected == 0 {
+		return shared.WrapError(gorm.ErrRecordNotFound, "collection")
+	}
+	return shared.WrapError(res.Error, "collection")
 }
 
 func (r *Repository) Access(ctx context.Context, id, userID string) (domain.MemberRole, error) {
@@ -288,6 +337,7 @@ func (r *Repository) Referrers(ctx context.Context, targetID, userID string) ([]
 type memberRow struct {
 	UserID    uuid.UUID `gorm:"column:user_id"`
 	Name      string    `gorm:"column:name"`
+	Username  string    `gorm:"column:username"`
 	Email     string    `gorm:"column:email"`
 	Status    string    `gorm:"column:status"`
 	Role      string    `gorm:"column:role"`
@@ -298,7 +348,7 @@ func (r *Repository) Members(ctx context.Context, id string) ([]domain.Collectio
 	var rows []memberRow
 	// shortcut: no paging; a collection has a handful of helpers. Page it past ~200.
 	err := r.db.WithContext(ctx).Raw(`
-		SELECT m.user_id, u.name, u.email::text AS email, u.status, m.role, m.created_at
+		SELECT m.user_id, u.name, u.username, u.email::text AS email, u.status, m.role, m.created_at
 		FROM app.collection_member m JOIN usr.usr_user u ON u.id = m.user_id
 		WHERE m.collection_id = ?
 		ORDER BY m.role = 'owner' DESC, u.name, m.user_id
@@ -309,7 +359,7 @@ func (r *Repository) Members(ctx context.Context, id string) ([]domain.Collectio
 	out := make([]domain.CollectionMember, 0, len(rows))
 	for _, m := range rows {
 		out = append(out, domain.CollectionMember{
-			UserID: m.UserID.String(), Name: m.Name, Email: m.Email, Status: m.Status,
+			UserID: m.UserID.String(), Name: m.Name, Username: m.Username, Email: m.Email, Status: m.Status,
 			Role: domain.MemberRole(m.Role), CreatedAt: m.CreatedAt,
 		})
 	}

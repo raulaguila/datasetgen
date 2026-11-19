@@ -6,6 +6,7 @@ import { RecordCard } from "@/components/record-view";
 import { fieldsOf, recordTitle } from "@/components/field-builder";
 import { records } from "@/lib/api/endpoints";
 import { useI18n } from "@/lib/i18n/provider";
+import { collectionByID, recordByID } from "@/lib/paths";
 
 /** The records of other collections pointing at this one (its backlinks). */
 export function useRecordLinks(recordId: string | undefined) {
@@ -30,13 +31,13 @@ export function RecordLinks({ recordId }: { recordId: string }) {
             return (
               <section key={`${l.collection_id}:${l.field}:${l.sub ?? ""}`} aria-label={`${l.collection_name}: ${field}`} className="space-y-1.5">
                 <h3 className="text-sm font-medium">
-                  <Link href={`/collections/${l.collection_id}`} className="hover:underline">{t("links.via").replace("{collection}", l.collection_name).replace("{field}", field)}</Link>
+                  <Link href={collectionByID(l.collection_id)} className="hover:underline">{t("links.via").replace("{collection}", l.collection_name).replace("{field}", field)}</Link>
                   <span className="ml-2 text-xs text-muted-foreground">{l.total}</span>
                 </h3>
                 <ul className="flex flex-wrap gap-1.5">
                   {l.records.map((r) => (
                     <li key={r.id}>
-                      <Link href={`/records/${r.id}`} className="block max-w-64 truncate rounded-full border bg-muted/40 px-2.5 py-0.5 text-sm hover:bg-muted">
+                      <Link href={recordByID(r.id)} className="block max-w-64 truncate rounded-full border bg-muted/40 px-2.5 py-0.5 text-sm hover:bg-muted">
                         {recordTitle(l.schema, r.data) ?? r.id.slice(0, 8)}
                       </Link>
                     </li>

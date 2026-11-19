@@ -3,7 +3,7 @@ import type { Me } from "@/lib/api/types";
 import { can, permissionsText } from "./permissions";
 
 const user = (over: Partial<Me>): Me => ({
-  id: "1", name: "A", email: "a@x", status: "active", created_at: "", is_superuser: false,
+  id: "1", name: "A", username: "a", email: "a@x", status: "active", created_at: "", is_superuser: false,
   permissions: {}, preferences: { theme: "system", language: "pt-BR" }, roles: [], ...over,
 });
 

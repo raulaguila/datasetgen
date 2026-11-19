@@ -25,6 +25,7 @@ func NewRepository(db *gorm.DB) *Repository {
 type row struct {
 	ID        uuid.UUID `gorm:"column:id"`
 	Name      string    `gorm:"column:name"`
+	Username  string    `gorm:"column:username"`
 	Email     string    `gorm:"column:email"`
 	Status    string    `gorm:"column:status"`
 	CreatedAt time.Time `gorm:"column:created_at"`
@@ -35,6 +36,7 @@ func (m row) toDomain() *domain.User {
 	return &domain.User{
 		ID:        m.ID.String(),
 		Name:      m.Name,
+		Username:  m.Username,
 		Email:     m.Email,
 		Status:    m.Status,
 		CreatedAt: m.CreatedAt,
@@ -98,14 +100,16 @@ func (r *Repository) Create(ctx context.Context, u *domain.User) error {
 		id = parsed
 	}
 	now := time.Now()
-	err := r.db.WithContext(ctx).Exec(`
-		INSERT INTO usr.usr_user (id, name, email, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, id, u.Name, u.Email, u.Status, now, now).Error
+	// An empty username gets one from the email (trg_usr_user_username).
+	var username string
+	err := r.db.WithContext(ctx).Raw(`
+		INSERT INTO usr.usr_user (id, name, username, email, status, created_at, updated_at)
+		VALUES (?, ?, NULLIF(?, ''), ?, ?, ?, ?) RETURNING username
+	`, id, u.Name, u.Username, u.Email, u.Status, now, now).Row().Scan(&username)
 	if err != nil {
 		return shared.WrapError(err, "user")
 	}
-	u.ID = id.String()
+	u.ID, u.Username = id.String(), username
 	u.CreatedAt = now
 	u.UpdatedAt = now
 	return nil
@@ -117,7 +121,7 @@ func (r *Repository) List(ctx context.Context, filter domain.UserFilter) ([]doma
 		q := r.db.WithContext(ctx).Table("usr.usr_user u").Where(shared.Unprotected)
 		if filter.Search != "" {
 			pattern := shared.Contains(filter.Search)
-			q = q.Where("(u.name ILIKE ? OR u.email::text ILIKE ?)", pattern, pattern)
+			q = q.Where("(u.name ILIKE ? OR u.email::text ILIKE ? OR u.username ILIKE ?)", pattern, pattern, pattern)
 		}
 		if filter.Status != "" {
 			q = q.Where("u.status = ?", filter.Status)
@@ -133,7 +137,7 @@ func (r *Repository) List(ctx context.Context, filter domain.UserFilter) ([]doma
 	}
 	var rows []row
 	err := matching().
-		Select("u.id, u.name, u.email, u.status, u.created_at, u.updated_at").
+		Select("u.id, u.name, u.username, u.email, u.status, u.created_at, u.updated_at").
 		Order(shared.OrderBy("u", filter.Sort, filter.Order)).
 		Limit(filter.Page.Limit).Offset(filter.Page.Offset()).
 		Scan(&rows).Error
@@ -177,6 +181,15 @@ func (r *Repository) UpdateName(ctx context.Context, id, name string) error {
 		return shared.WrapError(gorm.ErrRecordNotFound, "user")
 	}
 	return shared.WrapError(res.Error, "user")
+}
+
+// UpdateUsername fails with AlreadyExists when another account holds username.
+func (r *Repository) UpdateUsername(ctx context.Context, id, username string) error {
+	res := r.db.WithContext(ctx).Exec(`UPDATE usr.usr_user SET username = ? WHERE id = ?`, username, id)
+	if res.Error == nil && res.RowsAffected == 0 {
+		return shared.WrapError(gorm.ErrRecordNotFound, "user")
+	}
+	return shared.WrapError(res.Error, "username")
 }
 
 func (r *Repository) AvatarAt(ctx context.Context, id string) (*time.Time, error) {

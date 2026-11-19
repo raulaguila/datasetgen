@@ -1,0 +1,14 @@
+DROP TRIGGER trg_usr_user_username_moved ON usr.usr_user;
+DROP FUNCTION usr.fn_user_username_moved();
+DROP TRIGGER trg_app_collection_path ON app.collection;
+DROP FUNCTION app.fn_collection_path();
+DROP FUNCTION app.fn_remember_path(TEXT, TEXT, UUID);
+DROP TABLE app.collection_path;
+ALTER TABLE app.collection DROP COLUMN slug, DROP COLUMN owner_id;
+DROP TRIGGER trg_usr_user_username ON usr.usr_user;
+DROP FUNCTION usr.fn_user_username();
+ALTER TABLE usr.usr_user DROP COLUMN username;
+DROP FUNCTION app.fn_free_slug(UUID, TEXT, UUID);
+DROP FUNCTION usr.fn_free_username(TEXT, UUID);
+DROP FUNCTION app.fn_slugify(TEXT, INTEGER);
+DROP FUNCTION usr.fn_username_reserved(TEXT);

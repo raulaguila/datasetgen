@@ -14,6 +14,7 @@ import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 import { OptionDot } from "@/components/option-chip";
 import { andWhere, whereText, type Where } from "@/components/record-rules";
+import { recordPath } from "@/lib/paths";
 
 export type Layout = "table" | "board" | "calendar" | "gallery";
 
@@ -65,7 +66,7 @@ function Card({ r, collection, extra, show, draggable, onDragStart }: { r: DataR
   const data = (r.data ?? {}) as Record<string, unknown>;
   const title = recordTitle(collection.schema ?? null, r.data) ?? r.id.slice(0, 8);
   return (
-    <Link href={`/records/${r.id}`} draggable={draggable} onDragStart={onDragStart}
+    <Link href={recordPath(collection, r.id)} draggable={draggable} onDragStart={onDragStart}
       className="block space-y-1 rounded-md border bg-card p-2.5 text-sm shadow-xs hover:border-primary/50 focus-visible:outline-2">
       <p className="truncate font-medium">{title}</p>
       {/* The title field is the heading already: not repeated as a line. */}
@@ -162,7 +163,7 @@ export function CalendarView(p: Common) {
               className={cn("min-h-24 space-y-1 border-b border-r p-1", d.getMonth() !== month.getMonth() && "bg-muted/20 text-muted-foreground")}>
               <p className={cn("text-xs", key === today && "font-semibold text-primary")}>{d.getDate()}</p>
               {list.slice(0, 3).map((r) => (
-                <Link key={r.id} href={`/records/${r.id}`} className="block truncate rounded bg-primary/10 px-1 text-xs hover:bg-primary/20">
+                <Link key={r.id} href={recordPath(p.collection, r.id)} className="block truncate rounded bg-primary/10 px-1 text-xs hover:bg-primary/20">
                   {recordTitle(p.collection.schema ?? null, r.data) ?? r.id.slice(0, 8)}
                 </Link>
               ))}

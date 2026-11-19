@@ -70,6 +70,10 @@ type CollectionService interface {
 	// schema, role, record and trash counts and the newest record change.
 	Overview(ctx context.Context, ids []string) ([]domain.Collection, error)
 	Get(ctx context.Context, id string) (*domain.Collection, error)
+	// ByPath opens the collection at /<username>/<slug> or at an old path of it (every member).
+	ByPath(ctx context.Context, username, slug string) (*domain.Collection, error)
+	// Transfer moves the collection's URL to another owner member (owners).
+	Transfer(ctx context.Context, id, userID string) (*domain.Collection, error)
 	Create(ctx context.Context, cmd CreateCollectionCommand) (*domain.Collection, error)
 	Update(ctx context.Context, cmd UpdateCollectionCommand) (*domain.Collection, error)
 	// DeleteMany deletes every listed collection or none; collections with records are refused.

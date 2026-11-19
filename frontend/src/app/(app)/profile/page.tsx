@@ -27,7 +27,7 @@ import { LOCALES } from "@/lib/i18n/messages";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { describeDevice } from "@/lib/device";
 import { useI18n } from "@/lib/i18n/provider";
-import { newPassword, personName, ready, sameAs } from "@/lib/validation";
+import { newPassword, personName, ready, sameAs, username as usernameRule } from "@/lib/validation";
 import { squareImage } from "@/lib/image";
 import { passwordScore } from "@/lib/password";
 import { cn } from "@/lib/utils";
@@ -128,17 +128,24 @@ function NameCard() {
   const { user } = useMe();
   const client = useQueryClient();
   const [name, setName] = useState(user?.name ?? "");
+  const [handle, setHandle] = useState(user?.username ?? "");
   const [error, setError] = useState<string | null>(null);
+  const nameChanged = name.trim() !== user?.name;
+  const handleChanged = handle.trim().toLowerCase() !== user?.username;
   const save = useMutation({
-    mutationFn: () => account.rename(name),
+    mutationFn: () => account.updateProfile({ name: nameChanged ? name : undefined, username: handleChanged ? handle.trim().toLowerCase() : undefined }),
     onSuccess: (data) => {
       client.setQueryData(ME_KEY, data);
+      setHandle(data.user.username);
+      // Addresses of the user's collections changed with the username.
+      if (handleChanged) void client.invalidateQueries({ queryKey: ["collections"] });
       setError(null);
-      toast.success(t("profile.name_saved"));
+      toast.success(t("profile.saved"));
     },
     onError: (err) => setError(errorMessage(err, "profile.save_failed", t)),
   });
-  const dirty = name.trim() !== user?.name;
+  const dirty = nameChanged || handleChanged;
+  const preview = handle.trim().toLowerCase() || user?.username || "";
   return (
     <FormSection description={t("profile.account_desc")}>
     <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="max-w-xl space-y-6">
@@ -147,16 +154,22 @@ function NameCard() {
             <Input id="name" required maxLength={80} aria-invalid={!!personName(name)} aria-describedby="name-note" value={name} onChange={(e) => setName(e.target.value)} />
             <FieldNote id="name-note" error={personName(name) && t(personName(name)!)} />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="username">{t("profile.username")}</Label>
+            <Input id="username" required maxLength={39} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username"
+              className="font-mono" aria-invalid={!!usernameRule(handle)} aria-describedby="username-note" value={handle} onChange={(e) => setHandle(e.target.value)} />
+            <FieldNote id="username-note" error={usernameRule(handle) && t(usernameRule(handle)!)} hint={t("profile.username_hint").replace("{username}", preview)} />
+          </div>
     {dirty && (
       <SaveBar
         submit
         label={t("roles.unsaved")}
         error={error}
         saving={save.isPending}
-        canSave={ready([name, personName])}
+        canSave={ready([name, personName], [handle, usernameRule])}
         saveLabel={t("common.save")}
         discardLabel={t("common.discard")}
-        onDiscard={() => { setName(user?.name ?? ""); setError(null); }}
+        onDiscard={() => { setName(user?.name ?? ""); setHandle(user?.username ?? ""); setError(null); }}
       />
     )}
     </form>

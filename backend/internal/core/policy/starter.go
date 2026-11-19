@@ -24,6 +24,7 @@ func GiveStarterCollection(ctx context.Context, uow output.UnitOfWork, userID st
 		return err
 	}
 	c := domain.StarterCollection(lang)
+	c.OwnerID = userID
 	if err := uow.Collections().Create(ctx, &c); err != nil {
 		return err
 	}

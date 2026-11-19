@@ -20,6 +20,8 @@ export interface Preferences {
 export interface Me {
   id: string;
   name: string;
+  /** The account's part of collection addresses: /<username>/<slug>. */
+  username: string;
   email: string;
   status: UserStatus;
   created_at: string;
@@ -82,6 +84,7 @@ export interface Notification {
 export interface User {
   id: string;
   name: string;
+  username: string;
   email: string;
   status: UserStatus;
   created_at: string;
@@ -92,7 +95,11 @@ export interface User {
 /** A collection as pickers need it: GET /v1/collections/list, up to 1000 by name. */
 export interface CollectionOption {
   id: string;
+  /** owner and slug make the collection's address: /<owner>/<slug>. */
+  owner: string;
+  slug: string;
   name: string;
+  icon: string;
   role: MemberRole;
   member: boolean;
 }
@@ -112,6 +119,9 @@ export interface UserDetails extends User {
 
 export interface Collection {
   id: string;
+  /** owner and slug make the collection's address: /<owner>/<slug> (collectionPath). */
+  owner: string;
+  slug: string;
   name: string;
   description: string;
   /** JSON Schema; absent from list responses. */
@@ -194,6 +204,7 @@ export type MemberRole = "owner" | "editor" | "viewer";
 export interface CollectionMember {
   user_id: string;
   name: string;
+  username: string;
   email: string;
   status: "pending" | "active" | "locked" | "disabled";
   role: MemberRole;

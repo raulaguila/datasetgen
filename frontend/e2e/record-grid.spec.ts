@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { formAlert, guestPage, newCollection } from "./helpers";
+import { formAlert, guestPage, newCollection, collectionIdOf, collectionAt } from "./helpers";
 
 const api = (page: Page, path: string, data: unknown) => page.request.post(`/api/proxy${path}`, { data });
 
@@ -114,7 +114,7 @@ test("share links: a public form and a read-only list", async ({ page, browser }
   await expect(guest.getByRole("searchbox")).toBeVisible();
 
   // A private field stays off both links, and the list stops searching.
-  const colId = records.split("/").pop()!;
+  const colId = await collectionIdOf(page, records);
   const col = await (await page.request.get(`/api/proxy/v1/collections/${colId}`)).json();
   const schema = { ...col.schema, properties: { ...col.schema.properties, nota: { type: "string", title: "Nota interna", "x-private": true } } };
   expect((await page.request.patch(`/api/proxy/v1/collections/${colId}`, { data: { schema } })).ok()).toBeTruthy();
@@ -165,7 +165,7 @@ test("several references and the records linked to one", async ({ page }) => {
   }
   await expect(page.getByRole("list", { name: "Tags" }).getByRole("link")).toHaveText(["Urgente", "Casa"]);
   await page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/collections/${postsId}$`));
+  await expect(page).toHaveURL(await collectionAt(page, postsId));
   await expect(page.getByRole("row").filter({ hasText: "Consertar a pia" })).toContainText("Urgente, Casa");
 
   await page.goto(`/records/${ids[1]}`);
@@ -236,7 +236,7 @@ test("auto fields, comments and an upsert import", async ({ page }) => {
   await page.locator("#rec_preco").fill("2.5");
   await page.locator("#rec_qtd").fill("4");
   await page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/collections/${id}$`));
+  await expect(page).toHaveURL(await collectionAt(page, id));
   const list = await (await page.request.get(`/api/proxy/v1/records?collection_id=${id}`)).json();
   const rec = list.items[0];
   expect(rec.data).toMatchObject({ num: 1, total: 10 });
@@ -325,7 +325,7 @@ test("several files in one field", async ({ page }) => {
   await (await again).setFiles([{ name: "mapa.png", mimeType: "image/png", buffer: png }]);
   await expect(list.getByRole("listitem")).toHaveCount(2);
   await page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/collections/${id}$`));
+  await expect(page).toHaveURL(await collectionAt(page, id));
   await expect(page.getByRole("row").filter({ hasText: "Viagem" })).toContainText("praia.png +1");
 });
 
@@ -358,7 +358,7 @@ test("a list of objects with a reference in each item", async ({ page }) => {
   await page.getByRole("button", { name: "Ao andar", exact: true }).click();
   await page.locator("#rec_passos_0_config").fill("Pisar no quadrado da porta");
   await page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/collections/${exemplos}$`));
+  await expect(page).toHaveURL(await collectionAt(page, exemplos));
 
   await page.goto(`/records/${andar}`);
   await expect(page.getByRole("region", { name: /: Passos › Wired$/ }).getByRole("link", { name: "Porta com senha" })).toBeVisible();

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2, UserPlus, Users, Loader2 } from "lucide-react";
+import { ArrowRightLeft, Trash2, UserPlus, Users, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { FieldNote, IconAction, initials, avatarStyle, FormError } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -24,6 +25,7 @@ import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
 import { email as emailRule, personName } from "@/lib/validation";
 import { copyText } from "@/lib/utils";
+import { movedPath } from "@/lib/paths";
 import { CollectionPage } from "../_parts";
 
 const ROLES: MemberRole[] = ["owner", "editor", "viewer"];
@@ -127,7 +129,10 @@ function MemberList({ collection, children }: { collection: Collection; children
   const { t } = useI18n();
   const { user } = useMe();
   const client = useQueryClient();
+  const router = useRouter();
+  const pathname = usePathname();
   const [removing, setRemoving] = useState<CollectionMember | null>(null);
+  const [moving, setMoving] = useState<CollectionMember | null>(null);
   const key = ["collections", "members", collection.id];
   const list = useQuery({ queryKey: key, queryFn: () => collections.members(collection.id) });
   const refresh = () => {
@@ -146,6 +151,9 @@ function MemberList({ collection, children }: { collection: Collection; children
   const items = list.data.items;
   // The server keeps one owner at least; the controls say so up front instead of failing.
   const lastOwner = (m: CollectionMember) => m.role === "owner" && items.filter((x) => x.role === "owner").length === 1;
+  // The address's owner stays an owner member until the address moves to someone else.
+  const urlOwner = (m: CollectionMember) => m.username === collection.owner;
+  const locked = (m: CollectionMember) => lastOwner(m) || urlOwner(m);
   return (
     <Card className="gap-0 overflow-hidden p-0">
       <div className="border-b px-4 py-3">
@@ -161,13 +169,15 @@ function MemberList({ collection, children }: { collection: Collection; children
               <p className="truncate text-sm font-medium">
                 {m.name}
                 {m.user_id === user?.id && <span className="text-muted-foreground"> ({t("members.you")})</span>}
+                {urlOwner(m) && <Badge variant="secondary" className="ml-2">{t("members.url_owner")}</Badge>}
                 {m.status === "pending" && <Badge variant="outline" className="ml-2">{t("members.pending")}</Badge>}
               </p>
               <p className="truncate text-xs text-muted-foreground">{m.email}{lastOwner(m) && ` · ${t("members.last_owner")}`}</p>
             </div>
             <div className="ml-12 flex items-center gap-1 sm:ml-0">
-            <RoleSelect value={m.role} label={`${t("members.role")}: ${m.name}`} disabled={setRole.isPending || lastOwner(m)} onChange={(role) => role !== m.role && setRole.mutate({ m, role })} />
-            <IconAction label={t("members.remove")} target={m.name} className="text-destructive disabled:text-muted-foreground" disabled={lastOwner(m)} onClick={() => setRemoving(m)}><Trash2 className="size-4" /></IconAction>
+            {m.role === "owner" && !urlOwner(m) && <IconAction label={t("members.transfer")} target={m.name} onClick={() => setMoving(m)}><ArrowRightLeft className="size-4" /></IconAction>}
+            <RoleSelect value={m.role} label={`${t("members.role")}: ${m.name}`} disabled={setRole.isPending || locked(m)} onChange={(role) => role !== m.role && setRole.mutate({ m, role })} />
+            <IconAction label={t("members.remove")} target={m.name} className="text-destructive disabled:text-muted-foreground" disabled={locked(m)} onClick={() => setRemoving(m)}><Trash2 className="size-4" /></IconAction>
             </div>
           </li>
         ))}
@@ -184,6 +194,22 @@ function MemberList({ collection, children }: { collection: Collection; children
           await collections.removeMember(collection.id, removing.user_id); // the dialog shows a refusal, such as the last owner
           setRemoving(null);
           refresh();
+        }}
+      />
+      <ConfirmDialog
+        open={!!moving}
+        onOpenChange={(o) => !o && setMoving(null)}
+        title={t("members.transfer")}
+        description={t("members.transfer_desc").replace("{owner}", moving?.username ?? "").replace("{slug}", collection.slug)}
+        confirmLabel={t("members.transfer")}
+        onConfirm={async () => {
+          if (!moving) return;
+          const moved = await collections.transfer(collection.id, moving.user_id);
+          setMoving(null);
+          client.setQueryData(["collections", "detail", moved.id], moved);
+          refresh();
+          toast.success(t("members.transferred"));
+          router.replace(movedPath(pathname, collection, moved));
         }}
       />
     </Card>

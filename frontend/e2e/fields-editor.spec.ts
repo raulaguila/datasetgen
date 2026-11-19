@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { collectionAt } from "./helpers";
 
 const api = (page: Page, path: string, data: unknown) => page.request.post(`/api/proxy${path}`, { data });
 
@@ -104,7 +105,7 @@ test("ready-made fields, conditions, sections and option colors", async ({ page 
   await expect(page.locator(".rjsf-section", { hasText: "Encerramento" })).toBeVisible();
   await page.locator("#rec_motivo").fill("Entregue");
   await page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/collections/${id}$`));
+  await expect(page).toHaveURL(await collectionAt(page, id));
   await page.getByRole("link", { name: "Pedido 1" }).click();
   await expect(page.getByText("Concluído").first()).toHaveClass(/emerald/);
 });

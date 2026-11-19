@@ -60,9 +60,16 @@ func (r *recorder) Profile(_ context.Context, userID string) (*domain.Profile, e
 	return &domain.Profile{User: domain.User{ID: userID}}, nil
 }
 
-func (r *recorder) Rename(_ context.Context, userID, name string) (*domain.Profile, error) {
-	r.got = [2]string{userID, name}
-	return &domain.Profile{User: domain.User{ID: userID, Name: name}}, nil
+func (r *recorder) UpdateProfile(_ context.Context, userID string, name, username *string) (*domain.Profile, error) {
+	u := domain.User{ID: userID}
+	if name != nil {
+		u.Name = *name
+	}
+	if username != nil {
+		u.Username = *username
+	}
+	r.got = [3]string{userID, u.Name, u.Username}
+	return &domain.Profile{User: u}, nil
 }
 
 func call(t *testing.T, rec *recorder, method, path, body string) (int, map[string]any) {
@@ -109,7 +116,8 @@ func TestRoutesPassTheBodyAndThePrincipal(t *testing.T) {
 		{"POST", "/auth/password-reset/request", `{"email":"a@acme.io"}`, 200, input.RequestPasswordResetCommand{Email: "a@acme.io"}},
 		{"POST", "/auth/password-reset/confirm", `{"token":"t","password":"p"}`, 204, input.ConfirmPasswordResetCommand{Token: "t", Password: "p"}},
 		{"GET", "/me", ``, 200, "u1"},
-		{"PATCH", "/me", `{"name":"Bia"}`, 200, [2]string{"u1", "Bia"}},
+		{"PATCH", "/me", `{"name":"Bia"}`, 200, [3]string{"u1", "Bia", ""}},
+		{"PATCH", "/me", `{"username":"bia"}`, 200, [3]string{"u1", "", "bia"}},
 		{"POST", "/me/password", `{"current_password":"old","new_password":"new"}`, 204, input.ChangePasswordCommand{UserID: "u1", SessionID: "s1", CurrentPassword: "old", NewPassword: "new"}},
 	} {
 		rec := &recorder{}

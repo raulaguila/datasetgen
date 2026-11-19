@@ -2,6 +2,7 @@ package collection
 
 import (
 	"context"
+	"slices"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/policy"
@@ -103,18 +104,19 @@ func (s *Service) SetMemberRole(ctx context.Context, id, userID string, role dom
 	if !role.Valid() {
 		return apperror.New(apperror.CodeInvalidInput, "role must be owner, editor or viewer").WithField("role")
 	}
-	return s.changeMember(ctx, id, userID, "collection.member_role", map[string]any{"user_id": userID, "role": role},
+	return s.changeMember(ctx, id, userID, role != domain.RoleOwner, "collection.member_role", map[string]any{"user_id": userID, "role": role},
 		func(repo output.CollectionRepository) error { return repo.SetMemberRole(ctx, id, userID, role) })
 }
 
 func (s *Service) RemoveMember(ctx context.Context, id, userID string) error {
-	return s.changeMember(ctx, id, userID, "collection.member_remove", map[string]any{"user_id": userID},
+	return s.changeMember(ctx, id, userID, true, "collection.member_remove", map[string]any{"user_id": userID},
 		func(repo output.CollectionRepository) error { return repo.RemoveMember(ctx, id, userID) })
 }
 
 // changeMember runs one owner-only member change; the lock serializes changes to
 // the collection's members, so two owners demoting each other cannot leave none.
-func (s *Service) changeMember(ctx context.Context, id, userID, action string, details map[string]any, change func(output.CollectionRepository) error) error {
+// demotes is true when the change takes the owner role away (remove or demote).
+func (s *Service) changeMember(ctx context.Context, id, userID string, demotes bool, action string, details map[string]any, change func(output.CollectionRepository) error) error {
 	if err := validate.ID(userID); err != nil {
 		return err
 	}
@@ -124,6 +126,11 @@ func (s *Service) changeMember(ctx context.Context, id, userID, action string, d
 		}
 		if err := uow.Lock(ctx, "collection.members:"+id); err != nil {
 			return err
+		}
+		if demotes {
+			if err := keepsURLOwner(ctx, uow, id, userID); err != nil {
+				return err
+			}
 		}
 		before, err := uow.Collections().Owners(ctx, id)
 		if err != nil {
@@ -160,6 +167,9 @@ func (s *Service) Leave(ctx context.Context, id string) error {
 		if err := uow.Lock(ctx, "collection.members:"+id); err != nil {
 			return err
 		}
+		if err := keepsURLOwner(ctx, uow, id, actor); err != nil {
+			return err
+		}
 		before, err := uow.Collections().Owners(ctx, id)
 		if err != nil {
 			return err
@@ -178,4 +188,52 @@ func (s *Service) Leave(ctx context.Context, id string) error {
 		}
 		return policy.Audit(ctx, uow, "collection.member_leave", id, details)
 	})
+}
+
+// keepsURLOwner refuses taking the owner role from the account in the collection's
+// URL: it would leave the URL naming someone without access. Transfer first.
+func keepsURLOwner(ctx context.Context, uow output.UnitOfWork, id, userID string) error {
+	owner, err := uow.Collections().OwnerOf(ctx, id)
+	if err != nil {
+		return err
+	}
+	if owner == userID {
+		return apperror.New(apperror.CodeConflict, "this person owns the collection's address: transfer it to another owner first").WithField("role")
+	}
+	return nil
+}
+
+// Transfer moves the collection's URL to another owner member; the old path keeps
+// opening. The caller must be an owner (a platform admin counts).
+func (s *Service) Transfer(ctx context.Context, id, userID string) (*domain.Collection, error) {
+	if err := validate.ID(userID); err != nil {
+		return nil, err
+	}
+	err := s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		if _, err := policy.CollectionRole(ctx, uow.Collections(), id, domain.RoleOwner); err != nil {
+			return err
+		}
+		if err := uow.Lock(ctx, "collection.members:"+id); err != nil {
+			return err
+		}
+		from, err := uow.Collections().OwnerOf(ctx, id)
+		if err != nil || from == userID {
+			return err
+		}
+		members, err := uow.Collections().Members(ctx, id)
+		if err != nil {
+			return err
+		}
+		if !slices.ContainsFunc(members, func(m domain.CollectionMember) bool { return m.UserID == userID && m.Role == domain.RoleOwner }) {
+			return apperror.New(apperror.CodeInvalidInput, "the new owner must be an owner member of the collection").WithField("user_id")
+		}
+		if err := uow.Collections().SetOwner(ctx, id, userID); err != nil {
+			return err
+		}
+		return policy.Audit(ctx, uow, "collection.transfer", id, map[string]any{"from": from, "to": userID})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.Get(ctx, id)
 }

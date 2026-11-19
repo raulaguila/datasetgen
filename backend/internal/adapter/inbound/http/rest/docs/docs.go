@@ -965,6 +965,65 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/collections/path/{owner}/{slug}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "An old address (before a rename, transfer or username change) answers the collection too; compare owner and slug to move to the current one.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Get a collection by its address, /\u003cowner\u003e/\u003cslug\u003e, with its schema",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/collection.collectionDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/collections/trash": {
             "get": {
                 "security": [
@@ -2999,6 +3058,76 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/collections/{id}/transfer": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "The address becomes /\u003cnew owner\u003e/\u003cslug\u003e; the old one keeps opening the collection.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Move the collection's address to another owner member",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Collection ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/collection.transferDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/collection.collectionDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/collections/{id}/trash": {
             "get": {
                 "security": [
@@ -3814,7 +3943,7 @@ const docTemplate = `{
                 "tags": [
                     "Profile"
                 ],
-                "summary": "Change the name of the current user",
+                "summary": "Change the name or username of the current user",
                 "parameters": [
                     {
                         "description": "Request",
@@ -6375,7 +6504,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Part of the name or email",
+                        "description": "Part of the name, username or email",
                         "name": "search",
                         "in": "query"
                     },
@@ -7188,7 +7317,13 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Ana Silva"
+                },
+                "username": {
+                    "description": "Username is the account's part of collection URLs; old paths keep opening.",
+                    "type": "string",
+                    "example": "ana-silva"
                 }
             }
         },
@@ -7315,6 +7450,9 @@ const docTemplate = `{
                 },
                 "status": {
                     "type": "string"
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         },
@@ -7428,6 +7566,11 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "owner": {
+                    "description": "Owner and Slug make the collection's address in the app: /\u003cowner\u003e/\u003cslug\u003e.",
+                    "type": "string",
+                    "example": "ana-silva"
+                },
                 "record_count": {
                     "type": "integer"
                 },
@@ -7442,6 +7585,10 @@ const docTemplate = `{
                 },
                 "schema": {
                     "type": "object"
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "livros-lidos"
                 },
                 "updated_at": {
                     "type": "string"
@@ -7622,12 +7769,18 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "string"
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         },
         "collection.optionDTO": {
             "type": "object",
             "properties": {
+                "icon": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -7638,6 +7791,9 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "owner": {
+                    "type": "string"
+                },
                 "role": {
                     "description": "the caller's role",
                     "type": "string",
@@ -7646,6 +7802,9 @@ const docTemplate = `{
                         "editor",
                         "viewer"
                     ]
+                },
+                "slug": {
+                    "type": "string"
                 }
             }
         },
@@ -7734,6 +7893,15 @@ const docTemplate = `{
                 },
                 "records": {
                     "type": "integer"
+                }
+            }
+        },
+        "collection.transferDTO": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "description": "UserID is an owner member who takes the collection's address.",
+                    "type": "string"
                 }
             }
         },
@@ -9149,6 +9317,10 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                },
+                "username": {
+                    "type": "string",
+                    "example": "ana-silva"
                 }
             }
         },
@@ -9207,6 +9379,10 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                },
+                "username": {
+                    "type": "string",
+                    "example": "ana-silva"
                 }
             }
         }

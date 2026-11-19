@@ -13,16 +13,49 @@ func TestRenameValidatesAndUpdates(t *testing.T) {
 	e := newEnv(t)
 	id := e.userID(t, e.activeUser(t))
 	ctx := context.Background()
+	name := func(s string) *string { return &s }
 
-	_, err := e.account().Rename(ctx, id, "a")
+	_, err := e.account().UpdateProfile(ctx, id, name("a"), nil)
 	wantCode(t, err, apperror.CodeInvalidInput)
 
-	p, err := e.account().Rename(ctx, id, "  Ada Lovelace  ")
+	p, err := e.account().UpdateProfile(ctx, id, name("  Ada Lovelace  "), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p.User.Name != "Ada Lovelace" {
 		t.Fatalf("name %q", p.User.Name)
+	}
+}
+
+func TestUsernameComesFromTheEmailAndChangesOnce(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	first := e.userID(t, e.activeUser(t))
+	p, err := e.account().Profile(ctx, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.User.Username == "" {
+		t.Fatal("a new account has no username")
+	}
+	second := e.userID(t, e.activeUser(t))
+	name := func(s string) *string { return &s }
+
+	for _, bad := range []string{"admin", "Ana Silva", "-ana", "ana--silva"} {
+		_, err := e.account().UpdateProfile(ctx, second, nil, name(bad))
+		wantCode(t, err, apperror.CodeInvalidInput)
+	}
+	_, err = e.account().UpdateProfile(ctx, second, name("Somebody Else"), name(p.User.Username))
+	wantCode(t, err, apperror.CodeAlreadyExists)
+	if q, _ := e.account().Profile(ctx, second); q.User.Name == "Somebody Else" {
+		t.Fatal("a taken username left the new name saved")
+	}
+	got, err := e.account().UpdateProfile(ctx, second, nil, name("  Second-User  "))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.User.Username != "second-user" {
+		t.Fatalf("username %q", got.User.Username)
 	}
 }
 

@@ -110,6 +110,20 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Collection, error
 	return c, nil
 }
 
+// ByPath opens the collection at /<username>/<slug>, or at an old path of it; the
+// answer carries the current path, so a caller on an old one can move.
+func (s *Service) ByPath(ctx context.Context, username, slug string) (*domain.Collection, error) {
+	username, slug = strings.ToLower(username), strings.ToLower(slug)
+	if len(username) > 39 || len(slug) > 100 || username == "" || slug == "" {
+		return nil, apperror.New(apperror.CodeNotFound, "collection not found").WithDetails("resource", "collection")
+	}
+	id, err := s.Repo.FindIDByPath(ctx, username, slug)
+	if err != nil {
+		return nil, err
+	}
+	return s.Get(ctx, id)
+}
+
 func (s *Service) Create(ctx context.Context, cmd input.CreateCollectionCommand) (*domain.Collection, error) {
 	return s.create(ctx, cmd, nil)
 }
@@ -135,7 +149,8 @@ func (s *Service) create(ctx context.Context, cmd input.CreateCollectionCommand,
 	if !domain.ValidCollectionIcon(cmd.Icon) {
 		return nil, invalidIcon()
 	}
-	c := &domain.Collection{Name: name, Description: description, Icon: cmd.Icon, Schema: cmd.Schema}
+	// The creator's account is the one in the URL.
+	c := &domain.Collection{OwnerID: actor, Name: name, Description: description, Icon: cmd.Icon, Schema: cmd.Schema}
 	err = s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
 		if err := uow.Collections().Create(ctx, c); err != nil {
 			return err

@@ -15,6 +15,8 @@ export const description: Rule = (v) => (chars(v) > 2000 ? "error.msg.descriptio
 // Dot or comma: the form shows the language's decimal mark.
 export const price: Rule = (v) =>
   !filled(v) ? null : v.trim().startsWith("-") ? "error.msg.price_negative" : !/^\d{1,10}([.,]\d{1,2})?$/.test(v.trim()) ? "error.msg.price_format" : null;
+// The backend's rule (domain.ValidUsername), less the reserved names, which it reports.
+export const username: Rule = (v) => (filled(v) && !/^(?=.{1,39}$)[a-z0-9]+(-[a-z0-9]+)*$/.test(v.trim().toLowerCase()) ? "error.msg.username" : null);
 export const roleName: Rule = (v) => (filled(v) && !/^[a-z0-9_-]{2,40}$/.test(v.trim()) ? "error.msg.role_name" : null);
 // Common passwords and the account's own name stay a server check.
 export const newPassword: Rule = (v) =>

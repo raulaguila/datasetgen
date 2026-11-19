@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { addField, dropKey, newCollection } from "./helpers";
+import { addField, dropKey, newCollection, atCollection, collectionIdOf } from "./helpers";
 
 // CSV import, sort by a field, bulk edit, a saved view, the trash, an API key
 // used through the web address, and the field history.
@@ -8,7 +8,7 @@ test("a collection's tools: CSV, bulk edit, views, trash, API key, field history
   // The starter fields: Título (title, required) and Notas (notes).
   const records = await newCollection(page, name);
   await page.goto(records);
-  const collectionId = records.split("/").pop()!;
+  const collectionId = await collectionIdOf(page, records);
 
   // CSV: columns by label or key.
   await page.getByRole("button", { name: "Mais" }).click();
@@ -126,7 +126,7 @@ test("reference and file fields", async ({ page }) => {
   await page.locator(".rjsf input[type=file]").setInputFiles({ name: "nota.txt", mimeType: "text/plain", buffer: Buffer.from("olá") });
   await expect(page.getByRole("link", { name: /nota\.txt/ })).toBeVisible();
   await page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true }).click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(atCollection());
   const row = page.getByRole("row").filter({ hasText: "Com ligação" });
   await expect(row).toContainText("Alvo 1");
   const file = row.getByRole("link", { name: /nota\.txt/ });

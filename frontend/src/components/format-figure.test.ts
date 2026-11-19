@@ -10,8 +10,8 @@ it("formats a widget's figure", () => {
 });
 
 it("links a figure to its records", () => {
-  expect(recordsHref("c1", { any: false, rules: [] })).toBe("/collections/c1");
-  expect(recordsHref("c1", { any: false, rules: [{ field: "a", op: "empty" }] })).toMatch(/^\/collections\/c1\?where=%7B/);
+  expect(recordsHref({ owner: "ana", slug: "c1" }, { any: false, rules: [] })).toBe("/ana/c1");
+  expect(recordsHref({ owner: "ana", slug: "c1" }, { any: false, rules: [{ field: "a", op: "empty" }] })).toMatch(/^\/ana\/c1\?where=%7B/);
 });
 
 it("compares a period with the one before it", async () => {

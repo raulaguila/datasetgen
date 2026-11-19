@@ -29,7 +29,8 @@ import { templateSchema } from "@/lib/infer-schema";
 import { setPendingImport } from "@/lib/pending-import";
 import { cn } from "@/lib/utils";
 import { collectionName, description as descriptionRule, ready } from "@/lib/validation";
-import { starter } from "./_parts";
+import { starter } from "@/app/(app)/[owner]/[slug]/_parts";
+import { collectionPath } from "@/lib/paths";
 
 type Start = "scratch" | "file";
 const STARTS: { id: Start; icon: typeof FilePlus2 }[] = [
@@ -104,7 +105,7 @@ export function NewCollectionForm() {
       void client.invalidateQueries({ queryKey: ["collections"] });
       toast.success(t("collections.created"));
       if (start === "file" && importRows && file) setPendingImport(saved.id, file.file);
-      router.replace(start === "scratch" ? `/collections/${saved.id}/fields` : importRows ? `/collections/${saved.id}` : `/collections/${saved.id}/overview`);
+      router.replace(collectionPath(saved, start === "scratch" ? "fields" : importRows ? undefined : "overview"));
     },
     // The backend names the broken schema rule; it reads better than a generic failure.
     onError: (err) => setError(err instanceof ApiError && err.field === "schema" ? err.message : errorMessage(err, "common.save_failed", t)),

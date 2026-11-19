@@ -21,6 +21,7 @@ import { ApiError } from "@/lib/api/client";
 import { useI18n } from "@/lib/i18n/provider";
 import { LOCALES, messages, type Locale, type MessageKey } from "@/lib/i18n/messages";
 import { schemaValidator, type Translate } from "@/lib/schema-validator";
+import { recordByID } from "@/lib/paths";
 
 // The default theme draws glyphicon fonts this app does not load; these use lucide.
 // Some buttons (add) come without a title: the name falls back to the registry's translated string.
@@ -227,7 +228,7 @@ function ReferenceField({ formData, onChange, fieldPathId, schema, name, require
       <Head id={id} schema={schema} name={name} required={required} />
       {value && !open ? (
         <div className="flex items-center gap-2">
-          <Link href={`/records/${value}`} className="min-w-0 flex-1 truncate rounded-md border px-3 py-1.5 text-sm hover:underline">{label}</Link>
+          <Link href={recordByID(value)} className="min-w-0 flex-1 truncate rounded-md border px-3 py-1.5 text-sm hover:underline">{label}</Link>
           {!off && <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>{t("schema.ref_change")}</Button>}
           {!off && <Button type="button" size="icon-sm" variant="ghost" aria-label={t("schema.ref_clear")} title={t("schema.ref_clear")} onClick={() => pick(undefined)}><X className="size-4" /></Button>}
         </div>
@@ -247,7 +248,7 @@ export function RefChip({ target, value, onRemove }: { target: string; value: st
   const label = useRecordLabel(target, value);
   return (
     <li className="flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pl-2.5 pr-0.5 text-sm">
-      <Link href={`/records/${value}`} className="max-w-60 truncate hover:underline">{label}</Link>
+      <Link href={recordByID(value)} className="max-w-60 truncate hover:underline">{label}</Link>
       {onRemove && <button type="button" className="grid size-6 place-items-center rounded-full hover:bg-accent" aria-label={`${t("schema.ref_clear")}: ${label}`} onClick={onRemove}><X className="size-3" /></button>}
     </li>
   );

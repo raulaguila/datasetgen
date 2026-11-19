@@ -61,7 +61,8 @@ const id = (v: string) => encodeURIComponent(v);
 
 export const account = {
   me: () => apiFetch<MeResponse>("/v1/me"),
-  rename: (name: string) => apiFetch<MeResponse>("/v1/me", { method: "PATCH", json: { name } }),
+  /** Changes the name, the username or both; a new username moves the account's collection addresses. */
+  updateProfile: (input: { name?: string; username?: string }) => apiFetch<MeResponse>("/v1/me", { method: "PATCH", json: input }),
   changePassword: (current_password: string, new_password: string) =>
     apiFetch<void>("/v1/me/password", { method: "POST", json: { current_password, new_password } }),
   sessions: () => apiFetch<{ items: Session[] }>("/v1/me/sessions"),
@@ -123,6 +124,11 @@ export const collections = {
   /** Every collection the caller reaches (up to 1000) as id, name and role, without counts: for pickers. */
   options: (signal?: AbortSignal) => apiFetch<{ items: CollectionOption[] }>("/v1/collections/list", { signal }),
   get: (collectionId: string) => apiFetch<Collection>(`/v1/collections/${id(collectionId)}`),
+  /** The collection at /<owner>/<slug>, or at an old address of it: compare owner and slug to move on. */
+  byPath: (owner: string, slug: string, signal?: AbortSignal) =>
+    apiFetch<Collection>(`/v1/collections/path/${encodeURIComponent(owner)}/${encodeURIComponent(slug)}`, { signal }),
+  /** Moves the address to another owner member of the collection. */
+  transfer: (collectionId: string, userId: string) => apiFetch<Collection>(`/v1/collections/${id(collectionId)}/transfer`, { method: "POST", json: { user_id: userId } }),
   create: (input: CollectionInput) => apiFetch<Collection>("/v1/collections", { method: "POST", json: input }),
   update: (collectionId: string, input: Partial<CollectionInput> & { version?: number }) => apiFetch<Collection>(`/v1/collections/${id(collectionId)}`, { method: "PATCH", json: input }),
   remove: (ids: string[]) => apiFetch<void>("/v1/collections/delete", { method: "POST", json: { ids } }),

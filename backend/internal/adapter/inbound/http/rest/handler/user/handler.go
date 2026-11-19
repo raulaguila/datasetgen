@@ -48,6 +48,7 @@ func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
 type userDTO struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
+	Username  string    `json:"username" example:"ana-silva"`
 	Email     string    `json:"email"`
 	Status    string    `json:"status" example:"active"`
 	CreatedAt time.Time `json:"created_at"`
@@ -76,7 +77,7 @@ type accessDTO struct {
 }
 
 func toDTO(u domain.User) userDTO {
-	return userDTO{ID: u.ID, Name: u.Name, Email: u.Email, Status: u.Status, CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt}
+	return userDTO{ID: u.ID, Name: u.Name, Username: u.Username, Email: u.Email, Status: u.Status, CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt}
 }
 
 // @Summary List users, without those holding a protected role
@@ -84,7 +85,7 @@ func toDTO(u domain.User) userDTO {
 // @Produce json
 // @Param page query int false "Page" default(1)
 // @Param limit query int false "Items per page, up to 100" default(20)
-// @Param search query string false "Part of the name or email"
+// @Param search query string false "Part of the name, username or email"
 // @Param status query string false "Status" Enums(pending, active, locked, disabled)
 // @Param role_id query string false "Only holders of this role"
 // @Param sort query string false "Sort field" Enums(name, email, status, created_at) default(name)

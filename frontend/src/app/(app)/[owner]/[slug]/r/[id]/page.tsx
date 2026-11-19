@@ -18,13 +18,15 @@ import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ApiError } from "@/lib/api/client";
-import { collections, records } from "@/lib/api/endpoints";
+import { records } from "@/lib/api/endpoints";
 import type { Collection, DataRecord } from "@/lib/api/types";
 import { useMe } from "@/lib/context/me";
 import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
 import { roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
+import { recordPath, collectionPath } from "@/lib/paths";
+import { useRecordAddress, useRouteCollection } from "../../_parts";
 import { neighbours, useSequenceStore } from "@/lib/store/sequence";
 import { useUIStore } from "@/lib/store/ui";
 import { cn, copyText } from "@/lib/utils";
@@ -78,14 +80,15 @@ function RecordViewPage({ id }: { id: string }) {
   const { loading } = useMe();
   const detail = useQuery({ queryKey: ["records", "detail", id], queryFn: () => records.get(id) });
   const record = detail.data;
-  const collectionId = record?.collection_id;
-  const parent = useQuery({ queryKey: ["collections", "detail", collectionId], queryFn: () => collections.get(collectionId!), enabled: !!collectionId });
+  // The collection comes from the address; a record of another collection moves to its own.
+  const parent = useRouteCollection();
   const collection = parent.data;
+  useRecordAddress(record?.collection_id, collection?.id, id);
   const setCollection = useUIStore((st) => st.setCollection);
   useEffect(() => { if (collection) setCollection(collection.id); }, [collection, setCollection]);
   const editable = roleAllows(collection?.role, "editor");
   const title = record ? recordTitle(collection?.schema ?? null, record.data) ?? `${t("records.record")} ${record.id.slice(0, 8)}` : t("records.record");
-  useCrumb(title, collection && { label: collection.name, href: `/collections/${collection.id}/overview` }, collection && { label: t("collections.tab.records"), href: `/collections/${collection.id}` });
+  useCrumb(title, collection && { label: collection.name, href: collectionPath(collection, "overview") }, collection && { label: t("collections.tab.records"), href: collectionPath(collection) });
   const failed = detail.error ?? parent.error;
   const router = useRouter();
   const client = useQueryClient();
@@ -95,7 +98,7 @@ function RecordViewPage({ id }: { id: string }) {
     onSuccess: (copy) => {
       void client.invalidateQueries({ queryKey: ["records", copy.collection_id] });
       toast.success(t("records.duplicated"));
-      router.push(`/records/${copy.id}/edit`);
+      router.push(recordPath(collection!, copy.id, true));
     },
     onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
   });
@@ -115,7 +118,7 @@ function RecordViewPage({ id }: { id: string }) {
     const label = t(dir === "prev" ? "records.prev" : "records.next");
     const Icon = dir === "prev" ? ChevronLeft : ChevronRight;
     return to
-      ? <Button variant="outline" size="icon" nativeButton={false} aria-label={label} title={`${label} (${dir === "prev" ? "k" : "j"})`} aria-keyshortcuts={dir === "prev" ? "k" : "j"} render={<Link href={`/records/${to}`} data-step={dir} />}><Icon className="size-4" /></Button>
+      ? <Button variant="outline" size="icon" nativeButton={false} aria-label={label} title={`${label} (${dir === "prev" ? "k" : "j"})`} aria-keyshortcuts={dir === "prev" ? "k" : "j"} render={<Link href={recordPath(collection!, to)} data-step={dir} />}><Icon className="size-4" /></Button>
       : <Button variant="outline" size="icon" disabled aria-label={label}><Icon className="size-4" /></Button>;
   };
 
@@ -124,7 +127,7 @@ function RecordViewPage({ id }: { id: string }) {
       <PageHeader
         title={title}
         description={record && `${t("history.version").replace("{n}", String(record.version))} · ${t("common.updated_at")} ${format(record.updated_at)}`}
-        action={record && (
+        action={record && collection && (
           <>
             {index >= 0 && sequence.length > 1 && (
               <div className="flex items-center gap-2" role="group" aria-label={t("records.steps")}>
@@ -138,7 +141,7 @@ function RecordViewPage({ id }: { id: string }) {
               </div>
             )}
             {editable && (
-              <Button nativeButton={false} title={`${t("common.edit")} (e)`} aria-keyshortcuts="e" render={<Link href={`/records/${record.id}/edit`} data-step="edit" />}>
+              <Button nativeButton={false} title={`${t("common.edit")} (e)`} aria-keyshortcuts="e" render={<Link href={recordPath(collection, record.id, true)} data-step="edit" />}>
                 <Pencil className="size-4" />{t("common.edit")}<kbd className="ml-1 hidden rounded border border-current/30 px-1 font-mono text-xs leading-4 opacity-70 sm:inline">E</kbd>
               </Button>
             )}
@@ -153,7 +156,7 @@ function RecordViewPage({ id }: { id: string }) {
         )}
       />
       <PageBody>
-        {loading || detail.isPending || (!!collectionId && parent.isPending) ? (
+        {loading || detail.isPending || parent.isPending ? (
           <ListSkeleton rows={3} />
         ) : failed instanceof ApiError && failed.code === "NOT_FOUND" ? (
           <EmptyState title={t("error.not_found")} description={t("error.record_gone")} action={<Button variant="outline" nativeButton={false} render={<Link href="/collections" />}>{t("common.back_to_list")}</Button>} />
@@ -167,7 +170,7 @@ function RecordViewPage({ id }: { id: string }) {
   );
 }
 
-/** /records/{id} reads the record; /records/new is the form for a new one. */
+/** /<owner>/<slug>/r/{id} reads the record; .../r/new is the form for a new one. */
 export default function RecordPage() {
   const { id } = useParams<{ id: string }>();
   return id === "new" ? <RecordEditPage /> : <RecordViewPage id={id} />;

@@ -24,6 +24,13 @@ type CollectionRepository interface {
 	// Referrers lists the collections userID belongs to whose reference fields point at targetID.
 	Referrers(ctx context.Context, targetID, userID string) ([]domain.Referrer, error)
 	FindByID(ctx context.Context, id string) (*domain.Collection, error)
+	// FindIDByPath finds the collection at /<username>/<slug>, or at an old path of it
+	// (a rename, transfer or username change). No access check.
+	FindIDByPath(ctx context.Context, username, slug string) (string, error)
+	// OwnerOf is the id of the account in the collection's URL.
+	OwnerOf(ctx context.Context, id string) (string, error)
+	// SetOwner moves the collection's URL to userID's account.
+	SetOwner(ctx context.Context, id, userID string) error
 	// SchemaForWrite reads only the schema and holds a FOR SHARE lock until the
 	// transaction ends, so a schema update waits for records being checked against it.
 	SchemaForWrite(ctx context.Context, id string) (json.RawMessage, error)

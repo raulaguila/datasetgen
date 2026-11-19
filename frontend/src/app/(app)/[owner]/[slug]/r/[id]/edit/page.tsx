@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type Form from "@rjsf/core";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronLeft, ChevronRight, Columns2, Eye, Rows3 } from "lucide-react";
 import { toast } from "sonner";
@@ -19,7 +19,7 @@ import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ApiError } from "@/lib/api/client";
-import { collections, records } from "@/lib/api/endpoints";
+import { records } from "@/lib/api/endpoints";
 import type { Collection, DataRecord, SchemaIssue } from "@/lib/api/types";
 import { useMe } from "@/lib/context/me";
 import { errorMessage } from "@/lib/errors";
@@ -28,6 +28,8 @@ import { useI18n } from "@/lib/i18n/provider";
 import { plural } from "@/lib/i18n/plural";
 import { roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
+import { collectionPath, recordPath } from "@/lib/paths";
+import { useRouteCollection, useRecordAddress } from "../../../_parts";
 import { neighbours, useSequenceStore } from "@/lib/store/sequence";
 import { useUIStore } from "@/lib/store/ui";
 
@@ -47,7 +49,7 @@ function RecordForm({ collection, record, editable, next }: { collection: Collec
   const [checked, setChecked] = useState(false); // errors follow the typing once a save was tried
   const dirty = JSON.stringify(data) !== JSON.stringify(record?.data ?? {});
   useUnsavedGuard(editable && dirty, t("roles.leave_unsaved"));
-  const back = `/collections/${collection.id}`;
+  const back = collectionPath(collection);
   // Values of fields since removed: the form does not show them and saving keeps them; quality lists them.
   const props = (collection.schema?.properties ?? {}) as Record<string, unknown>;
   const leftovers = collection.schema?.additionalProperties === undefined && data && typeof data === "object" ? Object.keys(data).filter((k) => !(k in props)) : [];
@@ -99,8 +101,8 @@ function RecordForm({ collection, record, editable, next }: { collection: Collec
     setError(null);
     save.mutate(t(again === "copy" ? "records.copy_kept" : "common.saved"), {
       onSuccess: () => {
-        if (!again) return router.push(record ? `/records/${record.id}` : back);
-        if (again === "next") return router.push(`/records/${next}/edit`);
+        if (!again) return router.push(record ? recordPath(collection, record.id) : back);
+        if (again === "next") return router.push(recordPath(collection, next!, true));
         // Entering a batch: stay on the form for the next record.
         if (again === "blank") setData({});
         setChecked(false);
@@ -190,7 +192,7 @@ function RecordForm({ collection, record, editable, next }: { collection: Collec
   );
 }
 
-/** The record's form: creates at /records/new, edits at /records/{id}/edit. */
+/** The record's form: creates at /<owner>/<slug>/r/new, edits at .../r/{id}/edit. */
 export default function RecordEditPage() {
   const { t } = useI18n();
   const router = useRouter();
@@ -199,12 +201,13 @@ export default function RecordEditPage() {
   const { loading } = useMe();
   const { id } = useParams<{ id: string }>();
   const creating = id === "new";
-  const fromQuery = useSearchParams().get("collection") ?? "";
   const detail = useQuery({ queryKey: ["records", "detail", id], queryFn: () => records.get(id), enabled: !creating });
   const record = detail.data;
-  const collectionId = creating ? fromQuery : record?.collection_id;
-  const parent = useQuery({ queryKey: ["collections", "detail", collectionId], queryFn: () => collections.get(collectionId!), enabled: !!collectionId });
+  // The collection comes from the address; a record of another collection moves to its own.
+  const parent = useRouteCollection();
   const collection = parent.data;
+  const collectionId = collection?.id;
+  useRecordAddress(record?.collection_id, collectionId, id, true);
   // The sidebar follows the collection this record belongs to.
   const setCollection = useUIStore((st) => st.setCollection);
   useEffect(() => { if (collection) setCollection(collection.id); }, [collection, setCollection]);
@@ -214,7 +217,7 @@ export default function RecordEditPage() {
   const editable = roleAllows(collection?.role, "editor");
   // Named by its first text value, as lists show it; the id when it has none.
   const title = creating ? t("records.new") : record ? recordTitle(collection?.schema ?? null, record.data) ?? `${t("records.record")} ${record.id.slice(0, 8)}` : t("records.record");
-  useCrumb(title, collection && { label: collection.name, href: `/collections/${collection.id}/overview` }, collection && { label: t("collections.tab.records"), href: `/collections/${collection.id}` });
+  useCrumb(title, collection && { label: collection.name, href: collectionPath(collection, "overview") }, collection && { label: t("collections.tab.records"), href: collectionPath(collection) });
   const failed = detail.error ?? parent.error;
   const sequence = useSequenceStore((st) => st.ids);
   const { prev, next, index } = creating ? { index: -1 } : neighbours(sequence, id);
@@ -235,7 +238,7 @@ export default function RecordEditPage() {
     const label = t(dir === "prev" ? "records.prev" : "records.next");
     const Icon = dir === "prev" ? ChevronLeft : ChevronRight;
     return to
-      ? <Button variant="outline" size="icon" nativeButton={false} aria-label={label} title={`${label} (${dir === "prev" ? "k" : "j"})`} render={<Link href={`/records/${to}/edit`} data-step={dir} />}><Icon className="size-4" /></Button>
+      ? <Button variant="outline" size="icon" nativeButton={false} aria-label={label} title={`${label} (${dir === "prev" ? "k" : "j"})`} render={<Link href={recordPath(collection!, to, true)} data-step={dir} />}><Icon className="size-4" /></Button>
       : <Button variant="outline" size="icon" disabled aria-label={label}><Icon className="size-4" /></Button>;
   };
 
@@ -245,7 +248,7 @@ export default function RecordEditPage() {
         title={title}
         tabTitle={creating ? undefined : `${t("common.edit")}: ${title}`}
         description={record && `${t("common.updated_at")} ${format(record.updated_at)}`}
-        action={record && (
+        action={record && collection && (
           <div className="flex items-center gap-2">
             {index >= 0 && sequence.length > 1 && (
               <div className="flex items-center gap-2" role="group" aria-label={t("records.steps")}>
@@ -258,7 +261,7 @@ export default function RecordEditPage() {
                 {step(next, "next")}
               </div>
             )}
-            <Button variant="outline" nativeButton={false} render={<Link href={`/records/${record.id}`} />}><Eye className="size-4" />{t("records.view")}</Button>
+            <Button variant="outline" nativeButton={false} render={<Link href={recordPath(collection, record.id)} />}><Eye className="size-4" />{t("records.view")}</Button>
           </div>
         )}
       />
@@ -288,7 +291,7 @@ export default function RecordEditPage() {
         confirmLabel={t("common.delete")}
         onConfirm={async () => {
           await records.remove([id]);
-          router.push(collectionId ? `/collections/${collectionId}` : "/collections");
+          router.push(collection ? collectionPath(collection) : "/collections");
           client.removeQueries({ queryKey: ["records", "detail", id] });
           void client.invalidateQueries({ queryKey: ["records"] });
           void client.invalidateQueries({ queryKey: ["collections"] });

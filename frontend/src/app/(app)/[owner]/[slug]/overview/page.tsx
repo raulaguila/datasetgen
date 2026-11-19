@@ -21,6 +21,7 @@ import { roleAllows } from "@/lib/permissions";
 import { useUIStore } from "@/lib/store/ui";
 import { cn } from "@/lib/utils";
 import { CollectionPage } from "../_parts";
+import { collectionPath, recordPath } from "@/lib/paths";
 
 const DAYS = 30;
 
@@ -83,7 +84,7 @@ function NextSteps({ collection, records, members }: { collection: Collection; r
   const { t } = useI18n();
   const dismissed = useUIStore((s) => s.stepsDismissed.includes(collection.id));
   const dismiss = useUIStore((s) => s.dismissSteps);
-  const base = `/collections/${collection.id}`;
+  const base = collectionPath(collection);
   const keys = Object.keys((collection.schema?.properties as Record<string, unknown> | undefined) ?? {});
   const steps = [
     { done: records > 0 || keys.some((k) => !STARTER_KEYS.includes(k)), label: t("overview.step_fields"), href: `${base}/fields` },
@@ -118,7 +119,7 @@ function Overview({ collection }: { collection: Collection }) {
   const { t, locale } = useI18n();
   const relative = useRelativeTime();
   const stepsGone = useUIStore((st) => st.stepsDismissed.includes(collection.id));
-  const base = `/collections/${collection.id}`;
+  const base = collectionPath(collection);
   const editor = roleAllows(collection.role, "editor");
   const stats = useQuery({ queryKey: ["collections", "stats", collection.id], queryFn: ({ signal }) => collections.stats(collection.id, signal) });
   const { q: quality, stale } = useQuality(collection, editor);
@@ -217,7 +218,7 @@ function Overview({ collection }: { collection: Collection }) {
               className="m-4 py-8"
               icon={FileJson}
               title={t("records.empty")}
-              action={editor && <Button variant="outline" nativeButton={false} render={<Link href={`/records/new?collection=${collection.id}`} />}><Plus className="size-4" />{t("records.new")}</Button>}
+              action={editor && <Button variant="outline" nativeButton={false} render={<Link href={recordPath(collection, "new")} />}><Plus className="size-4" />{t("records.new")}</Button>}
             />
           ) : (
             <ul className="divide-y">
@@ -226,7 +227,7 @@ function Overview({ collection }: { collection: Collection }) {
                 const when = relative(r.created_at);
                 return (
                   <li key={r.id} className="flex items-center gap-3 px-4 py-2.5">
-                    <Link href={`/records/${r.id}`} data-touch-link className="min-w-0 flex-1 truncate text-sm font-medium hover:underline">{text}</Link>
+                    <Link href={recordPath(collection, r.id)} data-touch-link className="min-w-0 flex-1 truncate text-sm font-medium hover:underline">{text}</Link>
                     <time dateTime={r.created_at} title={when.abs} className="shrink-0 text-xs text-muted-foreground">{when.rel}</time>
                   </li>
                 );
@@ -268,7 +269,7 @@ function OverviewActions({ collection }: { collection: Collection }) {
       {collection.role && <span className="text-xs text-muted-foreground">{t("overview.your_role")}: {t(`members.role.${collection.role}`)}</span>}
       <ExportMenu collection={collection} />
       {roleAllows(collection.role, "editor") && (
-        <Button nativeButton={false} render={<Link href={`/records/new?collection=${collection.id}`} />}><Plus className="size-4" />{t("records.new")}</Button>
+        <Button nativeButton={false} render={<Link href={recordPath(collection, "new")} />}><Plus className="size-4" />{t("records.new")}</Button>
       )}
     </>
   );

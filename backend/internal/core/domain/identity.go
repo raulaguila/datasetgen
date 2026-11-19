@@ -33,6 +33,7 @@ func (r Role) Protected() bool {
 type User struct {
 	ID        string
 	Name      string
+	Username  string // the account's part of a collection URL: /<username>/<slug>
 	Email     string
 	Status    string
 	CreatedAt time.Time

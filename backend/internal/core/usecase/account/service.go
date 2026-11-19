@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/policy"
@@ -68,13 +69,38 @@ func (s *Service) Profile(ctx context.Context, userID string) (*domain.Profile, 
 	return profile, nil
 }
 
-func (s *Service) Rename(ctx context.Context, userID, name string) (*domain.Profile, error) {
-	name, err := policy.ValidateName(name)
-	if err != nil {
-		return nil, err
+func (s *Service) UpdateProfile(ctx context.Context, userID string, name, username *string) (*domain.Profile, error) {
+	if name == nil && username == nil {
+		return nil, apperror.New(apperror.CodeInvalidInput, "nothing to change").WithField("name")
 	}
-	if err := s.UOW.Users().UpdateName(ctx, userID, name); err != nil {
-		return nil, err
+	if name != nil {
+		n, err := policy.ValidateName(*name)
+		if err != nil {
+			return nil, err
+		}
+		name = &n
+	}
+	if username != nil {
+		u := strings.ToLower(strings.TrimSpace(*username))
+		if !domain.ValidUsername(u) {
+			return nil, apperror.New(apperror.CodeInvalidInput,
+				"username must be 1-39 lowercase letters, digits or single hyphens, and not a reserved word").WithField("username")
+		}
+		username = &u
+	}
+	// The username first: a taken one is the likely refusal, and it must not leave the new name saved.
+	if username != nil {
+		if err := s.UOW.Users().UpdateUsername(ctx, userID, *username); err != nil {
+			if apperror.IsCode(err, apperror.CodeAlreadyExists) {
+				return nil, apperror.New(apperror.CodeAlreadyExists, "this username is taken").WithField("username")
+			}
+			return nil, err
+		}
+	}
+	if name != nil {
+		if err := s.UOW.Users().UpdateName(ctx, userID, *name); err != nil {
+			return nil, err
+		}
 	}
 	return s.Profile(ctx, userID)
 }

@@ -39,6 +39,10 @@ const BY_MESSAGE: [string, MessageKey][] = [
   ["a unique field cannot be filled in bulk", "error.msg.unique_bulk"],
   ["picture must be at most", "error.msg.avatar_size"],
   ["picture must be PNG", "error.msg.avatar_type"],
+  ["username must be", "error.msg.username"],
+  ["this username is taken", "error.msg.username_taken"],
+  ["this person owns the collection's address", "error.msg.url_owner"],
+  ["the new owner must be an owner member", "error.msg.transfer_owner"],
 ];
 
 /**

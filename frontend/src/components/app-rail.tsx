@@ -15,6 +15,7 @@ import { useMe } from "@/lib/context/me";
 import { useI18n } from "@/lib/i18n/provider";
 import { ADMIN_NAV, COLLECTION_GROUPS, COLLECTION_SECTIONS, isActive, type CollectionSection } from "@/lib/navigation";
 import { can, roleAllows } from "@/lib/permissions";
+import { collectionInPath, collectionPath } from "@/lib/paths";
 import { useUIStore } from "@/lib/store/ui";
 
 const WIDE = "(min-width: 1024px)";
@@ -25,12 +26,6 @@ const subscribeWide = (listener: () => void) => {
 };
 
 export const useWideRail = () => useSyncExternalStore(subscribeWide, () => window.matchMedia(WIDE).matches, () => true);
-
-/** The collection a path belongs to: /collections/{id}/… (not "new"). */
-function collectionInPath(pathname: string): string | undefined {
-  const m = /^\/collections\/([^/]+)/.exec(pathname);
-  return m && m[1] !== "new" ? m[1] : undefined;
-}
 
 /**
  * Floating sidebar: the collections listed at the top, the selected one opening
@@ -52,8 +47,10 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
   });
   const pinned = useUIStore((s) => s.pinned);
   const storedId = useUIStore((s) => s.collectionId);
-  // A collection page names its collection; a record page leaves it to the store.
-  const activeId = collectionInPath(pathname) ?? storedId;
+  // The address names the collection; until the list knows it, the page's own choice (the store).
+  const at = collectionInPath(pathname);
+  const atItem = at && list.data?.items.find((c) => c.owner === at.owner && c.slug === at.slug);
+  const activeId = atItem?.id ?? storedId;
   // The open collection keeps its menu even when it is past the first 100.
   const missing = !!activeId && list.isSuccess && !list.data.items.some((c) => c.id === activeId);
   const extra = useQuery({ queryKey: ["collections", "detail", activeId], queryFn: () => collections.get(activeId!), enabled: missing, retry: false });
@@ -63,10 +60,10 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
   const active = items.find((c) => c.id === activeId);
   // Two states, set by the page alone: inside a collection (its pages or records) the rail shows only that
   // collection with its pages, the others sliding away; anywhere else, only the list. The logo leads to the list.
-  const inCollection = !!collectionInPath(pathname) || pathname.startsWith("/records/");
+  const inCollection = !!at;
   const focused = inCollection && !!active;
   const activeIndex = items.findIndex((c) => c.id === activeId);
-  const base = active ? `/collections/${active.id}` : "";
+  const base = active ? collectionPath(active) : "";
   const allowed = (s: CollectionSection) => !s.need || roleAllows(active?.role, s.need);
   const groups = COLLECTION_GROUPS.map((g) => ({ ...g, items: g.items.filter(allowed) })).filter((g) => g.items.length > 0);
   const admin = ADMIN_NAV.filter((item) => !item.needs || can(user, ...item.needs));
@@ -88,7 +85,7 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
       }
       if (e.timeStamp - lastG < 1000 && e.key in keys) {
         lastG = 0;
-        router.push(`/collections/${active.id}${keys[e.key]}`);
+        router.push(collectionPath(active) + keys[e.key]);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -100,7 +97,7 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
   const link = (s: CollectionSection) => {
     const href = base + s.seg;
     // Records is the collection's root; its record pages count as Records too.
-    const current = s.seg ? pathname === href : pathname === base || pathname.startsWith("/records/");
+    const current = s.seg ? pathname === href : pathname === base || pathname.startsWith(base + "/r/");
     const name = t(s.key);
     return (
       <span key={s.seg} className="contents">
@@ -161,7 +158,7 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
                         </DropdownMenuTrigger>
                         <DropdownMenuContent side={compact ? "right" : "bottom"} align="start" className="min-w-60">
                           {items.filter((o) => o.id !== c.id).map((o) => (
-                            <DropdownMenuItem key={o.id} render={<Link href={`/collections/${o.id}/overview`} onClick={onNavigate} />}>
+                            <DropdownMenuItem key={o.id} render={<Link href={collectionPath(o, "overview")} onClick={onNavigate} />}>
                               <CollectionAvatar collection={o} className="size-6 rounded-full text-xs" />
                               <span className="min-w-0 flex-1 truncate">{o.name}</span>
                             </DropdownMenuItem>
@@ -171,7 +168,7 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : tooltip(c.name, (
-                      <Link href={`/collections/${c.id}/overview`} className="rail-item rail-workspace" aria-label={c.name} title={c.name} onClick={onNavigate}>
+                      <Link href={collectionPath(c, "overview")} className="rail-item rail-workspace" aria-label={c.name} title={c.name} onClick={onNavigate}>
                         <CollectionAvatar collection={c} className="rail-avatar" />
                         {!compact && <span className="rail-workspace-copy"><strong>{c.name}</strong><span>{count(c.record_count)}</span></span>}
                         {!compact && pinned.includes(c.id) && <Star className="rail-pin" fill="currentColor" aria-label={t("collections.pinned")} />}

@@ -10,7 +10,9 @@ import (
 // method acts on userID only, which callers take from the verified token.
 type AccountService interface {
 	Profile(ctx context.Context, userID string) (*domain.Profile, error)
-	Rename(ctx context.Context, userID, name string) (*domain.Profile, error)
+	// UpdateProfile changes the name and the username that are set (nil keeps them).
+	// A new username moves the user's collections; their old paths still open.
+	UpdateProfile(ctx context.Context, userID string, name, username *string) (*domain.Profile, error)
 
 	// SetAvatar stores a PNG, JPEG or WebP picture of at most domain.AvatarMaxBytes.
 	SetAvatar(ctx context.Context, userID string, image []byte) error

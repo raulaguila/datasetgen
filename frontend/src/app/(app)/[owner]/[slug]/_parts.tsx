@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Braces, ChevronRight, Eye, History, MoreHorizontal, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -33,6 +33,7 @@ import type { MessageKey } from "@/lib/i18n/messages";
 import { roleAllows } from "@/lib/permissions";
 import { useCrumb } from "@/lib/store/crumb";
 import { useUIStore } from "@/lib/store/ui";
+import { collectionPath, movedPath, recordByID } from "@/lib/paths";
 import { cn } from "@/lib/utils";
 import { collectionName, description as descriptionRule, ready } from "@/lib/validation";
 
@@ -72,6 +73,45 @@ export function useRecordCount(collectionId: string | undefined, enabled = true)
 }
 
 /**
+ * The collection at /<owner>/<slug>: the address is looked up once, then the
+ * collection is read by id, so every change that refreshes it by id shows here.
+ * An old address (a rename, transfer or new username) moves to the current one.
+ */
+export function useRouteCollection() {
+  const { owner, slug } = useParams<{ owner: string; slug: string }>();
+  const router = useRouter();
+  const pathname = usePathname();
+  const client = useQueryClient();
+  const found = useQuery({
+    queryKey: ["collections", "path", owner, slug],
+    queryFn: async ({ signal }) => {
+      const c = await collections.byPath(owner, slug, signal);
+      client.setQueryData(["collections", "detail", c.id], c);
+      return c;
+    },
+    staleTime: Infinity, // the id behind an address does not change while the page is open
+  });
+  const id = found.data?.id;
+  const detail = useQuery({ queryKey: ["collections", "detail", id], queryFn: () => collections.get(id!), enabled: !!id });
+  const current = detail.data;
+  useEffect(() => {
+    if (current && (current.owner !== owner || current.slug !== slug)) {
+      router.replace(movedPath(pathname, { owner, slug }, current) + window.location.search + window.location.hash);
+    }
+  }, [current, owner, slug, pathname, router]);
+  const failed = found.isError ? found : detail;
+  return { data: current ?? found.data, isPending: found.isPending, isError: failed.isError, error: failed.error, refetch: failed.refetch };
+}
+
+/** A record opened under another collection's address moves to its own, through /records/<id>. */
+export function useRecordAddress(recordCollection: string | undefined, routeCollection: string | undefined, recordId: string, edit = false) {
+  const router = useRouter();
+  useEffect(() => {
+    if (recordCollection && routeCollection && recordCollection !== routeCollection) router.replace(recordByID(recordId) + (edit ? "/edit" : ""));
+  }, [recordCollection, routeCollection, recordId, edit, router]);
+}
+
+/**
  * Loads the collection in the URL and frames one of its sections: the header with
  * its name, loading and missing states, and the sidebar's current collection.
  */
@@ -88,13 +128,13 @@ export function CollectionPage({ section, description, countRecords = false, act
 }) {
   const { t } = useI18n();
   const { loading } = useMe();
-  const { id } = useParams<{ id: string }>();
   const setCollection = useUIStore((s) => s.setCollection);
-  const detail = useQuery({ queryKey: ["collections", "detail", id], queryFn: () => collections.get(id) });
+  const detail = useRouteCollection();
   const collection = detail.data;
+  const id = collection?.id;
   const gone = detail.error instanceof ApiError && detail.error.code === "NOT_FOUND";
-  useEffect(() => setCollection(gone ? null : id), [id, gone, setCollection]);
-  useCrumb(collection && t(section), collection && { label: collection.name, href: `/collections/${collection.id}/overview` });
+  useEffect(() => setCollection(gone ? null : id ?? null), [id, gone, setCollection]);
+  useCrumb(collection && t(section), collection && { label: collection.name, href: collectionPath(collection, "overview") });
   const recordCount = useRecordCount(collection?.id, countRecords);
   const subtitle = !collection ? undefined
     : typeof description === "function" ? description(collection, recordCount)
@@ -194,7 +234,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection; 
       setError(null);
       client.setQueryData(["collections", "detail", saved.id], saved);
       void client.invalidateQueries({ queryKey: ["collections"] });
-      toast.success(t("common.saved"), wasRisky ? { action: { label: t("collections.check_quality"), onClick: () => router.push(`/collections/${saved.id}/quality`) } } : undefined);
+      toast.success(t("common.saved"), wasRisky ? { action: { label: t("collections.check_quality"), onClick: () => router.push(collectionPath(saved, "quality")) } } : undefined);
       setVersion(saved.version);
     },
     onError: (err) => {

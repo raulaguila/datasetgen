@@ -11,6 +11,24 @@ export const adminState = "e2e/.auth/admin.json";
 export const apiUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:9990";
 export const strongPassword = "Quiet river lantern 42";
 
+/** A collection's own address, /<owner>/<slug>[/<section>], not an old /collections/<id> one. */
+export const atCollection = (section?: string) =>
+  new RegExp(`^https?://[^/]+/(?!collections/|records/)[a-z0-9-]+/[a-z0-9-]+${section ? `/${section}` : ""}$`);
+
+/** The collection id behind a collection address. */
+export async function collectionIdOf(page: Page, url: string): Promise<string> {
+  const [owner, slug] = new URL(url).pathname.split("/").slice(1, 3);
+  const res = await page.request.get(`/api/proxy/v1/collections/path/${owner}/${slug}`);
+  expect(res.ok()).toBeTruthy();
+  return (await res.json()).id as string;
+}
+
+/** Matches the address of the collection with this id, once it is open. */
+export async function collectionAt(page: Page, id: string): Promise<RegExp> {
+  const c = await (await page.request.get(`/api/proxy/v1/collections/${id}`)).json();
+  return new RegExp(`/${c.owner}/${c.slug}$`);
+}
+
 /** An address no earlier run used, so the flows never collide with old data. */
 export const uniqueEmail = (tag: string) => `e2e-${tag}-${Date.now()}@example.test`;
 
@@ -26,7 +44,7 @@ export async function newCollection(page: Page, name: string, template?: string)
     await page.getByRole("option", { name: template }).click();
   }
   await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}\/fields$/);
+  await expect(page).toHaveURL(atCollection("fields"));
   return page.url().replace(/\/fields$/, "");
 }
 

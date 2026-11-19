@@ -15,6 +15,7 @@ import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 import { formatFigure } from "@/components/format-figure";
+import { collectionPath, recordPath } from "@/lib/paths";
 
 export { formatFigure };
 
@@ -326,9 +327,9 @@ export function ViewConditions({ collectionId, onPick }: { collectionId: string;
 }
 
 /** The records list filtered to `where`: where a widget's figure or bar leads. */
-export const recordsHref = (collectionId: string, where: Where) => {
+export const recordsHref = (collection: { owner: string; slug: string }, where: Where) => {
   const text = whereText(where);
-  return `/collections/${collectionId}${text ? `?where=${encodeURIComponent(text)}` : ""}`;
+  return `${collectionPath(collection)}${text ? `?where=${encodeURIComponent(text)}` : ""}`;
 };
 
 /** The rule picking one value of a breakdown: empty values have their own. */
@@ -397,8 +398,8 @@ export function WidgetView({ collection, widget, rows, scope, head }: { collecti
   const value = figureValue !== undefined ? shown(figureValue, widget.kind === "count" ? undefined : field) : "—";
   const moved = compare ? change(figureValue, pick(before.data)) : null;
   // Drill-down: the figure opens the records it counts; a bar, the records of its value.
-  const all = recordsHref(collection.id, figure && field ? andWhere(where, [{ field: field.key, op: "not_empty" }]) : where);
-  const byValue = field ? (key: unknown) => recordsHref(collection.id, andWhere(where, [valueRule(field.key, key)])) : undefined;
+  const all = recordsHref(collection, figure && field ? andWhere(where, [{ field: field.key, op: "not_empty" }]) : where);
+  const byValue = field ? (key: unknown) => recordsHref(collection, andWhere(where, [valueRule(field.key, key)])) : undefined;
   const pending = measure ? grouped.isPending : st.isPending;
   const none = <p className="text-sm text-muted-foreground">{pending ? "…" : t("dashboard.no_records")}</p>;
   const total = st.data?.total ?? 0;
@@ -427,7 +428,7 @@ export function WidgetView({ collection, widget, rows, scope, head }: { collecti
           list.data?.items.length ? (
             <ul className="divide-y text-sm">
               {list.data.items.map((r) => (
-                <li key={r.id}><Link href={`/records/${r.id}`} className="block truncate py-1.5 hover:underline">{recordTitle(collection.schema ?? null, r.data) ?? r.id.slice(0, 8)}</Link></li>
+                <li key={r.id}><Link href={recordPath(collection, r.id)} className="block truncate py-1.5 hover:underline">{recordTitle(collection.schema ?? null, r.data) ?? r.id.slice(0, 8)}</Link></li>
               ))}
             </ul>
           ) : <p className="text-sm text-muted-foreground">{list.isPending ? "…" : t("dashboard.no_records")}</p>

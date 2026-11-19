@@ -28,6 +28,7 @@ func New(svc input.CollectionService) *Handler {
 func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
 	r.Get("/", h.List)
 	r.Get("/list", h.Options) // before /:id, which would swallow it
+	r.Get("/path/:owner/:slug", h.ByPath)
 	r.Get("/:id", h.Get)
 	r.Post("/", middleware.Require(authz, domain.ResourceCollections, domain.ActionCreate), h.Create)
 	r.Patch("/:id", h.Update)
@@ -44,10 +45,65 @@ func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
 	r.Post("/:id/duplicate", middleware.Require(authz, domain.ResourceCollections, domain.ActionCreate), h.Duplicate)
 	r.Get("/:id/stats", h.Stats)
 	r.Post("/:id/leave", h.Leave)
+	r.Post("/:id/transfer", h.Transfer)
+}
+
+// @Summary Get a collection by its address, /<owner>/<slug>, with its schema
+// @Description An old address (before a rename, transfer or username change) answers the collection too; compare owner and slug to move to the current one.
+// @Tags Collections
+// @Produce json
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
+// @Security BearerAuth
+// @Success 200 {object} collectionDTO
+// @Failure 401 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/path/{owner}/{slug} [get]
+func (h *Handler) ByPath(c fiber.Ctx) error {
+	item, err := h.svc.ByPath(c.Context(), c.Params("owner"), c.Params("slug"))
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	return c.JSON(toDTO(*item))
+}
+
+type transferDTO struct {
+	// UserID is an owner member who takes the collection's address.
+	UserID string `json:"user_id"`
+}
+
+// @Summary Move the collection's address to another owner member
+// @Description The address becomes /<new owner>/<slug>; the old one keeps opening the collection.
+// @Tags Collections
+// @Produce json
+// @Accept json
+// @Param id path string true "Collection ID"
+// @Param body body transferDTO true "Request"
+// @Security BearerAuth
+// @Success 200 {object} collectionDTO
+// @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @Router /v1/collections/{id}/transfer [post]
+func (h *Handler) Transfer(c fiber.Ctx) error {
+	var body transferDTO
+	if err := c.Bind().Body(&body); err != nil {
+		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
+	}
+	item, err := h.svc.Transfer(c.Context(), c.Params("id"), body.UserID)
+	if err != nil {
+		return mapper.WriteError(c, err)
+	}
+	return c.JSON(toDTO(*item))
 }
 
 type collectionDTO struct {
-	ID          string          `json:"id"`
+	ID string `json:"id"`
+	// Owner and Slug make the collection's address in the app: /<owner>/<slug>.
+	Owner       string          `json:"owner" example:"ana-silva"`
+	Slug        string          `json:"slug" example:"livros-lidos"`
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Icon        string          `json:"icon"`
@@ -68,7 +124,10 @@ type collectionDTO struct {
 
 type optionDTO struct {
 	ID     string `json:"id"`
+	Owner  string `json:"owner"`
+	Slug   string `json:"slug"`
 	Name   string `json:"name"`
+	Icon   string `json:"icon"`
 	Role   string `json:"role" enums:"owner,editor,viewer"` // the caller's role
 	Member bool   `json:"member"`                           // false for a platform admin outside the collection
 }
@@ -91,7 +150,7 @@ type updateDTO struct {
 
 func toDTO(c domain.Collection) collectionDTO {
 	return collectionDTO{
-		ID: c.ID, Name: c.Name, Description: c.Description, Icon: c.Icon, Schema: c.Schema, Role: string(c.Role),
+		ID: c.ID, Owner: c.Owner, Slug: c.Slug, Name: c.Name, Description: c.Description, Icon: c.Icon, Schema: c.Schema, Role: string(c.Role),
 		Version: c.Version, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
 }
@@ -153,7 +212,7 @@ func (h *Handler) Options(c fiber.Ctx) error {
 	}
 	out := make([]optionDTO, 0, len(items))
 	for _, item := range items {
-		out = append(out, optionDTO{ID: item.ID, Name: item.Name, Role: string(item.Role), Member: item.Member})
+		out = append(out, optionDTO{ID: item.ID, Owner: item.Owner, Slug: item.Slug, Name: item.Name, Icon: item.Icon, Role: string(item.Role), Member: item.Member})
 	}
 	return c.JSON(fiber.Map{"items": out})
 }
@@ -265,6 +324,7 @@ func (h *Handler) Delete(c fiber.Ctx) error {
 type memberDTO struct {
 	UserID    string    `json:"user_id"`
 	Name      string    `json:"name"`
+	Username  string    `json:"username"`
 	Email     string    `json:"email"`
 	Status    string    `json:"status" enums:"pending,active,locked,disabled"`
 	Role      string    `json:"role" enums:"owner,editor,viewer"`
@@ -272,7 +332,7 @@ type memberDTO struct {
 }
 
 func toMemberDTO(m domain.CollectionMember) memberDTO {
-	return memberDTO{UserID: m.UserID, Name: m.Name, Email: m.Email, Status: m.Status, Role: string(m.Role), CreatedAt: m.CreatedAt}
+	return memberDTO{UserID: m.UserID, Name: m.Name, Username: m.Username, Email: m.Email, Status: m.Status, Role: string(m.Role), CreatedAt: m.CreatedAt}
 }
 
 type addMemberDTO struct {

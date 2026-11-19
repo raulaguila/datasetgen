@@ -16,6 +16,7 @@ import type { Collection, DataRecord } from "@/lib/api/types";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 import { colorOf, optionColor } from "@/components/option-chip";
+import { recordByID } from "@/lib/paths";
 
 type S = Record<string, unknown>;
 const obj = (v: unknown): S => (v && typeof v === "object" && !Array.isArray(v) ? (v as S) : {});
@@ -63,7 +64,7 @@ export function Chip({ children, mono, strong, title, color }: { children: React
 
 function RefLink({ target, id }: { target: string; id: string }) {
   const label = useRecordLabel(target, id);
-  return <Link href={`/records/${id}`} className="truncate text-primary underline-offset-2 hover:underline">{label}</Link>;
+  return <Link href={recordByID(id)} className="truncate text-primary underline-offset-2 hover:underline">{label}</Link>;
 }
 
 function Files({ value }: { value: unknown }) {

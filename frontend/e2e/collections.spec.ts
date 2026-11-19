@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addField, newCollection } from "./helpers";
+import { addField, newCollection, atCollection } from "./helpers";
 
 const fieldsList = (page: Page) => page.getByRole("list", { name: "Campos" });
 
@@ -41,7 +41,7 @@ test("a collection's records follow its fields", async ({ page }) => {
   await page.getByRole("option", { name: "gatilho" }).click();
   await expect(page.getByText("Campo obrigatório.")).toHaveCount(0);
   await save.click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(atCollection());
   // One column per field, named after it, after the selection box.
   await expect(page.getByRole("columnheader")).toHaveText(["", "Nome", "Categoria", "Nota", "Atualizado em"]);
   const row = page.getByRole("row").filter({ hasText: "Ao clicar" });
@@ -152,7 +152,7 @@ test("groups hold subfields and free objects take JSON", async ({ page }) => {
   await page.locator("#rec_nome").fill("Casa 2");
   // Ctrl+Enter saves from inside a text area.
   await extra.press("Control+Enter");
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(atCollection());
   await expect(page.getByRole("row").filter({ hasText: "Casa 2" })).toHaveCount(1);
   const row = page.getByRole("row").filter({ hasText: "Casa" }).filter({ hasNotText: "Casa 2" });
   // The list carries plain values only; the record keeps the rest.
@@ -177,16 +177,16 @@ test("templates start collections and unique fields hold", async ({ page }) => {
   await page.getByRole("option", { name: "Contatos" }).click();
   await page.locator("#c-name").fill(name);
   await create.click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}\/fields$/);
+  await expect(page).toHaveURL(atCollection("fields"));
   await expect(fieldsList(page).getByRole("listitem").filter({ hasText: "E-mail" })).toContainText(/único/i);
   const records = page.url().replace(/\/fields$/, "");
 
   for (const who of ["Ana", "Bia"]) {
-    await page.goto(records.replace(/\/collections\/([^/]+)$/, "/records/new?collection=$1"));
+    await page.goto(`${records}/r/new`);
     await page.locator("#rec_nome").fill(who);
     await page.locator("#rec_e_mail").fill("mesmo@example.test");
     await page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true }).click();
-    if (who === "Ana") await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+    if (who === "Ana") await expect(page).toHaveURL(atCollection());
   }
   await expect(page.getByText("Outro registro já usa este valor.").first()).toBeVisible();
 
@@ -199,10 +199,10 @@ test("templates start collections and unique fields hold", async ({ page }) => {
 test("a whole-collection export recreates the collection", async ({ page }) => {
   const name = `e2e-bundle-${Date.now()}`;
   const records = await newCollection(page, name, "Contatos");
-  await page.goto(records.replace(/\/collections\/([^/]+)$/, "/records/new?collection=$1"));
+  await page.goto(`${records}/r/new`);
   await page.locator("#rec_nome").fill("Ana");
   await page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true }).click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(atCollection());
 
   await page.getByRole("button", { name: "Exportar" }).click();
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: /Coleção completa/ }).click()]);
@@ -214,7 +214,7 @@ test("a whole-collection export recreates the collection", async ({ page }) => {
   await expect(page.locator("#c-name")).toHaveValue(name);
   await page.locator("#c-name").fill(`${name}-copia`);
   await page.getByRole("region", { name: "Nova coleção" }).getByRole("button", { name: "Criar" }).click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(atCollection());
   const dialog = page.getByRole("dialog", { name: "Importar" });
   await dialog.getByRole("button", { name: /^Importar 1/ }).click();
   await expect(page.getByRole("row").filter({ hasText: "Ana" })).toBeVisible();

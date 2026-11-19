@@ -4,12 +4,12 @@ import Link from "next/link";
 import { OptionDot } from "@/components/option-chip";
 import { fieldFigure } from "@/components/format-figure";
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { keepPreviousData, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Download, FileJson, Eye, Paperclip, PencilLine, Plus, Search, Trash2 } from "lucide-react";
 import { saveFile } from "@/lib/api/client";
 import { toast } from "sonner";
-import { PageBody, PageHeader, useRelativeTime } from "@/components/bits";
+import { useRelativeTime } from "@/components/bits";
 import { EmptyState } from "@/components/empty-state";
 import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { fieldsOf, fileRefs, recordTitle, REF, type FieldRow } from "@/components/field-builder";
@@ -33,7 +33,6 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { collections, records, tools } from "@/lib/api/endpoints";
 import type { Collection, DataRecord, SortOrder } from "@/lib/api/types";
-import { useMe } from "@/lib/context/me";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useGoToPage, useListParams } from "@/lib/hooks/use-list-params";
 import { useQuality } from "@/lib/hooks/use-quality";
@@ -41,12 +40,11 @@ import { errorMessage } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n/provider";
 import { plural } from "@/lib/i18n/plural";
 import { roleAllows } from "@/lib/permissions";
-import { useCrumb } from "@/lib/store/crumb";
 import { useSequenceStore } from "@/lib/store/sequence";
 import { cn, searchTerm } from "@/lib/utils";
 import { deleteWithUndo } from "@/lib/undo-delete";
 import { CollectionPage } from "./_parts";
-import { NewCollectionForm } from "./_new";
+import { collectionPath, recordPath } from "@/lib/paths";
 
 /**
  * The titles of the records reference columns point at, one lookup per column
@@ -257,7 +255,7 @@ function RecordList({ collection }: { collection: Collection }) {
           {/* On phones its buttons join the row, so all of them space out evenly. */}
           <div className="flex items-center gap-2 max-sm:contents sm:ml-auto">
             {report && report.checked > 0 && (
-              <Link href={`/collections/${collection.id}/quality`} className="inline-flex h-[var(--control-h)] items-center gap-2 rounded-lg border px-3 text-sm tabular-nums hover:bg-muted max-sm:hidden" title={t("collections.tab.quality")}>
+              <Link href={collectionPath(collection, "quality")} className="inline-flex h-[var(--control-h)] items-center gap-2 rounded-lg border px-3 text-sm tabular-nums hover:bg-muted max-sm:hidden" title={t("collections.tab.quality")}>
                 <span className="inline-flex items-center gap-1"><span className="size-2 rounded-full bg-success" aria-hidden />{t("records.valid_n").replace("{n}", num(report.checked - report.invalid_count))}</span>
                 {report.invalid_count > 0 && <span className="inline-flex items-center gap-1 text-warn"><span className="size-2 rounded-full bg-warn" aria-hidden />{t("records.invalid_n").replace("{n}", num(report.invalid_count))}</span>}
               </Link>
@@ -306,7 +304,7 @@ function RecordList({ collection }: { collection: Collection }) {
                 const matchedIn = hiddenMatches(data);
                 const cells = columns.length ? columns.map((c) => ({ key: c.key, row: c, label: c.field.name, text: show(data[c.key], c), file: fileRefs(data[c.key])[0] })) : [{ key: "", row: undefined, label: t("records.record"), text: JSON.stringify(r.data), file: undefined }];
                 return (
-                  <TableRow key={r.id} className={cn("cursor-pointer hover:bg-muted/60", isInvalid(r.id, r.updated_at) && "[&>td:first-child]:shadow-[inset_3px_0_0_var(--warn)]")} onClick={() => router.push(`/records/${r.id}`)}>
+                  <TableRow key={r.id} className={cn("cursor-pointer hover:bg-muted/60", isInvalid(r.id, r.updated_at) && "[&>td:first-child]:shadow-[inset_3px_0_0_var(--warn)]")} onClick={() => router.push(recordPath(collection, r.id))}>
                     <SelectCell selection={selection} id={r.id} label={cells[0].text} />
                     {cells.map((c, i) => { const cell = (
                       <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : "field"} className={cn(i === 0 ? "max-w-0 min-w-40" : "max-w-0 min-w-24 text-muted-foreground", i > 0 && c.row?.field.unique && "font-mono text-xs xl:min-w-48")} title={c.row?.field.type === "url" ? String(data[c.key] ?? "") : undefined}>
@@ -316,7 +314,7 @@ function RecordList({ collection }: { collection: Collection }) {
                               <AlertTriangle className="size-4 shrink-0 text-warn" role="img" aria-label={t("overview.invalid")}><title>{t("records.invalid_hint")}</title></AlertTriangle>
                             )}
                             <span className="min-w-0">
-                              <Link href={`/records/${r.id}`} className="block truncate font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{c.text}</Link>
+                              <Link href={recordPath(collection, r.id)} className="block truncate font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{c.text}</Link>
                               {matchedIn.length > 0 && <span className="block truncate text-xs text-muted-foreground">{t("records.found_in").replace("{fields}", matchedIn.join(", "))}</span>}
                             </span>
                           </span>
@@ -361,25 +359,11 @@ function RecordList({ collection }: { collection: Collection }) {
 
 function NewRecordButton({ collection }: { collection: Collection }) {
   const { t } = useI18n();
-  return <Button nativeButton={false} render={<Link href={`/records/new?collection=${collection.id}`} />}><Plus className="size-4" />{t("records.new")}</Button>;
-}
-
-function NewCollection() {
-  const { t } = useI18n();
-  const { loading } = useMe();
-  useCrumb(t("collections.new"));
-  return (
-    <>
-      <PageHeader title={t("collections.new")} description={t("collections.new_desc")} />
-      <PageBody>{loading ? <ListSkeleton rows={3} /> : <NewCollectionForm />}</PageBody>
-    </>
-  );
+  return <Button nativeButton={false} render={<Link href={recordPath(collection, "new")} />}><Plus className="size-4" />{t("records.new")}</Button>;
 }
 
 export default function CollectionRecordsPage() {
-  const { id } = useParams<{ id: string }>();
   const { t } = useI18n();
-  if (id === "new") return <NewCollection />;
   const count = (_: Collection, n?: number) => (n === undefined ? undefined : t(n === 1 ? "nav.record_one" : "nav.record_many").replace("{n}", String(n)));
   return (
     <CollectionPage section="collections.tab.records" countRecords description={count} action={(c) => <><ExportMenu collection={c} />{roleAllows(c.role, "editor") && <NewRecordButton collection={c} />}</>}>

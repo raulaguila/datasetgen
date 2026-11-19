@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { DangerZone } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -15,7 +15,6 @@ export default function CollectionSettingsPage() {
   const { t } = useI18n();
   const router = useRouter();
   const client = useQueryClient();
-  const { id } = useParams<{ id: string }>();
   const setCollection = useUIStore((s) => s.setCollection);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -35,10 +34,10 @@ export default function CollectionSettingsPage() {
             destructive
             confirmLabel={t("common.delete")}
             onConfirm={async () => {
-              await collections.remove([id]); // the dialog shows a refusal
+              await collections.remove([collection.id]); // the dialog shows a refusal
               setCollection(null);
               router.push("/collections");
-              client.removeQueries({ queryKey: ["collections", "detail", id] });
+              client.removeQueries({ queryKey: ["collections", "detail", collection.id] });
               void client.invalidateQueries({ queryKey: ["collections"] });
             }}
           />

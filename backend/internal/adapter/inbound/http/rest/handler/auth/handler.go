@@ -74,7 +74,9 @@ type refreshDTO struct {
 }
 
 type renameDTO struct {
-	Name string `json:"name"`
+	Name *string `json:"name" example:"Ana Silva"`
+	// Username is the account's part of collection URLs; old paths keep opening.
+	Username *string `json:"username" example:"ana-silva"`
 }
 
 type changePasswordDTO struct {
@@ -95,6 +97,7 @@ type resetConfirmDTO struct {
 type userDTO struct {
 	ID          string                `json:"id"`
 	Name        string                `json:"name"`
+	Username    string                `json:"username"`
 	Email       string                `json:"email"`
 	Status      string                `json:"status"`
 	CreatedAt   time.Time             `json:"created_at"`
@@ -124,6 +127,7 @@ func toUserDTO(p *domain.Profile) userDTO {
 	return userDTO{
 		ID:          p.User.ID,
 		Name:        p.User.Name,
+		Username:    p.User.Username,
 		Email:       p.User.Email,
 		Status:      p.User.Status,
 		CreatedAt:   p.User.CreatedAt,
@@ -287,7 +291,7 @@ func (h *Handler) Me(c fiber.Ctx) error {
 	return c.JSON(meDTO{User: toUserDTO(profile), SessionID: middleware.SessionID(c)})
 }
 
-// @Summary Change the name of the current user
+// @Summary Change the name or username of the current user
 // @Tags Profile
 // @Produce json
 // @Accept json
@@ -303,7 +307,7 @@ func (h *Handler) Rename(c fiber.Ctx) error {
 	if err := c.Bind().Body(&body); err != nil {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
-	profile, err := h.account.Rename(c.Context(), middleware.UserID(c), body.Name)
+	profile, err := h.account.UpdateProfile(c.Context(), middleware.UserID(c), body.Name, body.Username)
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}

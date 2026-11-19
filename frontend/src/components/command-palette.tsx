@@ -14,6 +14,7 @@ import { ADMIN_NAV, COLLECTION_SECTIONS, MAIN_NAV, type NavItem } from "@/lib/na
 import { can, roleAllows } from "@/lib/permissions";
 import { useUIStore } from "@/lib/store/ui";
 import { cn } from "@/lib/utils";
+import { collectionPath, recordPath } from "@/lib/paths";
 
 interface Hit {
   href: string;
@@ -61,10 +62,10 @@ export function CommandPalette() {
   const lastCollection = useQuery({ queryKey: ["collections", "detail", collectionId], queryFn: () => collections.get(collectionId!), enabled: open && !!collectionId, retry: false }).data;
   const recordHits = useHits(`records:${lastCollection?.id}`, q, search && !!lastCollection, (signal) =>
     records.list({ collection_id: lastCollection!.id, page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((rec) => ({
-      href: `/records/${rec.id}`, label: recordTitle(lastCollection!.schema ?? null, rec.data) ?? rec.id, hint: lastCollection!.name, icon: FileText,
+      href: recordPath(lastCollection!, rec.id), label: recordTitle(lastCollection!.schema ?? null, rec.data) ?? rec.id, hint: lastCollection!.name, icon: FileText,
     }))));
   const collectionHits = useHits("collections", q, search && !!user, (signal) =>
-    collections.list({ page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((c) => ({ href: `/collections/${c.id}`, label: c.name, hint: t("nav.collections"), icon: Database }))));
+    collections.list({ page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((c) => ({ href: collectionPath(c), label: c.name, hint: t("nav.collections"), icon: Database }))));
 
   const needle = text.trim().toLowerCase();
   const pages: Hit[] = [...MAIN_NAV, ...ADMIN_NAV, ...EXTRA]
@@ -73,7 +74,7 @@ export function CommandPalette() {
     .filter((hit) => hit.label.toLowerCase().includes(needle));
   const sections: Hit[] = !lastCollection || !needle ? [] : COLLECTION_SECTIONS
     .filter((sec) => !sec.need || roleAllows(lastCollection.role, sec.need))
-    .map((sec) => ({ href: `/collections/${lastCollection.id}${sec.seg}`, label: t(sec.key), hint: lastCollection.name, icon: sec.icon }))
+    .map((sec) => ({ href: collectionPath(lastCollection) + sec.seg, label: t(sec.key), hint: lastCollection.name, icon: sec.icon }))
     .filter((hit) => hit.label.toLowerCase().includes(needle));
   const hits = [...pages, ...sections, ...(recordHits.data ?? []), ...(collectionHits.data ?? []), ...(userHits.data ?? [])];
   const current = Math.min(active, hits.length - 1);

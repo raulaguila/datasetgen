@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { CodeBlock } from "@/components/secret";
+import { recordByID } from "@/lib/paths";
 
 /**
  * The Markdown that long text fields carry (headings, lists, quotes, code, tables,
@@ -83,7 +84,7 @@ export function inline(text: string, links?: Map<string, string>): ReactNode[] {
     if (m[1] !== undefined) out.push(<code key={k} className="rounded bg-muted px-1 py-0.5 font-mono text-[0.85em]">{m[1]}</code>);
     else if (m[2] !== undefined) out.push(<strong key={k} className="font-semibold">{inline(m[2], links)}</strong>);
     else if (m[3] !== undefined) out.push(<em key={k}>{inline(m[3], links)}</em>);
-    else if (links?.has(linkKey(m[5]))) out.push(<Link key={k} href={`/records/${links.get(linkKey(m[5]))}`} title={m[5]} className="text-primary underline-offset-2 hover:underline">{m[4]}</Link>);
+    else if (links?.has(linkKey(m[5]))) out.push(<Link key={k} href={recordByID(links.get(linkKey(m[5]))!)} title={m[5]} className="text-primary underline-offset-2 hover:underline">{m[4]}</Link>);
     else out.push(<a key={k} href={m[5]} target="_blank" rel="noreferrer noopener" className="text-primary underline-offset-2 hover:underline">{m[4]}</a>);
     last = m.index + m[0].length;
   }

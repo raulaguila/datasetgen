@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { choosePassword, invite, login, strongPassword, formAlert, guestPage, uniqueEmail } from "./helpers";
+import { choosePassword, invite, login, strongPassword, formAlert, guestPage, uniqueEmail, atCollection } from "./helpers";
 
 test("an invited person activates the account and signs in", async ({ page, browser }) => {
   const email = uniqueEmail("invite");
@@ -15,7 +15,7 @@ test("an invited person activates the account and signs in", async ({ page, brow
   await login(guest, email, strongPassword);
   // Invited by an admin, not into a collection: the account starts with its own,
   // where the app opens, and may create more.
-  await expect(guest).toHaveURL(/\/collections\/[0-9a-f-]{36}\/overview$/);
+  await expect(guest).toHaveURL(atCollection("overview"));
   await expect(guest.getByText("Minha coleção").first()).toBeVisible();
   await guest.goto("/collections");
   await expect(guest.getByRole("button", { name: "Nova coleção" })).toBeVisible();
