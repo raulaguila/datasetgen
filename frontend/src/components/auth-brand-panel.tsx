@@ -20,13 +20,10 @@ export function AuthBrandPanel() {
         <BrandMark size={200} className="opacity-[0.14]" />
       </div>
       <div className="relative z-10 mt-auto max-w-md space-y-3 p-10 pb-12 pr-12">
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-(--brand-foreground)">
-          {t("auth.brand_eyebrow")}
-        </p>
         <h2 className="font-heading text-3xl font-semibold leading-tight text-(--brand-foreground)">
           {t("auth.brand_tagline")}
         </h2>
-        <p className="text-sm leading-relaxed text-(--brand-foreground)">
+        <p className="text-sm leading-relaxed text-pretty text-(--brand-foreground)">
           {t("auth.brand_body")}
         </p>
       </div>

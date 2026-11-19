@@ -21,7 +21,9 @@ addEventListener("message", async (e: MessageEvent<WorkerRequest>) => {
     else {
       for await (const batch of recordBatches(m.file, m.opts, progress)) {
         post({ type: "batch", batch });
-        await new Promise<void>((r) => { resume = r; });
+        const next = Promise.withResolvers<void>();
+        resume = next.resolve;
+        await next.promise;
       }
       post({ type: "end" });
     }

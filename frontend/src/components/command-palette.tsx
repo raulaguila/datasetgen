@@ -123,7 +123,7 @@ export function CommandPalette() {
               onKeyDown={(e) => {
                 if (e.key === "ArrowDown") { e.preventDefault(); setActive((i) => Math.min(i + 1, hits.length - 1)); }
                 else if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
-                else if (e.key === "Enter") { e.preventDefault(); go(hits[current]); }
+                else if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); go(hits[current]); }
               }}
             />
           </div>

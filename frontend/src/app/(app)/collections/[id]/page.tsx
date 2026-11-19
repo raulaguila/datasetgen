@@ -154,7 +154,8 @@ function RecordList({ collection }: { collection: Collection }) {
   const invalid = new Map((report?.invalid ?? []).map((r) => [r.id, r.updated_at]));
   // A record edited since the check may be fixed already: it stays unmarked.
   const isInvalid = (id: string, updatedAt: string) => invalid.has(id) && Date.parse(updatedAt) <= Date.parse(invalid.get(id)!);
-  const selection = useSelection(canEdit ? items.map((r) => r.id) : []);
+  // Readers select too: they can export a part; edits and deletes stay with editors.
+  const selection = useSelection(items.map((r) => r.id));
   const filtered = !!(q || whereText);
   // Out of how many: the collection's total, beside a filtered list's count.
   const all = useQuery({
@@ -291,7 +292,7 @@ function RecordList({ collection }: { collection: Collection }) {
           <Table data-responsive data-compact data-records>
             <TableHeader>
               <TableRow>
-                {canEdit && <SelectAllHead selection={selection} />}
+                <SelectAllHead selection={selection} />
                 {/* The first column, the record's name, gets the room; the others what is left. */}
                 {columns.length ? columns.map((c, i) => c.field.type === "file" || c.field.type === "files"
                   ? <TableHead key={c.key} className={i === 0 ? "w-[40%]" : undefined}><span className="inline-flex items-center gap-1">{(() => { const I = TYPE_ICONS[c.field.type]; return <I className="size-3.5 opacity-60" aria-hidden />; })()}{c.field.name}</span></TableHead>
@@ -306,7 +307,7 @@ function RecordList({ collection }: { collection: Collection }) {
                 const cells = columns.length ? columns.map((c) => ({ key: c.key, row: c, label: c.field.name, text: show(data[c.key], c), file: fileRefs(data[c.key])[0] })) : [{ key: "", row: undefined, label: t("records.record"), text: JSON.stringify(r.data), file: undefined }];
                 return (
                   <TableRow key={r.id} className={cn("cursor-pointer hover:bg-muted/60", isInvalid(r.id, r.updated_at) && "[&>td:first-child]:shadow-[inset_3px_0_0_var(--warn)]")} onClick={() => router.push(`/records/${r.id}`)}>
-                    {canEdit && <SelectCell selection={selection} id={r.id} label={cells[0].text} />}
+                    <SelectCell selection={selection} id={r.id} label={cells[0].text} />
                     {cells.map((c, i) => { const cell = (
                       <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : "field"} className={cn(i === 0 ? "max-w-0 min-w-40" : "max-w-0 min-w-24 text-muted-foreground", i > 0 && c.row?.field.unique && "font-mono text-xs xl:min-w-48")} title={c.row?.field.type === "url" ? String(data[c.key] ?? "") : undefined}>
                         {i === 0 ? (
@@ -350,8 +351,8 @@ function RecordList({ collection }: { collection: Collection }) {
         <Button variant="outline" onClick={() => saveFile(new Blob([items.filter((r) => selection.has(r.id)).map((r) => JSON.stringify(r.data) + "\n").join("")], { type: "application/x-ndjson" }), `${collection.name}-${selection.ids.length}.jsonl`)}>
           <Download className="size-4" />{t("export.selected")}
         </Button>
-        <Button variant="outline" onClick={() => setBulk(true)}><PencilLine className="size-4" />{t("bulk.title")}</Button>
-        <Button variant="destructive" onClick={removeSelected}><Trash2 className="size-4" />{t("common.delete_selected")}</Button>
+        {canEdit && <Button variant="outline" onClick={() => setBulk(true)}><PencilLine className="size-4" />{t("bulk.title")}</Button>}
+        {canEdit && <Button variant="destructive" onClick={removeSelected}><Trash2 className="size-4" />{t("common.delete_selected")}</Button>}
       </SelectionBar>
       {canEdit && <BulkEditDialog collection={collection} ids={selection.ids} open={bulk} onOpenChange={setBulk} onDone={selection.clear} />}
     </>

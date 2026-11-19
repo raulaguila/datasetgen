@@ -111,7 +111,7 @@ export function EditableCell({ row, value, text, recordId, save, className }: {
     return (
       <span role="button" tabIndex={0} aria-label={`${label}, ${text}`} title={t("grid.edit_hint")} className={`block min-h-5 truncate rounded px-1 -mx-1 hover:bg-muted ${className ?? ""}`}
         onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => { e.stopPropagation(); start(); }}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === "F2") { e.preventDefault(); e.stopPropagation(); start(); } }}>
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === "F2" || e.key === " ") { e.preventDefault(); e.stopPropagation(); start(); } }}>
         {row.field.type === "enum" && typeof value === "string" && row.field.colors[value] ? <span className="flex min-w-0 items-center gap-1.5"><OptionDot color={row.field.colors[value]} /><span className="truncate">{text}</span></span> : text}
       </span>
     );
@@ -119,7 +119,7 @@ export function EditableCell({ row, value, text, recordId, save, className }: {
   const keys = (e: React.KeyboardEvent) => {
     e.stopPropagation();
     if (e.key === "Escape") setEditing(false);
-    if (e.key === "Enter") { e.preventDefault(); void commit((e.target as HTMLInputElement | HTMLSelectElement).value); }
+    if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void commit((e.target as HTMLInputElement | HTMLSelectElement).value); }
   };
   if (type === "boolean" || type === "enum") {
     const options = type === "boolean" ? [["true", t("common.yes")], ["false", t("common.no")]] : row.field.options.split(",").map((o) => o.trim()).filter(Boolean).map((o) => [o, o]);

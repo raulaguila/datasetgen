@@ -151,7 +151,7 @@ function OptionsEditor({ id, field, invalid, set }: { id: string; field: Field; 
                   {OPTION_COLORS.map((c) => <SelectItem key={c} value={c}><span className={cn("mr-2 inline-block size-3 rounded-full", optionColor(c).dot)} aria-hidden />{colorNames[c]}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Input aria-label={`${t("fields.option")} ${i + 1}`} className="h-8 min-w-0 flex-1" defaultValue={o} maxLength={100} onBlur={(e) => rename(i, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }} />
+              <Input aria-label={`${t("fields.option")} ${i + 1}`} className="h-8 min-w-0 flex-1" defaultValue={o} maxLength={100} onBlur={(e) => rename(i, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.blur(); } }} />
               <IconAction label={t("collections.field_up")} target={o} disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="size-4" /></IconAction>
               <IconAction label={t("collections.field_down")} target={o} disabled={i === options.length - 1} onClick={() => move(i, 1)}><ArrowDown className="size-4" /></IconAction>
               <IconAction label={t("fields.option_remove")} target={o} className="text-muted-foreground hover:text-destructive" onClick={() => write(options.filter((x) => x !== o))}><Trash2 className="size-4" /></IconAction>
@@ -161,7 +161,7 @@ function OptionsEditor({ id, field, invalid, set }: { id: string; field: Field; 
       )}
       <div className="flex gap-2">
         <Input id={`${id}-option`} aria-label={t("fields.option_new")} placeholder={t("fields.option_new")} aria-invalid={invalid && !options.length} maxLength={100} value={draft}
-          onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} />
+          onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); add(); } }} />
         <Button type="button" variant="outline" disabled={!clean(draft)} onClick={add}><Plus className="size-4" />{t("fields.option_add")}</Button>
       </div>
     </fieldset>

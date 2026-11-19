@@ -184,7 +184,7 @@ function FieldPicker({ entries, value, label, onPick }: { entries: Entry[]; valu
               onKeyDown={(e) => {
                 if (e.key === "ArrowDown") { e.preventDefault(); setAt((i) => Math.min(i + 1, shown.length - 1)); }
                 if (e.key === "ArrowUp") { e.preventDefault(); setAt((i) => Math.max(i - 1, 0)); }
-                if (e.key === "Enter") { e.preventDefault(); if (shown[at]) pick(shown[at].key); }
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); if (shown[at]) pick(shown[at].key); }
               }} />
             <ul id={listId} role="listbox" aria-label={label} className="mt-1 max-h-64 overflow-y-auto">
               {shown.map((e, i) => {
@@ -591,7 +591,7 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
             onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
             onKeyDown={(e) => {
               if (e.key === "Tab" && !e.shiftKey && suggestions.items.length) { e.preventDefault(); take(suggestions.items[0]); }
-              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); }
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form?.requestSubmit(); }
             }} />
           {suggestions.items.length > 0 && (
             <ul aria-label={t("rules.suggest")} className="flex flex-wrap gap-1">
@@ -618,7 +618,7 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
       ) : viewName !== null ? (
         <div className="flex gap-2 border-t pt-3">
           <Input autoFocus maxLength={80} aria-label={t("views.name")} placeholder={t("views.name")} value={viewName} onChange={(e) => setViewName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); if (viewName.trim() && pending) create.mutate({ name: viewName.trim(), where: pending }); } if (e.key === "Escape") { e.stopPropagation(); setViewName(null); } }} />
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); e.stopPropagation(); if (viewName.trim() && pending) create.mutate({ name: viewName.trim(), where: pending }); } if (e.key === "Escape") { e.stopPropagation(); setViewName(null); } }} />
           <Button type="button" variant="ghost" onClick={() => setViewName(null)}>{t("common.cancel")}</Button>
           <Button type="button" disabled={!viewName.trim() || !pending || create.isPending} onClick={() => pending && create.mutate({ name: viewName.trim(), where: pending })}>{t("common.save")}</Button>
         </div>
