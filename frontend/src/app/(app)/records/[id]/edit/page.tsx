@@ -243,6 +243,7 @@ export default function RecordEditPage() {
     <>
       <PageHeader
         title={title}
+        tabTitle={creating ? undefined : `${t("common.edit")}: ${title}`}
         description={record && `${t("common.updated_at")} ${format(record.updated_at)}`}
         action={record && (
           <div className="flex items-center gap-2">

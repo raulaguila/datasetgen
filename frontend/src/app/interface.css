@@ -189,6 +189,13 @@ button,a,input,select,textarea {
   min-height: 50px
 }
 }
+/* Text links stay text but get a 44px tall hit area on touch; the negative margin keeps the row height. */
+@media(max-width:767px),(pointer:coarse) {
+:is(nav[aria-label=breadcrumb] a, [data-touch-link]) {
+  padding-block: 0.75rem;
+  margin-block: -0.625rem
+}
+}
 /* Workspace rail mirrors the reference: 64/256 px, project avatars and footer controls. */
 [data-ui-workspace-rail] {
   display: flex;

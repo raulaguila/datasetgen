@@ -208,7 +208,7 @@ function Overview({ collection }: { collection: Collection }) {
         <Card className="gap-0 overflow-hidden p-0">
           <div className="flex items-center justify-between border-b px-4 py-3">
             <h2 className="font-heading text-base font-semibold">{t("overview.recent")}</h2>
-            <Link href={base} className="text-sm text-primary hover:underline">{t("overview.view_all")}</Link>
+            <Link href={base} data-touch-link className="text-sm text-primary hover:underline">{t("overview.view_all")}</Link>
           </div>
           {recent.isPending ? (
             <div className="p-4"><ListSkeleton rows={2} /></div>
@@ -226,7 +226,7 @@ function Overview({ collection }: { collection: Collection }) {
                 const when = relative(r.created_at);
                 return (
                   <li key={r.id} className="flex items-center gap-3 px-4 py-2.5">
-                    <Link href={`/records/${r.id}`} className="min-w-0 flex-1 truncate text-sm font-medium hover:underline">{text}</Link>
+                    <Link href={`/records/${r.id}`} data-touch-link className="min-w-0 flex-1 truncate text-sm font-medium hover:underline">{text}</Link>
                     <time dateTime={r.created_at} title={when.abs} className="shrink-0 text-xs text-muted-foreground">{when.rel}</time>
                   </li>
                 );

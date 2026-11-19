@@ -82,9 +82,9 @@ export function NewCollectionForm() {
       if (ctl.signal.aborted) return;
       if (head) {
         setFile({ file: f, schema: head.schema });
-        if (!name.trim()) setName(head.name ?? "");
-        if (!desc.trim()) setDesc(head.description ?? "");
-        if (!icon && head.icon && head.icon in COLLECTION_ICONS) setIcon(head.icon);
+        if (!name.trim()) setName(head.name);
+        if (!desc.trim()) setDesc(head.description);
+        if (!icon && Object.hasOwn(COLLECTION_ICONS, head.icon)) setIcon(head.icon);
         return setFileNote(t("collections.start.collection_loaded").replace("{file}", f.name));
       }
       const next = await inferSchema(f, shown, ctl.signal);

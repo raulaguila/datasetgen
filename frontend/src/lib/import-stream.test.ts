@@ -190,6 +190,12 @@ describe("collection export", () => {
     expect(await collectionHead(file("nome\nAna", "x.csv"))).toBeNull();
   });
 
+  it("keeps only text details from a hand-edited head", async () => {
+    const odd = JSON.stringify({ $collection: { name: 5, description: null, icon: ["x"], schema: head.schema } });
+    expect(await collectionHead(file(`${odd}\n`))).toEqual({ name: "", description: "", icon: "", schema: head.schema });
+    expect(await collectionHead(file('{"$collection":null}\n'))).toBeNull();
+  });
+
   it("imports only the records after it", async () => {
     let n = 0;
     for await (const b of recordBatches(file(content), { schema: head.schema })) n += b.records.length;

@@ -121,8 +121,11 @@ export async function collectionHead(file: File): Promise<CollectionHead | null>
   const end = text.indexOf("\n");
   try {
     const v: unknown = JSON.parse(end < 0 ? text : text.slice(0, end));
-    const head = isHead(v) ? v.$collection : null;
-    return head && head.schema && typeof head.schema === "object" && !Array.isArray(head.schema) ? head : null;
+    const head: Record<string, unknown> | null = isHead(v) && v.$collection && typeof v.$collection === "object" ? v.$collection : null;
+    if (!head || !head.schema || typeof head.schema !== "object" || Array.isArray(head.schema)) return null;
+    // A hand-edited file may hold anything: only text fills the form.
+    const str = (k: string) => (typeof head[k] === "string" ? (head[k] as string) : "");
+    return { name: str("name"), description: str("description"), icon: str("icon"), schema: head.schema as Record<string, unknown> };
   } catch {
     return null;
   }

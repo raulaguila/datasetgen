@@ -24,12 +24,15 @@ export function PageHeader({
   title,
   description,
   action,
+  tabTitle,
 }: {
   title: string;
   description?: string;
   action?: React.ReactNode;
+  /** The browser tab's name when it should differ from the heading (an edit screen). */
+  tabTitle?: string;
 }) {
-  useDocumentTitle(title);
+  useDocumentTitle(tabTitle ?? title);
   return (
     <div data-ui-page-header className="px-[var(--space-page)] py-3 md:pb-5">
       <div className="flex w-full flex-col gap-[var(--space-row)] sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">

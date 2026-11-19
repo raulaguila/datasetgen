@@ -369,7 +369,7 @@ function Quality({ collection }: { collection: Collection }) {
             {r.invalid.map((rec) => (
               <li key={rec.id} className="flex flex-wrap items-start gap-x-4 gap-y-1 px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <Link href={`/records/${rec.id}`} className="block truncate text-sm font-medium hover:underline">{preview(rec.id, rec.data)}</Link>
+                  <Link href={`/records/${rec.id}`} data-touch-link className="block truncate text-sm font-medium hover:underline">{preview(rec.id, rec.data)}</Link>
                   <ul className="mt-1 space-y-0.5 text-xs">
                     {rec.issues.map((i, n) => (
                       <li key={n}><span className="font-medium">{field(i.path)}</span>: <span className="text-destructive">{issue(i.keyword, i.message)}</span></li>
