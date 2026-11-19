@@ -73,23 +73,15 @@ define require_env_file
 	@test -f config/.env || (echo "$(RED)config/.env not found. Run make init first.$(RESET)" && exit 1)
 endef
 
-# Source config/.env (POSTGRES_USER, POSTGRES_PASS, POSTGRES_PORT, POSTGRES_BASE).
-# Wait until localhost:POSTGRES_PORT accepts TCP, then run migrate.
+# Share the Postgres container's network so migrations work without a published port.
 define run_migrate
 	$(call require_env_file)
-	@set -a && . ./config/.env && set +a; \
-	i=0; \
-	while [ $$i -lt 30 ]; do \
-		if (echo > /dev/tcp/127.0.0.1/$${POSTGRES_PORT}) >/dev/null 2>&1; then break; fi; \
-		i=$$((i + 1)); \
-		sleep 1; \
-	done; \
-	if [ $$i -ge 30 ]; then \
-		echo "$(RED)Postgres not reachable on port $${POSTGRES_PORT}. Is compose up?$(RESET)"; \
-		exit 1; \
-	fi; \
-	MIGRATE_URL="postgres://$${POSTGRES_USER}@localhost:$${POSTGRES_PORT}/$${POSTGRES_BASE}?sslmode=disable"; \
-	PGPASSWORD="$${POSTGRES_PASS}" $(MIGRATE_BIN) -path $(MIGRATIONS_DIR) -database "$${MIGRATE_URL}" $(1)
+	@set -e; . ./config/.env; \
+	postgres_id="$$($(COMPOSE_SERVICE) ps -q postgres)"; \
+	test -n "$$postgres_id" || { echo "Postgres is not running. Start it with make compose-services."; exit 1; }; \
+	PGPASSWORD="$$POSTGRES_PASS" $(DOCKER) run --rm -i --network "container:$$postgres_id" -e PGPASSWORD \
+		-v "$(CURDIR)/$(MIGRATIONS_DIR):/migrations:ro" migrate/migrate:$(MIGRATE_VERSION) \
+		-path /migrations -database "postgres://$$POSTGRES_USER@127.0.0.1:$$POSTGRES_PORT/$$POSTGRES_BASE?sslmode=disable" $(1)
 endef
 
 # $(1) name  $(2) binary  $(3) version args (empty = do not run)
@@ -340,7 +332,7 @@ migrate-up: ## Run migrations and configure backend and mailer logins
 	$(call run_migrate,up)
 	@set -a && . ./config/.env && set +a; \
 	printf '%s\n' '\getenv app_password POSTGRES_APP_PASS' '\getenv mailer_password POSTGRES_MAILER_PASS' "SELECT format('ALTER ROLE dataset_app LOGIN PASSWORD %L', :'app_password') \gexec" "SELECT format('ALTER ROLE dataset_mailer LOGIN PASSWORD %L', :'mailer_password') \gexec" | \
-	$(DOCKER) exec -i -e POSTGRES_APP_PASS -e POSTGRES_MAILER_PASS dataset_postgres psql -X -q --single-transaction -v ON_ERROR_STOP=1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_BASE}" -p "$${POSTGRES_PORT}"
+	$(COMPOSE_SERVICE) exec -T -e POSTGRES_APP_PASS -e POSTGRES_MAILER_PASS postgres psql -X -q --single-transaction -v ON_ERROR_STOP=1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_BASE}" -p "$${POSTGRES_PORT}"
 	@echo "$(GREEN)✅ Migrations and database logins configured!$(RESET)"
 	@echo
 

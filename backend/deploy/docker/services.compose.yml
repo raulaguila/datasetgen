@@ -85,6 +85,7 @@ services:
       - ${BACKUP_DIR:-backup_volume}:/backups
       - files_volume:/files:ro
       - ./backup.sh:/backup.sh:ro
+      - ../db/migrations:/migrations:ro
     # Unhealthy once the last verified backup is over 26 h old: a failing backup shows in docker ps.
     healthcheck:
       test: [ "CMD-SHELL", "find /backups/.last-ok -mmin -1560 | grep -q ." ]

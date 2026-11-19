@@ -1,6 +1,6 @@
 #!/bin/sh
 # Daily backup of the database and the attached files, run by the backup container.
-#   backup.sh loop    back up now, then once a day (the container's command)
+#   backup.sh loop    wait for migrations, then back up immediately and once a day
 #   backup.sh once    back up now
 #   backup.sh verify  restore the newest dump into a scratch database and check the newest files archive
 # Each backup is verified the same way: a dump that does not restore is reported as failed.
@@ -11,6 +11,15 @@ export PGOPTIONS='-c client_min_messages=warning'
 DIR=/backups
 CHECK_DB="${POSTGRES_BASE}_restore_check"
 pg() { "$@" -h postgres -p "$POSTGRES_PORT" -U "$POSTGRES_USER"; }
+
+migrations_ready() {
+	pg psql -XqtA -v ON_ERROR_STOP=1 -v target="$1" -d "$POSTGRES_BASE" <<'SQL' | grep -qx t
+SELECT to_regclass('public.schema_migrations') IS NOT NULL AS initialized \gset
+\if :initialized
+SELECT version >= :'target'::bigint AND NOT dirty FROM public.schema_migrations;
+\endif
+SQL
+}
 
 verify() {
 	dump=$(ls -1 "$DIR"/db-*.dump 2>/dev/null | sort | tail -n 1)
@@ -57,6 +66,14 @@ case "${1:-loop}" in
 	once) once ;;
 	verify) verify ;;
 	loop)
+		# The sequential migration filenames have zero-padded version numbers.
+		for migration in /migrations/*.up.sql; do
+			[ -f "$migration" ] || { echo "backup: no migrations found in /migrations" >&2; exit 1; }
+			latest=${migration##*/}
+		done
+		target=${latest%%_*}
+		echo "backup: waiting for database migration $target to finish"
+		until migrations_ready "$target"; do sleep 5; done
 		while true; do
 			once
 			sleep 86400
