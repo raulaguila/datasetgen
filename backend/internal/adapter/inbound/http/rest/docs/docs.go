@@ -965,65 +965,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/path/{owner}/{slug}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "An old address (before a rename, transfer or username change) answers the collection too; compare owner and slug to move to the current one.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Collections"
-                ],
-                "summary": "Get a collection by its address, /\u003cowner\u003e/\u003cslug\u003e, with its schema",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Owner's username",
-                        "name": "owner",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Collection slug",
-                        "name": "slug",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/collection.collectionDTO"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            }
-        },
         "/v1/collections/trash": {
             "get": {
                 "security": [
@@ -1110,7 +1051,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}": {
+        "/v1/collections/{owner}/{slug}": {
             "get": {
                 "security": [
                     {
@@ -1127,8 +1068,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -1194,8 +1142,15 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -1246,7 +1201,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/audit": {
+        "/v1/collections/{owner}/{slug}/audit": {
             "get": {
                 "security": [
                     {
@@ -1263,8 +1218,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -1358,7 +1320,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/automations": {
+        "/v1/collections/{owner}/{slug}/automations": {
             "get": {
                 "security": [
                     {
@@ -1375,8 +1337,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -1424,8 +1393,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -1455,7 +1431,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/automations/{autoId}": {
+        "/v1/collections/{owner}/{slug}/automations/{autoId}": {
             "put": {
                 "security": [
                     {
@@ -1475,8 +1451,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -1531,8 +1514,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -1557,7 +1547,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/automations/{autoId}/run": {
+        "/v1/collections/{owner}/{slug}/automations/{autoId}/run": {
             "post": {
                 "security": [
                     {
@@ -1574,8 +1564,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -1603,7 +1600,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/dashboard": {
+        "/v1/collections/{owner}/{slug}/dashboard": {
             "get": {
                 "security": [
                     {
@@ -1620,8 +1617,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -1659,8 +1663,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -1681,7 +1692,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/duplicate": {
+        "/v1/collections/{owner}/{slug}/duplicate": {
             "post": {
                 "security": [
                     {
@@ -1702,8 +1713,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -1757,7 +1775,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/files": {
+        "/v1/collections/{owner}/{slug}/files": {
             "post": {
                 "security": [
                     {
@@ -1778,8 +1796,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -1801,7 +1826,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/keys": {
+        "/v1/collections/{owner}/{slug}/keys": {
             "get": {
                 "security": [
                     {
@@ -1819,8 +1844,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -1855,7 +1887,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/keys/{keyId}": {
+        "/v1/collections/{owner}/{slug}/keys/{keyId}": {
             "delete": {
                 "security": [
                     {
@@ -1870,8 +1902,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -1896,7 +1935,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/leave": {
+        "/v1/collections/{owner}/{slug}/leave": {
             "post": {
                 "security": [
                     {
@@ -1910,8 +1949,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -1947,7 +1993,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/mcp-calls": {
+        "/v1/collections/{owner}/{slug}/mcp-calls": {
             "get": {
                 "security": [
                     {
@@ -1964,8 +2010,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -1994,7 +2047,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/mcp-tools": {
+        "/v1/collections/{owner}/{slug}/mcp-tools": {
             "get": {
                 "security": [
                     {
@@ -2011,8 +2064,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -2060,8 +2120,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -2097,7 +2164,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/mcp-tools/test": {
+        "/v1/collections/{owner}/{slug}/mcp-tools/test": {
             "post": {
                 "security": [
                     {
@@ -2118,8 +2185,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -2149,7 +2223,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/mcp-tools/{toolId}": {
+        "/v1/collections/{owner}/{slug}/mcp-tools/{toolId}": {
             "put": {
                 "security": [
                     {
@@ -2169,8 +2243,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -2225,8 +2306,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -2251,7 +2339,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/members": {
+        "/v1/collections/{owner}/{slug}/members": {
             "get": {
                 "security": [
                     {
@@ -2268,8 +2356,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -2334,8 +2429,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -2395,7 +2497,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/members/{userId}": {
+        "/v1/collections/{owner}/{slug}/members/{userId}": {
             "delete": {
                 "security": [
                     {
@@ -2409,8 +2511,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -2480,8 +2589,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -2545,7 +2661,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/quality": {
+        "/v1/collections/{owner}/{slug}/quality": {
             "get": {
                 "security": [
                     {
@@ -2562,8 +2678,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -2617,8 +2740,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -2657,7 +2787,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/quality/delete-invalid": {
+        "/v1/collections/{owner}/{slug}/quality/delete-invalid": {
             "post": {
                 "security": [
                     {
@@ -2675,8 +2805,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -2721,7 +2858,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/quality/fix": {
+        "/v1/collections/{owner}/{slug}/quality/fix": {
             "post": {
                 "security": [
                     {
@@ -2742,8 +2879,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -2797,7 +2941,594 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/schema-versions": {
+        "/v1/collections/{owner}/{slug}/records": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Each item's data is a preview: only its top-level strings, numbers, booleans and lists of strings (first 10), strings cut to 120 characters. GET /v1/records/{id} returns the full data.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Records"
+                ],
+                "summary": "List the records of one collection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page, up to 100",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Text anywhere in the record JSON",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "created_at",
+                        "description": "Sort field",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order",
+                        "name": "order",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "UTC",
+                        "description": "IANA time zone for {'today': n} dates",
+                        "name": "tz",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Rules as JSON: {'any': false, 'rules': [{'field': 'price', 'op': 'gt', 'value': 10}]} with double quotes; ops eq, neq, contains, not_contains, starts_with, gt, gte, lt, lte, between ([from, to]), empty, not_empty, in, not_in, has, has_any (lists take a list); a date value is YYYY-MM-DD or {'today': n} (days from today in tz) and matches date-times by day; fields $created_at and $updated_at are the record's dates; lookups and rollups filter too; any joins them by OR; groups (one level) bracket rules: {'any': true, 'groups': [{'rules': [...]}, {'rules': [...]}]}",
+                        "name": "where",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "JSON object of top-level fields and exact values, up to 10, such as {'category': 'trigger'} with double quotes",
+                        "name": "filter",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "items": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/record.recordDTO"
+                                    }
+                                },
+                                "pagination": {
+                                    "$ref": "#/definitions/mapper.PaginationDTO"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Records"
+                ],
+                "summary": "Create a record; data must match the collection schema (VALIDATION_FAILED lists the issues in details)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/record.createDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/record.recordDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/collections/{owner}/{slug}/records/aggregate": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Records"
+                ],
+                "summary": "Count the selected records, by a field (group) or all together, with the sum, average, least and greatest of numeric fields (sum, comma separated, up to 5)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field to group by (up to 100 groups, largest first)",
+                        "name": "group",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Numeric fields, comma separated",
+                        "name": "sum",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Rules as JSON, as in the list",
+                        "name": "where",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "items": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/record.groupDTO"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/collections/{owner}/{slug}/records/export": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "JSON Lines holds one record's data per line. \"collection\" is JSON Lines whose first line is {\"$collection\":{name, description, icon, schema}}: the whole collection, which the new-collection page recreates in one go. CSV has one column per field, in the form's order, then any other keys; lists and objects are written as JSON. Streamed, any number of records; CSV columns past the form come from up to 1 000 keys.",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "Records"
+                ],
+                "summary": "Download every record of a collection as JSON Lines or CSV",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "jsonl",
+                            "csv",
+                            "collection"
+                        ],
+                        "type": "string",
+                        "default": "jsonl",
+                        "description": "File format",
+                        "name": "format",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Only records that match the current schema",
+                        "name": "valid",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/collections/{owner}/{slug}/records/import": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Up to 5000 records within the body limit; clients send a large file in batches. With dry_run nothing is written. With invalid records and no skip_invalid, none are written. With upsert_key (a unique field) a row whose value a record already holds updates that record.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Records"
+                ],
+                "summary": "Check a batch of records against the schema and add them; editors and owners",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Batch",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/record.importDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/record.importResultDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/collections/{owner}/{slug}/records/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "How many of the selected records fill each field, the range of numbers and dates, a count per date bucket and the commonest values. Viewer or above.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Records"
+                ],
+                "summary": "Profile records field by field",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Rules as JSON, as in the list",
+                        "name": "where",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Text search, as in the list",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Fields to count filled, comma separated",
+                        "name": "filled",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Numeric fields: min, max, avg, sum",
+                        "name": "numbers",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Date fields: first, last and a series",
+                        "name": "dates",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Fields to list the commonest values of (8 each)",
+                        "name": "values",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Series bucket: day, week, month (default) or year",
+                        "name": "bucket",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "fields": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "$ref": "#/definitions/record.fieldStatsDTO"
+                                    }
+                                },
+                                "total": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/collections/{owner}/{slug}/schema-versions": {
             "get": {
                 "security": [
                     {
@@ -2814,8 +3545,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -2838,7 +3576,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/shares": {
+        "/v1/collections/{owner}/{slug}/shares": {
             "get": {
                 "security": [
                     {
@@ -2855,8 +3593,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -2909,8 +3654,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -2954,7 +3706,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/shares/{shareId}": {
+        "/v1/collections/{owner}/{slug}/shares/{shareId}": {
             "delete": {
                 "security": [
                     {
@@ -2968,8 +3720,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -2994,7 +3753,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/stats": {
+        "/v1/collections/{owner}/{slug}/stats": {
             "get": {
                 "security": [
                     {
@@ -3011,8 +3770,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -3058,7 +3824,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/transfer": {
+        "/v1/collections/{owner}/{slug}/transfer": {
             "post": {
                 "security": [
                     {
@@ -3079,8 +3845,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -3128,7 +3901,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/trash": {
+        "/v1/collections/{owner}/{slug}/trash": {
             "get": {
                 "security": [
                     {
@@ -3145,8 +3918,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -3169,7 +3949,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/trash/purge": {
+        "/v1/collections/{owner}/{slug}/trash/purge": {
             "post": {
                 "security": [
                     {
@@ -3190,8 +3970,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -3214,7 +4001,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/trash/restore": {
+        "/v1/collections/{owner}/{slug}/trash/restore": {
             "post": {
                 "security": [
                     {
@@ -3235,8 +4022,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -3260,7 +4054,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/views": {
+        "/v1/collections/{owner}/{slug}/views": {
             "get": {
                 "security": [
                     {
@@ -3277,8 +4071,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -3319,8 +4120,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -3344,7 +4152,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/views/{viewId}": {
+        "/v1/collections/{owner}/{slug}/views/{viewId}": {
             "delete": {
                 "security": [
                     {
@@ -3358,8 +4166,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -3378,7 +4193,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/webhooks": {
+        "/v1/collections/{owner}/{slug}/webhooks": {
             "get": {
                 "security": [
                     {
@@ -3395,8 +4210,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     }
@@ -3438,8 +4260,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -3469,7 +4298,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/webhooks/{hookId}": {
+        "/v1/collections/{owner}/{slug}/webhooks/{hookId}": {
             "delete": {
                 "security": [
                     {
@@ -3483,8 +4312,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -3522,8 +4358,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -3566,7 +4409,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/webhooks/{hookId}/deliveries": {
+        "/v1/collections/{owner}/{slug}/webhooks/{hookId}/deliveries": {
             "get": {
                 "security": [
                     {
@@ -3583,8 +4426,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -3620,7 +4470,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/webhooks/{hookId}/deliveries/{deliveryId}/redeliver": {
+        "/v1/collections/{owner}/{slug}/webhooks/{hookId}/deliveries/{deliveryId}/redeliver": {
             "post": {
                 "security": [
                     {
@@ -3637,8 +4487,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -3673,7 +4530,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/collections/{id}/webhooks/{hookId}/test": {
+        "/v1/collections/{owner}/{slug}/webhooks/{hookId}/test": {
             "post": {
                 "security": [
                     {
@@ -3690,8 +4547,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Collection ID",
-                        "name": "id",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
                         "in": "path",
                         "required": true
                     },
@@ -5342,275 +6206,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/records": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Each item's data is a preview: only its top-level strings, numbers, booleans and lists of strings (first 10), strings cut to 120 characters. GET /v1/records/{id} returns the full data.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Records"
-                ],
-                "summary": "List the records of one collection",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Collection ID",
-                        "name": "collection_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "Items per page, up to 100",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Text anywhere in the record JSON",
-                        "name": "search",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "default": "created_at",
-                        "description": "Sort field",
-                        "name": "sort",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "default": "desc",
-                        "description": "Sort order",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "default": "UTC",
-                        "description": "IANA time zone for {'today': n} dates",
-                        "name": "tz",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Rules as JSON: {'any': false, 'rules': [{'field': 'price', 'op': 'gt', 'value': 10}]} with double quotes; ops eq, neq, contains, not_contains, starts_with, gt, gte, lt, lte, between ([from, to]), empty, not_empty, in, not_in, has, has_any (lists take a list); a date value is YYYY-MM-DD or {'today': n} (days from today in tz) and matches date-times by day; fields $created_at and $updated_at are the record's dates; lookups and rollups filter too; any joins them by OR; groups (one level) bracket rules: {'any': true, 'groups': [{'rules': [...]}, {'rules': [...]}]}",
-                        "name": "where",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "JSON object of top-level fields and exact values, up to 10, such as {'category': 'trigger'} with double quotes",
-                        "name": "filter",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "items": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/definitions/record.recordDTO"
-                                    }
-                                },
-                                "pagination": {
-                                    "$ref": "#/definitions/mapper.PaginationDTO"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Records"
-                ],
-                "summary": "Create a record; data must match the collection schema (VALIDATION_FAILED lists the issues in details)",
-                "parameters": [
-                    {
-                        "description": "Request",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/record.createDTO"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/record.recordDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/records/aggregate": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Records"
-                ],
-                "summary": "Count the selected records, by a field (group) or all together, with the sum, average, least and greatest of numeric fields (sum, comma separated, up to 5)",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Collection ID",
-                        "name": "collection_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Field to group by (up to 100 groups, largest first)",
-                        "name": "group",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Numeric fields, comma separated",
-                        "name": "sum",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Rules as JSON, as in the list",
-                        "name": "where",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "items": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/definitions/record.groupDTO"
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            }
-        },
         "/v1/records/bulk-update": {
             "post": {
                 "security": [
@@ -5714,268 +6309,6 @@ const docTemplate = `{
                     },
                     "429": {
                         "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/records/export": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "JSON Lines holds one record's data per line. \"collection\" is JSON Lines whose first line is {\"$collection\":{name, description, icon, schema}}: the whole collection, which the new-collection page recreates in one go. CSV has one column per field, in the form's order, then any other keys; lists and objects are written as JSON. Streamed, any number of records; CSV columns past the form come from up to 1 000 keys.",
-                "produces": [
-                    "text/plain"
-                ],
-                "tags": [
-                    "Records"
-                ],
-                "summary": "Download every record of a collection as JSON Lines or CSV",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Collection ID",
-                        "name": "collection_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "enum": [
-                            "jsonl",
-                            "csv",
-                            "collection"
-                        ],
-                        "type": "string",
-                        "default": "jsonl",
-                        "description": "File format",
-                        "name": "format",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Only records that match the current schema",
-                        "name": "valid",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/records/import": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Up to 5000 records within the body limit; clients send a large file in batches. With dry_run nothing is written. With invalid records and no skip_invalid, none are written. With upsert_key (a unique field) a row whose value a record already holds updates that record.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Records"
-                ],
-                "summary": "Check a batch of records against the schema and add them; editors and owners",
-                "parameters": [
-                    {
-                        "description": "Batch",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/record.importDTO"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/record.importResultDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "413": {
-                        "description": "Request Entity Too Large",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "429": {
-                        "description": "Too Many Requests",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/records/stats": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "How many of the selected records fill each field, the range of numbers and dates, a count per date bucket and the commonest values. Viewer or above.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Records"
-                ],
-                "summary": "Profile records field by field",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Collection ID",
-                        "name": "collection_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Rules as JSON, as in the list",
-                        "name": "where",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Text search, as in the list",
-                        "name": "search",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Fields to count filled, comma separated",
-                        "name": "filled",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Numeric fields: min, max, avg, sum",
-                        "name": "numbers",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Date fields: first, last and a series",
-                        "name": "dates",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Fields to list the commonest values of (8 each)",
-                        "name": "values",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Series bucket: day, week, month (default) or year",
-                        "name": "bucket",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "fields": {
-                                    "type": "object",
-                                    "additionalProperties": {
-                                        "$ref": "#/definitions/record.fieldStatsDTO"
-                                    }
-                                },
-                                "total": {
-                                    "type": "integer"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/mapper.errorBody"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/mapper.errorBody"
                         }
@@ -8105,9 +8438,6 @@ const docTemplate = `{
         "record.createDTO": {
             "type": "object",
             "properties": {
-                "collection_id": {
-                    "type": "string"
-                },
                 "data": {
                     "type": "object"
                 }
@@ -8220,9 +8550,6 @@ const docTemplate = `{
             "properties": {
                 "batch_key": {
                     "description": "BatchKey, chosen per batch (up to 100 characters), makes a retry safe: a key saved before returns that result and saves nothing again.",
-                    "type": "string"
-                },
-                "collection_id": {
                     "type": "string"
                 },
                 "dry_run": {

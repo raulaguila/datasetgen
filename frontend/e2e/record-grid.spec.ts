@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { formAlert, guestPage, newCollection, collectionIdOf, collectionAt } from "./helpers";
+import { formAlert, guestPage, newCollection, collectionIdOf, collectionAt, colOf, pageOf } from "./helpers";
 
 const api = (page: Page, path: string, data: unknown) => page.request.post(`/api/proxy${path}`, { data });
 
@@ -19,7 +19,7 @@ test("conditions, groups, inline edit and the board", async ({ page }) => {
   expect(made.ok()).toBeTruthy();
   const id = (await made.json()).id as string;
   for (const [title, status, valor] of [["Alfa", "novo", 10], ["Beta", "novo", 30], ["Gama", "feito", 5]] as const) {
-    expect((await api(page, "/v1/records", { collection_id: id, data: { title, status, valor } })).ok()).toBeTruthy();
+    expect((await api(page, `${await colOf(page, id)}/records`, { data: { title, status, valor } })).ok()).toBeTruthy();
   }
   await page.goto(`/collections/${id}`);
   await expect(page.locator("tbody tr")).toHaveCount(3);
@@ -115,10 +115,10 @@ test("share links: a public form and a read-only list", async ({ page, browser }
 
   // A private field stays off both links, and the list stops searching.
   const colId = await collectionIdOf(page, records);
-  const col = await (await page.request.get(`/api/proxy/v1/collections/${colId}`)).json();
+  const col = await (await page.request.get(`/api/proxy${await colOf(page, colId)}`)).json();
   const schema = { ...col.schema, properties: { ...col.schema.properties, nota: { type: "string", title: "Nota interna", "x-private": true } } };
-  expect((await page.request.patch(`/api/proxy/v1/collections/${colId}`, { data: { schema } })).ok()).toBeTruthy();
-  await api(page, "/v1/records", { collection_id: colId, data: { title: "Com nota", nota: "segredo" } });
+  expect((await page.request.patch(`/api/proxy${await colOf(page, colId)}`, { data: { schema } })).ok()).toBeTruthy();
+  await api(page, `${await colOf(page, colId)}/records`, { data: { title: "Com nota", nota: "segredo" } });
   await guest.reload();
   await expect(guest.getByRole("cell", { name: "Com nota" })).toBeVisible();
   await expect(guest.getByText("segredo")).toHaveCount(0);
@@ -145,7 +145,7 @@ test("several references and the records linked to one", async ({ page }) => {
   const tags = await api(page, "/v1/collections", { name: `tags-${Date.now()}`, schema: { type: "object", properties: { nome: { type: "string", title: "Nome" } } } });
   const tagsId = (await tags.json()).id as string;
   const ids: string[] = [];
-  for (const nome of ["Urgente", "Casa"]) ids.push((await (await api(page, "/v1/records", { collection_id: tagsId, data: { nome } })).json()).id);
+  for (const nome of ["Urgente", "Casa"]) ids.push((await (await api(page, `${await colOf(page, tagsId)}/records`, { data: { nome } })).json()).id);
   const posts = await api(page, "/v1/collections", {
     name: `posts-${Date.now()}`,
     schema: { type: "object", required: ["titulo"], properties: {
@@ -155,7 +155,7 @@ test("several references and the records linked to one", async ({ page }) => {
   });
   const postsId = (await posts.json()).id as string;
 
-  await page.goto(`/records/new?collection=${postsId}`);
+  await page.goto(`${await pageOf(page, postsId)}/r/new`);
   await page.locator("#rec_titulo").fill("Consertar a pia");
   // The search stays open after a pick, for the next one.
   await page.getByRole("button", { name: /Adicionar registro/ }).click();
@@ -202,8 +202,8 @@ test("automations act on matching records", async ({ page }) => {
   await form.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByRole("list", { name: "Automações" })).toContainText("Marcar urgentes");
 
-  const hot = (await (await api(page, "/v1/records", { collection_id: id, data: { titulo: "Quente", prio: 9 } })).json()).id as string;
-  const cold = (await (await api(page, "/v1/records", { collection_id: id, data: { titulo: "Frio", prio: 1 } })).json()).id as string;
+  const hot = (await (await api(page, `${await colOf(page, id)}/records`, { data: { titulo: "Quente", prio: 9 } })).json()).id as string;
+  const cold = (await (await api(page, `${await colOf(page, id)}/records`, { data: { titulo: "Frio", prio: 1 } })).json()).id as string;
   // The job worker polls every 2 seconds.
   await expect.poll(async () => (await (await page.request.get(`/api/proxy/v1/records/${hot}`)).json()).data.status, { timeout: 15_000 }).toBe("urgente");
   expect((await (await page.request.get(`/api/proxy/v1/records/${cold}`)).json()).data.status).toBeUndefined();
@@ -230,14 +230,14 @@ test("auto fields, comments and an upsert import", async ({ page }) => {
   });
   const id = (await made.json()).id as string;
 
-  await page.goto(`/records/new?collection=${id}`);
+  await page.goto(`${await pageOf(page, id)}/r/new`);
   await expect(page.locator("#rec_total")).toHaveAttribute("readonly", "");
   await page.locator("#rec_codigo").fill("A1");
   await page.locator("#rec_preco").fill("2.5");
   await page.locator("#rec_qtd").fill("4");
   await page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true }).click();
   await expect(page).toHaveURL(await collectionAt(page, id));
-  const list = await (await page.request.get(`/api/proxy/v1/records?collection_id=${id}`)).json();
+  const list = await (await page.request.get(`/api/proxy${await colOf(page, id)}/records`)).json();
   const rec = list.items[0];
   expect(rec.data).toMatchObject({ num: 1, total: 10 });
   expect(typeof rec.data.autor).toBe("string");
@@ -265,7 +265,7 @@ test("auto fields, comments and an upsert import", async ({ page }) => {
   await expect(dialog.getByRole("status")).toContainText("2 registros válidos, 0 com problema.");
   await dialog.getByRole("button", { name: "Importar 2" }).click();
   await expect(page.getByText("1 criados, 1 atualizados")).toBeVisible();
-  const after = await (await page.request.get(`/api/proxy/v1/records?collection_id=${id}&sort=created_at&order=asc`)).json();
+  const after = await (await page.request.get(`/api/proxy${await colOf(page, id)}/records?sort=created_at&order=asc`)).json();
   expect(after.items.map((r: { data: Record<string, unknown> }) => [r.data.codigo, r.data.num, r.data.total])).toEqual([["A1", 1, 9], ["B2", 2, 2]]);
 });
 
@@ -286,7 +286,7 @@ test("a JSON Lines upsert keeps adjacent large integer keys distinct", async ({ 
   await dialog.locator("#import-file").setInputFiles({ name: "items.jsonl", mimeType: "application/x-ndjson", buffer: Buffer.from(file) });
   await dialog.getByRole("button", { name: "Importar 3" }).click();
   await expect(page.getByText("2 criados, 1 atualizados")).toBeVisible();
-  const exported = await page.request.get(`/api/proxy/v1/records/export?collection_id=${id}&format=jsonl`);
+  const exported = await page.request.get(`/api/proxy${await colOf(page, id)}/records/export?format=jsonl`);
   expect(exported.ok()).toBe(true);
   const text = await exported.text();
   expect(text).toContain("9007199254740992");
@@ -307,7 +307,7 @@ test("several files in one field", async ({ page }) => {
   // A 1x1 PNG.
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
 
-  await page.goto(`/records/new?collection=${id}`);
+  await page.goto(`${await pageOf(page, id)}/r/new`);
   await page.locator("#rec_titulo").fill("Viagem");
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "Adicionar arquivo" }).click();
@@ -333,8 +333,8 @@ test("several files in one field", async ({ page }) => {
 test("a list of objects with a reference in each item", async ({ page }) => {
   await page.goto("/");
   const wireds = (await (await api(page, "/v1/collections", { name: `wireds-${Date.now()}`, schema: { type: "object", properties: { nome: { type: "string", title: "Nome" } } } })).json()).id as string;
-  const andar = (await (await api(page, "/v1/records", { collection_id: wireds, data: { nome: "Ao andar" } })).json()).id as string;
-  await api(page, "/v1/records", { collection_id: wireds, data: { nome: "Abrir porta" } });
+  const andar = (await (await api(page, `${await colOf(page, wireds)}/records`, { data: { nome: "Ao andar" } })).json()).id as string;
+  await api(page, `${await colOf(page, wireds)}/records`, { data: { nome: "Abrir porta" } });
   const exemplos = (await (await api(page, "/v1/collections", {
     name: `exemplos-${Date.now()}`,
     schema: { type: "object", properties: {
@@ -350,7 +350,7 @@ test("a list of objects with a reference in each item", async ({ page }) => {
   await page.goto(`/collections/${exemplos}/fields`);
   await expect(page.getByRole("main")).toContainText(/Lista de objetos\s*· 2 subcampos/);
 
-  await page.goto(`/records/new?collection=${exemplos}`);
+  await page.goto(`${await pageOf(page, exemplos)}/r/new`);
   await page.locator("#rec_titulo").fill("Porta com senha");
   await page.getByRole("button", { name: "Adicionar item" }).click();
   await page.getByRole("button", { name: /Escolher registro/ }).first().click();

@@ -1,12 +1,13 @@
 "use client";
 
+import type { CollectionRef } from "@/lib/paths";
 import { useQuery } from "@tanstack/react-query";
 import { type FieldRow } from "@/components/field-builder";
 import { fieldFigure } from "@/components/format-figure";
 import { records } from "@/lib/api/endpoints";
 import { useI18n } from "@/lib/i18n/provider";
 
-type Selection = { collection_id: string; search?: string; filter?: string; where?: string };
+type Selection = { collection: CollectionRef; search?: string; filter?: string; where?: string };
 
 /** Numeric fields among these, up to the five the server sums. */
 export const numericOf = (rows: FieldRow[]) => rows.filter((r) => !r.advanced && (r.field.type === "number" || r.field.type === "integer")).slice(0, 5);
@@ -33,8 +34,8 @@ export function RecordGroups({ selection, group, fields, label, onPick }: {
   const num = useNumberFormat();
   const numeric = numericOf(fields);
   const q = useQuery({
-    queryKey: ["records", selection.collection_id, "groups", group.key, selection],
-    queryFn: ({ signal }) => records.aggregate({ ...selection, group: group.key, sum: numeric.map((f) => f.key).join(",") || undefined }, signal),
+    queryKey: ["records", selection.collection.id, "groups", group.key, selection.search, selection.filter, selection.where],
+    queryFn: ({ signal }) => records.aggregate(selection.collection, { search: selection.search, filter: selection.filter, where: selection.where, group: group.key, sum: numeric.map((f) => f.key).join(",") || undefined }, signal),
   });
   const items = q.data?.items ?? [];
   const max = Math.max(1, ...items.map((g) => g.count));

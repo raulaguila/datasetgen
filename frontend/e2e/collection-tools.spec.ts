@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { addField, dropKey, newCollection, atCollection, collectionIdOf } from "./helpers";
+import { addField, dropKey, newCollection, atCollection, collectionIdOf, colOf } from "./helpers";
 
 // CSV import, sort by a field, bulk edit, a saved view, the trash, an API key
 // used through the web address, and the field history.
@@ -73,10 +73,10 @@ test("a collection's tools: CSV, bulk edit, views, trash, API key, field history
   const secret = await page.locator("code").filter({ hasText: /^dsk_/ }).innerText();
   await page.goto(`${records}/integrations#keys`);
   await expect(page.getByText(`leitura-${name}`)).toBeVisible(); // the owner sees the key that reaches it
-  const res = await page.request.get(`/api/proxy/v1/records?collection_id=${collectionId}&page=1&limit=10`, { headers: { Authorization: `Bearer ${secret}`, Cookie: "" } });
+  const res = await page.request.get(`/api/proxy${await colOf(page, collectionId)}/records?page=1&limit=10`, { headers: { Authorization: `Bearer ${secret}`, Cookie: "" } });
   expect(res.status()).toBe(200);
   expect((await res.json()).pagination.total_items).toBe(3);
-  const write = await page.request.post("/api/proxy/v1/records", { headers: { "X-API-Key": secret, Cookie: "" }, data: { collection_id: collectionId, data: { title: "x" } } });
+  const write = await page.request.post(`/api/proxy${await colOf(page, collectionId)}/records`, { headers: { "X-API-Key": secret, Cookie: "" }, data: { data: { title: "x" } } });
   expect(write.status()).toBe(403);
   await dropKey(page, `leitura-${name}`);
 
@@ -138,12 +138,12 @@ test("reference and file fields", async ({ page }) => {
 // A unique value another record took after the delete: the restore asks for a new one.
 test("a restore picks a new unique value", async ({ page }) => {
   await page.goto("/");
-  const post = (path: string, data: unknown) => page.request.post(`/api/proxy/v1${path}`, { data });
+  const post = (path: string, data: unknown) => page.request.post(`/api/proxy${path}`, { data });
   const schema = { type: "object", properties: { cod: { type: "string", title: "Código", "x-unique": true } } };
-  const id = (await (await post("/collections", { name: `unico-${Date.now()}`, schema })).json()).id as string;
-  const old = (await (await post("/records", { collection_id: id, data: { cod: "A1" } })).json()).id as string;
-  expect((await post("/records/delete", { ids: [old] })).ok()).toBeTruthy();
-  expect((await post("/records", { collection_id: id, data: { cod: "A1" } })).ok()).toBeTruthy();
+  const id = (await (await post("/v1/collections", { name: `unico-${Date.now()}`, schema })).json()).id as string;
+  const old = (await (await post(`${await colOf(page, id)}/records`, { data: { cod: "A1" } })).json()).id as string;
+  expect((await post("/v1/records/delete", { ids: [old] })).ok()).toBeTruthy();
+  expect((await post(`${await colOf(page, id)}/records`, { data: { cod: "A1" } })).ok()).toBeTruthy();
 
   await page.goto(`/collections/${id}/trash`);
   await page.getByRole("row").filter({ hasText: "A1" }).getByRole("button", { name: "Restaurar" }).click();

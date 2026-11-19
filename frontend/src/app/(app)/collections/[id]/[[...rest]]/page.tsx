@@ -9,5 +9,5 @@ import { collectionPath } from "@/lib/paths";
 export default function CollectionByIDPage() {
   const { id, rest } = useParams<{ id: string; rest?: string[] }>();
   const section = rest?.join("/");
-  return <AddressRedirect queryKey={["collection", id, section]} find={async () => collectionPath(await collections.get(id), section)} />;
+  return <AddressRedirect queryKey={["collection", id, section]} find={async () => collectionPath(await collections.at(id), section)} />;
 }

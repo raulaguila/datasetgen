@@ -44,21 +44,21 @@ export function useTextLinks(record: DataRecord | undefined): Map<string, string
     staleTime: 30_000,
     enabled: targets.length > 0,
   });
-  const ids = targets.length ? (list.data?.items ?? []).map((c) => c.id) : [];
-  const metas = useQueries({ queries: ids.map((id) => ({ queryKey: ["collections", "detail", id], queryFn: () => collections.get(id), staleTime: 60_000 })) });
+  const items = targets.length ? (list.data?.items ?? []) : [];
+  const metas = useQueries({ queries: items.map((c) => ({ queryKey: ["collections", "detail", c.id], queryFn: () => collections.get(c), staleTime: 60_000 })) });
   // Each collection's link fields, one lookup per field.
   const lookups = metas.flatMap((m) => {
     const c = m.data;
     const props = (c?.schema?.properties ?? {}) as Record<string, { format?: string }>;
-    return c ? Object.entries(props).filter(([, p]) => p?.format === "uri").map(([key]) => ({ collection: c.id, key })) : [];
+    return c ? Object.entries(props).filter(([, p]) => p?.format === "uri").map(([key]) => ({ collection: c, key })) : [];
   });
   const parts = chunks(targets);
   const found = useQueries({
     queries: lookups.map(({ collection, key }) => ({
-      queryKey: ["records", collection, "links", key, targets],
+      queryKey: ["records", collection.id, "links", key, targets],
       // shortcut: one page of 100 matches per field, raise if a text links to more records of one collection.
-      queryFn: ({ signal }: { signal: AbortSignal }) => records.list({
-        collection_id: collection, page: 1, limit: 100,
+      queryFn: ({ signal }: { signal: AbortSignal }) => records.list(collection, {
+        page: 1, limit: 100,
         where: JSON.stringify({ any: true, rules: parts.slice(0, 20).map((value) => ({ field: key, op: "in", value })) }),
       }, signal),
       staleTime: 60_000,

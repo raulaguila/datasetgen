@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { dropKey, newCollection, collectionIdOf } from "./helpers";
+import { dropKey, newCollection, collectionIdOf, colOf } from "./helpers";
 
 // An owner publishes an MCP tool on the Integrations page; an assistant with a
 // key to the collection sees it and calls it through the web address.
@@ -9,7 +9,7 @@ test("an owner publishes an MCP tool and an assistant calls it", async ({ page }
   await page.goto(records);
   const collectionId = await collectionIdOf(page, records);
   for (const title of ["Alfa", "Beta"]) {
-    const res = await page.request.post("/api/proxy/v1/records", { data: { collection_id: collectionId, data: { title, notes: `nota ${title}` } } });
+    const res = await page.request.post(`/api/proxy${await colOf(page, collectionId)}/records`, { data: { data: { title, notes: `nota ${title}` } } });
     expect(res.status()).toBe(201);
   }
 

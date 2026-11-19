@@ -125,7 +125,7 @@ function BulkFix({ collection, report, onDone, fieldLabel, issueText }: { collec
   const review = async (fix: Fix) => {
     setCounting(true);
     try {
-      const { count } = await collections.fix(collection.id, { ...fix, dry_run: true });
+      const { count } = await collections.fix(collection, { ...fix, dry_run: true });
       if (count === 0) toast.info(t("fix.none"));
       else setConfirm({ fix, count });
     } catch (err) {
@@ -215,8 +215,8 @@ function BulkFix({ collection, report, onDone, fieldLabel, issueText }: { collec
         confirmLabel={t(pending ? "fix.apply" : "common.delete")}
         onConfirm={async () => {
           try {
-            if (pending) after((await collections.fix(collection.id, pending.fix)).count, "fix.changed");
-            else after((await collections.deleteInvalid(collection.id)).count, "fix.deleted");
+            if (pending) after((await collections.fix(collection, pending.fix)).count, "fix.changed");
+            else after((await collections.deleteInvalid(collection)).count, "fix.deleted");
           } catch (err) {
             toast.error(errorMessage(err, "common.save_failed", t));
           }
@@ -232,7 +232,7 @@ function BulkFix({ collection, report, onDone, fieldLabel, issueText }: { collec
 function FieldHealth({ collection, report, fieldName }: { collection: Collection; report?: QualityReport; fieldName: (key: string) => string }) {
   const { t, locale } = useI18n();
   const rows = fieldsOf(collection.schema ?? null).filter((r) => !VIRTUAL_TYPES.includes(r.field.type));
-  const stats = useStats(collection.id, { any: false, rules: [] }, { filled: rows }, rows.length > 0);
+  const stats = useStats(collection, { any: false, rules: [] }, { filled: rows }, rows.length > 0);
   if (!rows.length || !stats.data) return null;
   const total = stats.data.total;
   const problems = new Map<string, number>();

@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/mapper"
+	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/pkg/apperror"
@@ -27,44 +28,49 @@ func New(integrations input.IntegrationService, tools input.ToolsService, record
 	return &Handler{integrations: integrations, tools: tools, records: records}
 }
 
-// CollectionRoutes mounts on /v1/collections before its /:id routes.
-func (h *Handler) CollectionRoutes(r fiber.Router) {
+// TrashRoutes mounts the deleted collections on /v1/collections, by id: a deleted
+// collection gave its address up.
+func (h *Handler) TrashRoutes(r fiber.Router) {
 	r.Get("/trash", h.TrashedCollections)
 	r.Post("/trash/:id/restore", h.RestoreCollection)
 	r.Delete("/trash/:id", h.PurgeCollection)
-	r.Get("/:id/keys", h.Keys)
-	r.Delete("/:id/keys/:keyId", h.DeleteKey)
-	r.Get("/:id/shares", h.Shares)
-	r.Post("/:id/shares", h.CreateShare)
-	r.Delete("/:id/shares/:shareId", h.DeleteShare)
-	r.Get("/:id/webhooks", h.Webhooks)
-	r.Post("/:id/webhooks", h.CreateWebhook)
-	r.Patch("/:id/webhooks/:hookId", h.UpdateWebhook)
-	r.Delete("/:id/webhooks/:hookId", h.DeleteWebhook)
-	r.Post("/:id/webhooks/:hookId/test", h.TestWebhook)
-	r.Get("/:id/webhooks/:hookId/deliveries", h.Deliveries)
-	r.Post("/:id/webhooks/:hookId/deliveries/:deliveryId/redeliver", h.Redeliver)
-	r.Get("/:id/automations", h.Automations)
-	r.Post("/:id/automations", h.CreateAutomation)
-	r.Put("/:id/automations/:autoId", h.UpdateAutomation)
-	r.Delete("/:id/automations/:autoId", h.DeleteAutomation)
-	r.Post("/:id/automations/:autoId/run", h.RunAutomation)
-	r.Get("/:id/mcp-tools", h.MCPTools)
-	r.Post("/:id/mcp-tools", h.CreateMCPTool)
-	r.Put("/:id/mcp-tools/:toolId", h.UpdateMCPTool)
-	r.Delete("/:id/mcp-tools/:toolId", h.DeleteMCPTool)
-	r.Post("/:id/mcp-tools/test", h.TestMCPTool)
-	r.Get("/:id/mcp-calls", h.MCPCalls)
-	r.Get("/:id/trash", h.TrashedRecords)
-	r.Post("/:id/trash/restore", h.RestoreRecords)
-	r.Post("/:id/trash/purge", h.PurgeRecords)
-	r.Get("/:id/schema-versions", h.SchemaVersions)
-	r.Get("/:id/dashboard", h.Dashboard)
-	r.Put("/:id/dashboard", h.SaveDashboard)
-	r.Get("/:id/views", h.Views)
-	r.Post("/:id/views", h.CreateView)
-	r.Delete("/:id/views/:viewId", h.DeleteView)
-	r.Post("/:id/files", h.Upload)
+}
+
+// CollectionRoutes mounts a collection's tools on /v1/collections/:owner/:slug.
+func (h *Handler) CollectionRoutes(at fiber.Router) {
+	at.Get("/keys", h.Keys)
+	at.Delete("/keys/:keyId", h.DeleteKey)
+	at.Get("/shares", h.Shares)
+	at.Post("/shares", h.CreateShare)
+	at.Delete("/shares/:shareId", h.DeleteShare)
+	at.Get("/webhooks", h.Webhooks)
+	at.Post("/webhooks", h.CreateWebhook)
+	at.Patch("/webhooks/:hookId", h.UpdateWebhook)
+	at.Delete("/webhooks/:hookId", h.DeleteWebhook)
+	at.Post("/webhooks/:hookId/test", h.TestWebhook)
+	at.Get("/webhooks/:hookId/deliveries", h.Deliveries)
+	at.Post("/webhooks/:hookId/deliveries/:deliveryId/redeliver", h.Redeliver)
+	at.Get("/automations", h.Automations)
+	at.Post("/automations", h.CreateAutomation)
+	at.Put("/automations/:autoId", h.UpdateAutomation)
+	at.Delete("/automations/:autoId", h.DeleteAutomation)
+	at.Post("/automations/:autoId/run", h.RunAutomation)
+	at.Get("/mcp-tools", h.MCPTools)
+	at.Post("/mcp-tools", h.CreateMCPTool)
+	at.Put("/mcp-tools/:toolId", h.UpdateMCPTool)
+	at.Delete("/mcp-tools/:toolId", h.DeleteMCPTool)
+	at.Post("/mcp-tools/test", h.TestMCPTool)
+	at.Get("/mcp-calls", h.MCPCalls)
+	at.Get("/trash", h.TrashedRecords)
+	at.Post("/trash/restore", h.RestoreRecords)
+	at.Post("/trash/purge", h.PurgeRecords)
+	at.Get("/schema-versions", h.SchemaVersions)
+	at.Get("/dashboard", h.Dashboard)
+	at.Put("/dashboard", h.SaveDashboard)
+	at.Get("/views", h.Views)
+	at.Post("/views", h.CreateView)
+	at.Delete("/views/:viewId", h.DeleteView)
+	at.Post("/files", h.Upload)
 }
 
 // MeRoutes mounts the caller's own API keys on /v1/me/keys.
@@ -130,14 +136,15 @@ func keyList(keys []domain.APIKey) fiber.Map {
 // @Description can_write is each key's access to this collection.
 // @Tags API keys
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]keyDTO}
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{id}/keys [get]
+// @Router /v1/collections/{owner}/{slug}/keys [get]
 func (h *Handler) Keys(c fiber.Ctx) error {
-	keys, err := h.integrations.Keys(c.Context(), c.Params("id"))
+	keys, err := h.integrations.Keys(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return fail(c, err)
 	}
@@ -147,14 +154,15 @@ func (h *Handler) Keys(c fiber.Ctx) error {
 // @Summary Take the collection out of an API key; owners
 // @Description The key keeps its other collections.
 // @Tags API keys
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param keyId path string true "Key ID"
 // @Security BearerAuth
 // @Success 204
 // @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{id}/keys/{keyId} [delete]
+// @Router /v1/collections/{owner}/{slug}/keys/{keyId} [delete]
 func (h *Handler) DeleteKey(c fiber.Ctx) error {
-	if err := h.integrations.DeleteKey(c.Context(), c.Params("id"), c.Params("keyId")); err != nil {
+	if err := h.integrations.DeleteKey(c.Context(), middleware.CollectionID(c), c.Params("keyId")); err != nil {
 		return fail(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -274,14 +282,15 @@ func toShareDTO(s domain.Share) shareDTO {
 // @Summary A collection's share links; owners
 // @Tags Share links
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]shareDTO}
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{id}/shares [get]
+// @Router /v1/collections/{owner}/{slug}/shares [get]
 func (h *Handler) Shares(c fiber.Ctx) error {
-	shares, err := h.integrations.Shares(c.Context(), c.Params("id"))
+	shares, err := h.integrations.Shares(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return fail(c, err)
 	}
@@ -296,13 +305,14 @@ func (h *Handler) Shares(c fiber.Ctx) error {
 // @Tags Share links
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body object{kind=string,expires_in_days=int} true "Link; expires_in_days 1 to 365, or 0 for no end"
 // @Security BearerAuth
 // @Success 201 {object} shareDTO
 // @Failure 400 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
-// @Router /v1/collections/{id}/shares [post]
+// @Router /v1/collections/{owner}/{slug}/shares [post]
 func (h *Handler) CreateShare(c fiber.Ctx) error {
 	var body struct {
 		Kind          string `json:"kind"`
@@ -311,7 +321,7 @@ func (h *Handler) CreateShare(c fiber.Ctx) error {
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	s, err := h.integrations.CreateShare(c.Context(), c.Params("id"), body.Kind, body.ExpiresInDays)
+	s, err := h.integrations.CreateShare(c.Context(), middleware.CollectionID(c), body.Kind, body.ExpiresInDays)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -320,14 +330,15 @@ func (h *Handler) CreateShare(c fiber.Ctx) error {
 
 // @Summary Delete a share link; owners
 // @Tags Share links
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param shareId path string true "Link ID"
 // @Security BearerAuth
 // @Success 204
 // @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{id}/shares/{shareId} [delete]
+// @Router /v1/collections/{owner}/{slug}/shares/{shareId} [delete]
 func (h *Handler) DeleteShare(c fiber.Ctx) error {
-	if err := h.integrations.DeleteShare(c.Context(), c.Params("id"), c.Params("shareId")); err != nil {
+	if err := h.integrations.DeleteShare(c.Context(), middleware.CollectionID(c), c.Params("shareId")); err != nil {
 		return fail(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -353,12 +364,13 @@ func toHookDTO(w domain.Webhook) webhookDTO {
 // @Summary A collection's webhooks; owners
 // @Tags Webhooks
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]webhookDTO}
-// @Router /v1/collections/{id}/webhooks [get]
+// @Router /v1/collections/{owner}/{slug}/webhooks [get]
 func (h *Handler) Webhooks(c fiber.Ctx) error {
-	hooks, err := h.integrations.Webhooks(c.Context(), c.Params("id"))
+	hooks, err := h.integrations.Webhooks(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return fail(c, err)
 	}
@@ -385,18 +397,19 @@ type newHookDTO struct {
 // @Tags Webhooks
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body createHookDTO true "Webhook"
 // @Security BearerAuth
 // @Success 201 {object} newHookDTO
 // @Failure 400 {object} mapper.errorBody
-// @Router /v1/collections/{id}/webhooks [post]
+// @Router /v1/collections/{owner}/{slug}/webhooks [post]
 func (h *Handler) CreateWebhook(c fiber.Ctx) error {
 	var body createHookDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	w, err := h.integrations.CreateWebhook(c.Context(), c.Params("id"), body.URL, body.Events)
+	w, err := h.integrations.CreateWebhook(c.Context(), middleware.CollectionID(c), body.URL, body.Events)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -415,20 +428,21 @@ type updateHookDTO struct {
 // @Tags Webhooks
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param hookId path string true "Webhook ID"
 // @Param body body updateHookDTO true "Webhook"
 // @Security BearerAuth
 // @Success 200 {object} webhookDTO
 // @Failure 400 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{id}/webhooks/{hookId} [patch]
+// @Router /v1/collections/{owner}/{slug}/webhooks/{hookId} [patch]
 func (h *Handler) UpdateWebhook(c fiber.Ctx) error {
 	var body updateHookDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	w, err := h.integrations.UpdateWebhook(c.Context(), c.Params("id"), c.Params("hookId"), body.URL, body.Events, body.Enabled)
+	w, err := h.integrations.UpdateWebhook(c.Context(), middleware.CollectionID(c), c.Params("hookId"), body.URL, body.Events, body.Enabled)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -437,13 +451,14 @@ func (h *Handler) UpdateWebhook(c fiber.Ctx) error {
 
 // @Summary Delete a webhook; owners
 // @Tags Webhooks
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param hookId path string true "Webhook ID"
 // @Security BearerAuth
 // @Success 204
-// @Router /v1/collections/{id}/webhooks/{hookId} [delete]
+// @Router /v1/collections/{owner}/{slug}/webhooks/{hookId} [delete]
 func (h *Handler) DeleteWebhook(c fiber.Ctx) error {
-	if err := h.integrations.DeleteWebhook(c.Context(), c.Params("id"), c.Params("hookId")); err != nil {
+	if err := h.integrations.DeleteWebhook(c.Context(), middleware.CollectionID(c), c.Params("hookId")); err != nil {
 		return fail(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -452,13 +467,14 @@ func (h *Handler) DeleteWebhook(c fiber.Ctx) error {
 // @Summary Send a ping to a webhook now; owners
 // @Tags Webhooks
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param hookId path string true "Webhook ID"
 // @Security BearerAuth
 // @Success 200 {object} webhookDTO "with the answer"
-// @Router /v1/collections/{id}/webhooks/{hookId}/test [post]
+// @Router /v1/collections/{owner}/{slug}/webhooks/{hookId}/test [post]
 func (h *Handler) TestWebhook(c fiber.Ctx) error {
-	w, err := h.integrations.TestWebhook(c.Context(), c.Params("id"), c.Params("hookId"))
+	w, err := h.integrations.TestWebhook(c.Context(), middleware.CollectionID(c), c.Params("hookId"))
 	if err != nil {
 		return fail(c, err)
 	}
@@ -484,12 +500,13 @@ type trashedRecordDTO struct {
 // @Summary The collection's deleted records, newest first (up to 200); editors
 // @Tags Trash
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]trashedRecordDTO}
-// @Router /v1/collections/{id}/trash [get]
+// @Router /v1/collections/{owner}/{slug}/trash [get]
 func (h *Handler) TrashedRecords(c fiber.Ctx) error {
-	items, err := h.tools.TrashedRecords(c.Context(), c.Params("id"))
+	items, err := h.tools.TrashedRecords(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return fail(c, err)
 	}
@@ -509,17 +526,18 @@ type countDTO struct {
 // @Tags Trash
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body restoreDTO true "Record ids (1 to 100); values, for one record, give its unique fields new values"
 // @Security BearerAuth
 // @Success 200 {object} countDTO
-// @Router /v1/collections/{id}/trash/restore [post]
+// @Router /v1/collections/{owner}/{slug}/trash/restore [post]
 func (h *Handler) RestoreRecords(c fiber.Ctx) error {
 	var body restoreDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	n, err := h.tools.RestoreRecords(c.Context(), c.Params("id"), body.IDs, body.Values)
+	n, err := h.tools.RestoreRecords(c.Context(), middleware.CollectionID(c), body.IDs, body.Values)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -531,11 +549,12 @@ func (h *Handler) RestoreRecords(c fiber.Ctx) error {
 // @Tags Trash
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body idsDTO false "Record ids (up to 100)"
 // @Security BearerAuth
 // @Success 200 {object} countDTO
-// @Router /v1/collections/{id}/trash/purge [post]
+// @Router /v1/collections/{owner}/{slug}/trash/purge [post]
 func (h *Handler) PurgeRecords(c fiber.Ctx) error {
 	var body idsDTO
 	if len(c.Body()) > 0 {
@@ -543,7 +562,7 @@ func (h *Handler) PurgeRecords(c fiber.Ctx) error {
 			return badBody(c)
 		}
 	}
-	n, err := h.tools.PurgeRecords(c.Context(), c.Params("id"), body.IDs)
+	n, err := h.tools.PurgeRecords(c.Context(), middleware.CollectionID(c), body.IDs)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -612,12 +631,13 @@ type schemaVersionDTO struct {
 // @Summary Earlier fields of the collection, newest first (up to 50); owners
 // @Tags Collections
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]schemaVersionDTO}
-// @Router /v1/collections/{id}/schema-versions [get]
+// @Router /v1/collections/{owner}/{slug}/schema-versions [get]
 func (h *Handler) SchemaVersions(c fiber.Ctx) error {
-	items, err := h.tools.SchemaVersions(c.Context(), c.Params("id"))
+	items, err := h.tools.SchemaVersions(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return fail(c, err)
 	}
@@ -644,12 +664,13 @@ func toViewDTO(v domain.SavedView) viewDTO {
 // @Summary The collection's dashboard widgets; members
 // @Tags Collections
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} object{widgets=[]object}
-// @Router /v1/collections/{id}/dashboard [get]
+// @Router /v1/collections/{owner}/{slug}/dashboard [get]
 func (h *Handler) Dashboard(c fiber.Ctx) error {
-	widgets, err := h.tools.Dashboard(c.Context(), c.Params("id"))
+	widgets, err := h.tools.Dashboard(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return fail(c, err)
 	}
@@ -663,17 +684,18 @@ type dashboardDTO struct {
 // @Summary Replace the collection's dashboard widgets (kinds count, sum, avg, min, max, bars, list); owners
 // @Tags Collections
 // @Accept json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body dashboardDTO true "Widgets"
 // @Security BearerAuth
 // @Success 204
-// @Router /v1/collections/{id}/dashboard [put]
+// @Router /v1/collections/{owner}/{slug}/dashboard [put]
 func (h *Handler) SaveDashboard(c fiber.Ctx) error {
 	var body dashboardDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	if err := h.tools.SaveDashboard(c.Context(), c.Params("id"), body.Widgets); err != nil {
+	if err := h.tools.SaveDashboard(c.Context(), middleware.CollectionID(c), body.Widgets); err != nil {
 		return fail(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -682,12 +704,13 @@ func (h *Handler) SaveDashboard(c fiber.Ctx) error {
 // @Summary The caller's saved views of the record list and the shared ones; viewers
 // @Tags Collections
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]viewDTO}
-// @Router /v1/collections/{id}/views [get]
+// @Router /v1/collections/{owner}/{slug}/views [get]
 func (h *Handler) Views(c fiber.Ctx) error {
-	items, err := h.tools.Views(c.Context(), c.Params("id"))
+	items, err := h.tools.Views(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return fail(c, err)
 	}
@@ -708,17 +731,18 @@ type createViewDTO struct {
 // @Tags Collections
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body createViewDTO true "View"
 // @Security BearerAuth
 // @Success 201 {object} viewDTO
-// @Router /v1/collections/{id}/views [post]
+// @Router /v1/collections/{owner}/{slug}/views [post]
 func (h *Handler) CreateView(c fiber.Ctx) error {
 	var body createViewDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	v, err := h.tools.CreateView(c.Context(), c.Params("id"), body.Name, body.Query, body.Shared)
+	v, err := h.tools.CreateView(c.Context(), middleware.CollectionID(c), body.Name, body.Query, body.Shared)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -727,13 +751,14 @@ func (h *Handler) CreateView(c fiber.Ctx) error {
 
 // @Summary Delete one of the caller's saved views
 // @Tags Collections
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param viewId path string true "View ID"
 // @Security BearerAuth
 // @Success 204
-// @Router /v1/collections/{id}/views/{viewId} [delete]
+// @Router /v1/collections/{owner}/{slug}/views/{viewId} [delete]
 func (h *Handler) DeleteView(c fiber.Ctx) error {
-	if err := h.tools.DeleteView(c.Context(), c.Params("id"), c.Params("viewId")); err != nil {
+	if err := h.tools.DeleteView(c.Context(), middleware.CollectionID(c), c.Params("viewId")); err != nil {
 		return fail(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -751,14 +776,15 @@ type fileDTO struct {
 // @Tags Collections
 // @Accept application/octet-stream
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param name query string true "File name"
 // @Security BearerAuth
 // @Success 201 {object} fileDTO
-// @Router /v1/collections/{id}/files [post]
+// @Router /v1/collections/{owner}/{slug}/files [post]
 func (h *Handler) Upload(c fiber.Ctx) error {
 	contentType, _, _ := mime.ParseMediaType(c.Get(fiber.HeaderContentType))
-	f, err := h.tools.UploadFile(c.Context(), c.Params("id"), c.Query("name"), contentType, c.Body())
+	f, err := h.tools.UploadFile(c.Context(), middleware.CollectionID(c), c.Query("name"), contentType, c.Body())
 	if err != nil {
 		return fail(c, err)
 	}

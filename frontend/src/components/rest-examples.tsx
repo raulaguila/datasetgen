@@ -26,12 +26,12 @@ export function RestExamples({ collection }: { collection: Collection }) {
       <p>{t("integrations.docs_base")} <code className="font-mono text-xs">{base}</code></p>
       <div className="space-y-1.5">
         <h3 className="font-medium">{t("integrations.docs_list")}</h3>
-        <CodeBlock>{`curl ${auth} \\\n  "${base}/v1/records?collection_id=${collection.id}&page=1&limit=50&sort=updated_at&order=desc"`}</CodeBlock>
+        <CodeBlock>{`curl ${auth} \\\n  "${base}/v1/collections/${collection.owner}/${collection.slug}/records?page=1&limit=50&sort=updated_at&order=desc"`}</CodeBlock>
         <p className="text-xs text-muted-foreground">{t("integrations.docs_list_hint")}</p>
       </div>
       <div className="space-y-1.5">
         <h3 className="font-medium">{t("integrations.docs_create")}</h3>
-        <CodeBlock>{`curl ${auth} -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ collection_id: collection.id, data: example })}' \\\n  "${base}/v1/records"`}</CodeBlock>
+        <CodeBlock>{`curl ${auth} -H "Content-Type: application/json" \\\n  -d '${JSON.stringify({ data: example })}' \\\n  "${base}/v1/collections/${collection.owner}/${collection.slug}/records"`}</CodeBlock>
       </div>
       <div className="space-y-1.5">
         <h3 className="font-medium">{t("integrations.docs_update")}</h3>

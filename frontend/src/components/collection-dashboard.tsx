@@ -134,8 +134,8 @@ function WidgetForm({ formId, collection, initial, onSave }: { formId: string; c
       <div className="space-y-1.5">
         <p className="text-sm font-medium">{t("dashboard.records")}</p>
         <div className="flex flex-wrap items-center gap-2">
-          <RecordRules collectionId={collection.id} fields={rows} value={where} onChange={setWhere} />
-          <ViewConditions collectionId={collection.id} onPick={setWhere} />
+          <RecordRules collection={collection} fields={rows} value={where} onChange={setWhere} />
+          <ViewConditions collection={collection} onPick={setWhere} />
           {!where.rules.length && !where.groups?.length && <span className="text-xs text-muted-foreground">{t("dashboard.all_records")}</span>}
         </div>
       </div>
@@ -185,13 +185,13 @@ export function CollectionDashboard({ collection, scope, readOnly = false }: {
   const formId = useId();
   const owner = roleAllows(collection.role, "owner") && !readOnly;
   const key = ["collections", "dashboard", collection.id];
-  const q = useQuery({ queryKey: key, queryFn: ({ signal }) => tools.dashboard(collection.id, signal) });
+  const q = useQuery({ queryKey: key, queryFn: ({ signal }) => tools.dashboard(collection, signal) });
   const [draft, setDraft] = useState<Widget[] | null>(null);
   // A new widget starts in the gallery (kind null), then its form.
   const [editing, setEditing] = useState<{ widget: Widget | null; kind: Widget["kind"] | null } | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const save = useMutation({
-    mutationFn: (widgets: Widget[]) => tools.saveDashboard(collection.id, widgets),
+    mutationFn: (widgets: Widget[]) => tools.saveDashboard(collection, widgets),
     onSuccess: (_, widgets) => { client.setQueryData(key, { widgets }); setDraft(null); toast.success(t("common.saved")); },
     onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
   });

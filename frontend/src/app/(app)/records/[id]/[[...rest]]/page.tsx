@@ -12,7 +12,7 @@ export default function RecordByIDPage() {
   return (
     <AddressRedirect
       queryKey={["record", id, edit]}
-      find={async () => recordPath(await collections.get((await records.get(id)).collection_id), id, edit)}
+      find={async () => recordPath(await collections.at((await records.get(id)).collection_id), id, edit)}
     />
   );
 }

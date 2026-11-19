@@ -1,5 +1,6 @@
 "use client";
 
+import type { CollectionRef } from "@/lib/paths";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -36,12 +37,12 @@ const asWhere = (w?: Widget["where"]): Where => (w ? (w as Where) : { any: false
 const csv = (rows: FieldRow[]) => rows.map((r) => r.key).join(",") || undefined;
 
 /** One request profiling the selected records over the given fields. */
-export function useStats(collectionId: string, where: Where, q: { filled?: FieldRow[]; numbers?: FieldRow[]; dates?: FieldRow[]; values?: FieldRow[]; bucket?: StatsBucket }, enabled = true) {
+export function useStats(collection: CollectionRef, where: Where, q: { filled?: FieldRow[]; numbers?: FieldRow[]; dates?: FieldRow[]; values?: FieldRow[]; bucket?: StatsBucket }, enabled = true) {
   const text = whereText(where) || undefined;
-  const p = { collection_id: collectionId, where: text, filled: csv(q.filled ?? []), numbers: csv(q.numbers ?? []), dates: csv(q.dates ?? []), values: csv(q.values ?? []), bucket: q.dates?.length ? q.bucket : undefined };
+  const p = { where: text, filled: csv(q.filled ?? []), numbers: csv(q.numbers ?? []), dates: csv(q.dates ?? []), values: csv(q.values ?? []), bucket: q.dates?.length ? q.bucket : undefined };
   return useQuery({
-    queryKey: ["records", collectionId, "stats", p],
-    queryFn: ({ signal }) => records.stats(p, signal),
+    queryKey: ["records", collection.id, "stats", p],
+    queryFn: ({ signal }) => records.stats(collection, p, signal),
     enabled,
   });
 }
@@ -313,9 +314,9 @@ export function FieldStats({ row, profile, total, bucket }: { row: FieldRow; pro
 }
 
 /** A picker that copies a saved view's conditions; hidden while there are none. */
-export function ViewConditions({ collectionId, onPick }: { collectionId: string; onPick: (w: Where) => void }) {
+export function ViewConditions({ collection, onPick }: { collection: CollectionRef; onPick: (w: Where) => void }) {
   const { t } = useI18n();
-  const views = useQuery({ queryKey: ["views", collectionId], queryFn: () => tools.views(collectionId) });
+  const views = useQuery({ queryKey: ["views", collection.id], queryFn: () => tools.views(collection) });
   const usable = (views.data?.items ?? []).filter((v) => { const w = viewWhere(v.query); return w.rules.length || w.groups?.length; });
   if (!usable.length) return null;
   return (
@@ -370,23 +371,23 @@ export function WidgetView({ collection, widget, rows, scope, head }: { collecti
   const bucket = widget.bucket ?? "month";
   const measure = widget.kind === "bars" && widget.measure ? rows.find((r) => r.key === widget.measure) : undefined;
   const on = !!joined && widget.kind !== "list" && (!needsField || !!field);
-  const st = useStats(collection.id, where, {
+  const st = useStats(collection, where, {
     numbers: figure && field ? [field] : [],
     values: widget.kind === "bars" && field && !measure ? [field] : [],
     dates: widget.kind === "timeline" && field ? [field] : [],
     bucket,
   }, on && !measure);
-  const before = useStats(collection.id, andWhere(base, previous), { numbers: figure && field ? [field] : [] }, on && !!compare);
+  const before = useStats(collection, andWhere(base, previous), { numbers: figure && field ? [field] : [] }, on && !!compare);
   const text = whereText(where) || undefined;
   // A sum or average per value: the grouped totals, as the list's groups read them.
   const grouped = useQuery({
     queryKey: ["records", collection.id, "widget-groups", widget.field, widget.measure, text],
-    queryFn: ({ signal }) => records.aggregate({ collection_id: collection.id, where: text, group: field!.key, sum: measure!.key }, signal),
+    queryFn: ({ signal }) => records.aggregate(collection, { where: text, group: field!.key, sum: measure!.key }, signal),
     enabled: on && !!measure && !!field,
   });
   const list = useQuery({
     queryKey: ["records", collection.id, "widget", widget.id, text],
-    queryFn: ({ signal }) => records.list({ collection_id: collection.id, page: 1, limit: 5, sort: "updated_at", order: "desc", where: text }, signal),
+    queryFn: ({ signal }) => records.list(collection, { page: 1, limit: 5, sort: "updated_at", order: "desc", where: text }, signal),
     enabled: !!joined && widget.kind === "list",
   });
   const p = field ? st.data?.fields[field.key] : undefined;

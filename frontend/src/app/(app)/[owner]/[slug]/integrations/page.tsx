@@ -32,7 +32,7 @@ function Keys({ collection }: { collection: Collection }) {
   const client = useQueryClient();
   const format = useFormatDate();
   const key = ["keys", collection.id];
-  const list = useQuery({ queryKey: key, queryFn: () => tools.keys(collection.id) });
+  const list = useQuery({ queryKey: key, queryFn: () => tools.keys(collection) });
   const [revoking, setRevoking] = useState<{ id: string; name: string } | null>(null);
   const items = list.data?.items ?? [];
   return (
@@ -69,7 +69,7 @@ function Keys({ collection }: { collection: Collection }) {
         destructive
         onConfirm={async () => {
           if (!revoking) return;
-          await tools.deleteKey(collection.id, revoking.id).then(() => client.invalidateQueries({ queryKey: key }), (err) => toast.error(errorMessage(err, "common.save_failed", t)));
+          await tools.deleteKey(collection, revoking.id).then(() => client.invalidateQueries({ queryKey: key }), (err) => toast.error(errorMessage(err, "common.save_failed", t)));
           setRevoking(null);
         }}
       />
@@ -85,12 +85,12 @@ function Shares({ collection }: { collection: Collection }) {
   const client = useQueryClient();
   const format = useFormatDate();
   const key = ["shares", collection.id];
-  const list = useQuery({ queryKey: key, queryFn: () => tools.shares(collection.id) });
+  const list = useQuery({ queryKey: key, queryFn: () => tools.shares(collection) });
   const [removing, setRemoving] = useState<{ id: string; kind: ShareLink["kind"] } | null>(null);
   const [days, setDays] = useState("30");
   const dayNames: Record<string, string> = Object.fromEntries(SHARE_DAYS.map((d) => [d, d === "0" ? t("keys.expires_never") : t("keys.expires_days").replace("{n}", d)]));
   const create = useMutation({
-    mutationFn: (kind: ShareLink["kind"]) => tools.createShare(collection.id, kind, Number(days)),
+    mutationFn: (kind: ShareLink["kind"]) => tools.createShare(collection, kind, Number(days)),
     onSuccess: () => void client.invalidateQueries({ queryKey: key }),
   });
   const items = list.data?.items ?? [];
@@ -140,7 +140,7 @@ function Shares({ collection }: { collection: Collection }) {
         destructive
         onConfirm={async () => {
           if (!removing) return;
-          await tools.deleteShare(collection.id, removing.id).then(() => client.invalidateQueries({ queryKey: key }), (err) => toast.error(errorMessage(err, "common.save_failed", t)));
+          await tools.deleteShare(collection, removing.id).then(() => client.invalidateQueries({ queryKey: key }), (err) => toast.error(errorMessage(err, "common.save_failed", t)));
           setRemoving(null);
         }}
       />
@@ -154,9 +154,9 @@ function Deliveries({ collection, hookId }: { collection: Collection; hookId: st
   const client = useQueryClient();
   const format = useFormatDate();
   const key = ["webhooks", collection.id, hookId, "deliveries"];
-  const list = useQuery({ queryKey: key, queryFn: () => tools.deliveries(collection.id, hookId) });
+  const list = useQuery({ queryKey: key, queryFn: () => tools.deliveries(collection, hookId) });
   const again = useMutation({
-    mutationFn: (deliveryId: string) => tools.redeliver(collection.id, hookId, deliveryId),
+    mutationFn: (deliveryId: string) => tools.redeliver(collection, hookId, deliveryId),
     onSuccess: (d) => {
       if (d.error) toast.error(t("integrations.test_failed").replace("{error}", d.error));
       else toast.success(t("integrations.test_ok").replace("{status}", String(d.status ?? "")));
@@ -190,7 +190,7 @@ function Webhooks({ collection }: { collection: Collection }) {
   const client = useQueryClient();
   const format = useFormatDate();
   const key = ["webhooks", collection.id];
-  const list = useQuery({ queryKey: key, queryFn: () => tools.webhooks(collection.id) });
+  const list = useQuery({ queryKey: key, queryFn: () => tools.webhooks(collection) });
   const [url, setUrl] = useState("");
   const [events, setEvents] = useState<WebhookEvent[]>([...WEBHOOK_EVENTS]);
   const [secret, setSecret] = useState<string | null>(null);
@@ -202,19 +202,19 @@ function Webhooks({ collection }: { collection: Collection }) {
   const edit = (w: Webhook) => { save.reset(); setEditing(w); setUrl(w.url); setEvents(w.events); };
   const save = useMutation({
     mutationFn: async () => {
-      if (editing && editing !== "new") return { ...(await tools.updateWebhook(collection.id, editing.id, url.trim(), events, !editing.paused_at)), secret: null };
-      return tools.createWebhook(collection.id, url.trim(), events);
+      if (editing && editing !== "new") return { ...(await tools.updateWebhook(collection, editing.id, url.trim(), events, !editing.paused_at)), secret: null };
+      return tools.createWebhook(collection, url.trim(), events);
     },
     onSuccess: (w) => { if (w.secret) setSecret(w.secret); else toast.success(t("common.saved")); close(); void client.invalidateQueries({ queryKey: key }); },
   });
   const pause = useMutation({
-    mutationFn: (w: Webhook) => tools.updateWebhook(collection.id, w.id, w.url, w.events, !!w.paused_at),
+    mutationFn: (w: Webhook) => tools.updateWebhook(collection, w.id, w.url, w.events, !!w.paused_at),
     onSuccess: (w) => { toast.success(t(w.paused_at ? "integrations.hook_paused_done" : "integrations.hook_resumed")); void client.invalidateQueries({ queryKey: key }); },
     onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
   });
   const eventName = (e: WebhookEvent) => t(`webhook.event.${e}`);
   const test = useMutation({
-    mutationFn: (hookId: string) => tools.testWebhook(collection.id, hookId),
+    mutationFn: (hookId: string) => tools.testWebhook(collection, hookId),
     onSuccess: (w) => {
       if (w.last_error) toast.error(t("integrations.test_failed").replace("{error}", w.last_error));
       else toast.success(t("integrations.test_ok").replace("{status}", String(w.last_status ?? "")));
@@ -308,7 +308,7 @@ const ok = crypto.timingSafeEqual(Buffer.from(v1), Buffer.from(expected)) && Dat
         destructive
         onConfirm={async () => {
           if (!removing) return;
-          await tools.deleteWebhook(collection.id, removing.id).then(() => client.invalidateQueries({ queryKey: key }), (err) => toast.error(errorMessage(err, "common.save_failed", t)));
+          await tools.deleteWebhook(collection, removing.id).then(() => client.invalidateQueries({ queryKey: key }), (err) => toast.error(errorMessage(err, "common.save_failed", t)));
           setRemoving(null);
         }}
       />

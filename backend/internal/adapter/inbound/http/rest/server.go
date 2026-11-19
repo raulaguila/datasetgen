@@ -103,13 +103,20 @@ func New(cfg *config.Environment, app *input.Application, hits middleware.Hits, 
 	usershttp.New(app.Users, app.Auth).Routes(users, app.Authorizer)
 	// Collections and records check the caller's role per collection, so they need the full session check.
 	// Records and files also take an API key, capped to its collections (policy.CollectionRole).
-	collections := v1.Group("/collections", bearer)
-	tools.CollectionRoutes(collections) // before /:id, which would swallow /trash
-	collectionhttp.New(app.Collections).Routes(collections, app.Authorizer)
+	// A collection lives at /v1/collections/:owner/:slug, as its page does in the app.
 	keyOrBearer := middleware.BearerOrKey(app.Auth, app.Integrations)
+	at := middleware.CollectionPath(app.Collections)
+	recordHandler := recordhttp.New(app.Records)
+	// Registered before the collection group: its Bearer-only middleware would refuse a key.
+	recordHandler.CollectionRoutes(v1.Group("/collections/:owner/:slug/records", keyOrBearer, at))
+	collections := v1.Group("/collections", bearer)
+	tools.TrashRoutes(collections) // before the :owner/:slug group, whose lookup would take "trash" for a username
+	collectionAt := collections.Group("/:owner/:slug", at)
+	tools.CollectionRoutes(collectionAt)
+	collectionhttp.New(app.Collections).Routes(collections, collectionAt, app.Authorizer)
 	records := v1.Group("/records", keyOrBearer)
 	tools.RecordRoutes(records)
-	recordhttp.New(app.Records).Routes(records)
+	recordHandler.Routes(records)
 	tools.FileRoutes(v1.Group("/files", keyOrBearer))
 	audithttp.New(app.Audit).Routes(v1.Group("/audit", token), app.Authorizer)
 	// Share links: no session; the token is the access. Form posts share the sign-in limit.

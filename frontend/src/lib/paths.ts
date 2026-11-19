@@ -1,5 +1,7 @@
 /** Where a collection lives in the app: /<owner>/<slug>, as repositories do on GitHub. */
-type At = { owner: string; slug: string };
+export type At = { owner: string; slug: string };
+/** A collection as the API calls need it: its address, and its id for caches and ids in data. */
+export type CollectionRef = At & { id: string };
 
 /** The collection's page, or one of its sections ("fields", "settings", ...). */
 export function collectionPath(c: At, section?: string): string {

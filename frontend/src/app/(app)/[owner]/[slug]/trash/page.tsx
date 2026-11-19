@@ -32,7 +32,7 @@ function Trash({ collection }: { collection: Collection }) {
   const client = useQueryClient();
   const format = useFormatDate();
   const key = ["trash", collection.id];
-  const list = useQuery({ queryKey: key, queryFn: ({ signal }) => tools.trash(collection.id, signal) });
+  const list = useQuery({ queryKey: key, queryFn: ({ signal }) => tools.trash(collection, signal) });
   const items = list.data?.items ?? [];
   const selection = useSelection(items.map((r) => r.id));
   const owner = roleAllows(collection.role, "owner");
@@ -45,7 +45,7 @@ function Trash({ collection }: { collection: Collection }) {
     void client.invalidateQueries({ queryKey: ["collections"] });
   };
   const restore = useMutation({
-    mutationFn: (ids: string[]) => tools.restoreRecords(collection.id, ids),
+    mutationFn: (ids: string[]) => tools.restoreRecords(collection, ids),
     onSuccess: (res) => { toast.success(plural(t("trash.restored"), res.count)); settle(); },
     onError: (err, ids) => {
       const fields = takenFields(err);
@@ -58,7 +58,7 @@ function Trash({ collection }: { collection: Collection }) {
   });
   const purge = async (ids: string[]) => {
     try {
-      const res = await tools.purgeRecords(collection.id, ids);
+      const res = await tools.purgeRecords(collection, ids);
       toast.success(plural(t("trash.purged"), res.count));
       settle();
     } catch (err) {
@@ -143,7 +143,7 @@ function RenewDialog({ collection, record, fields, onClose, onDone }: { collecti
     setError(null);
     try {
       const sent = Object.fromEntries(fields.map((k) => [k, numeric(k) ? Number(values[k]) : values[k].trim()]));
-      const res = await tools.restoreRecords(collection.id, [record.id], sent);
+      const res = await tools.restoreRecords(collection, [record.id], sent);
       onDone(res.count);
     } catch (err) {
       setError(takenFields(err) ? t("trash.still_taken") : errorMessage(err, "common.save_failed", t));

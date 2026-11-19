@@ -12,12 +12,12 @@ export function useQuality(collection: Collection, enabled = true) {
   const client = useQueryClient();
   const q = useQuery({
     queryKey: qualityKey(collection.id),
-    queryFn: ({ signal }) => collections.quality(collection.id, signal),
+    queryFn: ({ signal }) => collections.quality(collection, signal),
     enabled,
     refetchInterval: (query) => (query.state.data?.status === "running" ? 1500 : false),
   });
   const start = useMutation({
-    mutationFn: () => collections.startQuality(collection.id),
+    mutationFn: () => collections.startQuality(collection),
     onSuccess: (r) => client.setQueryData(qualityKey(collection.id), r),
   });
   const r = q.data;

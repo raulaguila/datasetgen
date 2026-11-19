@@ -63,18 +63,18 @@ export function parseSchema(text: string): { schema: Record<string, unknown> | n
 }
 
 /** How many records the collection holds; a one-row page answers the total. */
-export function useRecordCount(collectionId: string | undefined, enabled = true) {
+export function useRecordCount(collection: Collection | undefined, enabled = true) {
   const q = useQuery({
-    queryKey: ["records", collectionId, "count"],
-    queryFn: ({ signal }) => records.list({ collection_id: collectionId!, page: 1, limit: 1 }, signal),
-    enabled: !!collectionId && enabled,
+    queryKey: ["records", collection?.id, "count"],
+    queryFn: ({ signal }) => records.list(collection!, { page: 1, limit: 1 }, signal),
+    enabled: !!collection && enabled,
   });
   return q.data?.pagination.total_items;
 }
 
 /**
- * The collection at /<owner>/<slug>: the address is looked up once, then the
- * collection is read by id, so every change that refreshes it by id shows here.
+ * The collection at /<owner>/<slug>: the first answer names its id, and later reads
+ * keep it under that id, so every change that refreshes it by id shows here.
  * An old address (a rename, transfer or new username) moves to the current one.
  */
 export function useRouteCollection() {
@@ -85,14 +85,14 @@ export function useRouteCollection() {
   const found = useQuery({
     queryKey: ["collections", "path", owner, slug],
     queryFn: async ({ signal }) => {
-      const c = await collections.byPath(owner, slug, signal);
+      const c = await collections.get({ owner, slug }, signal);
       client.setQueryData(["collections", "detail", c.id], c);
       return c;
     },
     staleTime: Infinity, // the id behind an address does not change while the page is open
   });
   const id = found.data?.id;
-  const detail = useQuery({ queryKey: ["collections", "detail", id], queryFn: () => collections.get(id!), enabled: !!id });
+  const detail = useQuery({ queryKey: ["collections", "detail", id], queryFn: ({ signal }) => collections.get(found.data!, signal), enabled: !!id });
   const current = detail.data;
   useEffect(() => {
     if (current && (current.owner !== owner || current.slug !== slug)) {
@@ -135,7 +135,7 @@ export function CollectionPage({ section, description, countRecords = false, act
   const gone = detail.error instanceof ApiError && detail.error.code === "NOT_FOUND";
   useEffect(() => setCollection(gone ? null : id ?? null), [id, gone, setCollection]);
   useCrumb(collection && t(section), collection && { label: collection.name, href: collectionPath(collection, "overview") });
-  const recordCount = useRecordCount(collection?.id, countRecords);
+  const recordCount = useRecordCount(collection, countRecords);
   const subtitle = !collection ? undefined
     : typeof description === "function" ? description(collection, recordCount)
     : description && t(description);
@@ -165,7 +165,7 @@ export function CollectionPage({ section, description, countRecords = false, act
 function SchemaHistory({ collection, enabled, onLoad }: { collection: Collection; enabled: boolean; onLoad: (schema: Record<string, unknown>) => void }) {
   const { t } = useI18n();
   const format = useFormatDate();
-  const list = useQuery({ queryKey: ["schema-versions", collection.id, collection.version], queryFn: ({ signal }) => tools.schemaVersions(collection.id, signal), enabled });
+  const list = useQuery({ queryKey: ["schema-versions", collection.id, collection.version], queryFn: ({ signal }) => tools.schemaVersions(collection, signal), enabled });
   const items = list.data?.items ?? [];
   return (
     <div className="space-y-2">
@@ -204,7 +204,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection; 
   const router = useRouter();
   const client = useQueryClient();
   const editable = roleAllows(collection.role, "owner");
-  const recordCount = useRecordCount(collection.id, parts.includes("fields") && editable);
+  const recordCount = useRecordCount(collection, parts.includes("fields") && editable);
   const original = pretty(collection.schema ?? starter(t));
   const [name, setName] = useState(collection.name);
   const [desc, setDesc] = useState(collection.description);
@@ -228,7 +228,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection; 
   // The variable says whether the save was risky, for the toast that follows.
   const save = useMutation<Collection, unknown, boolean>({
     mutationFn: () => {
-      return collections.update(collection.id, { name: name.trim(), description: desc.trim(), icon: icon !== collection.icon ? icon : undefined, schema: schemaChanged ? schema : undefined, version });
+      return collections.update(collection, { name: name.trim(), description: desc.trim(), icon: icon !== collection.icon ? icon : undefined, schema: schemaChanged ? schema : undefined, version });
     },
     onSuccess: (saved, wasRisky) => {
       setError(null);

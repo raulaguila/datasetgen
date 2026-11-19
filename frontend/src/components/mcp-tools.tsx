@@ -71,7 +71,7 @@ function ToolForm({ collection, initial, onDone }: { collection: Collection; ini
   const set = (patch: Partial<McpToolInput>) => setDraft((d) => ({ ...d, ...patch }));
   const setParam = (i: number, patch: Partial<McpToolParam>) => set({ params: draft.params.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
   const save = useMutation({
-    mutationFn: () => (initial ? tools.updateMcpTool(collection.id, initial.id, draft) : tools.createMcpTool(collection.id, draft)),
+    mutationFn: () => (initial ? tools.updateMcpTool(collection, initial.id, draft) : tools.createMcpTool(collection, draft)),
     onSuccess: () => { void client.invalidateQueries({ queryKey: ["mcp-tools", collection.id] }); toast.success(t("common.saved")); onDone(); },
   });
   // Trying the unsaved settings with the values an assistant would send.
@@ -83,7 +83,7 @@ function ToolForm({ collection, initial, onDone }: { collection: Collection; ini
         const v = argOf(rows.find((r) => r.key === p.field), p.op, tryArgs[p.name] ?? "");
         if (v !== undefined) args[p.name] = v;
       }
-      return tools.testMcpTool(collection.id, draft, args);
+      return tools.testMcpTool(collection, draft, args);
     },
   });
   const names = draft.params.map((p) => p.name);
@@ -109,8 +109,8 @@ function ToolForm({ collection, initial, onDone }: { collection: Collection; ini
       <div className="space-y-1.5">
         <p className="text-sm font-medium">{t("mcp_tools.fixed")}</p>
         <div className="flex flex-wrap items-center gap-2">
-          <RecordRules collectionId={collection.id} fields={rows} value={draft.conditions as Where} onChange={(w) => set({ conditions: w })} />
-          <ViewConditions collectionId={collection.id} onPick={(w) => set({ conditions: w })} />
+          <RecordRules collection={collection} fields={rows} value={draft.conditions as Where} onChange={(w) => set({ conditions: w })} />
+          <ViewConditions collection={collection} onPick={(w) => set({ conditions: w })} />
         </div>
       </div>
       <fieldset className="space-y-2">
@@ -211,12 +211,12 @@ export function McpTools({ collection }: { collection: Collection }) {
   const { t } = useI18n();
   const client = useQueryClient();
   const key = ["mcp-tools", collection.id];
-  const list = useQuery({ queryKey: key, queryFn: () => tools.mcpTools(collection.id) });
+  const list = useQuery({ queryKey: key, queryFn: () => tools.mcpTools(collection) });
   const [editing, setEditing] = useState<McpTool | "new" | null>(null);
   const [removing, setRemoving] = useState<McpTool | null>(null);
   const refresh = () => void client.invalidateQueries({ queryKey: key });
   const toggle = useMutation({
-    mutationFn: (x: McpTool) => tools.updateMcpTool(collection.id, x.id, { name: x.name, description: x.description, enabled: !x.enabled, conditions: x.conditions, params: x.params, fields: x.fields, sort: x.sort, order: x.order, limit: x.limit }),
+    mutationFn: (x: McpTool) => tools.updateMcpTool(collection, x.id, { name: x.name, description: x.description, enabled: !x.enabled, conditions: x.conditions, params: x.params, fields: x.fields, sort: x.sort, order: x.order, limit: x.limit }),
     onSuccess: refresh,
     onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
   });
@@ -260,7 +260,7 @@ export function McpTools({ collection }: { collection: Collection }) {
         destructive
         onConfirm={async () => {
           if (!removing) return;
-          await tools.deleteMcpTool(collection.id, removing.id).then(refresh, (err) => toast.error(errorMessage(err, "common.save_failed", t)));
+          await tools.deleteMcpTool(collection, removing.id).then(refresh, (err) => toast.error(errorMessage(err, "common.save_failed", t)));
           setRemoving(null);
         }}
       />
@@ -285,7 +285,7 @@ export function CallArgs({ raw }: { raw?: string }) {
 export function McpActivity({ collection }: { collection: Collection }) {
   const { t } = useI18n();
   const format = useFormatDate();
-  const list = useQuery({ queryKey: ["mcp-calls", collection.id], queryFn: () => tools.mcpCalls(collection.id) });
+  const list = useQuery({ queryKey: ["mcp-calls", collection.id], queryFn: () => tools.mcpCalls(collection) });
   const items = list.data?.items ?? [];
   return (
     <FormSection id="mcp-activity" title={t("mcp_activity.title")} description={t("mcp_activity.desc")}>

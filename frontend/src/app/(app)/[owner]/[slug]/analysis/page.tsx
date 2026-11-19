@@ -29,15 +29,15 @@ function Analysis({ collection }: { collection: Collection }) {
   const bucket = (BUCKETS.includes(params.bucket as StatsBucket) ? params.bucket : "month") as StatsBucket;
   const rows = fieldsOf(collection.schema ?? null).filter((r) => !r.advanced && r.field.type !== "group");
   const dates = rows.filter(isDate);
-  const st = useStats(collection.id, where, { filled: rows, numbers: rows.filter(isNumeric), dates, values: barFields(rows), bucket });
+  const st = useStats(collection, where, { filled: rows, numbers: rows.filter(isNumeric), dates, values: barFields(rows), bucket });
   const n = st.data?.total ?? 0;
   const buckets = Object.fromEntries(BUCKETS.map((b) => [b, t(`analysis.bucket.${b}` as MessageKey)]));
   return (
     <div className="space-y-8">
       {/* One filter for the page: the dashboard and the fields read the same records. */}
       <div className="flex flex-wrap items-center gap-2">
-        <RecordRules collectionId={collection.id} fields={fieldsOf(collection.schema ?? null)} value={where} onChange={(w: Where) => set({ where: whereText(w) })} />
-        <ViewConditions collectionId={collection.id} onPick={(w) => set({ where: whereText(w) })} />
+        <RecordRules collection={collection} fields={fieldsOf(collection.schema ?? null)} value={where} onChange={(w: Where) => set({ where: whereText(w) })} />
+        <ViewConditions collection={collection} onPick={(w) => set({ where: whereText(w) })} />
         <span className="text-xs text-muted-foreground">{t("analysis.filter_hint")}</span>
         <p className="ml-auto text-sm text-muted-foreground" role="status">
           {st.isPending ? "…" : t(text ? "analysis.records_matching" : "analysis.records").replace("{n}", num(n))}

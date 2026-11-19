@@ -12,7 +12,7 @@ export default function CollectionAuditPage() {
   return (
     <CollectionPage section="collections.tab.audit" description="audit.collection_subtitle">
       {(collection) => roleAllows(collection.role, "owner")
-        ? <AuditLog collectionId={collection.id} />
+        ? <AuditLog collection={collection} />
         : <EmptyState icon={ScrollText} title={t("error.forbidden_page")} description={t("audit.owners_only")} />}
     </CollectionPage>
   );

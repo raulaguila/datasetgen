@@ -15,6 +15,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/mapper"
+	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/pkg/apperror"
 	"github.com/raulaguila/dataset/pkg/schema"
@@ -85,10 +86,9 @@ func (h *Handler) Restore(c fiber.Ctx) error {
 }
 
 type importDTO struct {
-	CollectionID string            `json:"collection_id"`
-	Records      []json.RawMessage `json:"records" swaggertype:"array,object"`
-	DryRun       bool              `json:"dry_run"`
-	SkipInvalid  bool              `json:"skip_invalid"`
+	Records     []json.RawMessage `json:"records" swaggertype:"array,object"`
+	DryRun      bool              `json:"dry_run"`
+	SkipInvalid bool              `json:"skip_invalid"`
 	// UpsertKey, a unique field: a record already holding a row's value is updated (its other fields stay).
 	UpsertKey string `json:"upsert_key,omitempty"`
 	// BatchKey, chosen per batch (up to 100 characters), makes a retry safe: a key saved before returns that result and saves nothing again.
@@ -122,6 +122,8 @@ type issueDTO struct {
 // @Tags Records
 // @Accept json
 // @Produce json
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body importDTO true "Batch"
 // @Security BearerAuth
 // @Success 200 {object} importResultDTO
@@ -131,14 +133,14 @@ type issueDTO struct {
 // @Failure 404 {object} mapper.errorBody
 // @Failure 413 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/records/import [post]
+// @Router /v1/collections/{owner}/{slug}/records/import [post]
 func (h *Handler) Import(c fiber.Ctx) error {
 	var body importDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
 	res, err := h.svc.Import(c.Context(), input.ImportRecordsCommand{
-		CollectionID: body.CollectionID, Records: body.Records, DryRun: body.DryRun, SkipInvalid: body.SkipInvalid, UpsertKey: body.UpsertKey, BatchKey: body.BatchKey,
+		CollectionID: middleware.CollectionID(c), Records: body.Records, DryRun: body.DryRun, SkipInvalid: body.SkipInvalid, UpsertKey: body.UpsertKey, BatchKey: body.BatchKey,
 	})
 	if err != nil {
 		return mapper.WriteError(c, err)
@@ -158,7 +160,8 @@ func (h *Handler) Import(c fiber.Ctx) error {
 // @Description JSON Lines holds one record's data per line. "collection" is JSON Lines whose first line is {"$collection":{name, description, icon, schema}}: the whole collection, which the new-collection page recreates in one go. CSV has one column per field, in the form's order, then any other keys; lists and objects are written as JSON. Streamed, any number of records; CSV columns past the form come from up to 1 000 keys.
 // @Tags Records
 // @Produce plain
-// @Param collection_id query string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param format query string false "File format" Enums(jsonl, csv, collection) default(jsonl)
 // @Param valid query bool false "Only records that match the current schema"
 // @Security BearerAuth
@@ -168,7 +171,7 @@ func (h *Handler) Import(c fiber.Ctx) error {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/records/export [get]
+// @Router /v1/collections/{owner}/{slug}/records/export [get]
 func (h *Handler) Export(c fiber.Ctx) error {
 	format := c.Query("format", "jsonl")
 	if format != "jsonl" && format != "csv" && format != "collection" {
@@ -176,7 +179,7 @@ func (h *Handler) Export(c fiber.Ctx) error {
 	}
 	// The body streams after this handler returns, when the request's context is
 	// cancelled and c is reused: the export gets its own context and copies.
-	id := strings.Clone(c.Query("collection_id"))
+	id := middleware.CollectionID(c)
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Context()), exportTimeout)
 	exp, err := h.svc.Export(ctx, id, input.ExportOptions{ValidOnly: fiber.Query[bool](c, "valid"), CSV: format == "csv"})
 	if err != nil {

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { colOf } from "./helpers";
 
 const api = (page: Page, path: string, data: unknown) => page.request.post(`/api/proxy${path}`, { data });
 
@@ -20,7 +21,7 @@ test("field analysis and a dashboard", async ({ page }) => {
     { nome: "A", tipo: "gatilho", preco: 10, quando: "2026-01-05" },
     { nome: "B", tipo: "gatilho", preco: 30, quando: "2026-03-01" },
     { nome: "C", tipo: "efeito" },
-  ]) expect((await api(page, "/v1/records", { collection_id: id, data })).ok()).toBeTruthy();
+  ]) expect((await api(page, `${await colOf(page, id)}/records`, { data })).ok()).toBeTruthy();
 
   await page.goto(`/collections/${id}/analysis`);
   await expect(page.getByRole("status")).toHaveText("3 registros");

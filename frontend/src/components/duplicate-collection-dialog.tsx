@@ -34,7 +34,7 @@ export function DuplicateCollectionDialog({ source, onClose }: { source: Collect
     setBusy(true);
     setError(null);
     try {
-      const created = await collections.duplicate(source.id, name.trim(), withRecords);
+      const created = await collections.duplicate(source, name.trim(), withRecords);
       toast.success(t("duplicate.done"));
       void client.invalidateQueries({ queryKey: ["collections"] });
       onClose();

@@ -168,7 +168,7 @@ function RestCard() {
   const mine = (cols.data?.items ?? []).filter((c) => c.member !== false);
   const [picked, setPicked] = useState<string | null>(null);
   const id = picked ?? mine[0]?.id ?? null;
-  const collection = useQuery({ queryKey: ["collections", id], queryFn: () => collections.get(id!), enabled: !!id });
+  const collection = useQuery({ queryKey: ["collections", id], queryFn: () => collections.byID(id!), enabled: !!id });
   const names = Object.fromEntries(mine.map((c) => [c.id, c.name]));
   return (
     <FormSection id="rest" title={t("integrations.docs")} description={t("integrations.docs_desc")} wide>

@@ -66,7 +66,7 @@ function AddMember({ collection }: { collection: Collection }) {
   const [error, setError] = useState<string | null>(null);
   const [link, setLink] = useState<string | null>(null);
   const add = useMutation({
-    mutationFn: () => collections.addMember(collection.id, { email: email.trim(), name: name.trim() || undefined, role }),
+    mutationFn: () => collections.addMember(collection, { email: email.trim(), name: name.trim() || undefined, role }),
     onSuccess: (res) => {
       void client.invalidateQueries({ queryKey: ["collections", "members", collection.id] });
       toast.success(t(res.invited ? "members.invited" : "members.added"));
@@ -134,14 +134,14 @@ function MemberList({ collection, children }: { collection: Collection; children
   const [removing, setRemoving] = useState<CollectionMember | null>(null);
   const [moving, setMoving] = useState<CollectionMember | null>(null);
   const key = ["collections", "members", collection.id];
-  const list = useQuery({ queryKey: key, queryFn: () => collections.members(collection.id) });
+  const list = useQuery({ queryKey: key, queryFn: () => collections.members(collection) });
   const refresh = () => {
     void client.invalidateQueries({ queryKey: key });
     // The caller's own role may have changed: the sidebar and pages follow it.
     void client.invalidateQueries({ queryKey: ["collections"] });
   };
   const setRole = useMutation({
-    mutationFn: ({ m, role }: { m: CollectionMember; role: MemberRole }) => collections.setMemberRole(collection.id, m.user_id, role),
+    mutationFn: ({ m, role }: { m: CollectionMember; role: MemberRole }) => collections.setMemberRole(collection, m.user_id, role),
     onSuccess: () => { toast.success(t("common.saved")); refresh(); },
     onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
   });
@@ -191,7 +191,7 @@ function MemberList({ collection, children }: { collection: Collection; children
         confirmLabel={t("members.remove")}
         onConfirm={async () => {
           if (!removing) return;
-          await collections.removeMember(collection.id, removing.user_id); // the dialog shows a refusal, such as the last owner
+          await collections.removeMember(collection, removing.user_id); // the dialog shows a refusal, such as the last owner
           setRemoving(null);
           refresh();
         }}
@@ -204,7 +204,7 @@ function MemberList({ collection, children }: { collection: Collection; children
         confirmLabel={t("members.transfer")}
         onConfirm={async () => {
           if (!moving) return;
-          const moved = await collections.transfer(collection.id, moving.user_id);
+          const moved = await collections.transfer(collection, moving.user_id);
           setMoving(null);
           client.setQueryData(["collections", "detail", moved.id], moved);
           refresh();

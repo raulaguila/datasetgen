@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { colOf } from "./helpers";
 
 const api = (page: Page, path: string, data: unknown) => page.request.post(`/api/proxy${path}`, { data });
 const day = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
@@ -7,8 +8,8 @@ const day = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); r
 test("richer conditions and the cell filter", async ({ page }) => {
   await page.goto("/");
   const people = (await (await api(page, "/v1/collections", { name: `pessoas-${Date.now()}`, schema: { type: "object", properties: { nome: { type: "string", title: "Nome" } } } })).json()).id as string;
-  const ana = (await (await api(page, "/v1/records", { collection_id: people, data: { nome: "Ana Prado" } })).json()).id as string;
-  const bia = (await (await api(page, "/v1/records", { collection_id: people, data: { nome: "Bia Lopes" } })).json()).id as string;
+  const ana = (await (await api(page, `${await colOf(page, people)}/records`, { data: { nome: "Ana Prado" } })).json()).id as string;
+  const bia = (await (await api(page, `${await colOf(page, people)}/records`, { data: { nome: "Bia Lopes" } })).json()).id as string;
   const schema = {
     type: "object",
     properties: {
@@ -23,7 +24,7 @@ test("richer conditions and the cell filter", async ({ page }) => {
     { titulo: "Luz", venc: day(-3), status: "atrasado", cliente: ana },
     { titulo: "Água", venc: day(2), status: "aberto", cliente: ana },
     { titulo: "Gás", venc: day(40), status: "pago", cliente: bia },
-  ]) expect((await api(page, "/v1/records", { collection_id: id, data })).ok()).toBeTruthy();
+  ]) expect((await api(page, `${await colOf(page, id)}/records`, { data })).ok()).toBeTruthy();
   await page.goto(`/collections/${id}?cols=titulo,venc,status,cliente`);
   await expect(page.locator("tbody tr")).toHaveCount(3);
 

@@ -139,7 +139,7 @@ export default function CollectionsPage() {
           if (!removing) return;
           const { c, kind } = removing;
           // The dialog shows a refusal, such as the last owner leaving.
-          await (kind === "delete" ? collections.remove([c.id]) : collections.leave(c.id));
+          await (kind === "delete" ? collections.remove([c.id]) : collections.leave(c));
           if (storedId === c.id) setCollection(null);
           if (pinned.includes(c.id)) togglePin(c.id);
           setRemoving(null);

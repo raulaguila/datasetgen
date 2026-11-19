@@ -221,7 +221,7 @@ function ToolForm({ tool, collections, initial, call, shown, onRun }: {
 
   const cid = typeof values.collection_id === "string" ? values.collection_id : "";
   const fields = collections.find((c) => c.id === cid)?.fields ?? [];
-  const schema = useQuery({ queryKey: ["collections", cid], queryFn: () => collectionsApi.get(cid), enabled: !!cid && "rules" in props });
+  const schema = useQuery({ queryKey: ["collections", cid], queryFn: () => collectionsApi.byID(cid), enabled: !!cid && "rules" in props });
   const rows = schema.data ? fieldsOf(schema.data.schema ?? null) : [];
 
   const run = useMutation({
@@ -304,7 +304,7 @@ function ToolForm({ tool, collections, initial, call, shown, onRun }: {
       case "hidden": return null;
       case "where":
         return !cid ? null : schema.data ? (
-          <RecordRules fields={rows} collectionId={cid} value={(values.rules as Where) ?? { any: false, rules: [] }} onChange={(v) => set("rules", v)} />
+          <RecordRules fields={rows} collection={schema.data} value={(values.rules as Where) ?? { any: false, rules: [] }} onChange={(v) => set("rules", v)} />
         ) : <ListSkeleton rows={2} />;
       case "collection": return pickOne(collections.map((c) => ({ value: c.id, label: c.name })));
       case "field": return pickOne(fieldOptions(fields));

@@ -18,15 +18,25 @@ export const atCollection = (section?: string) =>
 /** The collection id behind a collection address. */
 export async function collectionIdOf(page: Page, url: string): Promise<string> {
   const [owner, slug] = new URL(url).pathname.split("/").slice(1, 3);
-  const res = await page.request.get(`/api/proxy/v1/collections/path/${owner}/${slug}`);
+  const res = await page.request.get(`/api/proxy/v1/collections/${owner}/${slug}`);
   expect(res.ok()).toBeTruthy();
   return (await res.json()).id as string;
 }
 
+/** The API address of the collection with this id: /v1/collections/<owner>/<slug>. */
+export async function colOf(page: Page, id: string): Promise<string> {
+  const list = (await (await page.request.get("/api/proxy/v1/collections/list")).json()).items as { id: string; owner: string; slug: string }[];
+  const c = list.find((x) => x.id === id);
+  expect(c, `collection ${id}`).toBeTruthy();
+  return `/v1/collections/${c!.owner}/${c!.slug}`;
+}
+
+/** The app page of the collection with this id: /<owner>/<slug>. */
+export const pageOf = async (page: Page, id: string) => (await colOf(page, id)).slice("/v1/collections".length);
+
 /** Matches the address of the collection with this id, once it is open. */
 export async function collectionAt(page: Page, id: string): Promise<RegExp> {
-  const c = await (await page.request.get(`/api/proxy/v1/collections/${id}`)).json();
-  return new RegExp(`/${c.owner}/${c.slug}$`);
+  return new RegExp(`${await pageOf(page, id)}$`);
 }
 
 /** An address no earlier run used, so the flows never collide with old data. */

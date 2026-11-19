@@ -62,7 +62,7 @@ function RecordForm({ collection, record, editable, next }: { collection: Collec
 
   // The variable is the message shown once saved.
   const save = useMutation<DataRecord, unknown, string>({
-    mutationFn: () => (record ? records.update(record.id, data, version) : records.create(collection.id, data)),
+    mutationFn: () => (record ? records.update(record.id, data, version) : records.create(collection, data)),
     onSuccess: (saved, message) => {
       setError(null);
       setIssues([]);
@@ -144,7 +144,7 @@ function RecordForm({ collection, record, editable, next }: { collection: Collec
             </div>
           )}
           <div className={cn("min-w-0", columns === 1 && "max-w-3xl")}>
-            <SchemaForm schema={collection.schema ?? {}} collectionId={collection.id} data={data} disabled={!editable} onChange={setData} formRef={formRef} liveValidate={checked} issues={issues} columns={columns} />
+            <SchemaForm schema={collection.schema ?? {}} collection={collection} data={data} disabled={!editable} onChange={setData} formRef={formRef} liveValidate={checked} issues={issues} columns={columns} />
           </div>
         </section>
         {canSubmit && (

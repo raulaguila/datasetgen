@@ -53,7 +53,7 @@ export function AppRail({ collapsed, onToggle, mobile = false, onNavigate }: { c
   const activeId = atItem?.id ?? storedId;
   // The open collection keeps its menu even when it is past the first 100.
   const missing = !!activeId && list.isSuccess && !list.data.items.some((c) => c.id === activeId);
-  const extra = useQuery({ queryKey: ["collections", "detail", activeId], queryFn: () => collections.get(activeId!), enabled: missing, retry: false });
+  const extra = useQuery({ queryKey: ["collections", "detail", activeId], queryFn: () => collections.byID(activeId!), enabled: missing, retry: false });
   // Pinned first, each part in the API's order (by name).
   const all = [...(list.data?.items ?? []), ...(missing && extra.data ? [extra.data] : [])];
   const items = [...all.filter((c) => pinned.includes(c.id)), ...all.filter((c) => !pinned.includes(c.id))];

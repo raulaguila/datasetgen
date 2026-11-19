@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
+	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
 )
@@ -71,13 +72,14 @@ func (b mcpToolBody) input() input.MCPToolInput {
 // @Summary A collection's MCP tools; owners
 // @Tags MCP
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]mcpToolDTO}
 // @Failure 403 {object} mapper.errorBody
-// @Router /v1/collections/{id}/mcp-tools [get]
+// @Router /v1/collections/{owner}/{slug}/mcp-tools [get]
 func (h *Handler) MCPTools(c fiber.Ctx) error {
-	list, err := h.integrations.MCPTools(c.Context(), c.Params("id"))
+	list, err := h.integrations.MCPTools(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return fail(c, err)
 	}
@@ -93,19 +95,20 @@ func (h *Handler) MCPTools(c fiber.Ctx) error {
 // @Tags MCP
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body mcpToolBody true "Tool"
 // @Security BearerAuth
 // @Success 201 {object} mcpToolDTO
 // @Failure 400 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
-// @Router /v1/collections/{id}/mcp-tools [post]
+// @Router /v1/collections/{owner}/{slug}/mcp-tools [post]
 func (h *Handler) CreateMCPTool(c fiber.Ctx) error {
 	var body mcpToolBody
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	t, err := h.integrations.CreateMCPTool(c.Context(), c.Params("id"), body.input())
+	t, err := h.integrations.CreateMCPTool(c.Context(), middleware.CollectionID(c), body.input())
 	if err != nil {
 		return fail(c, err)
 	}
@@ -116,20 +119,21 @@ func (h *Handler) CreateMCPTool(c fiber.Ctx) error {
 // @Tags MCP
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param toolId path string true "Tool ID"
 // @Param body body mcpToolBody true "Tool"
 // @Security BearerAuth
 // @Success 200 {object} mcpToolDTO
 // @Failure 400 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{id}/mcp-tools/{toolId} [put]
+// @Router /v1/collections/{owner}/{slug}/mcp-tools/{toolId} [put]
 func (h *Handler) UpdateMCPTool(c fiber.Ctx) error {
 	var body mcpToolBody
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	t, err := h.integrations.UpdateMCPTool(c.Context(), c.Params("id"), c.Params("toolId"), body.input())
+	t, err := h.integrations.UpdateMCPTool(c.Context(), middleware.CollectionID(c), c.Params("toolId"), body.input())
 	if err != nil {
 		return fail(c, err)
 	}
@@ -138,14 +142,15 @@ func (h *Handler) UpdateMCPTool(c fiber.Ctx) error {
 
 // @Summary Delete an MCP tool; owners
 // @Tags MCP
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param toolId path string true "Tool ID"
 // @Security BearerAuth
 // @Success 204
 // @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{id}/mcp-tools/{toolId} [delete]
+// @Router /v1/collections/{owner}/{slug}/mcp-tools/{toolId} [delete]
 func (h *Handler) DeleteMCPTool(c fiber.Ctx) error {
-	if err := h.integrations.DeleteMCPTool(c.Context(), c.Params("id"), c.Params("toolId")); err != nil {
+	if err := h.integrations.DeleteMCPTool(c.Context(), middleware.CollectionID(c), c.Params("toolId")); err != nil {
 		return fail(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -173,18 +178,19 @@ type mcpTestDTO struct {
 // @Tags MCP
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body mcpTestBody true "Tool and arguments"
 // @Security BearerAuth
 // @Success 200 {object} mcpTestDTO
 // @Failure 400 {object} mapper.errorBody
-// @Router /v1/collections/{id}/mcp-tools/test [post]
+// @Router /v1/collections/{owner}/{slug}/mcp-tools/test [post]
 func (h *Handler) TestMCPTool(c fiber.Ctx) error {
 	var body mcpTestBody
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	items, total, page, err := h.integrations.TestMCPTool(c.Context(), c.Params("id"), body.Tool.input(), body.Args)
+	items, total, page, err := h.integrations.TestMCPTool(c.Context(), middleware.CollectionID(c), body.Tool.input(), body.Args)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -211,13 +217,14 @@ type mcpCallDTO struct {
 // @Summary What AI assistants did in a collection through MCP (newest 100, last 30 days); owners
 // @Tags MCP
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]mcpCallDTO}
 // @Failure 403 {object} mapper.errorBody
-// @Router /v1/collections/{id}/mcp-calls [get]
+// @Router /v1/collections/{owner}/{slug}/mcp-calls [get]
 func (h *Handler) MCPCalls(c fiber.Ctx) error {
-	list, err := h.integrations.MCPCalls(c.Context(), c.Params("id"))
+	list, err := h.integrations.MCPCalls(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return fail(c, err)
 	}

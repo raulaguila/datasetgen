@@ -1,5 +1,6 @@
 "use client";
 
+import type { CollectionRef } from "@/lib/paths";
 import Form, { getDefaultRegistry } from "@rjsf/core";
 import { englishStringTranslator, enumOptionsIndexForValue, enumOptionsValueForIndex, TranslatableString, type ObjectFieldTemplateProps, type WidgetProps, type ArrayFieldItemTemplateProps, type ErrorSchema, type FieldProps, type IconButtonProps, type RJSFSchema, type UiSchema, type ValidatorType } from "@rjsf/utils";
 import Link from "next/link";
@@ -172,7 +173,7 @@ const named = (id: string) => ({ id, "aria-labelledby": `${id}__label ${id}` });
 
 /** How a record of another collection reads: its first text field, or its id. */
 export function useRecordLabel(collectionId: string | undefined, recordId: string | undefined) {
-  const target = useQuery({ queryKey: ["collections", "detail", collectionId], queryFn: () => collections.get(collectionId!), enabled: !!collectionId && !!recordId });
+  const target = useQuery({ queryKey: ["collections", "detail", collectionId], queryFn: () => collections.byID(collectionId!), enabled: !!collectionId && !!recordId });
   const rec = useQuery({ queryKey: ["records", "one", recordId], queryFn: () => records.get(recordId!), enabled: !!recordId, retry: false });
   const { t } = useI18n();
   if (!recordId) return undefined;
@@ -186,8 +187,8 @@ export function RecordPicker({ id, target, onPick, onClose }: { id: string; targ
   const { t } = useI18n();
   const [text, setText] = useState("");
   const q = searchTerm(useDebounced(text));
-  const meta = useQuery({ queryKey: ["collections", "detail", target], queryFn: () => collections.get(target), enabled: !!target });
-  const found = useQuery({ queryKey: ["records", target, "pick", q], queryFn: ({ signal }) => records.list({ collection_id: target, page: 1, limit: 8, search: q }, signal), enabled: !!target });
+  const meta = useQuery({ queryKey: ["collections", "detail", target], queryFn: ({ signal }) => collections.byID(target, signal), enabled: !!target });
+  const found = useQuery({ queryKey: ["records", target, "pick", q], queryFn: async ({ signal }) => records.list(await collections.at(target), { page: 1, limit: 8, search: q }, signal), enabled: !!target });
   return (
     <div className="space-y-1.5 rounded-md border p-2">
       <Input id={id} autoFocus type="search" placeholder={t("schema.ref_search")} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") onClose(); if (e.key === "Enter") e.preventDefault(); }} />
@@ -307,14 +308,14 @@ function FileChip({ file, onRemove }: { file: FileRef; onRemove?: () => void }) 
  */
 function FileField({ formData, onChange, fieldPathId, schema, name, required, disabled, readonly, registry }: FieldProps) {
   const { t } = useI18n();
-  const collectionId = (registry.formContext as { collectionId?: string } | undefined)?.collectionId;
+  const collection = (registry.formContext as { collection?: CollectionRef } | undefined)?.collection;
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const many = schema.type === "array";
   const files = fileRefs(formData);
   const id = fieldPathId.$id;
-  const off = disabled || readonly || !collectionId;
+  const off = disabled || readonly || !collection;
   const full = many && files.length >= FILES_MAX;
   const set = (next: FileRef[]) => onChange(many ? (next.length ? next : undefined) : next[0], fieldPathId.path);
   const upload = async (picked: File[]) => {
@@ -324,7 +325,7 @@ function FileField({ formData, onChange, fieldPathId, schema, name, required, di
     setBusy(true);
     try {
       const added: FileRef[] = [];
-      for (const f of list) added.push(await tools.upload(collectionId!, f));
+      for (const f of list) added.push(await tools.upload(collection!, f));
       set(many ? [...files, ...added] : added);
     } catch (err) {
       setError(errorMessage(err, "common.save_failed", t));
@@ -346,7 +347,7 @@ function FileField({ formData, onChange, fieldPathId, schema, name, required, di
             {busy ? <Loader2 className="size-4 animate-spin" /> : <FileUp className="size-4" />}{t(many ? "schema.files_add" : files.length ? "schema.file_replace" : "schema.file_pick")}
           </Button>
         )}
-        {!files.length && off && <span className="text-sm text-muted-foreground">{collectionId ? "—" : t("schema.file_preview")}</span>}
+        {!files.length && off && <span className="text-sm text-muted-foreground">{collection ? "—" : t("schema.file_preview")}</span>}
         <input ref={input} type="file" multiple={many} className="hidden" aria-hidden tabIndex={-1} onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ""; if (f.length) void upload(f); }} />
       </div>
       <p className="text-xs text-muted-foreground">{t(full ? "schema.files_full" : "schema.file_hint")}</p>
@@ -472,12 +473,12 @@ export function withToday(schema: Record<string, unknown>, now = new Date()): Re
  * otherwise drop the errors. The server checks again; its issues come back
  * through `issues`.
  */
-export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec", formRef, issues, liveValidate, collectionId, columns = 1 }: {
+export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec", formRef, issues, liveValidate, collection, columns = 1 }: {
   schema: Record<string, unknown>;
   /** Two puts short fields side by side when the form is wide enough; long text, groups and lists keep the whole row. */
   columns?: 1 | 2;
   /** Where attached files go; without it (the fields preview) file fields only show. */
-  collectionId?: string;
+  collection?: CollectionRef;
   data: unknown;
   disabled?: boolean;
   onChange?: (data: unknown) => void;
@@ -498,7 +499,7 @@ export function SchemaForm({ schema, data, disabled, onChange, idPrefix = "rec",
   const formSchema = useMemo(() => (fresh ? withToday(schema) : schema), [fresh, schema]);
   // The page has its own save bar; the form never submits by itself.
   const uiSchema = useMemo(() => ({ ...uiFor(schema), "ui:submitButtonOptions": { norender: true } }), [schema]);
-  const formContext = useMemo(() => ({ collectionId }), [collectionId]);
+  const formContext = useMemo(() => ({ collection }), [collection]);
   const extraErrors = useMemo(() => (issues?.length ? issueErrors(issues, translators[locale]) : undefined), [issues, locale]);
   return (
     <div className="rjsf-frame" data-columns={columns}>

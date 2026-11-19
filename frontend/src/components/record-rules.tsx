@@ -1,5 +1,6 @@
 "use client";
 
+import type { CollectionRef } from "@/lib/paths";
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { ContextMenu } from "@base-ui/react/context-menu";
@@ -99,13 +100,13 @@ function DateValue({ raw, label, onChange }: { raw: string; label: string; onCha
 }
 
 /** Text with the field's commonest values offered as you type. */
-function TextValue({ collectionId, entry, raw, label, onChange }: { collectionId?: string; entry: Entry; raw: string; label: string; onChange: (raw: string) => void }) {
+function TextValue({ collection, entry, raw, label, onChange }: { collection?: CollectionRef; entry: Entry; raw: string; label: string; onChange: (raw: string) => void }) {
   const { t } = useI18n();
   const listId = useId();
-  const ask = !!collectionId && entry.stored && entry.key[0] !== "$";
+  const ask = !!collection && entry.stored && entry.key[0] !== "$";
   const top = useQuery({
-    queryKey: ["records", collectionId, "values", entry.key],
-    queryFn: ({ signal }) => records.stats({ collection_id: collectionId!, values: entry.key }, signal),
+    queryKey: ["records", collection?.id, "values", entry.key],
+    queryFn: ({ signal }) => records.stats(collection!, { values: entry.key }, signal),
     enabled: ask, staleTime: 60_000,
   });
   const values = (top.data?.fields?.[entry.key]?.top ?? []).map((x) => x.key).filter((k): k is string => typeof k === "string" && k !== "");
@@ -231,8 +232,8 @@ async function idNames(client: QueryClient, w: Where, entries: Entry[]): Promise
   const out: Record<string, string> = {};
   await Promise.all([...byTarget].map(async ([target, ids]) => {
     const [meta, found] = await Promise.all([
-      client.fetchQuery({ queryKey: ["collections", "detail", target], queryFn: () => collections.get(target) }),
-      records.list({ collection_id: target, page: 1, limit: 100, ids: [...ids].join(",") }),
+      client.fetchQuery({ queryKey: ["collections", "detail", target], queryFn: () => collections.byID(target) }),
+      collections.at(target).then((c) => records.list(c, { page: 1, limit: 100, ids: [...ids].join(",") })),
     ]);
     for (const r of found.items) { const name = recordTitle(meta.schema ?? null, r.data); if (name) out[r.id] = name; }
   }));
@@ -246,8 +247,8 @@ async function resolveNames(client: QueryClient, w: Where, refs: RefName[], entr
     const k = `${r.target}\n${low(r.name)}`;
     if (ids.has(k)) continue;
     const [meta, found] = await Promise.all([
-      client.fetchQuery({ queryKey: ["collections", "detail", r.target], queryFn: () => collections.get(r.target) }),
-      records.list({ collection_id: r.target, page: 1, limit: 20, search: r.name }),
+      client.fetchQuery({ queryKey: ["collections", "detail", r.target], queryFn: () => collections.byID(r.target) }),
+      collections.at(r.target).then((c) => records.list(c, { page: 1, limit: 20, search: r.name })),
     ]);
     const hits = found.items.filter((x) => low(recordTitle(meta.schema ?? null, x.data) ?? "") === low(r.name));
     if (hits.length !== 1) {
@@ -274,8 +275,8 @@ async function resolveNames(client: QueryClient, w: Where, refs: RefName[], entr
  * commonest values; with `count` the apply buttons tell how many records the
  * edited rules keep, and `saveView` lets them be kept as a saved view.
  */
-export function RecordRules({ fields: all, value, onChange, collectionId, count, saveView, bar, summary }: {
-  fields: FieldRow[]; value: Where; onChange: (w: Where) => void; collectionId?: string;
+export function RecordRules({ fields: all, value, onChange, collection, count, saveView, bar, summary }: {
+  fields: FieldRow[]; value: Where; onChange: (w: Where) => void; collection?: CollectionRef;
   /** The list's search, for counting what the edited rules keep. */
   count?: { search?: string };
   saveView?: boolean;
@@ -342,9 +343,9 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
   const dirty = (mode === "text" && text !== textBase) || whereText(whereOf(draft)) !== whereText(value);
   const counted = useDebounced(pending ? whereText(pending) : null, 250);
   const live = useQuery({
-    queryKey: ["records", collectionId, "count", counted, count?.search],
-    queryFn: ({ signal }) => records.list({ collection_id: collectionId!, page: 1, limit: 1, search: count?.search || undefined, where: counted || undefined }, signal),
-    enabled: (open || !!quick) && !!count && !!collectionId && counted !== null,
+    queryKey: ["records", collection?.id, "count", counted, count?.search],
+    queryFn: ({ signal }) => records.list(collection!, { page: 1, limit: 1, search: count?.search || undefined, where: counted || undefined }, signal),
+    enabled: (open || !!quick) && !!count && !!collection && counted !== null,
     placeholderData: keepPreviousData, staleTime: 30_000,
   });
   const create = useMutation({
@@ -353,9 +354,9 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
       q.delete("page"); q.delete("filter");
       const w = whereText(p.where);
       if (w) q.set("where", w); else q.delete("where");
-      return tools.createView(collectionId!, { name: p.name, query: q.toString(), shared: false });
+      return tools.createView(collection!, { name: p.name, query: q.toString(), shared: false });
     },
-    onSuccess: () => { setViewName(null); toast.success(t("views.saved")); void client.invalidateQueries({ queryKey: ["views", collectionId] }); },
+    onSuccess: () => { setViewName(null); toast.success(t("views.saved")); void client.invalidateQueries({ queryKey: ["views", collection?.id] }); },
     onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
   });
 
@@ -491,7 +492,7 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
       if (r.op !== "between") return box(r.raw, `${t("rules.value")} ${label}`, "raw");
       return <div className="flex items-center gap-1.5">{box(r.raw, `${t("rules.value")} ${label}`, "raw")}<span className="text-sm text-muted-foreground">{t("rules.and")}</span>{box(r.raw2, `${t("rules.value_to")} ${label}`, "raw2")}</div>;
     }
-    return <TextValue collectionId={collectionId} entry={entry} raw={r.raw} label={label} onChange={(raw) => set({ raw })} />;
+    return <TextValue collection={collection} entry={entry} raw={r.raw} label={label} onChange={(raw) => set({ raw })} />;
   };
   const opSelect = (r: DraftRule, n: number, set: (patch: Partial<DraftRule>) => void) => {
     const kind = kindOfKey(r.field);
@@ -637,7 +638,7 @@ export function RecordRules({ fields: all, value, onChange, collectionId, count,
             {mode === "visual" ? <><Code className="size-4" />{t("rules.as_text")}</> : <><SlidersHorizontal className="size-4" />{t("rules.as_visual")}</>}
           </Button>
           <span className="flex-1" />
-          {saveView && collectionId && <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" disabled={!pending} onClick={() => setViewName("")}><Bookmark className="size-4" />{t("rules.save_view")}</Button>}
+          {saveView && collection && <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" disabled={!pending} onClick={() => setViewName("")}><Bookmark className="size-4" />{t("rules.save_view")}</Button>}
           <Button type="submit" size="sm" className="ml-auto" disabled={busy || (mode === "text" && !!parsed && "error" in parsed)}>
             {busy && <Loader2 className="size-4 animate-spin" />}{t("filters.apply")}{counter(open)}
           </Button>

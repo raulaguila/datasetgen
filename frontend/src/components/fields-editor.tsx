@@ -221,7 +221,7 @@ function Part({ title, children }: { title: string; children: React.ReactNode })
 
 /** The fields of another collection, for a lookup or rollup to read. */
 function useFieldsOf(collectionId: string) {
-  const q = useQuery({ queryKey: ["collection", collectionId], queryFn: () => collections.get(collectionId), enabled: !!collectionId, staleTime: 30_000 });
+  const q = useQuery({ queryKey: ["collection", collectionId], queryFn: () => collections.byID(collectionId), enabled: !!collectionId, staleTime: 30_000 });
   return fieldsOf((q.data?.schema as Schema | undefined) ?? null).filter((r) => !r.advanced && !VIRTUAL_TYPES.includes(r.field.type));
 }
 

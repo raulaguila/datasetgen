@@ -1,5 +1,6 @@
 "use client";
 
+import type { CollectionRef } from "@/lib/paths";
 import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -158,9 +159,9 @@ function UserFilter({ onPick }: { onPick: (id: string) => void }) {
 }
 
 /** Members picked by email, for a collection's log: anyone outside it never shows there. */
-function MemberFilter({ collectionId, onPick }: { collectionId: string; onPick: (id: string) => void }) {
+function MemberFilter({ collection, onPick }: { collection: CollectionRef; onPick: (id: string) => void }) {
   const { t } = useI18n();
-  const members = useQuery({ queryKey: ["collections", "members", collectionId], queryFn: () => collections.members(collectionId) });
+  const members = useQuery({ queryKey: ["collections", "members", collection.id], queryFn: () => collections.members(collection) });
   const items = Object.fromEntries((members.data?.items ?? []).map((m) => [m.user_id, m.name]));
   return (
     <Select value="" items={items} onValueChange={(v) => v && onPick(v as string)}>
@@ -198,9 +199,10 @@ export function runs<T extends { created_at: string; action: string; actor_id?: 
 
 /**
  * The audit log with its filters, table and detail drawer: the whole platform's
- * (export included) or, with collectionId, one collection's own entries.
+ * (export included) or, with a collection, one collection's own entries.
  */
-export function AuditLog({ collectionId }: { collectionId?: string }) {
+export function AuditLog({ collection }: { collection?: CollectionRef }) {
+  const collectionId = collection?.id;
   const { t, locale } = useI18n();
   const { user: me } = useMe();
   const pathname = usePathname();
@@ -212,12 +214,12 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
   const filters = { action, user_id: user, from: dayStart(from), to: dayStart(to, 1) };
   const list = useQuery({
     queryKey: ["audit", collectionId ?? "all", page, limit, action, user, from, to],
-    queryFn: ({ signal }) => (collectionId ? collections.audit(collectionId, { page, limit, ...filters }, signal) : audit.list({ page, limit, ...filters }, signal)),
+    queryFn: ({ signal }) => (collectionId ? collections.audit(collection, { page, limit, ...filters }, signal) : audit.list({ page, limit, ...filters }, signal)),
     placeholderData: keepPreviousData,
   });
   const pickable = !!collectionId || can(me, "users", "read");
   const picked = useQuery({ queryKey: ["users", "detail", user], queryFn: () => users.get(user), enabled: !!user && !collectionId && pickable });
-  const members = useQuery({ queryKey: ["collections", "members", collectionId], queryFn: () => collections.members(collectionId!), enabled: !!user && !!collectionId });
+  const members = useQuery({ queryKey: ["collections", "members", collectionId], queryFn: () => collections.members(collection!), enabled: !!user && !!collectionId });
   const pickedEmail = collectionId ? members.data?.items.find((m) => m.user_id === user)?.email : picked.data?.email;
   const download = useMutation({
     mutationFn: () => audit.export(filters),
@@ -260,7 +262,7 @@ export function AuditLog({ collectionId }: { collectionId?: string }) {
           </div>
           <DateField label={t("audit.from")} value={from} max={to || undefined} onChange={(day) => set({ from: day, page: 1 })} />
           <DateField label={t("audit.to")} value={to} min={from || undefined} onChange={(day) => set({ to: day, page: 1 })} />
-          {!user && pickable && (collectionId ? <MemberFilter collectionId={collectionId} onPick={(id) => set({ user: id, page: 1 })} /> : <UserFilter onPick={(id) => set({ user: id, page: 1 })} />)}
+          {!user && pickable && (collectionId ? <MemberFilter collection={collection} onPick={(id) => set({ user: id, page: 1 })} /> : <UserFilter onPick={(id) => set({ user: id, page: 1 })} />)}
           {user && (
             <Badge variant="secondary" className="gap-1 max-sm:col-span-2 max-sm:justify-self-start">
               {pickedEmail ?? t("audit.filtered_user")}

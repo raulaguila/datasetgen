@@ -86,7 +86,7 @@ describe("import stream", () => {
       expect(sourceRecords).toEqual(json);
       const send = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({}));
       try {
-        await apiRecords.importBatch({ collection_id: "collection", records: batches[0].records.map(r => r.data), sourceRecords });
+        await apiRecords.importBatch({ owner: "ana", slug: "c" }, { records: batches[0].records.map(r => r.data), sourceRecords });
         const blob = send.mock.calls[0][1]?.body as Blob;
         const payload = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -94,7 +94,8 @@ describe("import stream", () => {
           reader.onerror = () => reject(reader.error);
           reader.readAsText(blob);
         });
-        expect(payload).toBe('{"collection_id":"collection","records":[' + json.join(",") + ']}');
+        expect(send.mock.calls[0][0]).toContain("/v1/collections/ana/c/records/import");
+        expect(payload).toBe('{"records":[' + json.join(",") + ']}');
       } finally { send.mockRestore(); }
     }
   });

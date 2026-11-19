@@ -57,11 +57,11 @@ function useRefLabels(columns: FieldRow[], items: DataRecord[], schema: Record<s
     return { target: String(props[c.key]?.[REF] ?? ""), ids };
   }).filter((r) => r.target && r.ids.length);
   const targets = [...new Set(refs.map((r) => r.target))];
-  const metas = useQueries({ queries: targets.map((target) => ({ queryKey: ["collections", "detail", target], queryFn: () => collections.get(target), retry: false })) });
+  const metas = useQueries({ queries: targets.map((target) => ({ queryKey: ["collections", "detail", target], queryFn: ({ signal }: { signal: AbortSignal }) => collections.byID(target, signal), retry: false })) });
   const found = useQueries({
     queries: refs.map((r) => ({
       queryKey: ["records", r.target, "ids", r.ids.join(",")],
-      queryFn: ({ signal }: { signal: AbortSignal }) => records.list({ collection_id: r.target, page: 1, limit: 100, ids: r.ids.join(",") }, signal),
+      queryFn: async ({ signal }: { signal: AbortSignal }) => records.list(await collections.at(r.target), { page: 1, limit: 100, ids: r.ids.join(",") }, signal),
       retry: false,
     })),
   });
@@ -106,7 +106,7 @@ function RecordList({ collection }: { collection: Collection }) {
   const q = searchTerm(useDebounced(params.q));
   const list = useQuery({
     queryKey: ["records", collection.id, page, limit, q, sort, order, whereText],
-    queryFn: ({ signal }) => records.list({ collection_id: collection.id, page, limit, search: q, sort, order, where: whereText }, signal),
+    queryFn: ({ signal }) => records.list(collection, { page, limit, search: q, sort, order, where: whereText }, signal),
     enabled: layout === "table",
     placeholderData: keepPreviousData,
   });
@@ -158,7 +158,7 @@ function RecordList({ collection }: { collection: Collection }) {
   // Out of how many: the collection's total, beside a filtered list's count.
   const all = useQuery({
     queryKey: ["records", collection.id, "total"],
-    queryFn: ({ signal }) => records.list({ collection_id: collection.id, page: 1, limit: 1 }, signal),
+    queryFn: ({ signal }) => records.list(collection, { page: 1, limit: 1 }, signal),
     enabled: layout === "table" && filtered,
     staleTime: 30_000,
   });
@@ -166,7 +166,7 @@ function RecordList({ collection }: { collection: Collection }) {
     ? t("rules.filtered").replace("{n}", list.data.pagination.total_items.toLocaleString()).replace("{total}", all.data.pagination.total_items.toLocaleString())
     : null;
   const [bar, setBar] = useState<HTMLDivElement | null>(null);
-  const scope = { collection_id: collection.id, search: q || undefined, where: whereText };
+  const scope = { collection, search: q || undefined, where: whereText };
   // Picking a group filters the list to its value (or to empty).
   const pickGroup = (key: unknown) => {
     if (!groupRow) return;
@@ -239,7 +239,7 @@ function RecordList({ collection }: { collection: Collection }) {
           <Input type="search" aria-label={t("common.search")} placeholder={t("records.search")} className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); set({ q: e.target.value.trim(), page: 1 }); }} />
         </div>
         <div className="toolbar-tools flex flex-wrap items-center gap-2 max-sm:w-full max-sm:justify-between sm:contents">
-          <RecordRules collectionId={collection.id} fields={rows} value={where} onChange={setWhere} count={{ search: q || undefined }} saveView bar={bar} summary={outOf} />
+          <RecordRules collection={collection} fields={rows} value={where} onChange={setWhere} count={{ search: q || undefined }} saveView bar={bar} summary={outOf} />
           {layout === "table" && <ColumnPicker fields={rows} value={columns} onChange={(keys) => set({ cols: keys.join(",") })} />}
           <div className="hidden items-center gap-2 lg:flex">{viewControls}</div>
           <Sheet>
@@ -260,7 +260,7 @@ function RecordList({ collection }: { collection: Collection }) {
                 {report.invalid_count > 0 && <span className="inline-flex items-center gap-1 text-warn"><span className="size-2 rounded-full bg-warn" aria-hidden />{t("records.invalid_n").replace("{n}", num(report.invalid_count))}</span>}
               </Link>
             )}
-            <SavedViews collectionId={collection.id} canShare={canEdit} onApply={applyView} />
+            <SavedViews collection={collection} canShare={canEdit} onApply={applyView} />
           </div>
         </div>
         {search.trim() !== "" && !searchTerm(search) && <p className="basis-full text-xs text-muted-foreground" role="status">{t("common.search_min")}</p>}

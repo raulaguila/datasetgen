@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
+	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
 )
@@ -25,14 +26,15 @@ func toDeliveryDTO(d domain.WebhookDelivery) deliveryDTO {
 // @Summary A webhook's newest calls (up to 50) and their answers; owners
 // @Tags Webhooks
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param hookId path string true "Webhook ID"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]deliveryDTO}
 // @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{id}/webhooks/{hookId}/deliveries [get]
+// @Router /v1/collections/{owner}/{slug}/webhooks/{hookId}/deliveries [get]
 func (h *Handler) Deliveries(c fiber.Ctx) error {
-	list, err := h.integrations.Deliveries(c.Context(), c.Params("id"), c.Params("hookId"))
+	list, err := h.integrations.Deliveries(c.Context(), middleware.CollectionID(c), c.Params("hookId"))
 	if err != nil {
 		return fail(c, err)
 	}
@@ -46,15 +48,16 @@ func (h *Handler) Deliveries(c fiber.Ctx) error {
 // @Summary Send a webhook call again now, with the same body; owners
 // @Tags Webhooks
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param hookId path string true "Webhook ID"
 // @Param deliveryId path string true "Delivery ID"
 // @Security BearerAuth
 // @Success 200 {object} deliveryDTO "the new call"
 // @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{id}/webhooks/{hookId}/deliveries/{deliveryId}/redeliver [post]
+// @Router /v1/collections/{owner}/{slug}/webhooks/{hookId}/deliveries/{deliveryId}/redeliver [post]
 func (h *Handler) Redeliver(c fiber.Ctx) error {
-	d, err := h.integrations.Redeliver(c.Context(), c.Params("id"), c.Params("hookId"), c.Params("deliveryId"))
+	d, err := h.integrations.Redeliver(c.Context(), middleware.CollectionID(c), c.Params("hookId"), c.Params("deliveryId"))
 	if err != nil {
 		return fail(c, err)
 	}
@@ -98,13 +101,14 @@ func (b automationBody) input() input.AutomationInput {
 // @Summary A collection's automations; owners
 // @Tags Automations
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]automationDTO}
 // @Failure 403 {object} mapper.errorBody
-// @Router /v1/collections/{id}/automations [get]
+// @Router /v1/collections/{owner}/{slug}/automations [get]
 func (h *Handler) Automations(c fiber.Ctx) error {
-	list, err := h.integrations.Automations(c.Context(), c.Params("id"))
+	list, err := h.integrations.Automations(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return fail(c, err)
 	}
@@ -120,18 +124,19 @@ func (h *Handler) Automations(c fiber.Ctx) error {
 // @Tags Automations
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body automationBody true "Automation"
 // @Security BearerAuth
 // @Success 201 {object} automationDTO
 // @Failure 400 {object} mapper.errorBody
-// @Router /v1/collections/{id}/automations [post]
+// @Router /v1/collections/{owner}/{slug}/automations [post]
 func (h *Handler) CreateAutomation(c fiber.Ctx) error {
 	var body automationBody
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	a, err := h.integrations.CreateAutomation(c.Context(), c.Params("id"), body.input())
+	a, err := h.integrations.CreateAutomation(c.Context(), middleware.CollectionID(c), body.input())
 	if err != nil {
 		return fail(c, err)
 	}
@@ -142,20 +147,21 @@ func (h *Handler) CreateAutomation(c fiber.Ctx) error {
 // @Tags Automations
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param autoId path string true "Automation ID"
 // @Param body body automationBody true "Automation"
 // @Security BearerAuth
 // @Success 200 {object} automationDTO
 // @Failure 400 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{id}/automations/{autoId} [put]
+// @Router /v1/collections/{owner}/{slug}/automations/{autoId} [put]
 func (h *Handler) UpdateAutomation(c fiber.Ctx) error {
 	var body automationBody
 	if err := c.Bind().Body(&body); err != nil {
 		return badBody(c)
 	}
-	a, err := h.integrations.UpdateAutomation(c.Context(), c.Params("id"), c.Params("autoId"), body.input())
+	a, err := h.integrations.UpdateAutomation(c.Context(), middleware.CollectionID(c), c.Params("autoId"), body.input())
 	if err != nil {
 		return fail(c, err)
 	}
@@ -164,14 +170,15 @@ func (h *Handler) UpdateAutomation(c fiber.Ctx) error {
 
 // @Summary Delete an automation; owners
 // @Tags Automations
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param autoId path string true "Automation ID"
 // @Security BearerAuth
 // @Success 204
 // @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{id}/automations/{autoId} [delete]
+// @Router /v1/collections/{owner}/{slug}/automations/{autoId} [delete]
 func (h *Handler) DeleteAutomation(c fiber.Ctx) error {
-	if err := h.integrations.DeleteAutomation(c.Context(), c.Params("id"), c.Params("autoId")); err != nil {
+	if err := h.integrations.DeleteAutomation(c.Context(), middleware.CollectionID(c), c.Params("autoId")); err != nil {
 		return fail(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -180,14 +187,15 @@ func (h *Handler) DeleteAutomation(c fiber.Ctx) error {
 // @Summary Run an automation now on every matching record (up to 100); owners
 // @Tags Automations
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param autoId path string true "Automation ID"
 // @Security BearerAuth
 // @Success 200 {object} automationDTO "with the run's result"
 // @Failure 404 {object} mapper.errorBody
-// @Router /v1/collections/{id}/automations/{autoId}/run [post]
+// @Router /v1/collections/{owner}/{slug}/automations/{autoId}/run [post]
 func (h *Handler) RunAutomation(c fiber.Ctx) error {
-	a, err := h.integrations.RunAutomation(c.Context(), c.Params("id"), c.Params("autoId"))
+	a, err := h.integrations.RunAutomation(c.Context(), middleware.CollectionID(c), c.Params("autoId"))
 	if err != nil {
 		return fail(c, err)
 	}

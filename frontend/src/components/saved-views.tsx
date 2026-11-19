@@ -1,5 +1,6 @@
 "use client";
 
+import type { CollectionRef } from "@/lib/paths";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, Trash2, Users } from "lucide-react";
@@ -26,20 +27,20 @@ function currentQuery(): string {
  * Named record list queries (search, filters, sort): the user's own, and those
  * an editor shared with every member.
  */
-export function SavedViews({ collectionId, canShare, onApply }: { collectionId: string; canShare: boolean; onApply: (query: string) => void }) {
+export function SavedViews({ collection, canShare, onApply }: { collection: CollectionRef; canShare: boolean; onApply: (query: string) => void }) {
   const { t } = useI18n();
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [shared, setShared] = useState(false);
-  const key = ["views", collectionId];
-  const list = useQuery({ queryKey: key, queryFn: () => tools.views(collectionId), enabled: open });
+  const key = ["views", collection.id];
+  const list = useQuery({ queryKey: key, queryFn: () => tools.views(collection), enabled: open });
   const create = useMutation({
-    mutationFn: () => tools.createView(collectionId, { name: name.trim(), query: currentQuery(), shared }),
+    mutationFn: () => tools.createView(collection, { name: name.trim(), query: currentQuery(), shared }),
     onSuccess: () => { setName(""); setShared(false); toast.success(t("views.saved")); void client.invalidateQueries({ queryKey: key }); },
   });
   const remove = useMutation({
-    mutationFn: (viewId: string) => tools.deleteView(collectionId, viewId),
+    mutationFn: (viewId: string) => tools.deleteView(collection, viewId),
     onSuccess: () => void client.invalidateQueries({ queryKey: key }),
     onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
   });

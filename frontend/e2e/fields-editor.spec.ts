@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { collectionAt } from "./helpers";
+import { collectionAt, colOf } from "./helpers";
 
 const api = (page: Page, path: string, data: unknown) => page.request.post(`/api/proxy${path}`, { data });
 
@@ -10,14 +10,14 @@ test("field order survives a save and a reload", async ({ page }) => {
     name: `ordem-${Date.now()}`,
     schema: { type: "object", properties: { primeiro: { type: "string", title: "Primeiro" }, segundo: { type: "string", title: "Segundo" } } },
   })).json()).id as string;
-  await api(page, "/v1/records", { collection_id: id, data: { primeiro: "a", segundo: "b" } });
+  await api(page, `${await colOf(page, id)}/records`, { data: { primeiro: "a", segundo: "b" } });
   await page.goto(`/collections/${id}/fields`);
   const rows = page.getByRole("list", { name: "Campos" }).getByRole("listitem");
   await rows.nth(0).locator("[draggable=true]").dragTo(rows.nth(1).locator("[draggable=true]"));
   await expect(rows.first()).toContainText("Segundo");
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(page.getByText("Alterações salvas.").first()).toBeVisible();
-  const saved = await (await page.request.get(`/api/proxy/v1/collections/${id}`)).json();
+  const saved = await (await page.request.get(`/api/proxy${await colOf(page, id)}`)).json();
   expect(Object.keys(saved.schema.properties)).toEqual(["segundo", "primeiro"]);
   // Saved means clean at once: leaving asks nothing, without a reload first.
   await expect(page.getByRole("button", { name: "Descartar" })).toHaveCount(0);
@@ -42,7 +42,7 @@ test("subfield order survives a save", async ({ page }) => {
   await page.getByRole("button", { name: "Subir: Endereço" }).click();
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(page.getByText("Alterações salvas.").first()).toBeVisible();
-  const saved = await (await page.request.get(`/api/proxy/v1/collections/${id}`)).json();
+  const saved = await (await page.request.get(`/api/proxy${await colOf(page, id)}`)).json();
   expect(Object.keys(saved.schema.properties)).toEqual(["endereco", "title"]);
   expect(Object.keys(saved.schema.properties.endereco.properties)).toEqual(["numero", "rua"]);
   await expect(page.getByRole("button", { name: "Descartar" })).toHaveCount(0);
@@ -90,7 +90,7 @@ test("ready-made fields, conditions, sections and option colors", async ({ page 
 
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
   await expect(page.getByText("Alterações salvas.").first()).toBeVisible();
-  const saved = (await (await page.request.get(`/api/proxy/v1/collections/${id}`)).json()).schema;
+  const saved = (await (await page.request.get(`/api/proxy${await colOf(page, id)}`)).json()).schema;
   expect(saved.properties.status["x-colors"]).toEqual({ "A fazer": "gray", "Em andamento": "blue", "Concluído": "green" });
   expect(saved.properties.motivo).toMatchObject({ "x-section": "Encerramento", "x-show-when": { field: "status", op: "eq", value: "Concluído" } });
 

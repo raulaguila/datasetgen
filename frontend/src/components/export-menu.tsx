@@ -35,13 +35,13 @@ export function ExportMenu({ collection }: { collection: Collection }) {
           <Download className="size-4" />{t("export.title")}<ChevronDown className="size-3.5 opacity-60" aria-hidden />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-56">
-          <DropdownMenuItem className="items-start" onClick={() => void records.export(collection.id, "collection", false).catch((err) => toast.error(errorMessage(err, "common.save_failed", t)))}>
+          <DropdownMenuItem className="items-start" onClick={() => void records.export(collection, "collection", false).catch((err) => toast.error(errorMessage(err, "common.save_failed", t)))}>
             <Database className="mt-0.5 size-4" />
             <span className="flex flex-col"><span>{t("export.collection")}</span><span className="max-w-60 text-xs text-muted-foreground">{t("export.collection_hint")}</span></span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {FORMATS.map((f) => (
-            <DropdownMenuItem key={f.key} onClick={() => void records.export(collection.id, f.format, f.valid).catch((err) => toast.error(errorMessage(err, "common.save_failed", t)))}>
+            <DropdownMenuItem key={f.key} onClick={() => void records.export(collection, f.format, f.valid).catch((err) => toast.error(errorMessage(err, "common.save_failed", t)))}>
               <Download className="size-4" />{t(f.key)}
             </DropdownMenuItem>
           ))}
@@ -53,7 +53,7 @@ export function ExportMenu({ collection }: { collection: Collection }) {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-      {canImport && <RecordImportDialog collectionId={collection.id} schema={collection.schema} open={importing} onOpenChange={setImporting} initialFile={initialFile} />}
+      {canImport && <RecordImportDialog collection={collection} schema={collection.schema} open={importing} onOpenChange={setImporting} initialFile={initialFile} />}
     </>
   );
 }

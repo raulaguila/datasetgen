@@ -29,7 +29,11 @@ func TestCollectionPathsFollowTheOwner(t *testing.T) {
 		return u.Username
 	}
 	open := func(ctx context.Context, owner, slug string) (*domain.Collection, error) {
-		return collections.ByPath(ctx, owner, slug)
+		id, err := collections.Resolve(ctx, owner, slug)
+		if err != nil {
+			return nil, err
+		}
+		return collections.Get(ctx, id)
 	}
 	// opens checks that owner/slug leads ctx to the collection id.
 	opens := func(ctx context.Context, owner, slug, id string) {

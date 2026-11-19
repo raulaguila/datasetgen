@@ -68,7 +68,7 @@ function CreateRecordConfig({ sources, value, onChange }: { sources: FieldRow[];
   const { t } = useI18n();
   const options = useQuery({ queryKey: ["collections", "options"], queryFn: ({ signal }) => collections.options(signal) });
   const writable = (options.data?.items ?? []).filter((c) => roleAllows(c.role, "editor"));
-  const target = useQuery({ queryKey: ["collection", value.collection_id], queryFn: () => collections.get(value.collection_id!), enabled: !!value.collection_id });
+  const target = useQuery({ queryKey: ["collection", value.collection_id], queryFn: () => collections.byID(value.collection_id!), enabled: !!value.collection_id });
   const fields = fieldsOf(target.data?.schema ?? null).filter((r) => !r.advanced);
   const data = value.data ?? {};
   const choice = (key: string) => {
@@ -136,12 +136,12 @@ function AutomationForm({ collection, initial, onDone }: { collection: Collectio
   const save = useMutation({
     mutationFn: () => {
       const input: AutomationInput = { ...draft, hour: draft.trigger === "daily" ? (draft.hour ?? 8) : undefined, config: draft.action === "set_field" ? { field: draft.config.field, value: typed(target, raw) } : draft.config };
-      return initial ? tools.updateAutomation(collection.id, initial.id, input) : tools.createAutomation(collection.id, input);
+      return initial ? tools.updateAutomation(collection, initial.id, input) : tools.createAutomation(collection, input);
     },
     onSuccess: () => { void client.invalidateQueries({ queryKey: ["automations", collection.id] }); toast.success(t("common.saved")); onDone(); },
   });
   const ready = draft.name.trim() && configReady(draft.action, draft.config);
-  const hooks = useQuery({ queryKey: ["webhooks", collection.id], queryFn: () => tools.webhooks(collection.id), enabled: draft.action === "webhook" });
+  const hooks = useQuery({ queryKey: ["webhooks", collection.id], queryFn: () => tools.webhooks(collection), enabled: draft.action === "webhook" });
   const valueInput = () => {
     if (target?.field.type === "boolean" || target?.field.type === "enum") {
       const options = target.field.type === "boolean" ? [["true", t("common.yes")], ["false", t("common.no")]] : target.field.options.split(",").map((o) => o.trim()).filter(Boolean).map((o) => [o, o]);
@@ -182,8 +182,8 @@ function AutomationForm({ collection, initial, onDone }: { collection: Collectio
       <div className="space-y-1.5">
         <p className="text-sm font-medium">{t("automations.if")}</p>
         <div className="flex flex-wrap items-center gap-2">
-          <RecordRules collectionId={collection.id} fields={rows} value={draft.conditions as Where} onChange={(w) => set({ conditions: w })} />
-          <ViewConditions collectionId={collection.id} onPick={(w) => set({ conditions: w })} />
+          <RecordRules collection={collection} fields={rows} value={draft.conditions as Where} onChange={(w) => set({ conditions: w })} />
+          <ViewConditions collection={collection} onPick={(w) => set({ conditions: w })} />
           {whereEmpty(draft.conditions as Where) && <span className="text-xs text-muted-foreground">{t("automations.every_record")}</span>}
         </div>
       </div>
@@ -265,18 +265,18 @@ function Automations({ collection }: { collection: Collection }) {
   const client = useQueryClient();
   const format = useFormatDate();
   const key = ["automations", collection.id];
-  const list = useQuery({ queryKey: key, queryFn: () => tools.automations(collection.id) });
+  const list = useQuery({ queryKey: key, queryFn: () => tools.automations(collection) });
   const [editing, setEditing] = useState<Automation | "new" | null>(null);
   const [removing, setRemoving] = useState<Automation | null>(null);
   const names = new Map(fieldsOf(collection.schema ?? null).map((r) => [r.key, r.field.name]));
   const refresh = () => void client.invalidateQueries({ queryKey: key });
   const toggle = useMutation({
-    mutationFn: (a: Automation) => tools.updateAutomation(collection.id, a.id, { name: a.name, enabled: !a.enabled, trigger: a.trigger, hour: a.hour, conditions: a.conditions, action: a.action, config: a.config }),
+    mutationFn: (a: Automation) => tools.updateAutomation(collection, a.id, { name: a.name, enabled: !a.enabled, trigger: a.trigger, hour: a.hour, conditions: a.conditions, action: a.action, config: a.config }),
     onSuccess: refresh,
     onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
   });
   const run = useMutation({
-    mutationFn: (a: Automation) => tools.runAutomation(collection.id, a.id),
+    mutationFn: (a: Automation) => tools.runAutomation(collection, a.id),
     onSuccess: (a) => { refresh(); if (a.last_error) toast.error(a.last_error); else toast.success(t("automations.ran")); },
     onError: (err) => toast.error(errorMessage(err, "common.save_failed", t)),
   });
@@ -327,7 +327,7 @@ function Automations({ collection }: { collection: Collection }) {
         destructive
         onConfirm={async () => {
           if (!removing) return;
-          await tools.deleteAutomation(collection.id, removing.id).then(refresh, (err) => toast.error(errorMessage(err, "common.save_failed", t)));
+          await tools.deleteAutomation(collection, removing.id).then(refresh, (err) => toast.error(errorMessage(err, "common.save_failed", t)));
           setRemoving(null);
         }}
       />

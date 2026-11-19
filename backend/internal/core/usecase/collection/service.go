@@ -110,18 +110,14 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Collection, error
 	return c, nil
 }
 
-// ByPath opens the collection at /<username>/<slug>, or at an old path of it; the
-// answer carries the current path, so a caller on an old one can move.
-func (s *Service) ByPath(ctx context.Context, username, slug string) (*domain.Collection, error) {
+// Resolve finds the id of the collection at /<username>/<slug>, or at an old path
+// of it. It checks no access: the calls that take the id do.
+func (s *Service) Resolve(ctx context.Context, username, slug string) (string, error) {
 	username, slug = strings.ToLower(username), strings.ToLower(slug)
 	if len(username) > 39 || len(slug) > 100 || username == "" || slug == "" {
-		return nil, apperror.New(apperror.CodeNotFound, "collection not found").WithDetails("resource", "collection")
+		return "", apperror.New(apperror.CodeNotFound, "collection not found").WithDetails("resource", "collection")
 	}
-	id, err := s.Repo.FindIDByPath(ctx, username, slug)
-	if err != nil {
-		return nil, err
-	}
-	return s.Get(ctx, id)
+	return s.Repo.FindIDByPath(ctx, username, slug)
 }
 
 func (s *Service) Create(ctx context.Context, cmd input.CreateCollectionCommand) (*domain.Collection, error) {

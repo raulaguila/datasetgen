@@ -42,7 +42,7 @@ function useCards(p: { collection: Collection; search?: string; where: Where }, 
   const where = whereText(p.where) || undefined;
   const q = useInfiniteQuery({
     queryKey: ["records", p.collection.id, "cards", key, p.search, where],
-    queryFn: ({ signal, pageParam }) => records.list({ collection_id: p.collection.id, page: pageParam, limit: CARD_LIMIT, search: p.search, where, sort: "updated_at", order: "desc" }, signal),
+    queryFn: ({ signal, pageParam }) => records.list(p.collection, { page: pageParam, limit: CARD_LIMIT, search: p.search, where, sort: "updated_at", order: "desc" }, signal),
     initialPageParam: 1,
     getNextPageParam: (last) => (last.pagination.page < last.pagination.total_pages ? last.pagination.page + 1 : undefined),
   });

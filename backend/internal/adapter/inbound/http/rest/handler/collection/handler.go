@@ -24,48 +24,27 @@ func New(svc input.CollectionService) *Handler {
 
 // Routes expects a router behind Bearer. Creating a collection is an RBAC
 // permission; everything else follows the caller's role in the collection,
-// which the service checks.
-func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
+// which the service checks. r is /v1/collections, at /v1/collections/:owner/:slug.
+func (h *Handler) Routes(r, at fiber.Router, authz input.Authorizer) {
 	r.Get("/", h.List)
-	r.Get("/list", h.Options) // before /:id, which would swallow it
-	r.Get("/path/:owner/:slug", h.ByPath)
-	r.Get("/:id", h.Get)
+	r.Get("/list", h.Options)
+	at.Get("/", h.Get)
 	r.Post("/", middleware.Require(authz, domain.ResourceCollections, domain.ActionCreate), h.Create)
-	r.Patch("/:id", h.Update)
+	at.Patch("/", h.Update)
 	r.Post("/delete", h.Delete)
-	r.Get("/:id/members", h.Members)
-	r.Post("/:id/members", h.AddMember)
-	r.Patch("/:id/members/:userId", h.SetMemberRole)
-	r.Delete("/:id/members/:userId", h.RemoveMember)
-	r.Get("/:id/audit", h.AuditLog)
-	r.Get("/:id/quality", h.Quality)
-	r.Post("/:id/quality", h.StartQuality)
-	r.Post("/:id/quality/fix", h.Fix)
-	r.Post("/:id/quality/delete-invalid", h.DeleteInvalid)
-	r.Post("/:id/duplicate", middleware.Require(authz, domain.ResourceCollections, domain.ActionCreate), h.Duplicate)
-	r.Get("/:id/stats", h.Stats)
-	r.Post("/:id/leave", h.Leave)
-	r.Post("/:id/transfer", h.Transfer)
-}
-
-// @Summary Get a collection by its address, /<owner>/<slug>, with its schema
-// @Description An old address (before a rename, transfer or username change) answers the collection too; compare owner and slug to move to the current one.
-// @Tags Collections
-// @Produce json
-// @Param owner path string true "Owner's username"
-// @Param slug path string true "Collection slug"
-// @Security BearerAuth
-// @Success 200 {object} collectionDTO
-// @Failure 401 {object} mapper.errorBody
-// @Failure 404 {object} mapper.errorBody
-// @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/path/{owner}/{slug} [get]
-func (h *Handler) ByPath(c fiber.Ctx) error {
-	item, err := h.svc.ByPath(c.Context(), c.Params("owner"), c.Params("slug"))
-	if err != nil {
-		return mapper.WriteError(c, err)
-	}
-	return c.JSON(toDTO(*item))
+	at.Get("/members", h.Members)
+	at.Post("/members", h.AddMember)
+	at.Patch("/members/:userId", h.SetMemberRole)
+	at.Delete("/members/:userId", h.RemoveMember)
+	at.Get("/audit", h.AuditLog)
+	at.Get("/quality", h.Quality)
+	at.Post("/quality", h.StartQuality)
+	at.Post("/quality/fix", h.Fix)
+	at.Post("/quality/delete-invalid", h.DeleteInvalid)
+	at.Post("/duplicate", middleware.Require(authz, domain.ResourceCollections, domain.ActionCreate), h.Duplicate)
+	at.Get("/stats", h.Stats)
+	at.Post("/leave", h.Leave)
+	at.Post("/transfer", h.Transfer)
 }
 
 type transferDTO struct {
@@ -78,7 +57,8 @@ type transferDTO struct {
 // @Tags Collections
 // @Produce json
 // @Accept json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body transferDTO true "Request"
 // @Security BearerAuth
 // @Success 200 {object} collectionDTO
@@ -86,13 +66,13 @@ type transferDTO struct {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/transfer [post]
+// @Router /v1/collections/{owner}/{slug}/transfer [post]
 func (h *Handler) Transfer(c fiber.Ctx) error {
 	var body transferDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
-	item, err := h.svc.Transfer(c.Context(), c.Params("id"), body.UserID)
+	item, err := h.svc.Transfer(c.Context(), middleware.CollectionID(c), body.UserID)
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
@@ -220,16 +200,17 @@ func (h *Handler) Options(c fiber.Ctx) error {
 // @Summary Get a collection with its schema
 // @Tags Collections
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} collectionDTO
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id} [get]
+// @Router /v1/collections/{owner}/{slug} [get]
 func (h *Handler) Get(c fiber.Ctx) error {
-	item, err := h.svc.Get(c.Context(), c.Params("id"))
+	item, err := h.svc.Get(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
@@ -268,7 +249,8 @@ func (h *Handler) Create(c fiber.Ctx) error {
 // @Produce json
 // @Accept json
 // @Param body body updateDTO true "Request"
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} collectionDTO
 // @Failure 400 {object} mapper.errorBody
@@ -277,14 +259,14 @@ func (h *Handler) Create(c fiber.Ctx) error {
 // @Failure 404 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id} [patch]
+// @Router /v1/collections/{owner}/{slug} [patch]
 func (h *Handler) Update(c fiber.Ctx) error {
 	var body updateDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
 	item, err := h.svc.Update(c.Context(), input.UpdateCollectionCommand{
-		ID: c.Params("id"), Name: body.Name, Description: body.Description, Icon: body.Icon, Schema: body.Schema, Version: body.Version,
+		ID: middleware.CollectionID(c), Name: body.Name, Description: body.Description, Icon: body.Icon, Schema: body.Schema, Version: body.Version,
 	})
 	if err != nil {
 		return mapper.WriteError(c, err)
@@ -356,16 +338,17 @@ type roleDTO struct {
 // @Summary List a collection's members; owners only
 // @Tags Collections
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} object{items=[]memberDTO}
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/members [get]
+// @Router /v1/collections/{owner}/{slug}/members [get]
 func (h *Handler) Members(c fiber.Ctx) error {
-	items, err := h.svc.Members(c.Context(), c.Params("id"))
+	items, err := h.svc.Members(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
@@ -380,7 +363,8 @@ func (h *Handler) Members(c fiber.Ctx) error {
 // @Tags Collections
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body addMemberDTO true "Request"
 // @Security BearerAuth
 // @Success 201 {object} addedMemberDTO
@@ -390,14 +374,14 @@ func (h *Handler) Members(c fiber.Ctx) error {
 // @Failure 404 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/members [post]
+// @Router /v1/collections/{owner}/{slug}/members [post]
 func (h *Handler) AddMember(c fiber.Ctx) error {
 	var body addMemberDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
 	res, err := h.svc.AddMember(c.Context(), input.AddMemberCommand{
-		CollectionID: c.Params("id"), Email: body.Email, Name: body.Name, Role: domain.MemberRole(body.Role),
+		CollectionID: middleware.CollectionID(c), Email: body.Email, Name: body.Name, Role: domain.MemberRole(body.Role),
 	})
 	if err != nil {
 		return mapper.WriteError(c, err)
@@ -408,7 +392,8 @@ func (h *Handler) AddMember(c fiber.Ctx) error {
 // @Summary Change a member's role; a collection keeps at least one owner
 // @Tags Collections
 // @Accept json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param userId path string true "User ID"
 // @Param body body roleDTO true "Request"
 // @Security BearerAuth
@@ -419,13 +404,13 @@ func (h *Handler) AddMember(c fiber.Ctx) error {
 // @Failure 404 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/members/{userId} [patch]
+// @Router /v1/collections/{owner}/{slug}/members/{userId} [patch]
 func (h *Handler) SetMemberRole(c fiber.Ctx) error {
 	var body roleDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
-	if err := h.svc.SetMemberRole(c.Context(), c.Params("id"), c.Params("userId"), domain.MemberRole(body.Role)); err != nil {
+	if err := h.svc.SetMemberRole(c.Context(), middleware.CollectionID(c), c.Params("userId"), domain.MemberRole(body.Role)); err != nil {
 		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -433,7 +418,8 @@ func (h *Handler) SetMemberRole(c fiber.Ctx) error {
 
 // @Summary Remove a member; a collection keeps at least one owner
 // @Tags Collections
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param userId path string true "User ID"
 // @Security BearerAuth
 // @Success 204
@@ -443,9 +429,9 @@ func (h *Handler) SetMemberRole(c fiber.Ctx) error {
 // @Failure 404 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/members/{userId} [delete]
+// @Router /v1/collections/{owner}/{slug}/members/{userId} [delete]
 func (h *Handler) RemoveMember(c fiber.Ctx) error {
-	if err := h.svc.RemoveMember(c.Context(), c.Params("id"), c.Params("userId")); err != nil {
+	if err := h.svc.RemoveMember(c.Context(), middleware.CollectionID(c), c.Params("userId")); err != nil {
 		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -469,7 +455,8 @@ type auditDTO struct {
 // @Summary A collection's audit log: its changes, its records' and its members'; owners only
 // @Tags Collections
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param page query int false "Page" default(1)
 // @Param limit query int false "Items per page, up to 100" default(20)
 // @Param action query string false "Action prefix, such as record. or collection.member"
@@ -483,13 +470,13 @@ type auditDTO struct {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/audit [get]
+// @Router /v1/collections/{owner}/{slug}/audit [get]
 func (h *Handler) AuditLog(c fiber.Ctx) error {
 	filter, err := mapper.AuditFilter(c, domain.NewPage(fiber.Query[int](c, "page"), fiber.Query[int](c, "limit")))
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
-	items, total, err := h.svc.AuditLog(c.Context(), c.Params("id"), filter)
+	items, total, err := h.svc.AuditLog(c.Context(), middleware.CollectionID(c), filter)
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
@@ -547,14 +534,15 @@ func toQualityDTO(st *input.QualityState) (qualityDTO, error) {
 // @Summary The latest check of the records against the current schema; editors and owners
 // @Tags Collections
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} qualityDTO "invalid holds the first 100, with their issues"
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/quality [get]
+// @Router /v1/collections/{owner}/{slug}/quality [get]
 func (h *Handler) Quality(c fiber.Ctx) error {
 	return h.writeQuality(c, h.svc.Quality)
 }
@@ -562,20 +550,21 @@ func (h *Handler) Quality(c fiber.Ctx) error {
 // @Summary Start a check of the records in the background, unless one is running; editors and owners
 // @Tags Collections
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} qualityDTO
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/quality [post]
+// @Router /v1/collections/{owner}/{slug}/quality [post]
 func (h *Handler) StartQuality(c fiber.Ctx) error {
 	return h.writeQuality(c, h.svc.StartQuality)
 }
 
 func (h *Handler) writeQuality(c fiber.Ctx, get func(context.Context, string) (*input.QualityState, error)) error {
-	st, err := get(c.Context(), c.Params("id"))
+	st, err := get(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
@@ -604,7 +593,8 @@ type countDTO struct {
 // @Tags Collections
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body fixDTO true "The change"
 // @Security BearerAuth
 // @Success 200 {object} countDTO "records changed, or that would change with dry_run"
@@ -613,13 +603,13 @@ type countDTO struct {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/quality/fix [post]
+// @Router /v1/collections/{owner}/{slug}/quality/fix [post]
 func (h *Handler) Fix(c fiber.Ctx) error {
 	var body fixDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
-	n, err := h.svc.Fix(c.Context(), c.Params("id"), domain.RecordFix{Op: body.Op, Field: body.Field, To: body.To, Value: body.Value, DryRun: body.DryRun})
+	n, err := h.svc.Fix(c.Context(), middleware.CollectionID(c), domain.RecordFix{Op: body.Op, Field: body.Field, To: body.To, Value: body.Value, DryRun: body.DryRun})
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
@@ -630,7 +620,8 @@ func (h *Handler) Fix(c fiber.Ctx) error {
 // @Description Records changed after that check started are kept. 409 when the check is missing, unfinished or of older fields.
 // @Tags Collections
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 200 {object} countDTO "records deleted"
 // @Failure 401 {object} mapper.errorBody
@@ -638,9 +629,9 @@ func (h *Handler) Fix(c fiber.Ctx) error {
 // @Failure 404 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/quality/delete-invalid [post]
+// @Router /v1/collections/{owner}/{slug}/quality/delete-invalid [post]
 func (h *Handler) DeleteInvalid(c fiber.Ctx) error {
-	n, err := h.svc.DeleteInvalid(c.Context(), c.Params("id"))
+	n, err := h.svc.DeleteInvalid(c.Context(), middleware.CollectionID(c))
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
@@ -657,7 +648,8 @@ type duplicateDTO struct {
 // @Tags Collections
 // @Accept json
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body duplicateDTO true "Copy"
 // @Security BearerAuth
 // @Success 201 {object} collectionDTO
@@ -666,13 +658,13 @@ type duplicateDTO struct {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/duplicate [post]
+// @Router /v1/collections/{owner}/{slug}/duplicate [post]
 func (h *Handler) Duplicate(c fiber.Ctx) error {
 	var body duplicateDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
-	created, err := h.svc.Duplicate(c.Context(), input.DuplicateCollectionCommand{ID: c.Params("id"), Name: body.Name, Records: body.Records})
+	created, err := h.svc.Duplicate(c.Context(), input.DuplicateCollectionCommand{ID: middleware.CollectionID(c), Name: body.Name, Records: body.Records})
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
@@ -705,7 +697,8 @@ type contributorDTO struct {
 // @Summary A collection's overview: totals, records per day and top contributors of the last 30 days
 // @Tags Collections
 // @Produce json
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param tz query string false "IANA time zone the days are counted in" default(UTC)
 // @Security BearerAuth
 // @Success 200 {object} statsDTO
@@ -713,9 +706,9 @@ type contributorDTO struct {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/stats [get]
+// @Router /v1/collections/{owner}/{slug}/stats [get]
 func (h *Handler) Stats(c fiber.Ctx) error {
-	st, err := h.svc.Stats(c.Context(), c.Params("id"), c.Query("tz"))
+	st, err := h.svc.Stats(c.Context(), middleware.CollectionID(c), c.Query("tz"))
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
@@ -731,16 +724,17 @@ func (h *Handler) Stats(c fiber.Ctx) error {
 
 // @Summary Leave a collection; the last owner cannot
 // @Tags Collections
-// @Param id path string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Security BearerAuth
 // @Success 204
 // @Failure 401 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 409 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/collections/{id}/leave [post]
+// @Router /v1/collections/{owner}/{slug}/leave [post]
 func (h *Handler) Leave(c fiber.Ctx) error {
-	if err := h.svc.Leave(c.Context(), c.Params("id")); err != nil {
+	if err := h.svc.Leave(c.Context(), middleware.CollectionID(c)); err != nil {
 		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

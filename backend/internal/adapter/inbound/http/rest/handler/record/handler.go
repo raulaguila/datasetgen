@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/mapper"
+	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/pkg/apperror"
@@ -22,15 +23,20 @@ func New(svc input.RecordService) *Handler {
 	return &Handler{svc: svc}
 }
 
-// Routes expects a router already behind Bearer.
-// Routes expects a router behind Bearer; the service checks the caller's role
-// in the record's collection (viewer reads, editor writes).
-func (h *Handler) Routes(r fiber.Router) {
+// Routes mounts one record's calls on /v1/records; the service checks the caller's
+// role in the record's collection (viewer reads, editor writes).
+// CollectionRoutes mounts the calls on a collection's records on
+// /v1/collections/:owner/:slug/records, behind middleware.CollectionPath.
+func (h *Handler) CollectionRoutes(r fiber.Router) {
 	r.Get("/", h.List)
-	r.Get("/export", h.Export) // before /:id, which would swallow it
+	r.Post("/", h.Create)
+	r.Get("/export", h.Export)
 	r.Get("/aggregate", h.Aggregate)
 	r.Get("/stats", h.Stats)
 	r.Post("/import", h.Import)
+}
+
+func (h *Handler) Routes(r fiber.Router) {
 	r.Get("/:id", h.Get)
 	r.Get("/:id/versions", h.Versions)
 	r.Get("/:id/links", h.Links)
@@ -38,7 +44,6 @@ func (h *Handler) Routes(r fiber.Router) {
 	r.Post("/:id/comments", h.AddComment)
 	r.Delete("/:id/comments/:commentId", h.DeleteComment)
 	r.Post("/:id/restore", h.Restore)
-	r.Post("/", h.Create)
 	r.Put("/:id", h.Update)
 	r.Post("/delete", h.Delete)
 }
@@ -161,8 +166,7 @@ func (h *Handler) DeleteComment(c fiber.Ctx) error {
 }
 
 type createDTO struct {
-	CollectionID string          `json:"collection_id"`
-	Data         json.RawMessage `json:"data" swaggertype:"object"`
+	Data json.RawMessage `json:"data" swaggertype:"object"`
 }
 
 type updateDTO struct {
@@ -181,7 +185,7 @@ func toDTO(r domain.Record) recordDTO {
 // listFilter reads what selects records from the query string.
 func listFilter(c fiber.Ctx) (domain.RecordFilter, error) {
 	filter := domain.RecordFilter{
-		CollectionID: c.Query("collection_id"),
+		CollectionID: middleware.CollectionID(c),
 		Page:         domain.NewPage(fiber.Query[int](c, "page"), fiber.Query[int](c, "limit")),
 		Search:       c.Query("search"),
 		Sort:         c.Query("sort"),
@@ -207,7 +211,8 @@ func listFilter(c fiber.Ctx) (domain.RecordFilter, error) {
 // @Description Each item's data is a preview: only its top-level strings, numbers, booleans and lists of strings (first 10), strings cut to 120 characters. GET /v1/records/{id} returns the full data.
 // @Tags Records
 // @Produce json
-// @Param collection_id query string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param page query int false "Page" default(1)
 // @Param limit query int false "Items per page, up to 100" default(20)
 // @Param search query string false "Text anywhere in the record JSON"
@@ -222,7 +227,7 @@ func listFilter(c fiber.Ctx) (domain.RecordFilter, error) {
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/records [get]
+// @Router /v1/collections/{owner}/{slug}/records [get]
 func (h *Handler) List(c fiber.Ctx) error {
 	filter, err := listFilter(c)
 	if err != nil {
@@ -262,6 +267,8 @@ func (h *Handler) Get(c fiber.Ctx) error {
 // @Tags Records
 // @Produce json
 // @Accept json
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param body body createDTO true "Request"
 // @Security BearerAuth
 // @Success 201 {object} recordDTO
@@ -270,13 +277,13 @@ func (h *Handler) Get(c fiber.Ctx) error {
 // @Failure 403 {object} mapper.errorBody
 // @Failure 404 {object} mapper.errorBody
 // @Failure 429 {object} mapper.errorBody
-// @Router /v1/records [post]
+// @Router /v1/collections/{owner}/{slug}/records [post]
 func (h *Handler) Create(c fiber.Ctx) error {
 	var body createDTO
 	if err := c.Bind().Body(&body); err != nil {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
-	item, err := h.svc.Create(c.Context(), input.CreateRecordCommand{CollectionID: body.CollectionID, Data: body.Data})
+	item, err := h.svc.Create(c.Context(), input.CreateRecordCommand{CollectionID: middleware.CollectionID(c), Data: body.Data})
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
@@ -350,7 +357,8 @@ type groupDTO struct {
 // @Summary Count the selected records, by a field (group) or all together, with the sum, average, least and greatest of numeric fields (sum, comma separated, up to 5)
 // @Tags Records
 // @Produce json
-// @Param collection_id query string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param group query string false "Field to group by (up to 100 groups, largest first)"
 // @Param sum query string false "Numeric fields, comma separated"
 // @Param where query string false "Rules as JSON, as in the list"
@@ -359,7 +367,7 @@ type groupDTO struct {
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
-// @Router /v1/records/aggregate [get]
+// @Router /v1/collections/{owner}/{slug}/records/aggregate [get]
 func (h *Handler) Aggregate(c fiber.Ctx) error {
 	filter, err := listFilter(c)
 	if err != nil {
@@ -415,7 +423,8 @@ func splitList(v string) []string {
 // @Description How many of the selected records fill each field, the range of numbers and dates, a count per date bucket and the commonest values. Viewer or above.
 // @Tags Records
 // @Produce json
-// @Param collection_id query string true "Collection ID"
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
 // @Param where query string false "Rules as JSON, as in the list"
 // @Param search query string false "Text search, as in the list"
 // @Param filled query string false "Fields to count filled, comma separated"
@@ -428,7 +437,7 @@ func splitList(v string) []string {
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
 // @Failure 403 {object} mapper.errorBody
-// @Router /v1/records/stats [get]
+// @Router /v1/collections/{owner}/{slug}/records/stats [get]
 func (h *Handler) Stats(c fiber.Ctx) error {
 	filter, err := listFilter(c)
 	if err != nil {

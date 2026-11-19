@@ -59,9 +59,9 @@ export function CommandPalette() {
     users.list({ page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((u) => ({ href: `/admin/users/${u.id}`, label: u.name, hint: u.email, icon: UserIcon }))));
   // The collection last opened: its pages, and its records by their content.
   const collectionId = useUIStore((s) => s.collectionId);
-  const lastCollection = useQuery({ queryKey: ["collections", "detail", collectionId], queryFn: () => collections.get(collectionId!), enabled: open && !!collectionId, retry: false }).data;
+  const lastCollection = useQuery({ queryKey: ["collections", "detail", collectionId], queryFn: () => collections.byID(collectionId!), enabled: open && !!collectionId, retry: false }).data;
   const recordHits = useHits(`records:${lastCollection?.id}`, q, search && !!lastCollection, (signal) =>
-    records.list({ collection_id: lastCollection!.id, page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((rec) => ({
+    records.list(lastCollection!, { page: 1, limit: 5, search: q }, signal).then((r) => r.items.map((rec) => ({
       href: recordPath(lastCollection!, rec.id), label: recordTitle(lastCollection!.schema ?? null, rec.data) ?? rec.id, hint: lastCollection!.name, icon: FileText,
     }))));
   const collectionHits = useHits("collections", q, search && !!user, (signal) =>

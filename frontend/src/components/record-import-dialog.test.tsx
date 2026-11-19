@@ -16,7 +16,7 @@ it("shows inferred subfields and sends objects and lists intact through validati
   const csv = Object.keys(data).join(",") + "\n" + Object.values(data).map((v) => '"' + JSON.stringify(v).replaceAll('"', '""') + '"').join(",");
   const schema = schemaFromFile("dados.csv", csv)!;
   const validator = new Validator(schema, "2020-12", false);
-  const importBatch = vi.spyOn(records, "importBatch").mockImplementation(async (body) => {
+  const importBatch = vi.spyOn(records, "importBatch").mockImplementation(async (_c, body) => {
     expect(body.records).toEqual([data]);
     expect(body.records.every((r) => validator.validate(r).valid)).toBe(true);
     return { created: body.dry_run ? 0 : 1, updated: 0, invalid: 0, errors: [] };
@@ -26,7 +26,7 @@ it("shows inferred subfields and sends objects and lists intact through validati
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <I18nProvider initial="pt-BR">
         <SchemaForm schema={schema} data={data} />
-        <RecordImportDialog collectionId="collection" schema={schema} open onOpenChange={onOpenChange} />
+        <RecordImportDialog collection={{ id: "collection", owner: "ana", slug: "c" }} schema={schema} open onOpenChange={onOpenChange} />
       </I18nProvider>
     </QueryClientProvider>,
   );
@@ -36,10 +36,10 @@ it("shows inferred subfields and sends objects and lists intact through validati
   Object.defineProperty(file, "text", { value: async () => csv });
   fireEvent.change(document.getElementById("import-file")!, { target: { files: [file] } });
   await waitFor(() => expect(screen.getByRole("button", { name: "Importar 1" })).toBeEnabled());
-  expect(importBatch).toHaveBeenNthCalledWith(1, expect.objectContaining({ dry_run: true, records: [data] }));
+  expect(importBatch).toHaveBeenNthCalledWith(1, expect.objectContaining({ slug: "c" }), expect.objectContaining({ dry_run: true, records: [data] }));
   fireEvent.click(screen.getByRole("button", { name: "Importar 1" }));
   await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
-  expect(importBatch).toHaveBeenNthCalledWith(2, expect.objectContaining({ skip_invalid: true, records: [data] }));
+  expect(importBatch).toHaveBeenNthCalledWith(2, expect.objectContaining({ slug: "c" }), expect.objectContaining({ skip_invalid: true, records: [data] }));
 });
 
 it("replays the first unacknowledged batch after reopening the dialog", async () => {
@@ -51,13 +51,13 @@ it("replays the first unacknowledged batch after reopening the dialog", async ()
   const mount = () => render(
     <QueryClientProvider client={new QueryClient()}>
       <I18nProvider initial="pt-BR">
-        <RecordImportDialog collectionId="resume-test" schema={schema} open onOpenChange={onClose} />
+        <RecordImportDialog collection={{ id: "resume-test", owner: "ana", slug: "r" }} schema={schema} open onOpenChange={onClose} />
       </I18nProvider>
     </QueryClientProvider>,
   );
   const pick = () => fireEvent.change(document.getElementById("import-file")!, { target: { files: [file] } });
   let pendingKey: string | undefined;
-  const request = vi.spyOn(records, "importBatch").mockImplementation(async (body) => {
+  const request = vi.spyOn(records, "importBatch").mockImplementation(async (_c, body) => {
     if (body.dry_run) return { created: 0, updated: 0, invalid: 0, errors: [] };
     const checkpoint = loadProgress(id);
     expect(checkpoint?.pending).toBe(0);

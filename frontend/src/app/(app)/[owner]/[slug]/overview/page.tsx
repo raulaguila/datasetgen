@@ -121,12 +121,12 @@ function Overview({ collection }: { collection: Collection }) {
   const stepsGone = useUIStore((st) => st.stepsDismissed.includes(collection.id));
   const base = collectionPath(collection);
   const editor = roleAllows(collection.role, "editor");
-  const stats = useQuery({ queryKey: ["collections", "stats", collection.id], queryFn: ({ signal }) => collections.stats(collection.id, signal) });
+  const stats = useQuery({ queryKey: ["collections", "stats", collection.id], queryFn: ({ signal }) => collections.stats(collection, signal) });
   const { q: quality, stale } = useQuality(collection, editor);
   const invalid = quality.data?.status === "done" && !stale ? quality.data.invalid_count : null;
   const checked = quality.data?.status === "done" && !stale ? quality.data.checked : 0;
   const valid = invalid === null ? null : checked - invalid;
-  const recent = useQuery({ queryKey: ["records", collection.id, "recent"], queryFn: ({ signal }) => records.list({ collection_id: collection.id, page: 1, limit: 5 }, signal) });
+  const recent = useQuery({ queryKey: ["records", collection.id, "recent"], queryFn: ({ signal }) => records.list(collection, { page: 1, limit: 5 }, signal) });
   const number = new Intl.NumberFormat(locale);
 
   if (stats.isPending) return <ListSkeleton rows={4} />;

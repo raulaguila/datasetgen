@@ -84,7 +84,7 @@ export function BulkEditDialog({ collection, ids, open, onOpenChange, onDone }: 
             <>
               {!clear && (
                 <div className="rounded-lg border bg-muted/30 p-3">
-                  <SchemaForm key={key} schema={{ type: "object", properties: { [key]: props[key] } }} collectionId={collection.id} data={value} onChange={(d) => setValue((d ?? {}) as Record<string, unknown>)} idPrefix="bulk" />
+                  <SchemaForm key={key} schema={{ type: "object", properties: { [key]: props[key] } }} collection={collection} data={value} onChange={(d) => setValue((d ?? {}) as Record<string, unknown>)} idPrefix="bulk" />
                 </div>
               )}
               {!row.field.required && (

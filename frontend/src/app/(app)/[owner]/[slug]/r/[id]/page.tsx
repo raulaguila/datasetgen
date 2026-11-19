@@ -94,7 +94,7 @@ function RecordViewPage({ id }: { id: string }) {
   const client = useQueryClient();
   // A copy opens in the form, so the fields that must differ can be changed at once.
   const duplicate = useMutation({
-    mutationFn: () => records.create(record!.collection_id, record!.data),
+    mutationFn: () => records.create(collection!, record!.data),
     onSuccess: (copy) => {
       void client.invalidateQueries({ queryKey: ["records", copy.collection_id] });
       toast.success(t("records.duplicated"));

@@ -1,5 +1,6 @@
 "use client";
 
+import type { CollectionRef } from "@/lib/paths";
 import { FormError } from "@/components/bits";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -62,8 +63,8 @@ interface Busy {
  * answer saves nothing twice, and failures that may pass are tried again. Where a
  * send stopped is kept in this browser: the same file continues from there.
  */
-export function RecordImportDialog({ collectionId, schema, open, onOpenChange, initialFile }: {
-  collectionId: string;
+export function RecordImportDialog({ collection, schema, open, onOpenChange, initialFile }: {
+  collection: CollectionRef;
   schema?: Record<string, unknown>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -115,7 +116,7 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange, i
     const ctl = new AbortController();
     running.current = ctl;
     const label = t(send ? "import.sending" : "import.checking");
-    const checkpointId = send && progress ? importId(collectionId, schema, f, cols, selectedKey) : null;
+    const checkpointId = send && progress ? importId(collection.id, schema, f, cols, selectedKey) : null;
     let records = 0;
     let n = 0;
     setBusy({ label, read: 0, records: 0 });
@@ -128,8 +129,8 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange, i
       }
       const res = b.records.length && i >= (progress?.sent ?? 0) && (send || i !== progress?.pending)
         ? await withRetry(
-          () => records_.importBatch({
-            collection_id: collectionId, records: b.records.map((r) => r.data), upsert_key: selectedKey,
+          () => records_.importBatch(collection, {
+            records: b.records.map((r) => r.data), upsert_key: selectedKey,
             ...(b.records.some((r) => r.sourceJSON) ? { sourceRecords: b.records.map((r) => r.sourceJSON ?? JSON.stringify(r.data)) } : {}),
             ...(send ? { skip_invalid: true, batch_key: `${progress!.fid}:${i}` } : { dry_run: true }),
           }),
@@ -149,7 +150,7 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange, i
     const out: Checked = { valid: 0, invalid: 0, problems: [], saved: 0 };
     const keep = (line: number, message: string) => { out.invalid++; if (out.problems.length < KEPT_PROBLEMS) out.problems.push({ line, message }); };
     // Batches an earlier send saved are not checked again: their unique values would now read as taken.
-    const before = loadProgress(importId(collectionId, schema, f, cols, selectedKey));
+    const before = loadProgress(importId(collection.id, schema, f, cols, selectedKey));
     out.saved = (before?.created ?? 0) + (before?.updated ?? 0);
     setResumed(before);
     try {
@@ -200,7 +201,7 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange, i
   const send = async () => {
     if (!file || !checked) return;
     const cols = mapped();
-    const id = importId(collectionId, schema, file, cols, upsertKey);
+    const id = importId(collection.id, schema, file, cols, upsertKey);
     const progress: SendProgress = loadProgress(id) ?? { version: 2, fid: crypto.randomUUID(), sent: 0, created: 0, updated: 0, at: Date.now() };
     const skip = progress.sent;
     setError(null);
@@ -219,7 +220,7 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange, i
       // The check counted what should go in; less means records changed between the check and the send.
       const missing = checked.valid + checked.saved - created - updated;
       if (missing > 0) toast.warning(plural(t("import.short"), missing, num(missing)), { duration: 15_000 });
-      void client.invalidateQueries({ queryKey: ["records", collectionId] });
+      void client.invalidateQueries({ queryKey: ["records", collection.id] });
       void client.invalidateQueries({ queryKey: ["collections"] });
       setBusy(null);
       close(false);
@@ -227,7 +228,7 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange, i
       const why = err instanceof Cancelled ? t("import.stopped") : errorMessage(err, "common.save_failed", t);
       setError(`${why} ${plural(t("import.partial"), progress.created + progress.updated, num(progress.created + progress.updated))} ${t("import.resume_later")}`);
       setResumed(loadProgress(id));
-      void client.invalidateQueries({ queryKey: ["records", collectionId] });
+      void client.invalidateQueries({ queryKey: ["records", collection.id] });
       setBusy(null);
     }
   };
@@ -235,7 +236,7 @@ export function RecordImportDialog({ collectionId, schema, open, onOpenChange, i
   /** Forgets where an earlier send stopped: the next send starts from the first line. */
   const startOver = () => {
     if (!file) return;
-    saveProgress(importId(collectionId, schema, file, mapped(), upsertKey), null);
+    saveProgress(importId(collection.id, schema, file, mapped(), upsertKey), null);
     void check(file, mapped());
   };
 
