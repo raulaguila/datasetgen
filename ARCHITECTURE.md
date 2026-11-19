@@ -236,7 +236,7 @@ Do not log refresh tokens, passwords, or email token plaintext (payload in outbo
 **Confirmed:**
 
 - Release: `make deploy` (in `backend/`) runs the steps in their order: start postgres and backup, `make db-backup`, `make migrate-up`, rebuild backend and mailer, rebuild the web. Each build is also tagged with its commit (`git describe --always --dirty`), so `SYS_VERSION=<commit> make compose-up` (backend) or `WEB_VERSION=<commit> make compose-up` (web) starts an older one; the web image carries it as `BUILD_REVISION`
-- Schema: `golang-migrate` on `deploy/db/migrations`, applied with `make migrate-up` (also configures database logins, and part of `make deploy`); no container runs them
+- Schema: `golang-migrate` on `deploy/db/migrations`, applied with `make migrate-up` (also configures database logins). `make compose-up` and `make compose-build` start postgres and run it first, so a fresh volume has the app roles before backend and mailer connect; no container runs migrations
 - Runtime: Docker Compose (`deploy/docker/compose.yml` + `services.compose.yml`: postgres, backend, mailer; app containers run as `nobody`, with no Linux capabilities and `no-new-privileges`; the API port is published on `127.0.0.1` only, the web reaching it over `dataset_network`). The mailer gets throwaway JWT keys (`ACCESS_TOKEN=new`, `SYS_SERVICE=mailer`), and no inherited backend database password; its database role is restricted to outbox delivery
 - Dev: Air (`make dev-backend` / `dev-mailer`); binaries `make build-*`
 - Config: `config/.env` from `config/env.sh` / `make init`
