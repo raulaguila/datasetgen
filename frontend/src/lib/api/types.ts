@@ -79,6 +79,9 @@ export interface Notification {
   message: string;
   read_at: string | null;
   created_at: string;
+  /** The address of params.collection_id while it exists. */
+  collection_owner?: string;
+  collection_slug?: string;
 }
 
 export interface User {
@@ -243,6 +246,9 @@ export interface AuditRecord {
   target_label?: string;
   /** The target was deleted since. */
   target_gone?: boolean;
+  /** A collection target's address: /target_owner/target_slug. */
+  target_owner?: string;
+  target_slug?: string;
   details: Record<string, unknown>;
 }
 
@@ -265,6 +271,9 @@ export interface RecordComment {
 export interface RecordLinks {
   collection_id: string;
   collection_name: string;
+  /** The collection's address: /owner/slug. */
+  owner: string;
+  slug: string;
   field: string;
   /** The reference subfield of each item when field is a list of objects. */
   sub?: string;

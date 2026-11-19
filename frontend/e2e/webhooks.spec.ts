@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { colOf } from "./helpers";
+import { colOf, pageOf } from "./helpers";
 
 // An owner edits a webhook (the secret stays), pauses it and resumes it; a share
 // link takes a validity.
@@ -10,7 +10,7 @@ test("webhooks pause and edit; share links end", async ({ page }) => {
   const hook = await page.request.post(`/api/proxy${await colOf(page, id)}/webhooks`, { data: { url: "https://example.com/a", events: ["record.created"] } });
   expect(hook.status()).toBe(201);
 
-  await page.goto(`/collections/${id}/integrations#webhooks`);
+  await page.goto(`${await pageOf(page, id)}/integrations#webhooks`);
   const row = page.getByRole("listitem").filter({ hasText: "https://example.com/a" });
   await row.getByRole("button", { name: "Pausar" }).click();
   await expect(row.getByText("Pausado", { exact: true })).toBeVisible();

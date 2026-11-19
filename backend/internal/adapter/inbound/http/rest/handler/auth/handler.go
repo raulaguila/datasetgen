@@ -60,6 +60,8 @@ type registerDTO struct {
 type activateDTO struct {
 	Token    string `json:"token"`
 	Password string `json:"password"`
+	// Username is optional: empty keeps the one made from the email. Collections live at /username/slug.
+	Username string `json:"username,omitempty" example:"ana-silva"`
 }
 
 type loginDTO struct {
@@ -186,7 +188,7 @@ func (h *Handler) Register(c fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(out)
 }
 
-// @Summary Activate an account and set its password
+// @Summary Activate an account, set its password and, optionally, choose its username
 // @Tags Registration
 // @Produce json
 // @Accept json
@@ -194,6 +196,7 @@ func (h *Handler) Register(c fiber.Ctx) error {
 // @Success 204
 // @Failure 400 {object} mapper.errorBody
 // @Failure 401 {object} mapper.errorBody
+// @Failure 409 {object} mapper.errorBody "ALREADY_EXISTS: the username is taken"
 // @Failure 429 {object} mapper.errorBody
 // @Router /v1/auth/activate [post]
 func (h *Handler) Activate(c fiber.Ctx) error {
@@ -201,7 +204,7 @@ func (h *Handler) Activate(c fiber.Ctx) error {
 	if err := c.Bind().Body(&body); err != nil {
 		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "invalid body"))
 	}
-	if err := h.svc.Activate(c.Context(), input.ActivateCommand{Token: body.Token, Password: body.Password}); err != nil {
+	if err := h.svc.Activate(c.Context(), input.ActivateCommand{Token: body.Token, Password: body.Password, Username: body.Username}); err != nil {
 		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

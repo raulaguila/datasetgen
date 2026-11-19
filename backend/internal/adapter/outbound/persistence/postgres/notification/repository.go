@@ -33,6 +33,9 @@ type row struct {
 	Message   string     `gorm:"column:message"`
 	ReadAt    *time.Time `gorm:"column:read_at"`
 	CreatedAt time.Time  `gorm:"column:created_at"`
+	// The address of params.collection_id, read with the list.
+	CollectionOwner *string `gorm:"column:collection_owner"`
+	CollectionSlug  *string `gorm:"column:collection_slug"`
 }
 
 func (r *Repository) Create(ctx context.Context, n *domain.Notification) error {
@@ -65,8 +68,13 @@ func (r *Repository) List(ctx context.Context, userID string, page domain.Page) 
 		return nil, 0, shared.WrapError(err, "notification")
 	}
 	var rows []row
-	err := owned().Select("id, user_id, level, kind, params, title, message, read_at, created_at").
-		Order("created_at DESC, id").Limit(page.Limit).Offset(page.Offset()).Find(&rows).Error
+	// A notification about a collection links to its current address; none once it is deleted.
+	err := r.db.WithContext(ctx).Table("usr.usr_notification n").
+		Select("n.id, n.user_id, n.level, n.kind, n.params, n.title, n.message, n.read_at, n.created_at, o.username AS collection_owner, c.slug AS collection_slug").
+		Joins("LEFT JOIN app.collection c ON c.id = (n.params->>'collection_id')::uuid AND c.deleted_at IS NULL").
+		Joins("LEFT JOIN usr.usr_user o ON o.id = c.owner_id").
+		Where("n.user_id = ?", userID).
+		Order("n.created_at DESC, n.id").Limit(page.Limit).Offset(page.Offset()).Find(&rows).Error
 	if err != nil {
 		return nil, 0, shared.WrapError(err, "notification")
 	}
@@ -78,6 +86,9 @@ func (r *Repository) List(ctx context.Context, userID string, page domain.Page) 
 		}
 		if m.Kind != nil {
 			n.Kind = *m.Kind
+		}
+		if m.CollectionOwner != nil && m.CollectionSlug != nil {
+			n.CollectionOwner, n.CollectionSlug = *m.CollectionOwner, *m.CollectionSlug
 		}
 		if err := json.Unmarshal(m.Params, &n.Params); err != nil {
 			return nil, 0, shared.WrapError(err, "notification")

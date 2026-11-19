@@ -36,5 +36,8 @@ type AuditRecord struct {
 	TargetID    string
 	TargetLabel string // the user's email, or the role's name
 	TargetGone  bool   // the target was deleted since
+	// The address of a collection target (/owner/slug); empty for other targets.
+	TargetOwner string
+	TargetSlug  string
 	Details     map[string]any
 }

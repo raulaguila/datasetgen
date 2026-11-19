@@ -306,15 +306,18 @@ func (r *Repository) Referrers(ctx context.Context, targetID, userID string) ([]
 	var rows []struct {
 		ID     uuid.UUID `gorm:"column:id"`
 		Name   string    `gorm:"column:name"`
+		Owner  string    `gorm:"column:owner"`
+		Slug   string    `gorm:"column:slug"`
 		Field  string    `gorm:"column:field"`
 		Sub    string    `gorm:"column:sub"`
 		Schema []byte    `gorm:"column:schema"`
 	}
 	// A top-level reference field, or a reference subfield of a list of objects.
 	err := r.db.WithContext(ctx).Raw(`
-		SELECT c.id, c.name, f.field, f.sub, c.schema
+		SELECT c.id, c.name, u.username AS owner, c.slug, f.field, f.sub, c.schema
 		FROM app.collection c
 		JOIN app.collection_member m ON m.collection_id = c.id AND m.user_id = ?
+		JOIN usr.usr_user u ON u.id = c.owner_id
 		CROSS JOIN LATERAL (
 			SELECT p.key AS field, '' AS sub FROM json_each(c.schema -> 'properties') p WHERE p.value ->> 'x-ref' = ?
 			UNION ALL
@@ -329,7 +332,7 @@ func (r *Repository) Referrers(ctx context.Context, targetID, userID string) ([]
 	}
 	out := make([]domain.Referrer, 0, len(rows))
 	for _, m := range rows {
-		out = append(out, domain.Referrer{CollectionID: m.ID.String(), Name: m.Name, Field: m.Field, Sub: m.Sub, Schema: m.Schema})
+		out = append(out, domain.Referrer{CollectionID: m.ID.String(), Name: m.Name, Owner: m.Owner, Slug: m.Slug, Field: m.Field, Sub: m.Sub, Schema: m.Schema})
 	}
 	return out, nil
 }

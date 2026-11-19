@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { collectionAt, colOf } from "./helpers";
+import { collectionAt, colOf, pageOf } from "./helpers";
 
 const api = (page: Page, path: string, data: unknown) => page.request.post(`/api/proxy${path}`, { data });
 
@@ -11,7 +11,7 @@ test("field order survives a save and a reload", async ({ page }) => {
     schema: { type: "object", properties: { primeiro: { type: "string", title: "Primeiro" }, segundo: { type: "string", title: "Segundo" } } },
   })).json()).id as string;
   await api(page, `${await colOf(page, id)}/records`, { data: { primeiro: "a", segundo: "b" } });
-  await page.goto(`/collections/${id}/fields`);
+  await page.goto(`${await pageOf(page, id)}/fields`);
   const rows = page.getByRole("list", { name: "Campos" }).getByRole("listitem");
   await rows.nth(0).locator("[draggable=true]").dragTo(rows.nth(1).locator("[draggable=true]"));
   await expect(rows.first()).toContainText("Segundo");
@@ -37,7 +37,7 @@ test("subfield order survives a save", async ({ page }) => {
       endereco: { title: "Endereço", type: "object", required: ["rua", "numero"], properties: { rua: { title: "Rua", type: "string" }, numero: { title: "Número", type: "integer" } } },
     } },
   })).json()).id as string;
-  await page.goto(`/collections/${id}/fields`);
+  await page.goto(`${await pageOf(page, id)}/fields`);
   await page.getByRole("button", { name: "Subir: Número" }).click();
   await page.getByRole("button", { name: "Subir: Endereço" }).click();
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
@@ -59,7 +59,7 @@ test("ready-made fields, conditions, sections and option colors", async ({ page 
     name: `painel-${Date.now()}`,
     schema: { type: "object", required: ["title"], properties: { title: { type: "string", title: "Título" } } },
   })).json()).id as string;
-  await page.goto(`/collections/${id}/fields`);
+  await page.goto(`${await pageOf(page, id)}/fields`);
 
   await page.getByRole("button", { name: "Adicionar campo", exact: true }).click();
   const panel = page.getByRole("dialog");
@@ -95,7 +95,7 @@ test("ready-made fields, conditions, sections and option colors", async ({ page 
   expect(saved.properties.motivo).toMatchObject({ "x-section": "Encerramento", "x-show-when": { field: "status", op: "eq", value: "Concluído" } });
 
   // The record form: Motivo only once Status is Concluído, under its section.
-  await page.goto(`/collections/${id}`);
+  await page.goto(`${await pageOf(page, id)}`);
   await page.getByRole("button", { name: "Novo registro" }).click();
   await page.locator("#rec_title").fill("Pedido 1");
   await expect(page.locator("#rec_motivo")).toHaveCount(0);

@@ -221,6 +221,7 @@ const (
 type Referrer struct {
 	CollectionID string
 	Name         string
+	Owner, Slug  string // the collection's address
 	Field        string
 	// Sub, when set, is the subfield of each item of the list Field that holds the reference.
 	Sub    string

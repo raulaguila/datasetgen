@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { addField, dropKey, newCollection, atCollection, collectionIdOf, colOf } from "./helpers";
+import { addField, dropKey, newCollection, atCollection, collectionIdOf, colOf, pageOf } from "./helpers";
 
 // CSV import, sort by a field, bulk edit, a saved view, the trash, an API key
 // used through the web address, and the field history.
@@ -145,7 +145,7 @@ test("a restore picks a new unique value", async ({ page }) => {
   expect((await post("/v1/records/delete", { ids: [old] })).ok()).toBeTruthy();
   expect((await post(`${await colOf(page, id)}/records`, { data: { cod: "A1" } })).ok()).toBeTruthy();
 
-  await page.goto(`/collections/${id}/trash`);
+  await page.goto(`${await pageOf(page, id)}/trash`);
   await page.getByRole("row").filter({ hasText: "A1" }).getByRole("button", { name: "Restaurar" }).click();
   const dialog = page.getByRole("dialog", { name: "Esse valor já está em uso" });
   await expect(dialog.getByLabel("Código")).toHaveValue("A1");
@@ -154,7 +154,7 @@ test("a restore picks a new unique value", async ({ page }) => {
   await dialog.getByLabel("Código").fill("A2");
   await dialog.getByRole("button", { name: "Restaurar" }).click();
   await expect(page.getByText("1 registro restaurado")).toBeVisible();
-  await page.goto(`/collections/${id}`);
+  await page.goto(`${await pageOf(page, id)}`);
   await expect(page.getByRole("row").filter({ hasText: "A2" })).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: "A1" })).toBeVisible();
 });

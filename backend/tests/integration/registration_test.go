@@ -157,3 +157,37 @@ func TestResetRequestTakesTheSameTimeForAnyEmail(t *testing.T) {
 		}
 	}
 }
+
+// The username is chosen at activation, when the email is proven; a refusal leaves the account pending.
+func TestActivateChoosesTheUsername(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	taken, err := e.store.Users().FindByEmail(ctx, e.activeUser(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := email()
+	res := e.register(t, addr)
+	activate := func(username string) error {
+		return e.svc.Activate(ctx, input.ActivateCommand{Token: res.ActivationToken, Password: strongPassword, Username: username})
+	}
+
+	wantCode(t, activate("no spaces"), apperror.CodeInvalidInput)
+	wantCode(t, activate("admin"), apperror.CodeInvalidInput) // reserved: an app page
+	wantCode(t, activate(strings.ToUpper(taken.Username)), apperror.CodeAlreadyExists)
+	if got := e.userStatus(t, addr); got != domain.UserStatusPending {
+		t.Fatalf("status %s", got)
+	}
+
+	chosen := "Leitora-" + addr[1:8] // unique per run
+	if err := activate(" " + chosen + " "); err != nil {
+		t.Fatal(err)
+	}
+	u, err := e.store.Users().FindByEmail(ctx, addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Username != strings.ToLower(chosen) || u.Status != domain.UserStatusActive {
+		t.Fatalf("user %s %s", u.Username, u.Status)
+	}
+}

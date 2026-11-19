@@ -17,7 +17,7 @@ import { useGoToPage, useListParams } from "@/lib/hooks/use-list-params";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
-import { collectionByID, recordByID } from "@/lib/paths";
+import { collectionPath, recordByID, recordPath } from "@/lib/paths";
 
 const ICON: Record<Notification["level"], { icon: typeof Info; cls: string }> = {
   info: { icon: Info, cls: "bg-primary/10 text-primary" },
@@ -85,6 +85,9 @@ export default function NotificationsPage() {
               {list.data.items.map((n) => {
                 const { icon: Icon, cls } = ICON[n.level];
                 const { title, message } = text(n);
+                const at = n.collection_owner && n.collection_slug ? { owner: n.collection_owner, slug: n.collection_slug } : undefined;
+                const recordId = n.params?.record_id;
+                const href = recordId ? (at ? recordPath(at, recordId) : recordByID(recordId)) : at && collectionPath(at);
                 return (
                   <li key={n.id} className={cn("flex flex-wrap gap-x-3 border-l-2 border-transparent px-4 py-3", !n.read_at && "border-l-primary bg-primary/[0.05]")}>
                     <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-full", cls)}>
@@ -97,9 +100,9 @@ export default function NotificationsPage() {
                         <span className="text-xs text-muted-foreground">{format(n.created_at)}</span>
                       </div>
                       <p className="mt-0.5 text-sm text-muted-foreground">{message}</p>
-                      {(n.params?.record_id || (!n.kind && n.params?.collection_id)) && (
-                        <Link className="mt-0.5 inline-block text-sm text-primary hover:underline" href={n.params.record_id ? recordByID(n.params.record_id) : collectionByID(n.params.collection_id)}>
-                          {t(n.params.record_id ? "notifications.open_record" : "notifications.open_collection")}
+                      {href && (
+                        <Link className="mt-0.5 inline-block text-sm text-primary hover:underline" href={href}>
+                          {t(recordId ? "notifications.open_record" : "notifications.open_collection")}
                         </Link>
                       )}
                     </div>

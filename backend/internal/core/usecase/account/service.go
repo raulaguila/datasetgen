@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
-	"strings"
 
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/policy"
@@ -81,19 +80,15 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, name, userna
 		name = &n
 	}
 	if username != nil {
-		u := strings.ToLower(strings.TrimSpace(*username))
-		if !domain.ValidUsername(u) {
-			return nil, apperror.New(apperror.CodeInvalidInput,
-				"username must be 1-39 lowercase letters, digits or single hyphens, and not a reserved word").WithField("username")
+		u, err := policy.ValidateUsername(*username)
+		if err != nil {
+			return nil, err
 		}
 		username = &u
 	}
 	// The username first: a taken one is the likely refusal, and it must not leave the new name saved.
 	if username != nil {
-		if err := s.UOW.Users().UpdateUsername(ctx, userID, *username); err != nil {
-			if apperror.IsCode(err, apperror.CodeAlreadyExists) {
-				return nil, apperror.New(apperror.CodeAlreadyExists, "this username is taken").WithField("username")
-			}
+		if err := policy.SetUsername(ctx, s.UOW, userID, *username); err != nil {
 			return nil, err
 		}
 	}

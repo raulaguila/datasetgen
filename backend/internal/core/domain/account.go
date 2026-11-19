@@ -61,4 +61,6 @@ type Notification struct {
 	Message   string
 	ReadAt    *time.Time
 	CreatedAt time.Time
+	// The current address of Params["collection_id"]; empty when there is none.
+	CollectionOwner, CollectionSlug string
 }

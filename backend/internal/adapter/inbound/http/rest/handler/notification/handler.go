@@ -36,6 +36,9 @@ type notificationDTO struct {
 	Message   string            `json:"message"`
 	ReadAt    *time.Time        `json:"read_at"`
 	CreatedAt time.Time         `json:"created_at"`
+	// The address of params.collection_id (/collection_owner/collection_slug), while it exists.
+	CollectionOwner string `json:"collection_owner,omitempty" example:"ana"`
+	CollectionSlug  string `json:"collection_slug,omitempty" example:"livros"`
 }
 
 // @Summary List the notifications of the current user, newest first
@@ -58,6 +61,7 @@ func (h *Handler) List(c fiber.Ctx) error {
 	for _, n := range items {
 		out = append(out, notificationDTO{
 			ID: n.ID, Level: n.Level, Kind: n.Kind, Params: n.Params, Title: n.Title, Message: n.Message, ReadAt: n.ReadAt, CreatedAt: n.CreatedAt,
+			CollectionOwner: n.CollectionOwner, CollectionSlug: n.CollectionSlug,
 		})
 	}
 	return c.JSON(fiber.Map{"items": out, "pagination": mapper.Pagination(page, total)})

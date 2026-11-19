@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/raulaguila/dataset/internal/core/policy"
@@ -76,6 +77,14 @@ func (s *Service) Activate(ctx context.Context, cmd input.ActivateCommand) error
 	if err := policy.ValidatePassword(cmd.Password); err != nil {
 		return err
 	}
+	username := ""
+	if strings.TrimSpace(cmd.Username) != "" {
+		u, err := policy.ValidateUsername(cmd.Username)
+		if err != nil {
+			return err
+		}
+		username = u
+	}
 	hash := tokenhash.SHA256Bytes(cmd.Token)
 	now := s.Clock.Now()
 
@@ -97,6 +106,12 @@ func (s *Service) Activate(ctx context.Context, cmd input.ActivateCommand) error
 		tok, user, err := activationTarget(ctx, uow, hash, now)
 		if err != nil {
 			return err
+		}
+		// Chosen here, not at signup: only the email's owner reaches this, so nobody reserves names.
+		if username != "" && username != user.Username {
+			if err := policy.SetUsername(ctx, uow, user.ID, username); err != nil {
+				return err
+			}
 		}
 		if err := uow.Credentials().SetPassword(ctx, user.ID, ph); err != nil {
 			return err

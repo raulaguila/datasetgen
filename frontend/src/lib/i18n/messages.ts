@@ -581,7 +581,9 @@ const ptBR = {
   "action.delete": "Excluir",
 
   "auth.activate_action": "Ativar conta",
-  "auth.activate_subtitle": "Cole o código recebido por e-mail e escolha sua senha.",
+  "auth.activate_subtitle": "Cole o código recebido por e-mail, escolha sua senha e, se quiser, seu nome de usuário.",
+  "auth.username_hint": "Opcional: em branco, criamos um a partir do seu e-mail. Suas coleções ficam em /{username}/nome-da-colecao; dá para trocar depois no perfil.",
+  "auth.username_placeholder": "seu-usuario",
   "auth.activate_title": "Ativar conta",
   "auth.activated_body": "Sua conta está ativa. Entre com seu e-mail e a nova senha.",
   "auth.activated_title": "Conta ativada",
@@ -2232,7 +2234,9 @@ const enUS: Record<MessageKey, string> = {
   "action.delete": "Delete",
 
   "auth.activate_action": "Activate account",
-  "auth.activate_subtitle": "Paste the code from the email and choose your password.",
+  "auth.activate_subtitle": "Paste the code from the email, choose your password and, if you like, your username.",
+  "auth.username_hint": "Optional: leave it blank and we make one from your email. Your collections live at /{username}/collection-name; you can change it later in your profile.",
+  "auth.username_placeholder": "your-username",
   "auth.activate_title": "Activate account",
   "auth.activated_body": "Your account is active. Sign in with your email and new password.",
   "auth.activated_title": "Account activated",

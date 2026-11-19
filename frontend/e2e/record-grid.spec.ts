@@ -21,7 +21,7 @@ test("conditions, groups, inline edit and the board", async ({ page }) => {
   for (const [title, status, valor] of [["Alfa", "novo", 10], ["Beta", "novo", 30], ["Gama", "feito", 5]] as const) {
     expect((await api(page, `${await colOf(page, id)}/records`, { data: { title, status, valor } })).ok()).toBeTruthy();
   }
-  await page.goto(`/collections/${id}`);
+  await page.goto(`${await pageOf(page, id)}`);
   await expect(page.locator("tbody tr")).toHaveCount(3);
 
   // A condition: valor greater than 8.
@@ -75,7 +75,7 @@ test("conditions, groups, inline edit and the board", async ({ page }) => {
   await expect(groups.getByRole("listitem").filter({ hasText: "novo" })).toContainText("40");
 
   // Edit a cell in place.
-  await page.goto(`/collections/${id}`);
+  await page.goto(`${await pageOf(page, id)}`);
   const cell = page.getByRole("row").filter({ hasText: "Gama" }).getByRole("button", { name: /^Editar: Valor/ });
   await cell.dblclick();
   const input = page.getByRole("spinbutton", { name: "Editar: Valor" });
@@ -181,7 +181,7 @@ test("automations act on matching records", async ({ page }) => {
     schema: { type: "object", properties: { titulo: { type: "string", title: "Título" }, prio: { type: "integer", title: "Prioridade" }, status: { title: "Status", enum: ["novo", "urgente"] } } },
   });
   const id = (await made.json()).id as string;
-  await page.goto(`/collections/${id}/automations`);
+  await page.goto(`${await pageOf(page, id)}/automations`);
   await page.getByRole("button", { name: "Nova automação" }).click();
   const form = page.getByRole("form", { name: "Nova automação" });
   await form.getByLabel("Nome").fill("Marcar urgentes");
@@ -251,7 +251,7 @@ test("auto fields, comments and an upsert import", async ({ page }) => {
   await expect(comments.getByRole("list", { name: "Comentários" })).toHaveCount(0);
 
   // "Code" matches no field: it is mapped by hand. A1 exists, B2 is new.
-  await page.goto(`/collections/${id}`);
+  await page.goto(`${await pageOf(page, id)}`);
   await page.getByRole("button", { name: "Exportar" }).click();
   await page.getByRole("menuitem", { name: "Importar" }).click();
   const dialog = page.getByRole("dialog", { name: "Importar" });
@@ -276,7 +276,7 @@ test("a JSON Lines upsert keeps adjacent large integer keys distinct", async ({ 
     schema: { type: "object", properties: { sku: { type: "integer", title: "SKU", "x-unique": true } } },
   });
   const { id } = await made.json();
-  await page.goto(`/collections/${id}`);
+  await page.goto(`${await pageOf(page, id)}`);
   await page.getByRole("button", { name: "Exportar" }).click();
   await page.getByRole("menuitem", { name: "Importar" }).click();
   const dialog = page.getByRole("dialog", { name: "Importar" });
@@ -347,7 +347,7 @@ test("a list of objects with a reference in each item", async ({ page }) => {
   })).json()).id as string;
 
   // The Fields page reads it as a list of objects with its subfields.
-  await page.goto(`/collections/${exemplos}/fields`);
+  await page.goto(`${await pageOf(page, exemplos)}/fields`);
   await expect(page.getByRole("main")).toContainText(/Lista de objetos\s*· 2 subcampos/);
 
   await page.goto(`${await pageOf(page, exemplos)}/r/new`);

@@ -224,7 +224,7 @@ const docTemplate = `{
                 "tags": [
                     "Registration"
                 ],
-                "summary": "Activate an account and set its password",
+                "summary": "Activate an account, set its password and, optionally, choose its username",
                 "parameters": [
                     {
                         "description": "Request",
@@ -248,6 +248,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/mapper.errorBody"
+                        }
+                    },
+                    "409": {
+                        "description": "ALREADY_EXISTS: the username is taken",
                         "schema": {
                             "$ref": "#/definitions/mapper.errorBody"
                         }
@@ -7527,6 +7533,15 @@ const docTemplate = `{
                 },
                 "target_label": {
                     "type": "string"
+                },
+                "target_owner": {
+                    "description": "a collection target's address: /target_owner/target_slug",
+                    "type": "string",
+                    "example": "ana"
+                },
+                "target_slug": {
+                    "type": "string",
+                    "example": "livros"
                 }
             }
         },
@@ -7538,6 +7553,11 @@ const docTemplate = `{
                 },
                 "token": {
                     "type": "string"
+                },
+                "username": {
+                    "description": "Username is optional: empty keeps the one made from the email. Collections live at /username/slug.",
+                    "type": "string",
+                    "example": "ana-silva"
                 }
             }
         },
@@ -7864,6 +7884,15 @@ const docTemplate = `{
                 },
                 "target_label": {
                     "type": "string"
+                },
+                "target_owner": {
+                    "description": "a collection target's address: /target_owner/target_slug",
+                    "type": "string",
+                    "example": "ana"
+                },
+                "target_slug": {
+                    "type": "string",
+                    "example": "livros"
                 }
             }
         },
@@ -8336,6 +8365,15 @@ const docTemplate = `{
         "notification.notificationDTO": {
             "type": "object",
             "properties": {
+                "collection_owner": {
+                    "description": "The address of params.collection_id (/collection_owner/collection_slug), while it exists.",
+                    "type": "string",
+                    "example": "ana"
+                },
+                "collection_slug": {
+                    "type": "string",
+                    "example": "livros"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -8636,6 +8674,11 @@ const docTemplate = `{
                 "field": {
                     "type": "string"
                 },
+                "owner": {
+                    "description": "the collection's address: /owner/slug",
+                    "type": "string",
+                    "example": "ana"
+                },
                 "records": {
                     "type": "array",
                     "items": {
@@ -8644,6 +8687,10 @@ const docTemplate = `{
                 },
                 "schema": {
                     "type": "object"
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "livros"
                 },
                 "sub": {
                     "description": "the reference subfield of each item when Field is a list of objects",

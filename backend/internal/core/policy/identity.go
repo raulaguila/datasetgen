@@ -2,11 +2,14 @@
 package policy
 
 import (
+	"context"
 	"net/mail"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/raulaguila/dataset/internal/core/domain"
+	"github.com/raulaguila/dataset/internal/core/port/output"
 	"github.com/raulaguila/dataset/pkg/apperror"
 )
 
@@ -35,6 +38,25 @@ func ValidateName(raw string) (string, error) {
 		return "", apperror.New(apperror.CodeInvalidInput, "name must be 2-80 characters").WithField("name")
 	}
 	return name, nil
+}
+
+// ValidateUsername lowercases a chosen username and checks it (domain.ValidUsername).
+func ValidateUsername(raw string) (string, error) {
+	u := strings.ToLower(strings.TrimSpace(raw))
+	if !domain.ValidUsername(u) {
+		return "", apperror.New(apperror.CodeInvalidInput,
+			"username must be 1-39 lowercase letters, digits or single hyphens, and not a reserved word").WithField("username")
+	}
+	return u, nil
+}
+
+// SetUsername gives the user a username, telling a taken one apart.
+func SetUsername(ctx context.Context, uow interface{ Users() output.UserRepository }, userID, username string) error {
+	err := uow.Users().UpdateUsername(ctx, userID, username)
+	if apperror.IsCode(err, apperror.CodeAlreadyExists) {
+		return apperror.New(apperror.CodeAlreadyExists, "this username is taken").WithField("username")
+	}
+	return err
 }
 
 // NormalizeEmail makes an address safe to compare and to store: Postgres refuses

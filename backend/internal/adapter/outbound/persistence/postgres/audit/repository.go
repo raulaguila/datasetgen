@@ -47,6 +47,8 @@ type recordRow struct {
 	TargetID    *string   `gorm:"column:target_id"`
 	TargetLabel *string   `gorm:"column:target_label"`
 	TargetGone  bool      `gorm:"column:target_gone"`
+	TargetOwner *string   `gorm:"column:target_owner"`
+	TargetSlug  *string   `gorm:"column:target_slug"`
 	Details     []byte    `gorm:"column:details"`
 }
 
@@ -96,11 +98,15 @@ func (r *Repository) List(ctx context.Context, filter domain.AuditFilter) ([]dom
 		       -- A later delete of the target; the log keeps its entries, the target is gone.
 		       EXISTS (SELECT 1 FROM usr.usr_audit_log d WHERE d.target_id = a.target_id
 		         AND d.action IN ('record.delete', 'collection.delete', 'role.delete')) AS target_gone,
+		       tco.username AS target_owner, tc.slug AS target_slug,
 		       a.details
 		FROM usr.usr_audit_log a
 		LEFT JOIN usr.usr_user au ON au.id = a.actor_id
 		LEFT JOIN usr.usr_user tu ON tu.id = a.target_id
 		LEFT JOIN usr.usr_role tr ON tr.id = a.target_id
+		-- A collection target's address, so the log links to /owner/slug.
+		LEFT JOIN app.collection tc ON tc.id = a.target_id AND tc.deleted_at IS NULL
+		LEFT JOIN usr.usr_user tco ON tco.id = tc.owner_id
 		WHERE `+where+`
 		ORDER BY a.created_at DESC, a.id
 		LIMIT ? OFFSET ?
@@ -114,6 +120,7 @@ func (r *Repository) List(ctx context.Context, filter domain.AuditFilter) ([]dom
 			ID: m.ID, CreatedAt: m.CreatedAt, Action: m.Action,
 			ActorID: deref(m.ActorID), ActorName: deref(m.ActorName), ActorEmail: deref(m.ActorEmail),
 			RequestID: deref(m.RequestID), TargetID: deref(m.TargetID), TargetLabel: deref(m.TargetLabel), TargetGone: m.TargetGone,
+			TargetOwner: deref(m.TargetOwner), TargetSlug: deref(m.TargetSlug),
 		}
 		if err := json.Unmarshal(m.Details, &rec.Details); err != nil {
 			return nil, 0, shared.WrapError(err, "audit log")

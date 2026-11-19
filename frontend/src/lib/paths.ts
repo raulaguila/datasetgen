@@ -13,8 +13,7 @@ export function recordPath(c: At, recordId: string, edit = false): string {
   return `${collectionPath(c, `r/${recordId}`)}${edit ? "/edit" : ""}`;
 }
 
-/** Old links that only know an id; their pages look the address up and move on. */
-export const collectionByID = (id: string, section?: string) => `/collections/${id}${section ? `/${section}` : ""}`;
+/** A record's permalink when only its id is known (a reference value, Markdown); the page finds its address. */
 export const recordByID = (id: string) => `/records/${id}`;
 
 /** pathname with its /<owner>/<slug> prefix swapped for the collection's current one. */

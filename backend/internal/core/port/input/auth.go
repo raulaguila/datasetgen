@@ -23,6 +23,8 @@ type RegisterResult struct {
 type ActivateCommand struct {
 	Token    string
 	Password string
+	// Username, when set, replaces the one made from the email.
+	Username string
 }
 
 type LoginCommand struct {

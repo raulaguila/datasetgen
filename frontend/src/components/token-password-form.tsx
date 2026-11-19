@@ -15,7 +15,7 @@ import { authPost } from "@/lib/api/client";
 import { errorMessage } from "@/lib/errors";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
-import { newPassword, ready, sameAs } from "@/lib/validation";
+import { newPassword, ready, sameAs, username as usernameRule } from "@/lib/validation";
 
 // The mail carries a plain token, so the field accepts a paste; a #token= link (or an old ?token= one) fills it.
 function Form({ action, title, subtitle, submitLabel, doneTitle, doneBody }: {
@@ -38,6 +38,9 @@ function Form({ action, title, subtitle, submitLabel, doneTitle, doneBody }: {
     window.history.replaceState(null, "", window.location.pathname);
   }, []);
   const [password, setPassword] = useState("");
+  // Activation only: the address of the person's collections; empty keeps the one made from the email.
+  const [handle, setHandle] = useState("");
+  const handleErr = action === "activate" ? usernameRule(handle) : null;
   const [confirm, setConfirm] = useState("");
   const [caps, setCaps] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +63,8 @@ function Form({ action, title, subtitle, submitLabel, doneTitle, doneBody }: {
     setPending(true);
     setError(null);
     try {
-      await authPost(action, { token: token.trim(), password });
+      const chosen = action === "activate" ? handle.trim().toLowerCase() : "";
+      await authPost(action, { token: token.trim(), password, ...(chosen && { username: chosen }) });
       setDone(true);
     } catch (err) {
       setError(errorMessage(err, "auth.token_failed", t));
@@ -77,6 +81,15 @@ function Form({ action, title, subtitle, submitLabel, doneTitle, doneBody }: {
           <Label htmlFor="token">{t("auth.token")}</Label>
           <Input id="token" required autoComplete="one-time-code" spellCheck={false} value={token} onChange={(e) => setToken(e.target.value)} className="font-mono" />
         </div>
+        {action === "activate" && (
+          <div className="space-y-2">
+            <Label htmlFor="username">{t("profile.username")}</Label>
+            <Input id="username" maxLength={39} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username"
+              className="font-mono" aria-invalid={!!handleErr} aria-describedby="username-note" value={handle} onChange={(e) => setHandle(e.target.value)} />
+            <FieldNote id="username-note" error={handleErr && t(handleErr)}
+              hint={t("auth.username_hint").replace("{username}", handle.trim().toLowerCase() || t("auth.username_placeholder"))} />
+          </div>
+        )}
         <div className="space-y-2">
           <Label htmlFor="password">{t("auth.new_password")}</Label>
           <PasswordInput id="password" autoComplete="new-password" required maxLength={128} aria-invalid={!!newPassword(password)} aria-describedby="password-note" value={password} onChange={(e) => setPassword(e.target.value)} onCapsLock={setCaps} />
@@ -88,7 +101,7 @@ function Form({ action, title, subtitle, submitLabel, doneTitle, doneBody }: {
           <FieldNote id="confirm-note" error={confirmErr && t(confirmErr)} />
           <CapsLockHint on={caps} />
         </div>
-        <Button type="submit" className="w-full" disabled={pending || !ready([token], [password, newPassword], [confirm, sameAs(password)])}>
+        <Button type="submit" className="w-full" disabled={pending || !!handleErr || !ready([token], [password, newPassword], [confirm, sameAs(password)])}>
           {pending && <Loader2 className="size-4 animate-spin" />}
           {t(submitLabel)}
         </Button>

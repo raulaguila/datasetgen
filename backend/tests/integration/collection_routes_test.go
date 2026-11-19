@@ -15,7 +15,7 @@ import (
 )
 
 // The API reaches a collection at /v1/collections/<owner>/<slug>, as the app's pages
-// do; its records take an API key there too, and old paths still answer.
+// do; its records take an API key there too, and a renamed collection's old path still answers.
 func TestHTTPCollectionRoutesUseTheAddress(t *testing.T) {
 	e := newEnv(t)
 	collections, _ := collectionServices(e)
@@ -100,6 +100,12 @@ func TestHTTPCollectionRoutesUseTheAddress(t *testing.T) {
 		t.Fatalf("old path: %v", got)
 	}
 	call("PATCH", "/v1/collections/"+c.Owner+"/leituras", `{"description":"x"}`, as, 200)
+	// The log and the notifications link to the current address, not to an id.
+	audit := call("GET", at+"/audit?action=collection.update", "", as, 200)["items"].([]any)
+	if len(audit) == 0 || audit[0].(map[string]any)["target_slug"] != "leituras" || audit[0].(map[string]any)["target_owner"] != c.Owner {
+		t.Fatalf("audit: %v", audit)
+	}
+	call("GET", "/v1/me/notifications", "", as, 200)
 
 	// The trash keeps ids: a deleted collection gave its address up.
 	call("POST", "/v1/collections/delete", `{"ids":["`+other.ID+`"]}`, as, 204)

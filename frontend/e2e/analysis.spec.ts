@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { colOf } from "./helpers";
+import { colOf, pageOf } from "./helpers";
 
 const api = (page: Page, path: string, data: unknown) => page.request.post(`/api/proxy${path}`, { data });
 
@@ -23,7 +23,7 @@ test("field analysis and a dashboard", async ({ page }) => {
     { nome: "C", tipo: "efeito" },
   ]) expect((await api(page, `${await colOf(page, id)}/records`, { data })).ok()).toBeTruthy();
 
-  await page.goto(`/collections/${id}/analysis`);
+  await page.goto(`${await pageOf(page, id)}/analysis`);
   await expect(page.getByRole("status")).toHaveText("3 registros");
   const preco = page.getByRole("region", { name: "Preço" });
   await expect(preco).toContainText("2 / 3 · 67%");
@@ -38,7 +38,7 @@ test("field analysis and a dashboard", async ({ page }) => {
   await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/analysis.png` : "test-results/analysis.png", fullPage: true });
 
   // The dashboard: a count of one kind and a chart by kind.
-  await page.goto(`/collections/${id}/analysis`);
+  await page.goto(`${await pageOf(page, id)}/analysis`);
   const board = page.getByRole("region", { name: "Painel" });
   await board.getByRole("button", { name: /Monte o painel/ }).click();
   // A side panel: the kind from the gallery, then its form with a live preview.
@@ -83,7 +83,7 @@ test("field analysis and a dashboard", async ({ page }) => {
   await pageRules.getByRole("button", { name: "Aplicar" }).click();
   await expect(page.getByRole("status").first()).toHaveText(/^1 registros? nas condições/);
   await expect(board.getByRole("region", { name: "Gráfico de barras: Tipo" })).not.toContainText("gatilho");
-  await page.goto(`/collections/${id}/analysis`);
+  await page.goto(`${await pageOf(page, id)}/analysis`);
   // Saved: a reload keeps it.
   await page.reload();
   await expect(board.getByRole("region", { name: "Gatilhos" })).toContainText("2");

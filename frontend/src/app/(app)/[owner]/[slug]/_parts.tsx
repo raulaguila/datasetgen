@@ -92,7 +92,9 @@ export function useRouteCollection() {
     staleTime: Infinity, // the id behind an address does not change while the page is open
   });
   const id = found.data?.id;
-  const detail = useQuery({ queryKey: ["collections", "detail", id], queryFn: ({ signal }) => collections.get(found.data!, signal), enabled: !!id });
+  const detail = useQuery({ queryKey: ["collections", "detail", id], queryFn: ({ signal }) => collections.get(found.data!, signal), enabled: !!id,
+    // The first answer just filled it; changes invalidate it, which refetches regardless.
+    staleTime: 30_000 });
   const current = detail.data;
   useEffect(() => {
     if (current && (current.owner !== owner || current.slug !== slug)) {

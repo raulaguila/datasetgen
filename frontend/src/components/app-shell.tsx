@@ -29,6 +29,7 @@ import { account, notifications } from "@/lib/api/endpoints";
 import { useMe } from "@/lib/context/me";
 import { useI18n } from "@/lib/i18n/provider";
 import { ACCOUNT_PAGES, ADMIN_NAV, MAIN_NAV, isActive } from "@/lib/navigation";
+import { collectionInPath } from "@/lib/paths";
 import { useCrumbStore } from "@/lib/store/crumb";
 import { useUIStore } from "@/lib/store/ui";
 
@@ -103,7 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {crumb && parent ? (
                 <nav aria-label="breadcrumb" className="flex min-w-0 items-center gap-1.5">
                   {/* A collection's pages start at the list, so the trail says where you are and the way back. */}
-                  {parent.href.startsWith("/collections/") && (
+                  {collectionInPath(parent.href) && (
                     <>
                       <Link href="/collections" className="hidden shrink-0 text-muted-foreground hover:text-foreground hover:underline sm:inline">{t("nav.collections")}</Link>
                       <ChevronRight className="hidden size-3.5 shrink-0 text-muted-foreground sm:block" />

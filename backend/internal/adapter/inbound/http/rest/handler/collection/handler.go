@@ -449,6 +449,8 @@ type auditDTO struct {
 	TargetID    string         `json:"target_id,omitempty"`
 	TargetLabel string         `json:"target_label,omitempty"`
 	TargetGone  bool           `json:"target_gone,omitempty"`
+	TargetOwner string         `json:"target_owner,omitempty" example:"ana"` // a collection target's address: /target_owner/target_slug
+	TargetSlug  string         `json:"target_slug,omitempty" example:"livros"`
 	Details     map[string]any `json:"details"`
 }
 

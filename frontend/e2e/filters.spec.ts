@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { colOf } from "./helpers";
+import { colOf, pageOf } from "./helpers";
 
 const api = (page: Page, path: string, data: unknown) => page.request.post(`/api/proxy${path}`, { data });
 const day = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
@@ -25,7 +25,7 @@ test("richer conditions and the cell filter", async ({ page }) => {
     { titulo: "Água", venc: day(2), status: "aberto", cliente: ana },
     { titulo: "Gás", venc: day(40), status: "pago", cliente: bia },
   ]) expect((await api(page, `${await colOf(page, id)}/records`, { data })).ok()).toBeTruthy();
-  await page.goto(`/collections/${id}?cols=titulo,venc,status,cliente`);
+  await page.goto(`${await pageOf(page, id)}?cols=titulo,venc,status,cliente`);
   await expect(page.locator("tbody tr")).toHaveCount(3);
 
   const rules = page.getByRole("dialog", { name: "Condições" });

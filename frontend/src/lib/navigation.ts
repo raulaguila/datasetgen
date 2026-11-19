@@ -1,6 +1,7 @@
 import { ChartColumn, Database, FileJson, LayoutDashboard, ListChecks, ListTree, Plug, ScrollText, Settings2, Trash2, UserCog, Users, Zap, type LucideIcon } from "lucide-react";
 import type { Action, MemberRole } from "@/lib/api/types";
 import type { MessageKey } from "@/lib/i18n/messages";
+import { collectionInPath } from "@/lib/paths";
 
 export interface NavItem {
   href: string;
@@ -23,6 +24,7 @@ export const ADMIN_NAV: NavItem[] = [
 export const ACCOUNT_PAGES = ["/profile", "/api-access", "/notifications"];
 
 export function isActive(pathname: string, href: string): boolean {
+  if (href === "/collections" && collectionInPath(pathname)) return true; // a collection lives at /<owner>/<slug>
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 }
 
