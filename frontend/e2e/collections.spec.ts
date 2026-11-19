@@ -23,10 +23,10 @@ test("a collection's records follow its fields", async ({ page }) => {
   await expect(page.getByText("Alterações salvas.").first()).toBeVisible();
   await page.goto(records);
   // The sidebar lists it and opens its sections.
-  await expect(page.getByRole("list", { name: "Coleções" }).getByRole("link", { name })).toHaveAttribute("aria-current", "true");
+  await expect(page.getByRole("button", { name: `${name}: Trocar de coleção` })).toBeVisible();
 
   await page.getByRole("button", { name: "Novo registro" }).click();
-  await expect(page).toHaveURL(/\/records\/new\?collection=/);
+  await expect(page).toHaveURL(atCollection("r/new"));
   await expect(page.locator(".rjsf label.control-label")).toHaveText([/Nome/, /Categoria/, /Nota/]);
   // Keys come from the labels; the help text shows under its field.
   await expect(page.getByText("De 0 a 10")).toBeVisible();
@@ -100,7 +100,7 @@ test("a collection's records follow its fields", async ({ page }) => {
   // The list groups it with the caller's own collections, with its counts; a star moves it to favorites.
   await page.goto("/collections");
   // A short list has no search box; a long one narrows to this collection.
-  await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name, exact: true })).toBeVisible();
   const search = page.getByRole("textbox", { name: "Buscar por nome" });
   if (await search.isVisible()) await search.fill(name);
   const mine = page.getByRole("list", { name: "Minhas coleções" }).getByRole("listitem").filter({ hasText: name });
@@ -108,7 +108,7 @@ test("a collection's records follow its fields", async ({ page }) => {
   await expect(mine).toContainText(["3 campos"]);
   await expect(mine).toContainText(["2 membros"]);
   await mine.getByRole("button", { name: `Fixar no topo: ${name}` }).click();
-  await expect(page.getByRole("list", { name: "Favoritas" }).getByRole("button", { name, exact: true })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Favoritas" }).getByRole("link", { name, exact: true })).toBeVisible();
 });
 
 // A group keeps its own fields, drawn together in the record form; a free
@@ -140,14 +140,14 @@ test("groups hold subfields and free objects take JSON", async ({ page }) => {
   await expect(page.getByText("JSON inválido.")).toBeVisible();
   const save = page.getByRole("region", { name: "Novo registro" }).getByRole("button", { name: "Criar", exact: true });
   await save.click();
-  await expect(page).toHaveURL(/\/records\/new/);
+  await expect(page).toHaveURL(atCollection("r/new"));
   await extra.fill('{"andar": 2, "bloco": "B"}');
   await expect(page.getByText("JSON inválido.")).toHaveCount(0);
   // Saving with the data kept leaves the form filled for a near-copy.
   await page.getByRole("button", { name: "Mais opções de salvar" }).click();
   await page.getByRole("menuitem", { name: /Salvar e criar outro com estes dados/ }).click();
   await expect(page.getByText(/Os dados continuam no formulário/)).toBeVisible();
-  await expect(page).toHaveURL(/\/records\/new/);
+  await expect(page).toHaveURL(atCollection("r/new"));
   await expect(page.locator("#rec_endereco_cidade")).toHaveValue("Recife");
   await page.locator("#rec_nome").fill("Casa 2");
   // Ctrl+Enter saves from inside a text area.
@@ -159,7 +159,7 @@ test("groups hold subfields and free objects take JSON", async ({ page }) => {
   await expect(row.getByRole("cell")).toHaveText(["", "Casa", /\S/]);
   await row.getByRole("link", { name: "Casa", exact: true }).click();
   await expect(page.getByRole("main")).toContainText("Recife");
-  await page.getByRole("button", { name: "Editar", exact: true }).click();
+  await page.getByRole("button", { name: /^Editar( E)?$/ }).click();
   await expect(page.locator("#rec_endereco_cidade")).toHaveValue("Recife");
   await expect(page.locator("#rec_extra")).toHaveValue(/"bloco": "B"/);
 });

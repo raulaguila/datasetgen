@@ -11,7 +11,7 @@ test("a collection's tools: CSV, bulk edit, views, trash, API key, field history
   const collectionId = await collectionIdOf(page, records);
 
   // CSV: columns by label or key.
-  await page.getByRole("button", { name: "Mais" }).click();
+  await page.getByRole("button", { name: "Exportar" }).click();
   await page.getByRole("menuitem", { name: "Importar" }).click();
   await page.locator("#import-file").setInputFiles({ name: "dados.csv", mimeType: "text/csv", buffer: Buffer.from("Título;notes\nBeta;b\nAlfa;a\nGama;c\n") });
   const dialog = page.getByRole("dialog", { name: "Importar" });

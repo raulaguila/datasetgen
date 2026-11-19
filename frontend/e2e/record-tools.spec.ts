@@ -52,10 +52,10 @@ test("records come in, go out and keep their history", async ({ page }) => {
   // An edit keeps the old version; restoring brings it back.
   // A row opens the record to read; Edit opens its form, and saving comes back to it.
   await page.getByRole("link", { name: "Primeiro" }).click();
-  await page.getByRole("button", { name: "Editar", exact: true }).click();
+  await page.getByRole("button", { name: /^Editar( E)?$/ }).click();
   await page.locator("#rec_title").fill("Primeiro editado");
   await page.getByRole("button", { name: "Salvar", exact: true }).click();
-  await expect(page).toHaveURL(/\/records\/[0-9a-f-]{36}$/);
+  await expect(page).toHaveURL(/\/r\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Primeiro editado");
   const history = page.getByRole("list", { name: "Histórico" });
   await expect(history.getByRole("checkbox")).toHaveCount(2);
@@ -65,7 +65,7 @@ test("records come in, go out and keep their history", async ({ page }) => {
   const compare = page.getByRole("region", { name: /^Versão 1/ });
   await expect(compare).toContainText("Primeiro");
   await expect(compare).toContainText("Primeiro editado");
-  await history.getByRole("button", { name: "Restaurar 1" }).click();
+  await history.getByRole("button", { name: "Restaurar: Versão 1" }).click();
   await page.getByRole("dialog", { name: "Restaurar" }).getByRole("button", { name: "Restaurar" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Primeiro");
   await expect(history.getByRole("checkbox")).toHaveCount(3);
@@ -97,9 +97,9 @@ test("records come in, go out and keep their history", async ({ page }) => {
   await page.goto("/collections");
   // A short list has no search box; a long one narrows to this collection.
   const search = page.getByRole("textbox", { name: "Buscar por nome" });
-  await expect(search.or(page.getByRole("button", { name, exact: true })).first()).toBeVisible();
+  await expect(search.or(page.getByRole("main").getByRole("link", { name, exact: true })).first()).toBeVisible();
   if (await search.isVisible()) await search.fill(name);
-  await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name, exact: true })).toBeVisible();
   await page.getByRole("button", { name: `Ações: ${name}` }).click();
   await page.getByRole("menuitem", { name: "Duplicar" }).click();
   const dup = page.getByRole("dialog", { name: "Duplicar" });
