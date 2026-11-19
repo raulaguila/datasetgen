@@ -28,6 +28,11 @@ services:
         - trusted_cas
     restart: always
     logging: *logging
+    # No Linux capability needed, and none may be gained.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     stop_grace_period: 40s
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:$${API_PORT}/health"]
@@ -36,7 +41,7 @@ services:
       start_period: 20s
       retries: 3
     ports:
-      - ${API_PORT}:${API_PORT}
+      - 127.0.0.1:${API_PORT}:${API_PORT}  # host tools only (dev, Swagger); the web reaches it on the network
     tty: true
     env_file: ../../config/.env
     environment:
@@ -76,6 +81,11 @@ services:
         - trusted_cas
     restart: always
     logging: *logging
+    # No Linux capability needed, and none may be gained.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     stop_grace_period: 60s
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9091/health"]

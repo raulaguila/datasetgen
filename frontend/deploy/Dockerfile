@@ -45,7 +45,8 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-RUN chown -R node:node /app
+# The code stays root's (read-only to the server); only the image cache is written.
+RUN mkdir -p .next/cache && chown node:node .next/cache
 ARG BUILD_REVISION=unknown
 ENV BUILD_REVISION=${BUILD_REVISION}
 LABEL org.opencontainers.image.revision=${BUILD_REVISION}

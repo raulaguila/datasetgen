@@ -14,12 +14,12 @@ Platform for building datasets to train and fine-tune AI models. Each collection
 ```bash
 cd backend
 make init            # creates config/.env with fresh secrets
-make compose-build   # builds and starts postgres, backend and mailer
-make migrate-up      # applies the schema and configures both database logins
+make -C ../frontend init
+make deploy          # postgres, backup, schema and logins, then backend, mailer and web
 make admin-bootstrap # asks name, email and password of the first admin
 ```
 
-The API answers on `API_PORT` (9977 in the generated file). Swagger UI is at `/swagger/index.html` outside protected environments.
+`make deploy` is also how a new version goes out: it backs the database up and migrates before the new code starts. The API answers on `API_PORT` (9977 in the generated file) on this machine only; the web (`WEB_PORT`, 3006) is the way in from other devices. Swagger UI is at `/swagger/index.html` outside protected environments.
 
 The Go modules are downloaded during the image build with the CA bundle in `GO_CA_BUNDLE` (default `/etc/ssl/certs/ca-certificates.crt`), passed as a build secret. Behind a proxy that inspects TLS, point it at a bundle that also holds the proxy's certificate; TLS checks stay on.
 

@@ -33,10 +33,12 @@ services:
   postgres:
 
     container_name: dataset_postgres
-    image: postgres:17.2-alpine
+    image: postgres:17.12-alpine
     hostname: postgres
     restart: always
     logging: *logging
+    # Parallel queries share memory through /dev/shm; Docker's 64 MB can make them fail.
+    shm_size: 256mb
     volumes:
       - postgres_volume:/var/lib/postgresql/data
     command: >
@@ -51,10 +53,11 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASS}
     healthcheck:
       test: [ "CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_BASE} -p ${POSTGRES_PORT}'" ]
-      interval: 2s
+      # Every 2 s while starting (the others wait for it), then every 30 s.
+      interval: 30s
       timeout: 5s
-      retries: 15
-      start_period: 1s
+      retries: 3
+      start_period: 30s
       start_interval: 2s
     networks:
       - dataset_network
@@ -66,7 +69,7 @@ services:
   backup:
 
     container_name: dataset_backup
-    image: postgres:17.2-alpine
+    image: postgres:17.12-alpine
     restart: always
     logging: *logging
     entrypoint: ["/bin/sh", "/backup.sh"]

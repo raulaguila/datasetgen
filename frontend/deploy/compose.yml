@@ -19,8 +19,15 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
+      args:
+        BUILD_REVISION: ${BUILD_REVISION:-unknown}
     restart: always
     logging: *logging
+    # No Linux capability needed, and none may be gained.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3005/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]

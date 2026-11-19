@@ -39,13 +39,18 @@ check: install ## Typecheck, lint and test
 build: install ## Production build
 	@pnpm build
 
-compose-up: ## Start the web container (the backend stack must be up)
+# Each build is also tagged with its commit, so an older one can be started again.
+REVISION := $(shell git describe --always --dirty 2>/dev/null || echo unknown)
+
+compose-up: ## Start the web container (the backend stack must be up; an older build: WEB_VERSION=<commit> make compose-up)
 	$(call require_env_file)
 	@$(COMPOSE) up -d
 
 compose-build: ## Build and start the web container (the backend stack must be up)
 	$(call require_env_file)
-	@$(COMPOSE) up -d --build --force-recreate
+	@BUILD_REVISION=$(REVISION) $(COMPOSE) up -d --build --force-recreate
+	@set -a && . ./config/.env && set +a; docker tag "dataset_web:$${WEB_VERSION:-dev}" "dataset_web:$(REVISION)"
+	@echo -e "$(CYAN)Also tagged $(REVISION)$(RESET)"
 
 compose-down: ## Stop and remove the web container
 	$(call require_env_file)

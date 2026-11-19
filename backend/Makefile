@@ -19,6 +19,8 @@ DOCKER_BASE     ?= $(or ${base}, source)
 DOCKER_SERVICE  ?= $(or ${service}, backend)
 COMPOSE_SERVICE := $(DOCKER_COMPOSE) --env-file config/.env -f deploy/docker/services.compose.yml
 COMPOSE_COMMAND := BASE=${DOCKER_BASE} $(DOCKER_COMPOSE) --env-file config/.env -f deploy/docker/compose.yml
+# Each build is also tagged with its commit, so an older one can be started again.
+REVISION        := $(shell git describe --always --dirty 2>/dev/null || echo unknown)
 
 # Go build
 GO          := GOWORK=off go
@@ -388,7 +390,7 @@ migrate-version: ## Show current migration version
 # =========================
 # 5. Docker Compose
 # =========================
-.PHONY: admin-bootstrap admin-promote admin-disable admin-enable compose-up compose-build compose-services compose-down compose-clean compose-remove compose-exec compose-log compose-top compose-stats
+.PHONY: deploy admin-bootstrap admin-promote admin-disable admin-enable compose-up compose-build compose-services compose-down compose-clean compose-remove compose-exec compose-log compose-top compose-stats
 
 admin-bootstrap: ## Create the first admin, asking name, email and password
 	@$(COMPOSE_COMMAND) exec backend ./admin bootstrap
@@ -402,7 +404,14 @@ admin-disable: ## Disable a user and end their sessions, asking the email
 admin-enable: ## Enable a disabled user, asking the email
 	@$(COMPOSE_COMMAND) exec backend ./admin enable
 
-compose-up: ## Create and start containers
+deploy: ## Release: start the database, back it up, migrate, then rebuild backend and web, in that order
+	@$(MAKE) --no-print-directory compose-services
+	@$(MAKE) --no-print-directory db-backup
+	@$(MAKE) --no-print-directory migrate-up
+	@$(MAKE) --no-print-directory compose-build
+	@$(MAKE) --no-print-directory -C ../frontend compose-build
+
+compose-up: ## Create and start containers (an older build: SYS_VERSION=<commit> make compose-up)
 	@echo "$(BLUE)🚀 Starting Docker containers...$(RESET)"
 	$(call require_env_file)
 	@$(COMPOSE_COMMAND) up -d
@@ -415,6 +424,8 @@ compose-build: ## Build, create and start containers
 	@$(COMPOSE_COMMAND) up -d --build
 	@# A rebuilt image under the same tag can leave the old container running.
 	@$(COMPOSE_COMMAND) up -d --no-deps --force-recreate backend mailer
+	@set -a && . ./config/.env && set +a; for s in backend mailer; do $(DOCKER) tag "dataset_$$s:$${SYS_VERSION}" "dataset_$$s:$(REVISION)"; done
+	@echo "$(CYAN)🏷️  Also tagged $(REVISION)$(RESET)"
 	@echo "$(GREEN)✅ Containers are up and running!$(RESET)"
 	@echo
 	@$(clean_dangling_images)
