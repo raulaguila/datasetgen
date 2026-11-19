@@ -390,7 +390,7 @@ migrate-version: ## Show current migration version
 # =========================
 # 5. Docker Compose
 # =========================
-.PHONY: deploy db-up admin-bootstrap admin-promote admin-disable admin-enable compose-up compose-build compose-services compose-down compose-clean compose-remove compose-exec compose-log compose-top compose-stats
+.PHONY: deploy admin-bootstrap admin-promote admin-disable admin-enable compose-up compose-build compose-services compose-down compose-clean compose-remove compose-exec compose-log compose-top compose-stats
 
 admin-bootstrap: ## Create the first admin, asking name, email and password
 	@$(COMPOSE_COMMAND) exec backend ./admin bootstrap
@@ -407,13 +407,13 @@ admin-enable: ## Enable a disabled user, asking the email
 deploy: ## Release: start the database, back it up, migrate, then rebuild backend and web, in that order
 	@$(MAKE) --no-print-directory compose-services
 	@$(MAKE) --no-print-directory db-backup
+	@$(MAKE) --no-print-directory migrate-up
 	@$(MAKE) --no-print-directory compose-build
 	@$(MAKE) --no-print-directory -C ../frontend compose-build
 
 compose-up: ## Create and start containers (an older build: SYS_VERSION=<commit> make compose-up)
 	@echo "$(BLUE)🚀 Starting Docker containers...$(RESET)"
 	$(call require_env_file)
-	@$(MAKE) --no-print-directory db-up
 	@$(COMPOSE_COMMAND) up -d
 	@echo "$(GREEN)✅ Containers are up and running!$(RESET)"
 	@echo
@@ -421,7 +421,6 @@ compose-up: ## Create and start containers (an older build: SYS_VERSION=<commit>
 compose-build: ## Build, create and start containers
 	@echo "$(BLUE)🚢 Building and starting Docker containers...$(RESET)"
 	$(call require_env_file)
-	@$(MAKE) --no-print-directory db-up
 	@$(COMPOSE_COMMAND) up -d --build
 	@# A rebuilt image under the same tag can leave the old container running.
 	@$(COMPOSE_COMMAND) up -d --no-deps --force-recreate backend mailer
@@ -430,11 +429,6 @@ compose-build: ## Build, create and start containers
 	@echo "$(GREEN)✅ Containers are up and running!$(RESET)"
 	@echo
 	@$(clean_dangling_images)
-
-db-up: ## Start postgres and backup, then migrate: the app roles exist before backend and mailer start
-	$(call require_env_file)
-	@$(COMPOSE_SERVICE) up -d --wait
-	@$(MAKE) --no-print-directory migrate-up
 
 compose-services: ## Build, create and start services containers
 	@echo "$(BLUE)🚢 Building and starting Docker services containers...$(RESET)"
