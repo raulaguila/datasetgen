@@ -85,7 +85,7 @@ function RecordViewPage({ id }: { id: string }) {
   useEffect(() => { if (collection) setCollection(collection.id); }, [collection, setCollection]);
   const editable = roleAllows(collection?.role, "editor");
   const title = record ? recordTitle(collection?.schema ?? null, record.data) ?? `${t("records.record")} ${record.id.slice(0, 8)}` : t("records.record");
-  useCrumb(title, collection && { label: collection.name, href: `/collections/${collection.id}/overview` });
+  useCrumb(title, collection && { label: collection.name, href: `/collections/${collection.id}/overview` }, collection && { label: t("collections.tab.records"), href: `/collections/${collection.id}` });
   const failed = detail.error ?? parent.error;
   const router = useRouter();
   const client = useQueryClient();

@@ -56,6 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const section = [...MAIN_NAV, ...ADMIN_NAV].find((item) => isActive(pathname, item.href));
   const crumb = useCrumbStore((s) => s.label);
   const parent = useCrumbStore((s) => s.parent);
+  const crumbSection = useCrumbStore((s) => s.section);
   const count = unread.data?.unread ?? 0;
 
   return (
@@ -109,6 +110,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </>
                   )}
                   <Link href={parent.href} className="min-w-0 truncate font-medium hover:underline">{parent.label}</Link>
+                  {crumbSection && (
+                    <>
+                      <ChevronRight className="hidden size-3.5 shrink-0 text-muted-foreground sm:block" />
+                      <Link href={crumbSection.href} className="hidden shrink-0 text-muted-foreground hover:text-foreground hover:underline sm:inline">{crumbSection.label}</Link>
+                    </>
+                  )}
                   {/* On a phone the h1 names the page; the trail keeps only its parent. */}
                   <ChevronRight className="hidden size-3.5 shrink-0 text-muted-foreground sm:block" />
                   <span aria-current="page" className="hidden truncate text-muted-foreground sm:inline">{crumb}</span>
