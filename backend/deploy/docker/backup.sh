@@ -5,6 +5,8 @@
 #   backup.sh verify  restore the newest dump into a scratch database and check the newest files archive
 # Each backup is verified the same way: a dump that does not restore is reported as failed.
 set -u
+# Warnings and errors only: "database ... does not exist, skipping" is no failure.
+export PGOPTIONS='-c client_min_messages=warning'
 
 DIR=/backups
 CHECK_DB="${POSTGRES_BASE}_restore_check"
