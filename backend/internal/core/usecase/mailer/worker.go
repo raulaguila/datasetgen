@@ -149,14 +149,15 @@ func markContext(ctx context.Context) (context.Context, context.CancelFunc) {
 
 // emailText is one email in one language. Link and Bare end the sentence that
 // introduces the link, or the token alone when no web app address is set.
+// An empty OrToken sends the link only: the activation page has no code field.
 type emailText struct {
 	Subject, Hello, Link, OrToken, Bare string
 }
 
 var emailTexts = map[string]map[string]emailText{
 	domain.OutboxPurposeActivation: {
-		"pt": {"Ative sua conta", "Olá,", "Abra este link para definir sua senha e ativar sua conta:", "Ou informe este código nessa página:", "Use este código para definir sua senha e ativar sua conta:"},
-		"en": {"Activate your account", "Hello,", "Open this link to set your password and activate your account:", "Or enter this token on that page:", "Use this token to set your password and activate your account:"},
+		"pt": {"Ative sua conta", "Olá,", "Abra este link para definir sua senha e ativar sua conta:", "", "Use este código para definir sua senha e ativar sua conta:"},
+		"en": {"Activate your account", "Hello,", "Open this link to set your password and activate your account:", "", "Use this token to set your password and activate your account:"},
 	},
 	domain.OutboxPurposePasswordReset: {
 		"pt": {"Redefinição de senha", "Olá,", "Abra este link para escolher uma nova senha:", "Ou informe este código nessa página:", "Use este código para escolher uma nova senha:"},
@@ -193,7 +194,11 @@ func render(msg *domain.OutboxMessage, codec output.EmailTokenCodec, appURL stri
 	body = t.Hello + "\n\n"
 	if appURL != "" {
 		// In the fragment the token never reaches a server log or a Referer header.
-		body += t.Link + "\n\n" + strings.TrimRight(appURL, "/") + emailPages[msg.Purpose] + "#token=" + url.QueryEscape(p.Token) + "\n\n" + t.OrToken + "\n\n"
+		body += t.Link + "\n\n" + strings.TrimRight(appURL, "/") + emailPages[msg.Purpose] + "#token=" + url.QueryEscape(p.Token) + "\n"
+		if t.OrToken == "" {
+			return p.Email, t.Subject, body, nil
+		}
+		body += "\n" + t.OrToken + "\n\n"
 	} else {
 		body += t.Bare + "\n\n"
 	}

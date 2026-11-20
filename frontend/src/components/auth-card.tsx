@@ -13,7 +13,7 @@ export function AuthCard({
 }: {
   title: string;
   subtitle?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   footer?: React.ReactNode;
 }) {
   useDocumentTitle(title);

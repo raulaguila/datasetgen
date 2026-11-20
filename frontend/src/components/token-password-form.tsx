@@ -17,7 +17,7 @@ import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
 import { newPassword, ready, sameAs, username as usernameRule } from "@/lib/validation";
 
-// The mail carries a plain token, so the field accepts a paste; a #token= link (or an old ?token= one) fills it.
+// A #token= link (or an old ?token= one) carries the token. Reset also takes a pasted one; activation only the link.
 function Form({ action, title, subtitle, submitLabel, doneTitle, doneBody }: {
   action: "activate" | "password-reset-confirm";
   title: MessageKey;
@@ -29,13 +29,21 @@ function Form({ action, title, subtitle, submitLabel, doneTitle, doneBody }: {
   const { t } = useI18n();
   const params = useSearchParams();
   const [token, setToken] = useState(params.get("token") ?? "");
+  // Activation has no code field, so it waits for the fragment before saying the link is missing.
+  const [read, setRead] = useState(false);
   // Email links carry the token in the fragment, which no server sees; take it and clean the address bar.
   useEffect(() => {
-    const fromLink = new URLSearchParams(window.location.hash.slice(1)).get("token");
-    if (!fromLink) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- the fragment exists only in the browser, after hydration
-    setToken(fromLink);
-    window.history.replaceState(null, "", window.location.pathname);
+    const take = () => {
+      const fromLink = new URLSearchParams(window.location.hash.slice(1)).get("token");
+      setRead(true);
+      if (!fromLink) return;
+      setToken(fromLink);
+      window.history.replaceState(null, "", window.location.pathname);
+    };
+    take();
+    // A link pasted into this same tab changes only the fragment, so the page does not reload.
+    window.addEventListener("hashchange", take);
+    return () => window.removeEventListener("hashchange", take);
   }, []);
   const [password, setPassword] = useState("");
   // Activation only: the address of the person's collections; empty keeps the one made from the email.
@@ -49,6 +57,16 @@ function Form({ action, title, subtitle, submitLabel, doneTitle, doneBody }: {
   const confirmErr = sameAs(password)(confirm);
 
   const footer = <Link href="/login" className="inline-block py-1 font-medium text-primary hover:underline">{t("auth.back_to_login")}</Link>;
+
+  const activate = action === "activate";
+  if (activate && !read) return null;
+  if (activate && !token.trim()) {
+    return (
+      <AuthCard title={t("auth.activation_link_missing_title")} subtitle={t("auth.activation_link_missing_body")}>
+        <Button className="w-full" nativeButton={false} render={<Link href="/login" />}>{t("auth.back_to_login")}</Button>
+      </AuthCard>
+    );
+  }
 
   if (done) {
     return (
@@ -67,7 +85,7 @@ function Form({ action, title, subtitle, submitLabel, doneTitle, doneBody }: {
       await authPost(action, { token: token.trim(), password, ...(chosen && { username: chosen }) });
       setDone(true);
     } catch (err) {
-      setError(errorMessage(err, "auth.token_failed", t));
+      setError(errorMessage(err, activate ? "auth.activation_link_failed" : "auth.token_failed", t));
     } finally {
       setPending(false);
     }
@@ -77,11 +95,13 @@ function Form({ action, title, subtitle, submitLabel, doneTitle, doneBody }: {
     <AuthCard title={t(title)} subtitle={t(subtitle)} footer={footer}>
       <form onSubmit={submit} className="space-y-5">
         <FormError message={error} />
-        <div className="space-y-2">
-          <Label htmlFor="token">{t("auth.token")}</Label>
-          <Input id="token" required autoComplete="one-time-code" spellCheck={false} value={token} onChange={(e) => setToken(e.target.value)} className="font-mono" />
-        </div>
-        {action === "activate" && (
+        {!activate && (
+          <div className="space-y-2">
+            <Label htmlFor="token">{t("auth.token")}</Label>
+            <Input id="token" required autoComplete="one-time-code" spellCheck={false} value={token} onChange={(e) => setToken(e.target.value)} className="font-mono" />
+          </div>
+        )}
+        {activate && (
           <div className="space-y-2">
             <Label htmlFor="username">{t("profile.username")}</Label>
             <Input id="username" maxLength={39} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username"

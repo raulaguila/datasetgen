@@ -108,6 +108,10 @@ func TestBodyLinksToTheWebApp(t *testing.T) {
 	if !strings.Contains(mail.bodies[0], "https://id.acme.io/activate#token=plain-token\n") || !strings.Contains(mail.bodies[0], "Olá,") {
 		t.Fatalf("body %q", mail.bodies[0])
 	}
+	// The activation page takes the link only, so the token is not repeated as a code.
+	if strings.Count(mail.bodies[0], "plain-token") != 1 {
+		t.Fatalf("activation body repeats the token: %q", mail.bodies[0])
+	}
 }
 
 func TestBodyFollowsTheUsersLanguage(t *testing.T) {

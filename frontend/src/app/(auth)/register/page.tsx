@@ -52,9 +52,7 @@ export default function RegisterPage() {
 
   if (sent) {
     return (
-      <AuthCard title={t("auth.check_email_title")} subtitle={t("auth.check_email_activate")} footer={footer}>
-        <Button className="w-full" nativeButton={false} render={<Link href="/activate" />}>{t("auth.have_token")}</Button>
-      </AuthCard>
+      <AuthCard title={t("auth.check_email_title")} subtitle={t("auth.check_email_activate")} footer={footer} />
     );
   }
 
