@@ -24,6 +24,8 @@ const BY_MESSAGE: [string, MessageKey][] = [
   ["password too common", "error.msg.password_common"],
   ["password cannot be your name or email", "error.msg.password_personal"],
   ["current password is wrong", "error.msg.current_password"],
+  ["password is wrong", "error.msg.your_password"],
+  ["your own admin role cannot be changed", "error.msg.own_admin"],
   ["price required", "error.msg.price_required"],
   ["price must be a number", "error.msg.price_number"],
   ["price must be a decimal", "error.msg.price_format"],

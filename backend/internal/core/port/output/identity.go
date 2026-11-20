@@ -133,6 +133,8 @@ type RoleRepository interface {
 	DefaultRoleIDs(ctx context.Context) ([]string, error)
 	FindIDByName(ctx context.Context, name string) (string, error)
 	Assign(ctx context.Context, userID, roleID string) error
+	// Unassign removes a role from a user; none held is not an error.
+	Unassign(ctx context.Context, userID, roleID string) error
 	// HasMembers reports whether any user holds the role.
 	HasMembers(ctx context.Context, roleID string) (bool, error)
 	// ForUser returns every role of a user, enabled or not, without member counts.

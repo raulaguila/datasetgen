@@ -1,5 +1,6 @@
 // Package user manages other people's accounts at runtime. Users with a protected
-// role stay out of reach here: they change only through cmd/admin.
+// role may be read and have the admin role set here; anything else about them
+// changes only through cmd/admin.
 package user
 
 import (
@@ -14,8 +15,12 @@ import (
 	"github.com/raulaguila/dataset/internal/core/port/input"
 	"github.com/raulaguila/dataset/internal/core/port/output"
 	"github.com/raulaguila/dataset/pkg/apperror"
+	"github.com/raulaguila/dataset/pkg/password"
 	"github.com/raulaguila/dataset/pkg/validate"
 )
+
+// adminRole is the role SetAdmin gives and takes, the one cmd/admin promotes to.
+const adminRole = "admin"
 
 const (
 	maxSearchBytes = 120
@@ -59,11 +64,21 @@ func (s *Service) List(ctx context.Context, filter domain.UserFilter) ([]domain.
 	return s.UOW.Users().List(ctx, filter)
 }
 
+// Get reads any user, protected or not: the screen shows an admin, read only.
 func (s *Service) Get(ctx context.Context, id string) (*domain.UserDetails, error) {
-	details, err := policy.Reachable(ctx, s.UOW, id)
+	if err := validate.ID(id); err != nil {
+		return nil, err
+	}
+	user, err := s.UOW.Users().FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+	roles, err := s.UOW.Roles().ForUser(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	user.Admin = slices.ContainsFunc(roles, domain.Role.Protected)
+	details := &domain.UserDetails{User: *user, Roles: roles}
 	now := s.Clock.Now()
 	if details.Access, err = s.UOW.Users().Access(ctx, details.ID, now.Add(-s.FailureWindow), now); err != nil {
 		return nil, err
@@ -123,6 +138,76 @@ func (s *Service) EnableMany(ctx context.Context, ids []string) error {
 			return err
 		}
 		return policy.Audit(ctx, uow, "user.enable", target.ID, nil)
+	})
+}
+
+// SetAdmin gives the admin role to an active user, or takes it from another
+// admin. The actor's password guards it, and nobody changes their own.
+func (s *Service) SetAdmin(ctx context.Context, cmd input.SetAdminCommand) error {
+	if err := validate.ID(cmd.UserID); err != nil {
+		return err
+	}
+	if strings.EqualFold(cmd.UserID, cmd.ActorID) { // the path may spell the same UUID in another case
+		return apperror.New(apperror.CodeForbidden, "your own admin role cannot be changed")
+	}
+	// Checked before the transaction: Argon2 must not hold a database connection.
+	cred, err := s.UOW.Credentials().FindByUserID(ctx, cmd.ActorID)
+	if err != nil {
+		return err
+	}
+	wrong := apperror.New(apperror.CodeInvalidInput, "password is wrong").WithField("password")
+	if cred.PasswordHash == nil {
+		return wrong
+	}
+	ok, err := password.Verify(ctx, *cred.PasswordHash, cmd.Password)
+	if err != nil {
+		return apperror.New(apperror.CodeInternal, "password check failed").WithCause(err)
+	}
+	if !ok {
+		return wrong
+	}
+	return s.Tx.WithinTx(ctx, func(ctx context.Context, uow output.UnitOfWork) error {
+		// One change at a time, the actor checked inside: two admins taking the
+		// role from each other at once would otherwise leave none.
+		if err := uow.Lock(ctx, "admin:roles"); err != nil {
+			return err
+		}
+		mine, err := uow.Roles().ForUser(ctx, cmd.ActorID)
+		if err != nil {
+			return err
+		}
+		if !slices.ContainsFunc(mine, domain.Role.Protected) {
+			return apperror.New(apperror.CodeForbidden, "only an admin may change admins")
+		}
+		target, err := uow.Users().FindByID(ctx, cmd.UserID)
+		if err != nil {
+			return err
+		}
+		roleID, err := uow.Roles().FindIDByName(ctx, adminRole)
+		if err != nil {
+			return err
+		}
+		roles, err := uow.Roles().ForUser(ctx, target.ID)
+		if err != nil {
+			return err
+		}
+		holds := slices.ContainsFunc(roles, func(r domain.Role) bool { return r.ID == roleID })
+		if holds == cmd.Admin {
+			return nil
+		}
+		if cmd.Admin {
+			if target.Status != domain.UserStatusActive {
+				return apperror.New(apperror.CodeConflict, "user is "+target.Status+", not active")
+			}
+			if err := uow.Roles().Assign(ctx, target.ID, roleID); err != nil {
+				return err
+			}
+			return policy.Audit(ctx, uow, "admin.promote", target.ID, nil)
+		}
+		if err := uow.Roles().Unassign(ctx, target.ID, roleID); err != nil {
+			return err
+		}
+		return policy.Audit(ctx, uow, "admin.demote", target.ID, nil)
 	})
 }
 

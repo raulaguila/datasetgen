@@ -90,6 +90,8 @@ export interface User {
   username: string;
   email: string;
   status: UserStatus;
+  /** Holds the admin role: shown read only, except for giving or taking that role. */
+  admin: boolean;
   created_at: string;
   updated_at: string;
 }

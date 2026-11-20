@@ -38,6 +38,7 @@ type User struct {
 	Status    string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	Admin     bool // holds a protected role; filled on list reads
 }
 
 // UserFilter narrows a user list; empty fields filter nothing.

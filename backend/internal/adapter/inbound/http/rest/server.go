@@ -110,7 +110,7 @@ func New(cfg *config.Environment, app *input.Application, hits middleware.Hits, 
 	oauthhttp.New(app.Integrations).Routes(v1.Group("/oauth"), bearer, middleware.RateLimit("oauth", cfg.API.AuthRateLimit, hits))
 
 	users := v1.Group("/users", token)
-	usershttp.New(app.Users, app.Auth).Routes(users, app.Authorizer)
+	usershttp.New(app.Users, app.Auth).Routes(users, app.Authorizer, passwordLimit)
 	// Collections and records check the caller's role per collection, so they need the full session check.
 	// Records and files also take an API key, capped to its collections (policy.CollectionRole).
 	// A collection lives at /v1/collections/:owner/:slug, as its page does in the app.

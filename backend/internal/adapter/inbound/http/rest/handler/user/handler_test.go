@@ -33,7 +33,7 @@ func newApp(svc input.UserService, authz input.Authorizer) *fiber.App {
 		c.Locals(middleware.LocalUserID, "actor")
 		return c.Next()
 	})
-	user.New(svc, nil).Routes(group, authz)
+	user.New(svc, nil).Routes(group, authz, func(c fiber.Ctx) error { return c.Next() })
 	return app
 }
 
@@ -47,6 +47,7 @@ func TestEveryRouteNeedsItsPermission(t *testing.T) {
 		{"DELETE", "/users/u1/sessions", "update"},
 		{"POST", "/users", "create"},
 		{"POST", "/users/u1/invite", "update"},
+		{"PUT", "/users/u1/admin", "update"},
 	} {
 		var resource, action string
 		denied := apperror.New(apperror.CodeForbidden, "forbidden")

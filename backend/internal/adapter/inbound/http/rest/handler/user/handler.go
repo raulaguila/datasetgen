@@ -29,8 +29,9 @@ func New(svc input.UserService, inviter Inviter) *Handler {
 	return &Handler{svc: svc, inviter: inviter}
 }
 
-// Routes expects a router already behind Bearer.
-func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
+// Routes expects a router already behind Bearer. passwordLimit guards the route
+// that checks the caller's password.
+func (h *Handler) Routes(r fiber.Router, authz input.Authorizer, passwordLimit fiber.Handler) {
 	read := middleware.Require(authz, domain.ResourceUsers, domain.ActionRead)
 	update := middleware.Require(authz, domain.ResourceUsers, domain.ActionUpdate)
 	r.Get("/", read, h.List)
@@ -43,6 +44,7 @@ func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
 	r.Post("/enable", update, h.Enable)
 	r.Post("/unlock", update, h.Unlock)
 	r.Delete("/:id/sessions", update, h.RevokeSessions)
+	r.Put("/:id/admin", update, middleware.Require(authz, domain.ResourceRoles, domain.ActionUpdate), passwordLimit, h.SetAdmin)
 }
 
 type userDTO struct {
@@ -51,6 +53,7 @@ type userDTO struct {
 	Username  string    `json:"username" example:"ana-silva"`
 	Email     string    `json:"email"`
 	Status    string    `json:"status" example:"active"`
+	Admin     bool      `json:"admin"` // holds a protected role: read only here, except SetAdmin
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 } // @name User
@@ -77,10 +80,10 @@ type accessDTO struct {
 } // @name UserAccess
 
 func toDTO(u domain.User) userDTO {
-	return userDTO{ID: u.ID, Name: u.Name, Username: u.Username, Email: u.Email, Status: u.Status, CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt}
+	return userDTO{ID: u.ID, Name: u.Name, Username: u.Username, Email: u.Email, Status: u.Status, Admin: u.Admin, CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt}
 }
 
-// @Summary List users, without those holding a protected role
+// @Summary List users; admin marks those holding a protected role
 // @Tags Users
 // @Produce json
 // @Param page query int false "Page" default(1)
@@ -118,7 +121,7 @@ func (h *Handler) List(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{"items": out, "pagination": mapper.Pagination(filter.Page, total)})
 }
 
-// @Summary Get a user with their roles
+// @Summary Get a user with their roles; an admin can be read but not changed here
 // @Tags Users
 // @Produce json
 // @Param id path string true "User ID"
@@ -333,6 +336,41 @@ func (h *Handler) ActivationLink(c fiber.Ctx) error {
 // @Router /v1/users/{id}/sessions [delete]
 func (h *Handler) RevokeSessions(c fiber.Ctx) error {
 	if err := h.svc.RevokeSessions(c.Context(), middleware.UserID(c), c.Params("id")); err != nil {
+		return mapper.WriteError(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+type setAdminDTO struct {
+	Admin    bool   `json:"admin"`
+	Password string `json:"password"` // the caller's own
+} // @name SetAdminInput
+
+// @Summary Give or take the admin role
+// @Description Gives the admin role to an active user or takes it from another admin.
+// @Description Needs users:update and roles:update, and the caller's own password. Nobody changes their own.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param id path string true "User ID"
+// @Param body body setAdminDTO true "Request"
+// @Security BearerAuth
+// @Success 204
+// @Failure 400 {object} mapper.errorBody
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 409 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID userSetAdmin
+// @Router /v1/users/{id}/admin [put]
+func (h *Handler) SetAdmin(c fiber.Ctx) error {
+	var body setAdminDTO
+	if err := c.Bind().Body(&body); err != nil {
+		return mapper.BadBody(c)
+	}
+	cmd := input.SetAdminCommand{ActorID: middleware.UserID(c), UserID: c.Params("id"), Admin: body.Admin, Password: body.Password}
+	if err := h.svc.SetAdmin(c.Context(), cmd); err != nil {
 		return mapper.WriteError(c, err)
 	}
 	return c.SendStatus(fiber.StatusNoContent)

@@ -11,6 +11,8 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ListSkeleton } from "@/components/skeletons";
+import { PasswordInput } from "@/components/password-input";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -124,12 +126,14 @@ function UserDetail({ id }: { id: string }) {
   const [revoking, setRevoking] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [settingAdmin, setSettingAdmin] = useState(false);
 
   const u = detail.data;
   useCrumb(u?.name);
   const disabled = u?.status === "disabled";
-  // The API refuses changing yourself; hide the button instead of showing an error.
-  const canToggle = u && can(me, "users", "update") && u.id !== me?.id;
+  // The API refuses changing yourself and anything about an admin but the role; hide those buttons instead of showing an error.
+  const canToggle = u && !u.admin && can(me, "users", "update") && u.id !== me?.id;
+  const canSetAdmin = u && can(me, "users", "update") && can(me, "roles", "update");
   const a = u?.access;
   const locked = !!a?.locked_until && new Date(a.locked_until) > new Date();
   const blocked = u?.status === "locked" || locked || (a?.recent_failures ?? 0) > 0;
@@ -204,7 +208,7 @@ function UserDetail({ id }: { id: string }) {
           <FormSection title={t("users.details")} description={t("users.details_desc")}>
               <dl className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-4 gap-y-3 text-sm sm:grid-cols-[10rem_1fr] sm:gap-x-6 sm:gap-y-4">
                 <dt className="text-muted-foreground">{t("users.status")}</dt>
-                <dd><StatusBadge status={detail.data.status} /></dd>
+                <dd className="flex flex-wrap items-center gap-2"><StatusBadge status={detail.data.status} />{detail.data.admin && <Badge variant="secondary">{t("roles.builtin.admin")}</Badge>}</dd>
                 <dt className="text-muted-foreground">{t("common.created_at")}</dt>
                 <dd>{format(detail.data.created_at)}</dd>
                 <dt className="text-muted-foreground">{t("common.updated_at")}</dt>
@@ -236,6 +240,17 @@ function UserDetail({ id }: { id: string }) {
                 </>
               )}
           </FormSection>
+          {canSetAdmin && (
+            <FormSection title={t("users.admin_section")} description={t(u.admin ? "users.admin_on_desc" : "users.admin_off_desc")}>
+              {u.id === me?.id ? (
+                <p className="text-sm text-muted-foreground">{t("users.admin_self")}</p>
+              ) : !u.admin && u.status !== "active" ? (
+                <p className="text-sm text-muted-foreground">{t("users.admin_inactive")}</p>
+              ) : (
+                <Button variant={u.admin ? "outline" : "default"} onClick={() => setSettingAdmin(true)}>{t(u.admin ? "users.remove_admin" : "users.make_admin")}</Button>
+              )}
+            </FormSection>
+          )}
           </FormSections>
           {canToggle && !disabled && (
             <DangerZone description={t("users.disable_desc")} label={t("users.disable")} onClick={() => setConfirm(true)} />
@@ -267,6 +282,7 @@ function UserDetail({ id }: { id: string }) {
         }}
       />
       <ActivationLinkDialog userId={id} open={linking} onOpenChange={setLinking} />
+      {u && <AdminRoleDialog user={u} open={settingAdmin} onOpenChange={setSettingAdmin} />}
       <ConfirmDialog
         open={revoking}
         onOpenChange={setRevoking}
@@ -321,6 +337,53 @@ function ActivationLinkDialog({ userId, open, onOpenChange }: { userId: string; 
             </Button>
           )}
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Gives or takes the admin role; the caller's own password confirms it, so a stolen session alone cannot. */
+function AdminRoleDialog({ user, open, onOpenChange }: { user: { id: string; name: string; admin: boolean }; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { t } = useI18n();
+  const client = useQueryClient();
+  const [password, setPassword] = useState("");
+  const set = useMutation({
+    mutationFn: () => users.setAdmin(user.id, !user.admin, password),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["users"] });
+      toast.success(t("users.admin_changed"));
+      change(false);
+    },
+  });
+  const change = (next: boolean) => {
+    onOpenChange(next);
+    if (!next) {
+      setPassword("");
+      set.reset();
+    }
+  };
+  const title = t(user.admin ? "users.remove_admin" : "users.make_admin");
+  return (
+    <Dialog open={open} onOpenChange={change}>
+      <DialogContent>
+        <form onSubmit={(e) => { e.preventDefault(); set.mutate(); }} className="space-y-4">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{t(user.admin ? "users.remove_admin_desc" : "users.make_admin_desc").replace("{name}", user.name)}</DialogDescription>
+          </DialogHeader>
+          <FormError message={set.error ? errorMessage(set.error, "common.save_failed", t) : null} />
+          <div className="space-y-2">
+            <Label htmlFor="admin-password">{t("users.your_password")}</Label>
+            <PasswordInput id="admin-password" autoComplete="current-password" required autoFocus value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => change(false)}>{t("common.cancel")}</Button>
+            <Button type="submit" variant={user.admin ? "destructive" : "default"} disabled={set.isPending || password === ""}>
+              {set.isPending && <Loader2 className="size-4 animate-spin" />}
+              {title}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

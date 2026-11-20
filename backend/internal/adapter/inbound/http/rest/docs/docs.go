@@ -8059,7 +8059,7 @@ const docTemplate = `{
                 "tags": [
                     "Users"
                 ],
-                "summary": "List users, without those holding a protected role",
+                "summary": "List users; admin marks those holding a protected role",
                 "operationId": "userList",
                 "parameters": [
                     {
@@ -8459,7 +8459,7 @@ const docTemplate = `{
                 "tags": [
                     "Users"
                 ],
-                "summary": "Get a user with their roles",
+                "summary": "Get a user with their roles; an admin can be read but not changed here",
                 "operationId": "userGet",
                 "parameters": [
                     {
@@ -8555,6 +8555,86 @@ const docTemplate = `{
                                 }
                             }
                         }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/users/{id}/admin": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Gives the admin role to an active user or takes it from another admin.\nNeeds users:update and roles:update, and the caller's own password. Nobody changes their own.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Give or take the admin role",
+                "operationId": "userSetAdmin",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Request",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/SetAdminInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -10632,6 +10712,18 @@ const docTemplate = `{
                 }
             }
         },
+        "SetAdminInput": {
+            "type": "object",
+            "properties": {
+                "admin": {
+                    "type": "boolean"
+                },
+                "password": {
+                    "description": "the caller's own",
+                    "type": "string"
+                }
+            }
+        },
         "ShareLink": {
             "type": "object",
             "properties": {
@@ -10763,6 +10855,10 @@ const docTemplate = `{
         "User": {
             "type": "object",
             "properties": {
+                "admin": {
+                    "description": "holds a protected role: read only here, except SetAdmin",
+                    "type": "boolean"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -10821,6 +10917,10 @@ const docTemplate = `{
             "properties": {
                 "access": {
                     "$ref": "#/definitions/UserAccess"
+                },
+                "admin": {
+                    "description": "holds a protected role: read only here, except SetAdmin",
+                    "type": "boolean"
                 },
                 "created_at": {
                     "type": "string"

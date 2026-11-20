@@ -14,6 +14,7 @@ import { SortHead, SortSelect } from "@/components/sort-head";
 import { SelectAllHead, SelectCell, SelectionBar, useSelection } from "@/components/selection";
 import { ListSkeleton } from "@/components/skeletons";
 import { TablePagination, emptyPageFallback } from "@/components/table-pagination";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -56,8 +57,8 @@ export default function UsersPage() {
   const fallback = list.isPlaceholderData ? null : emptyPageFallback(page, limit, list.data);
   useGoToPage(fallback, set); // the last rows of the last page went away
   const sortProps = { sort, order, onSort: (s: string, o: SortOrder) => set({ sort: s, order: o, page: 1 }) };
-  // Your own account cannot be disabled, so it is never ticked.
-  const selection = useSelection(list.data?.items.filter((u) => u.id !== user?.id).map((u) => u.id) ?? []);
+  // Your own account and admins are out of reach of bulk actions, so they are never ticked.
+  const selection = useSelection(list.data?.items.filter((u) => u.id !== user?.id && !u.admin).map((u) => u.id) ?? []);
   const statusItems: Record<string, string> = { all: t("users.all_statuses"), ...Object.fromEntries(STATUSES.map((s) => [s, t(`status.${s}` as MessageKey)])) };
 
   return (
@@ -116,10 +117,13 @@ export default function UsersPage() {
               <TableBody>
                 {list.data.items.map((u) => (
                   <TableRow key={u.id}>
-                    {canBulk && <SelectCell selection={selection} id={u.id} label={u.name} disabled={u.id === user?.id} />}
+                    {canBulk && <SelectCell selection={selection} id={u.id} label={u.name} disabled={u.id === user?.id || u.admin} />}
                     <TableCell data-label={t("auth.name")} data-cell="name" className="w-1/2 max-w-0">
                       {/* the keyboard way into the record on phones, where the action button is hidden */}
-                      <Link href={`/admin/users/${u.id}`} className="block truncate font-medium hover:underline" title={u.name}>{u.name}</Link>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Link href={`/admin/users/${u.id}`} className="truncate font-medium hover:underline" title={u.name}>{u.name}</Link>
+                        {u.admin && <Badge variant="secondary" className="shrink-0">{t("roles.builtin.admin")}</Badge>}
+                      </div>
                     </TableCell>
                     <TableCell data-label={t("auth.email")} data-cell="sub" className="w-1/2 max-w-0 text-muted-foreground lg:text-foreground"><span className="block truncate" title={u.email}>{u.email}</span></TableCell>
                     <TableCell data-label={t("users.status")} data-cell="status"><StatusBadge status={u.status} /></TableCell>

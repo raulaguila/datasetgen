@@ -35,7 +35,7 @@ func listed(t *testing.T, svc *user.Service, filter domain.UserFilter) map[strin
 	return found
 }
 
-func TestListFiltersAndHidesProtectedUsers(t *testing.T) {
+func TestListFiltersAndMarksProtectedUsers(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	svc := e.users()
@@ -56,8 +56,12 @@ func TestListFiltersAndHidesProtectedUsers(t *testing.T) {
 	}
 
 	found := listed(t, svc, domain.UserFilter{Search: strings.ToUpper(mark)})
-	if !found[addr] || !found[pending] || found[boss] || len(found) != 2 {
+	if !found[addr] || !found[pending] || !found[boss] || len(found) != 3 {
 		t.Fatalf("listed %v", found)
+	}
+	users, _, err := svc.List(ctx, domain.UserFilter{Search: boss, Page: domain.NewPage(1, 10)})
+	if err != nil || len(users) != 1 || !users[0].Admin {
+		t.Fatalf("admin not marked: %+v %v", users, err)
 	}
 	found = listed(t, svc, domain.UserFilter{Search: mark, Status: domain.UserStatusPending})
 	if !found[pending] || len(found) != 1 {
@@ -67,13 +71,13 @@ func TestListFiltersAndHidesProtectedUsers(t *testing.T) {
 		t.Fatalf("a wildcard matched: %v", found)
 	}
 
-	_, _, err := svc.List(ctx, domain.UserFilter{Page: domain.NewPage(1, 10), Status: "expired"})
+	_, _, err = svc.List(ctx, domain.UserFilter{Page: domain.NewPage(1, 10), Status: "expired"})
 	wantCode(t, err, apperror.CodeInvalidInput)
 	_, _, err = svc.List(ctx, domain.UserFilter{Page: domain.NewPage(1, 10), Search: "a\x00b"})
 	wantCode(t, err, apperror.CodeInvalidInput)
 }
 
-func TestGetShowsRolesAndRefusesProtectedUsers(t *testing.T) {
+func TestGetShowsRolesAndAdmins(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	svc := e.users()
@@ -95,8 +99,9 @@ func TestGetShowsRolesAndRefusesProtectedUsers(t *testing.T) {
 	if err := admin.New(e.store, e.clock).Promote(ctx, addr); err != nil {
 		t.Fatal(err)
 	}
-	_, err = svc.Get(ctx, e.userID(t, addr))
-	wantCode(t, err, apperror.CodeForbidden)
+	if got, err = svc.Get(ctx, e.userID(t, addr)); err != nil || !got.Admin {
+		t.Fatalf("admin read: %+v %v", got, err)
+	}
 }
 
 func TestDisableAndEnableThroughTheAPI(t *testing.T) {
@@ -226,11 +231,16 @@ func TestSentinelGrantProtectsItsMembers(t *testing.T) {
 	if err := e.store.Roles().Assign(ctx, e.userID(t, addr), roleID); err != nil {
 		t.Fatal(err)
 	}
-	_, err := svc.Get(ctx, e.userID(t, addr))
-	wantCode(t, err, apperror.CodeForbidden)
-	if found := listed(t, svc, domain.UserFilter{Search: addr}); len(found) != 0 {
-		t.Fatalf("listed %v", found)
+	// Read only: listed and shown as admin, but not changed.
+	got, err := svc.Get(ctx, e.userID(t, addr))
+	if err != nil || !got.Admin {
+		t.Fatalf("get %+v %v", got, err)
 	}
+	found, _, err := svc.List(ctx, domain.UserFilter{Search: addr, Page: domain.NewPage(1, 10)})
+	if err != nil || len(found) != 1 || !found[0].Admin {
+		t.Fatalf("listed %+v %v", found, err)
+	}
+	wantCode(t, svc.UnlockMany(ctx, []string{e.userID(t, addr)}), apperror.CodeForbidden)
 
 }
 
@@ -280,4 +290,48 @@ func TestUnlockKeepsAPendingUserPending(t *testing.T) {
 	if got := e.userStatus(t, addr); got != domain.UserStatusPending {
 		t.Fatalf("status %s", got)
 	}
+}
+
+// An admin gives and takes the admin role with their own password; nobody
+// changes their own, and a non-admin target must be active to be promoted.
+func TestAdminRoleChangesWithThePassword(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	svc := e.users()
+	operator := admin.New(e.store, e.clock)
+	boss := e.activeUser(t)
+	if err := operator.Promote(ctx, boss); err != nil {
+		t.Fatal(err)
+	}
+	actor, target := e.userID(t, boss), e.userID(t, e.activeUser(t))
+	set := func(id string, on bool, pass string) error {
+		return svc.SetAdmin(ctx, input.SetAdminCommand{ActorID: actor, UserID: id, Admin: on, Password: pass})
+	}
+
+	wantCode(t, set(target, true, "wrong password"), apperror.CodeInvalidInput)
+	wantCode(t, set(actor, false, strongPassword), apperror.CodeForbidden)
+	wantCode(t, set(strings.ToUpper(actor), false, strongPassword), apperror.CodeForbidden)
+
+	if err := set(target, true, strongPassword); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := svc.Get(ctx, target); !got.Admin {
+		t.Fatal("not promoted")
+	}
+	if err := set(target, true, strongPassword); err != nil { // already admin: nothing to do
+		t.Fatal(err)
+	}
+	if err := set(target, false, strongPassword); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := svc.Get(ctx, target); got.Admin {
+		t.Fatal("still admin")
+	}
+
+	// A non-admin cannot change admins, even with the right password.
+	wantCode(t, svc.SetAdmin(ctx, input.SetAdminCommand{ActorID: target, UserID: actor, Admin: false, Password: strongPassword}), apperror.CodeForbidden)
+
+	pending := email()
+	e.register(t, pending)
+	wantCode(t, set(e.userID(t, pending), true, strongPassword), apperror.CodeConflict)
 }

@@ -118,7 +118,7 @@ func (r *Repository) Create(ctx context.Context, u *domain.User) error {
 // shortcut: OFFSET and leading-wildcard ILIKE scan what they skip, fine for thousands of users; move to keyset and pg_trgm beyond that.
 func (r *Repository) List(ctx context.Context, filter domain.UserFilter) ([]domain.User, int64, error) {
 	matching := func() *gorm.DB {
-		q := r.db.WithContext(ctx).Table("usr.usr_user u").Where(shared.Unprotected)
+		q := r.db.WithContext(ctx).Table("usr.usr_user u")
 		if filter.Search != "" {
 			pattern := shared.Contains(filter.Search)
 			q = q.Where("(u.name ILIKE ? OR u.email::text ILIKE ? OR u.username ILIKE ?)", pattern, pattern, pattern)
@@ -135,9 +135,18 @@ func (r *Repository) List(ctx context.Context, filter domain.UserFilter) ([]doma
 	if err := matching().Count(&total).Error; err != nil {
 		return nil, 0, shared.WrapError(err, "user")
 	}
-	var rows []row
+	var rows []struct {
+		ID        uuid.UUID `gorm:"column:id"`
+		Name      string    `gorm:"column:name"`
+		Username  string    `gorm:"column:username"`
+		Email     string    `gorm:"column:email"`
+		Status    string    `gorm:"column:status"`
+		CreatedAt time.Time `gorm:"column:created_at"`
+		UpdatedAt time.Time `gorm:"column:updated_at"`
+		Admin     bool      `gorm:"column:admin"`
+	}
 	err := matching().
-		Select("u.id, u.name, u.username, u.email, u.status, u.created_at, u.updated_at").
+		Select("u.id, u.name, u.username, u.email, u.status, u.created_at, u.updated_at, u.id IN (" + shared.ProtectedIDs + ") AS admin").
 		Order(shared.OrderBy("u", filter.Sort, filter.Order)).
 		Limit(filter.Page.Limit).Offset(filter.Page.Offset()).
 		Scan(&rows).Error
@@ -146,7 +155,9 @@ func (r *Repository) List(ctx context.Context, filter domain.UserFilter) ([]doma
 	}
 	out := make([]domain.User, 0, len(rows))
 	for _, m := range rows {
-		out = append(out, *m.toDomain())
+		u := row{m.ID, m.Name, m.Username, m.Email, m.Status, m.CreatedAt, m.UpdatedAt}.toDomain()
+		u.Admin = m.Admin
+		out = append(out, *u)
 	}
 	return out, total, nil
 }
