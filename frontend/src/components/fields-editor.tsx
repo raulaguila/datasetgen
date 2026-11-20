@@ -2,12 +2,12 @@
 
 import { useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Braces, ChevronDown, ChevronRight, Copy, Eye, GripVertical, ListTodo, MapPin, MoreHorizontal, Plus, RotateCcw, Star, Trash2, Users, Gauge, Search, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowUp, Braces, ChevronDown, ChevronRight, Copy, Eye, GripVertical, Pencil, ListTodo, MapPin, MoreHorizontal, Plus, RotateCcw, Star, Trash2, Users, Gauge, Search, type LucideIcon } from "lucide-react";
 import { IconAction } from "@/components/bits";
 import {
   AUTO_TYPES, FIELD_TYPES, FORMULA_RESULTS, ITEM_TYPES, OPTION_COLORS, PATTERN_TYPES, ROLLUP_FNS, SHOW_OPS, SUBFIELD_TYPES, UNIQUE_TYPES, VIRTUAL_TYPES,
   addField, addProp, blankField, typeOf, typesKeepingValues, isNumberField, canonical, duplicateField, fieldProblem, fieldsOf, isObjectType, keyOf, limitKeys, moveField, moveFieldTo, optionsOf, propOf,
-  propsOf, removeField, requiredOf, restoreField, setProp, updateField,
+  propsOf, removeField, requiredOf, restoreField, setProp, titleCandidates, updateField,
   type Field, type FieldRow, type FieldType, type Schema, type ShowWhen,
 } from "@/components/field-builder";
 import { optionColor } from "@/components/option-chip";
@@ -634,6 +634,8 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
   onChange: (next: Schema) => void;
 }) {
   const { t, locale } = useI18n();
+  // Only the top level names records (subfields never do).
+  const titleKey = group ? undefined : titleCandidates(schema)[0];
   const formId = useId();
   const [panel, setPanel] = useState<Panel>(null);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -706,12 +708,13 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
             const Icon = advanced ? Braces : TYPE_ICONS[field.type];
             const heading = headings.get(key);
             const colors = field.type === "enum" ? optionsOf(field).slice(0, 4) : [];
+            const names = key === titleKey;
             return (
               <li key={key}>
               {heading && <p className="border-b bg-muted/40 px-3 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{heading}</p>}
               {/* The drag handlers sit on the row, so a group's subfields drag on their own. */}
               <div
-                className={cn("group/row flex items-center gap-x-2 gap-y-1 px-2 py-2 transition-colors", dragging === key && "opacity-50", over === i && dragging !== key && "bg-primary/10")}
+                className={cn("group/row flex items-center gap-x-2 gap-y-1 px-2 py-2 transition-colors hover:bg-muted/50 focus-within:bg-muted/50", editable && !searching && "cursor-grab active:cursor-grabbing", dragging === key && "opacity-50", over === i && dragging !== key && "bg-primary/10")}
                 draggable={editable && !searching}
                 onDragStart={(e) => { setDragging(key); e.dataTransfer.effectAllowed = "move"; }}
                 onDragOver={(e) => { if (!dragging) return; e.preventDefault(); setOver(i); }}
@@ -729,14 +732,15 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
                 <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground" title={advanced ? t("collections.type.advanced") : t(`collections.type.${field.type}`)}>
                   <Icon className="size-4" aria-hidden />
                 </span>
-                <button type="button" aria-label={`${t("collections.field_edit")}: ${field.name}`} disabled={!editable || advanced} onClick={() => setPanel({ mode: "edit", key })}
-                  className="min-w-0 flex-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring enabled:cursor-pointer">
+                {/* The row only drags; editing is the pencil, with the other actions. */}
+                <div className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                     <span className="truncate">{field.name}</span>
-                    {field.required && <Badge variant="outline" className="text-muted-foreground">{t("collections.field_required")}</Badge>}
-                    {field.unique && <Badge variant="outline" className="text-muted-foreground">{t("collections.field_unique")}</Badge>}
-                    {field.private && <Badge variant="outline" className="text-muted-foreground">{t("collections.field_private")}</Badge>}
-                    {field.showWhen && <Badge variant="outline" className="text-muted-foreground" title={t("fields.show_when")}><Eye className="size-3" aria-hidden />{t("fields.conditional")}</Badge>}
+                    {names && <Badge variant="secondary" title={t("fields.record_title_hint")}>{t("fields.record_title")}</Badge>}
+                    {field.required && <Badge variant="outline" className="text-foreground/80">{t("collections.field_required")}</Badge>}
+                    {field.unique && <Badge variant="outline" className="text-foreground/80">{t("collections.field_unique")}</Badge>}
+                    {field.private && <Badge variant="outline" className="text-foreground/80">{t("collections.field_private")}</Badge>}
+                    {field.showWhen && <Badge variant="outline" className="text-foreground/80" title={t("fields.show_when")}><Eye className="size-3" aria-hidden />{t("fields.conditional")}</Badge>}
                     {badge && <Badge variant="outline" className={badge === "collections.field_new" ? "border-primary/40 text-primary" : "border-warn/40 text-warn"}>{t(badge)}</Badge>}
                   </span>
                   <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
@@ -744,15 +748,17 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
                     {colors.length > 0 && <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">· {colors.map((o) => <span key={o} className="inline-flex items-center gap-1"><span className={cn("size-2 rounded-full", optionColor(field.colors[o]).dot)} aria-hidden />{o}</span>)}{optionsOf(field).length > 4 && "…"}</span>}
                     {isGroup && <span className="shrink-0">· {subCount === 1 ? t("collections.subfield_one") : t("collections.subfield_many").replace("{n}", String(subCount))}</span>}
                     {field.width === "half" && <span className="shrink-0">· {t("fields.width.half")}</span>}
-                    {/* The key is for builders: it shows on hover or focus. */}
-                    <span className="truncate font-mono opacity-0 transition-opacity max-sm:hidden group-hover/row:opacity-100 group-focus-within/row:opacity-100">· {key}</span>
+                    {/* The key is for builders: always shown on wide screens, on hover or focus elsewhere. */}
+                    <span className="truncate font-mono opacity-0 transition-opacity max-sm:hidden group-hover/row:opacity-100 group-focus-within/row:opacity-100 xl:opacity-100">· {key}</span>
                   </span>
-                </button>
+                </div>
                 {editable && (
                   // Phones: one menu instead of five buttons, so the name keeps the row.
                   <DropdownMenu>
                     <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon" className="ml-auto shrink-0 sm:hidden" aria-label={`${t("common.actions")}: ${field.name}`} />}><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem disabled={advanced} onClick={() => setPanel({ mode: "edit", key })}><Pencil className="size-4" />{t("collections.field_edit")}</DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem disabled={i === 0 || searching} onClick={() => onChange(moveField(schema, key, -1))}><ArrowUp className="size-4" />{t("collections.field_up")}</DropdownMenuItem>
                       <DropdownMenuItem disabled={i === rows.length - 1 || searching} onClick={() => onChange(moveField(schema, key, 1))}><ArrowDown className="size-4" />{t("collections.field_down")}</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => onChange(duplicateField(schema, key, t("fields.copy_suffix")))}><Copy className="size-4" />{t("fields.duplicate")}</DropdownMenuItem>
@@ -769,6 +775,7 @@ export function FieldsEditor({ schema, original, editable, keysLocked = false, g
                       <IconAction label={t("collections.field_down")} target={field.name} disabled={i === rows.length - 1 || searching} onClick={() => onChange(moveField(schema, key, 1))}><ArrowDown className="size-4" /></IconAction>
                       <IconAction label={t("fields.duplicate")} target={field.name} onClick={() => onChange(duplicateField(schema, key, t("fields.copy_suffix")))}><Copy className="size-4" /></IconAction>
                     </span>
+                    <IconAction label={t("collections.field_edit")} target={field.name} disabled={advanced} onClick={() => setPanel({ mode: "edit", key })}><Pencil className="size-4" /></IconAction>
                     <IconAction label={t("collections.field_remove")} target={field.name} className="text-muted-foreground hover:text-destructive" onClick={() => onChange(removeField(schema, key))}><Trash2 className="size-4" /></IconAction>
                   </div>
                 )}

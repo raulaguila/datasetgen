@@ -331,18 +331,24 @@ export const requiredOf = (schema: Schema) => (Array.isArray(schema.required) ? 
  */
 export function recordTitle(schema: Schema | null, data: unknown): string | undefined {
   const obj = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  for (const k of titleCandidates(schema)) {
+    const v = obj[k];
+    if (Number.isInteger(v)) return String(v);
+    if (typeof v === "string" && v.trim()) return v;
+  }
+  return undefined;
+}
+
+/** The fields recordTitle reads, in the order it tries them; the first is the one that names records. */
+export function titleCandidates(schema: Schema | null): string[] {
   const props = Object.entries(schema ? propsOf(schema) : {});
   const required = schema ? requiredOf(schema) : [];
   const plain = (p: Record<string, unknown>) => p?.type === "string" && !p.format && p[REF] === undefined && p.enum === undefined;
-  const text = (k: string) => (typeof obj[k] === "string" && (obj[k] as string).trim() ? (obj[k] as string) : undefined);
-  for (const [k, p] of props) if (plain(p) && required.includes(k) && text(k)) return text(k);
-  for (const [k, p] of props) {
-    if (p?.[UNIQUE] !== true || p[REF] !== undefined) continue;
-    if (p.type === "integer" && Number.isInteger(obj[k])) return String(obj[k]);
-    if (p.type === "string" && text(k)) return text(k);
-  }
-  for (const [k, p] of props) if (plain(p) && text(k)) return text(k);
-  return undefined;
+  return [
+    ...props.filter(([k, p]) => plain(p) && required.includes(k)),
+    ...props.filter(([, p]) => p?.[UNIQUE] === true && p[REF] === undefined && (p.type === "integer" || p.type === "string")),
+    ...props.filter(([, p]) => plain(p)),
+  ].map(([k]) => k);
 }
 
 export function fieldsOf(schema: Schema | null): FieldRow[] {
@@ -461,9 +467,10 @@ export function fieldProblem(f: Field, taken: (key: string) => boolean, initialK
 
 /** The schema with these properties (in this order) and required list, every other key kept. */
 function rebuild(schema: Schema, entries: [string, unknown][], required: string[]): Schema {
-  const rest = { ...schema };
-  delete rest.required;
-  return { ...rest, type: schema.type ?? "object", properties: Object.fromEntries(entries), ...(required.length ? { required } : {}) };
+  // Keys keep their place, so undoing a change gives back the very same JSON (and no unsaved change).
+  const out: Schema = { ...schema, type: schema.type ?? "object", properties: Object.fromEntries(entries), required };
+  if (!required.length) delete out.required;
+  return out;
 }
 
 /** Adds one top-level field to an object schema, keeping every other key as it was. */

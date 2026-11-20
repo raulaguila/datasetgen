@@ -7,9 +7,7 @@ import { useParams, usePathname, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Braces, ChevronRight, Eye, History, MoreHorizontal, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { FieldNote, FormSection, FormSections, PageBody, PageHeader, SaveBar, useFormatDate } from "@/components/bits";
-import { CollectionAvatar } from "@/components/collection-avatar";
-import { IconPicker } from "@/components/icon-picker";
+import { FieldNote, FormSections, PageBody, PageHeader, SaveBar, useFormatDate } from "@/components/bits";
 import { EmptyState } from "@/components/empty-state";
 import { schemaChanges, type SchemaChange } from "@/components/field-builder";
 import { FieldsEditor, SidePanel } from "@/components/fields-editor";
@@ -18,8 +16,6 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api/client";
 import { collections, records, tools } from "@/lib/api/endpoints";
@@ -35,7 +31,6 @@ import { useCrumb } from "@/lib/store/crumb";
 import { useUIStore } from "@/lib/store/ui";
 import { collectionPath, movedPath, recordByID } from "@/lib/paths";
 import { cn } from "@/lib/utils";
-import { collectionName, description as descriptionRule, ready } from "@/lib/validation";
 
 /** The fields a new collection starts with, named in the user's language. */
 export const starter = (t: (k: MessageKey) => string) => ({
@@ -202,20 +197,17 @@ function SchemaHistory({ collection, enabled, onLoad }: { collection: Collection
  * ("details" on Settings, "fields" on Fields), and saving sends only what changed.
  * A new collection is made on the new-collection page (_new.tsx).
  */
-export function CollectionForm({ collection, parts }: { collection: Collection; parts: ("details" | "fields")[] }) {
+/** The Fields page: the field list, its preview, history and JSON, saved together. */
+export function CollectionForm({ collection }: { collection: Collection }) {
   const { t } = useI18n();
   const router = useRouter();
   const client = useQueryClient();
   const editable = roleAllows(collection.role, "owner");
-  const recordCount = useRecordCount(collection, parts.includes("fields") && editable);
+  const recordCount = useRecordCount(collection, editable);
   const original = pretty(collection.schema ?? starter(t));
-  const [name, setName] = useState(collection.name);
-  const [desc, setDesc] = useState(collection.description);
-  const [icon, setIcon] = useState(collection.icon);
   const [schemaText, setSchemaText] = useState(original);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(collection.version);
-  const nameError = collectionName(name);
   const parsed = useMemo(() => parseSchema(schemaText), [schemaText]);
   const schema = parsed.schema;
   const [sheet, setSheet] = useState<"preview" | "history" | "json" | null>(null);
@@ -225,13 +217,13 @@ export function CollectionForm({ collection, parts }: { collection: Collection; 
   // Changes that can leave stored records out of format: confirmed first, then Quality is a click away.
   const risky = !!recordCount && changes.some((c) => c.risky);
   const [confirming, setConfirming] = useState(false);
-  const dirty = name.trim() !== collection.name || desc.trim() !== collection.description || icon !== collection.icon || schemaChanged;
+  const dirty = schemaChanged;
   useUnsavedGuard(editable && dirty, t("roles.leave_unsaved"));
 
   // The variable says whether the save was risky, for the toast that follows.
   const save = useMutation<Collection, unknown, boolean>({
     mutationFn: () => {
-      return collections.update(collection, { name: name.trim(), description: desc.trim(), icon: icon !== collection.icon ? icon : undefined, schema: schemaChanged ? schema : undefined, version });
+      return collections.update(collection, { schema: schema ?? undefined, version });
     },
     onSuccess: (saved, wasRisky) => {
       setError(null);
@@ -248,9 +240,6 @@ export function CollectionForm({ collection, parts }: { collection: Collection; 
   });
 
   const discard = () => {
-    setName(collection.name);
-    setDesc(collection.description);
-    setIcon(collection.icon);
     setSchemaText(original);
     setVersion(collection.version);
     setError(null);
@@ -269,105 +258,75 @@ export function CollectionForm({ collection, parts }: { collection: Collection; 
       onKeyDown={(e) => { if (editable && dirty && e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); e.currentTarget.requestSubmit(); } }}>
       <FormSections>
         {!editable && <p role="status" className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{t("collections.readonly")}</p>}
-        {parts.includes("details") && (
-          <FormSection title={t("collections.details")} description={t("collections.details_desc")}>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="c-name">{t("auth.name")}</Label>
-                <Input id="c-name" required maxLength={120} aria-invalid={!!nameError} aria-describedby="c-name-note" disabled={!editable} value={name} onChange={(e) => setName(e.target.value)} />
-                <FieldNote id="c-name-note" error={nameError && t(nameError)} />
+        {/* No side heading here: the list needs the width. */}
+        <section className="space-y-4 border-t pt-8 first:border-t-0 first:pt-0">
+          {/* One column, the card's full width as on every other page: each field opens in a side panel, and so do the preview, the history and the JSON. */}
+          <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {schema && <p className="mr-auto text-sm text-muted-foreground">{plural(t("collections.start.fields_count"), Object.keys(schema.properties ?? {}).length)}</p>}
+                <Button type="button" variant="outline" size="sm" disabled={!schema} onClick={() => setSheet("preview")}><Eye className="size-4" />{t("collections.preview")}</Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label={t("fields.more")} />}><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {editable && <DropdownMenuItem onClick={() => setSheet("history")}><History className="size-4" />{t("field_history.title")}</DropdownMenuItem>}
+                    <DropdownMenuItem onClick={() => setSheet("json")}><Braces className="size-4" />{t("collections.json_toggle")}</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="c-desc">{t("collections.description")}</Label>
-                <Textarea id="c-desc" rows={2} maxLength={2000} aria-invalid={!!descriptionRule(desc)} disabled={!editable} value={desc} onChange={(e) => setDesc(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <IconPicker value={icon} onChange={setIcon} label={t("collections.icon")} noneLabel={t("collections.icon_none")} disabled={!editable} />
-                <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                  {t("collections.icon_desc")}
-                  <CollectionAvatar collection={{ id: collection.id, name: name.trim() || "?", icon }} className="size-6 rounded-md text-xs font-semibold" />
-                </p>
-              </div>
-            </div>
-          </FormSection>
-        )}
-        {parts.includes("fields") && (
-          // No side heading here: the list needs the width.
-          <section className="space-y-4 border-t pt-8 first:border-t-0 first:pt-0">
-            {/* The Fields page says this in its header; the new-collection page needs it here. The save bar says what is unsaved. */}
-            {parts.includes("details") && (
-              <div className="space-y-1">
-                <h2 className="font-heading text-base font-semibold">{t("collections.fields")}</h2>
-                <p className="text-sm text-muted-foreground">{t("collections.fields_desc")}</p>
-              </div>
-            )}
-            {/* One column, the card's full width as on every other page: each field opens in a side panel, and so do the preview, the history and the JSON. */}
-            <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <Button type="button" variant="outline" size="sm" disabled={!schema} onClick={() => setSheet("preview")}><Eye className="size-4" />{t("collections.preview")}</Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label={t("fields.more")} />}><MoreHorizontal className="size-4" /></DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {editable && <DropdownMenuItem onClick={() => setSheet("history")}><History className="size-4" />{t("field_history.title")}</DropdownMenuItem>}
-                      <DropdownMenuItem onClick={() => setSheet("json")}><Braces className="size-4" />{t("collections.json_toggle")}</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+              {!schema && (
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
+                  <span>{[t("collections.schema_invalid"), parsed.error].filter(Boolean).join(": ")}</span>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setSheet("json")}><Braces className="size-4" />{t("collections.json_toggle")}</Button>
                 </div>
-                {!schema && (
-                  <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
-                    <span>{[t("collections.schema_invalid"), parsed.error].filter(Boolean).join(": ")}</span>
-                    <Button type="button" size="sm" variant="outline" onClick={() => setSheet("json")}><Braces className="size-4" />{t("collections.json_toggle")}</Button>
-                  </div>
-                )}
-                <FieldsEditor
-                  schema={schema}
-                  original={collection.schema ?? null}
-                  editable={editable}
-                  keysLocked={recordCount !== 0}
-                  onChange={(next) => setSchemaText(pretty(next))}
-                />
-                {changes.length > 0 && (
-                  // Compact: one line saying how many changes, the list on demand.
-                  <details role="status" className={cn("group rounded-md border px-3 py-2 text-sm", risky ? "border-warn/40 bg-warn/10" : "bg-muted/40")}>
-                    <summary className="flex cursor-pointer list-none items-center gap-2 font-medium [&::-webkit-details-marker]:hidden">
-                      <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
-                      {plural(t("fields.changes_count"), changes.length)}
-                      {risky && <span className="font-normal text-warn">· {t("fields.changes_risky")}</span>}
-                    </summary>
-                    <ul className="mt-1.5 list-inside list-disc space-y-0.5 pl-6">
-                      {changes.map((c, i) => <li key={i}>{changeText(c)}</li>)}
-                    </ul>
-                    {risky && <p className="mt-1.5 pl-6">{plural(t("collections.schema_change_hint"), recordCount)}</p>}
-                  </details>
-                )}
-              </div>
-            <SidePanel open={sheet === "preview"} onOpenChange={(o) => !o && setSheet(null)} title={t("collections.preview")} description={t("collections.preview_desc")} wide>
-              {schema && <SchemaForm schema={schema} data={previewData} onChange={setPreviewData} idPrefix="preview" columns={2} />}
+              )}
+              <FieldsEditor
+                schema={schema}
+                original={collection.schema ?? null}
+                editable={editable}
+                keysLocked={recordCount !== 0}
+                onChange={(next) => setSchemaText(pretty(next))}
+              />
+              {changes.length > 0 && (
+                // Compact: one line saying how many changes, the list on demand.
+                <details role="status" className={cn("group rounded-md border px-3 py-2 text-sm", risky ? "border-warn/40 bg-warn/10" : "bg-muted/40")}>
+                  <summary className="flex cursor-pointer list-none items-center gap-2 font-medium [&::-webkit-details-marker]:hidden">
+                    <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
+                    {plural(t("fields.changes_count"), changes.length)}
+                    {risky && <span className="font-normal text-warn">· {t("fields.changes_risky")}</span>}
+                  </summary>
+                  <ul className="mt-1.5 list-inside list-disc space-y-0.5 pl-6">
+                    {changes.map((c, i) => <li key={i}>{changeText(c)}</li>)}
+                  </ul>
+                  {risky && <p className="mt-1.5 pl-6">{plural(t("collections.schema_change_hint"), recordCount)}</p>}
+                </details>
+              )}
+            </div>
+          <SidePanel open={sheet === "preview"} onOpenChange={(o) => !o && setSheet(null)} title={t("collections.preview")} description={t("collections.preview_desc")} wide>
+            {schema && <SchemaForm schema={schema} data={previewData} onChange={setPreviewData} idPrefix="preview" columns={2} />}
+          </SidePanel>
+          {editable && (
+            <SidePanel open={sheet === "history"} onOpenChange={(o) => !o && setSheet(null)} title={t("field_history.title")}>
+              <SchemaHistory collection={collection} enabled={sheet === "history"} onLoad={(old) => { setSchemaText(pretty(old)); setSheet(null); toast.info(t("field_history.loaded")); }} />
             </SidePanel>
-            {editable && (
-              <SidePanel open={sheet === "history"} onOpenChange={(o) => !o && setSheet(null)} title={t("field_history.title")}>
-                <SchemaHistory collection={collection} enabled={sheet === "history"} onLoad={(old) => { setSchemaText(pretty(old)); setSheet(null); toast.info(t("field_history.loaded")); }} />
-              </SidePanel>
-            )}
-            <SidePanel open={sheet === "json"} onOpenChange={(o) => !o && setSheet(null)} title={t("collections.json_toggle")} description={t("collections.schema_desc")} wide>
-              <div className="space-y-2">
-                <Textarea
-                  id="c-schema"
-                  aria-label={t("collections.schema")}
-                  aria-invalid={!schema}
-                  aria-describedby="c-schema-note"
-                  spellCheck={false}
-                  rows={Math.min(40, Math.max(12, schemaText.split("\n").length + 1))}
-                  disabled={!editable}
-                  value={schemaText}
-                  onChange={(e) => setSchemaText(e.target.value)}
-                  className="px-3 font-mono text-xs leading-relaxed md:text-xs"
-                />
-                <FieldNote id="c-schema-note" error={!schema ? [t("collections.schema_invalid"), parsed.error].filter(Boolean).join(": ") : undefined} />
-              </div>
-            </SidePanel>
-          </section>
-        )}
+          )}
+          <SidePanel open={sheet === "json"} onOpenChange={(o) => !o && setSheet(null)} title={t("collections.json_toggle")} description={t("collections.schema_desc")} wide>
+            <div className="space-y-2">
+              <Textarea
+                id="c-schema"
+                aria-label={t("collections.schema")}
+                aria-invalid={!schema}
+                aria-describedby="c-schema-note"
+                spellCheck={false}
+                rows={Math.min(40, Math.max(12, schemaText.split("\n").length + 1))}
+                disabled={!editable}
+                value={schemaText}
+                onChange={(e) => setSchemaText(e.target.value)}
+                className="px-3 font-mono text-xs leading-relaxed md:text-xs"
+              />
+              <FieldNote id="c-schema-note" error={!schema ? [t("collections.schema_invalid"), parsed.error].filter(Boolean).join(": ") : undefined} />
+            </div>
+          </SidePanel>
+        </section>
         {editable && dirty && (
           <SaveBar
             footer
@@ -381,7 +340,7 @@ export function CollectionForm({ collection, parts }: { collection: Collection; 
             }
             error={error}
             saving={save.isPending}
-            canSave={!!schema && !descriptionRule(desc) && dirty && ready([name, collectionName])}
+            canSave={!!schema && dirty}
             saveLabel={t("common.save")}
             discardLabel={t("common.discard")}
             onDiscard={discard}

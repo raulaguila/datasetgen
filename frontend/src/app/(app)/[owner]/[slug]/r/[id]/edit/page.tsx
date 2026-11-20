@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type Form from "@rjsf/core";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -33,6 +33,12 @@ import { useRouteCollection, useRecordAddress } from "../../../_parts";
 import { neighbours, useSequenceStore } from "@/lib/store/sequence";
 import { useUIStore } from "@/lib/store/ui";
 
+const ANOTHER_KEY = "record-save-another";
+const noChanges = () => () => {};
+const storedAnother = (): "blank" | "copy" => {
+  try { return localStorage.getItem(ANOTHER_KEY) === "copy" ? "copy" : "blank"; } catch { return "blank"; }
+};
+
 /** Create when `record` is null, edit otherwise. The server checks the data against the schema. */
 function RecordForm({ collection, record, editable, next }: { collection: Collection; record: DataRecord | null; editable: boolean; next?: string }) {
   const { t } = useI18n();
@@ -41,6 +47,15 @@ function RecordForm({ collection, record, editable, next }: { collection: Collec
   const router = useRouter();
   const client = useQueryClient();
   const [data, setData] = useState<unknown>(record?.data ?? {});
+  // "Save and add another" remembers the last choice (blank or keep the data), per browser.
+  const stored = useSyncExternalStore(noChanges, storedAnother, () => "blank" as const);
+  const [picked, setPicked] = useState<"blank" | "copy" | null>(null);
+  const another = picked ?? stored;
+  const pickAnother = (mode: "blank" | "copy") => {
+    setPicked(mode);
+    try { localStorage.setItem(ANOTHER_KEY, mode); } catch {}
+    submit(mode);
+  };
   const [version, setVersion] = useState(record?.version);
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<SchemaIssue[]>([]);
@@ -168,18 +183,18 @@ function RecordForm({ collection, record, editable, next }: { collection: Collec
             extra={record ? next && (
               <Button type="button" variant="outline" disabled={save.isPending} onClick={() => submit("next")}>{t("records.save_and_next")}</Button>
             ) : (
-              // Split button: blank by default, the menu keeps the data for a near-copy.
+              // Split button: the last choice leads, the menu holds the other one.
               <div className="flex">
-                <Button type="button" variant="outline" className="rounded-r-none" disabled={save.isPending} onClick={() => submit("blank")}>{t("records.save_and_new")}</Button>
+                <Button type="button" variant="outline" className="rounded-r-none" disabled={save.isPending} onClick={() => submit(another)}>{t(another === "copy" ? "records.save_and_copy" : "records.save_and_new")}</Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger render={<Button type="button" variant="outline" size="icon" className="rounded-l-none border-l-0" disabled={save.isPending} aria-label={t("records.save_more")} />}>
                     <ChevronDown className="size-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-64">
-                    <DropdownMenuItem onClick={() => submit("copy")}>
+                    <DropdownMenuItem onClick={() => pickAnother(another === "copy" ? "blank" : "copy")}>
                       <span className="flex flex-col">
-                        {t("records.save_and_copy")}
-                        <span className="text-xs text-muted-foreground">{t("records.save_and_copy_hint")}</span>
+                        {t(another === "copy" ? "records.save_and_new" : "records.save_and_copy")}
+                        <span className="text-xs text-muted-foreground">{t(another === "copy" ? "records.save_and_new_hint" : "records.save_and_copy_hint")}</span>
                       </span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>

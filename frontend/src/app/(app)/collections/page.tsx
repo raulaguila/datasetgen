@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Copy, Database, FileJson, ListTree, LogOut, MoreVertical, Plus, RotateCcw, Search, Settings2, Star, Trash2, UserCog, Users, X } from "lucide-react";
+import { ArrowRight, Copy, Database, FileJson, ListTree, LogOut, MoreVertical, Pencil, Plus, RotateCcw, Search, Star, Trash2, UserCog, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader, useRelativeTime } from "@/components/bits";
 import { CollectionAvatar } from "@/components/collection-avatar";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DuplicateCollectionDialog } from "@/components/duplicate-collection-dialog";
+import { EditCollectionDialog } from "@/components/edit-collection-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
 import { ListSkeleton } from "@/components/skeletons";
@@ -45,6 +46,7 @@ interface RowProps {
   onRemove: (c: Collection, kind: "leave" | "delete") => void;
   /** Set when the caller may create collections. */
   onDuplicate?: (c: Collection) => void;
+  onEdit: (c: Collection) => void;
 }
 
 export default function CollectionsPage() {
@@ -67,6 +69,7 @@ export default function CollectionsPage() {
   const setCollection = useUIStore((s) => s.setCollection);
   const [removing, setRemoving] = useState<{ c: Collection; kind: "leave" | "delete" } | null>(null);
   const [duplicating, setDuplicating] = useState<Collection | null>(null);
+  const [editing, setEditing] = useState<Collection | null>(null);
   const canCreate = can(user, "collections", "create");
 
   const all = list.data?.items ?? [];
@@ -120,7 +123,7 @@ export default function CollectionsPage() {
           groups.map(([title, items]) => items.length > 0 && (
             <Group key={title} title={t(title)} headed={headed}>
               {items.sort(byActivity).map((c) => (
-                <Row key={c.id} c={c} pinned={isPinned(c)} onPin={() => togglePin(c.id)} onRemove={(c, kind) => setRemoving({ c, kind })} onDuplicate={canCreate ? setDuplicating : undefined} />
+                <Row key={c.id} c={c} pinned={isPinned(c)} onPin={() => togglePin(c.id)} onRemove={(c, kind) => setRemoving({ c, kind })} onDuplicate={canCreate ? setDuplicating : undefined} onEdit={setEditing} />
               ))}
             </Group>
           ))
@@ -128,6 +131,7 @@ export default function CollectionsPage() {
       </div>
 
       {duplicating && <DuplicateCollectionDialog source={duplicating} onClose={() => setDuplicating(null)} />}
+      {editing && <EditCollectionDialog collection={editing} onClose={() => setEditing(null)} />}
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
@@ -163,7 +167,7 @@ function Group({ title, headed, children }: { title: string; headed: boolean; ch
   );
 }
 
-function Row({ c, pinned, onPin, onRemove, onDuplicate }: RowProps) {
+function Row({ c, pinned, onPin, onRemove, onDuplicate, onEdit }: RowProps) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const relative = useRelativeTime();
@@ -220,7 +224,7 @@ function Row({ c, pinned, onPin, onRemove, onDuplicate }: RowProps) {
             <DropdownMenuItem onClick={() => router.push(base)}><FileJson className="size-4" aria-hidden />{t("collections.tab.records")}</DropdownMenuItem>
             {owner && <>
               <DropdownMenuItem onClick={() => router.push(`${base}/members`)}><UserCog className="size-4" aria-hidden />{t("collections.tab.members")}</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => router.push(`${base}/settings`)}><Settings2 className="size-4" aria-hidden />{t("collections.tab.settings")}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onEdit(c)}><Pencil className="size-4" aria-hidden />{t("collections.edit")}</DropdownMenuItem>
             </>}
             {onDuplicate && <DropdownMenuItem onClick={() => onDuplicate(c)}><Copy className="size-4" aria-hidden />{t("duplicate.title")}</DropdownMenuItem>}
             {(canLeave || owner) && <DropdownMenuSeparator />}

@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, ChevronRight, Circle, FileJson, Plus } from "lucide-react";
-import { avatarStyle, initials, useRelativeTime } from "@/components/bits";
+import { CheckCircle2, ChevronRight, Circle, FileJson, Pencil, Plus } from "lucide-react";
+import { avatarStyle, IconAction, initials, useRelativeTime } from "@/components/bits";
+import { EditCollectionDialog } from "@/components/edit-collection-dialog";
 import { recordTitle } from "@/components/field-builder";
 import { QueryErrorState } from "@/components/query-error-state";
 import { CollectionDashboard } from "@/components/collection-dashboard";
@@ -264,9 +266,14 @@ function Overview({ collection }: { collection: Collection }) {
 /** Your role, and the one action worth a shortcut here: the sidebar already lists the sections. */
 function OverviewActions({ collection }: { collection: Collection }) {
   const { t } = useI18n();
+  const [editing, setEditing] = useState(false);
   return (
     <>
       {collection.role && <span className="text-xs text-muted-foreground">{t("overview.your_role")}: {t(`members.role.${collection.role}`)}</span>}
+      {roleAllows(collection.role, "owner") && (
+        <IconAction label={t("collections.edit")} target={collection.name} onClick={() => setEditing(true)}><Pencil className="size-4" /></IconAction>
+      )}
+      {editing && <EditCollectionDialog collection={collection} onClose={() => setEditing(false)} />}
       <ExportMenu collection={collection} />
       {roleAllows(collection.role, "editor") && (
         <Button nativeButton={false} render={<Link href={recordPath(collection, "new")} />}><Plus className="size-4" />{t("records.new")}</Button>
