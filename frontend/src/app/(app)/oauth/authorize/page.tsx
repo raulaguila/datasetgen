@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { PlugZap } from "lucide-react";
@@ -59,7 +60,12 @@ function Consent() {
   });
   const daysName: Record<string, string> = Object.fromEntries(DAYS.map((d) => [d, d === "0" ? t("keys.expires_never") : t("keys.expires_days").replace("{n}", d)]));
 
-  if (!valid) return <p role="alert" className="text-sm text-destructive">{t("oauth.bad_request")}</p>;
+  if (!valid) return (
+    <div className="space-y-3">
+      <p role="alert" className="text-sm text-destructive">{t("oauth.bad_request")}</p>
+      <Button variant="outline" nativeButton={false} render={<Link href="/api-access" />}>{t("nav.api_access")}</Button>
+    </div>
+  );
   if (client.isPending) return <ListSkeleton rows={2} />;
   if (client.isError) return <QueryErrorState error={client.error} onRetry={() => void client.refetch()} />;
   return (

@@ -230,9 +230,31 @@ button,a,input,select,textarea {
   min-height: 0;
   flex: 1;
   overflow: auto;
-  scrollbar-width: none
+  scrollbar-width: none;
+  container-type: scroll-state
 }
 .rail-body::-webkit-scrollbar { display:none; }
+/* The scrollbar is hidden, so a shadow at each edge says more items sit past it (Trash and Settings on a short screen). */
+.rail-body::before, .rail-body::after {
+  content: "";
+  display: block;
+  position: sticky;
+  flex-shrink: 0;
+  block-size: 12px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms;
+}
+.rail-body::before { inset-block-start: 0; margin-block-end: -12px; background: radial-gradient(farthest-side at 50% 0, color-mix(in oklab, var(--foreground) 22%, transparent), transparent); }
+.rail-body::after { inset-block-end: 0; margin-block-start: -12px; background: radial-gradient(farthest-side at 50% 100%, color-mix(in oklab, var(--foreground) 22%, transparent), transparent); }
+@container scroll-state(scrollable: block-start) { .rail-body::before { opacity: 1; } }
+@container scroll-state(scrollable: block-end) { .rail-body::after { opacity: 1; } }
+/* Without scroll-state queries the shadows never show: keep a thin scrollbar as the hint instead. */
+@supports not (container-type: scroll-state) {
+  .rail-body { scrollbar-width: thin; }
+  .rail-body::-webkit-scrollbar { display: initial; }
+}
 .rail-item {
   display: flex;
   align-items: center;
@@ -576,6 +598,9 @@ html.sidebar-collapsed [data-ui-workspace-rail]:not([data-mobile]) .rail-item { 
   .toolbar-tools { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); }
   .toolbar-tools > *, .toolbar-tools button, .toolbar-tools > a { width:100%; min-width:0; }
   .toolbar-tools button, .toolbar-tools > a { height:2.75rem; justify-content:center; }
+  /* The record list's four tools share one row, icon over name, so the records start higher on the screen. */
+  .toolbar-tools[data-one-row] { grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
+  .toolbar-tools[data-one-row] button { flex-direction:column; gap:2px; padding-inline:2px; font-size:11px; line-height:1.1; }
 }
 
 /* With a mouse the page links sit a little tighter; touch keeps 44px targets. */

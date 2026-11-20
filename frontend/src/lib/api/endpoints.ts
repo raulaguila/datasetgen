@@ -166,6 +166,8 @@ export const collections = {
   /** The collection's own audit log (owners). */
   audit: (c: At, p: { page: number; limit: number; action?: string; user_id?: string; from?: string; to?: string }, signal?: AbortSignal) =>
     apiFetch<Paged<AuditRecord>>(`${col(c)}/audit${query(p)}`, { signal }),
+  /** The collection's audit log as CSV, under the list's filters (owners). */
+  auditExport: (c: At, p: { action?: string; user_id?: string; from?: string; to?: string }) => apiDownload(`${col(c)}/audit/export${query(p)}`, "audit.csv"),
   /** Checks every record against the current schema (editors and owners). */
   quality: (c: At, signal?: AbortSignal) => apiFetch<QualityReport>(`${col(c)}/quality`, { signal }),
   /** Queues a background check unless one is running. */

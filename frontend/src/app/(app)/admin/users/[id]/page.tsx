@@ -247,13 +247,13 @@ function UserDetail({ id }: { id: string }) {
               ) : !u.admin && u.status !== "active" ? (
                 <p className="text-sm text-muted-foreground">{t("users.admin_inactive")}</p>
               ) : (
-                <Button variant={u.admin ? "outline" : "default"} onClick={() => setSettingAdmin(true)}>{t(u.admin ? "users.remove_admin" : "users.make_admin")}</Button>
+                <Button variant="outline" onClick={() => setSettingAdmin(true)}>{t(u.admin ? "users.remove_admin" : "users.make_admin")}</Button>
               )}
             </FormSection>
           )}
           </FormSections>
           {canToggle && !disabled && (
-            <DangerZone description={t("users.disable_desc")} label={t("users.disable")} onClick={() => setConfirm(true)} />
+            <DangerZone description={t(u.status === "pending" ? "users.disable_pending_desc" : "users.disable_desc")} label={t("users.disable")} onClick={() => setConfirm(true)} />
           )}
           </>
         )}
@@ -262,7 +262,7 @@ function UserDetail({ id }: { id: string }) {
         open={confirm}
         onOpenChange={setConfirm}
         title={t(disabled ? "users.enable" : "users.disable")}
-        description={t(disabled ? "users.enable_desc" : "users.disable_desc")}
+        description={t(disabled ? "users.enable_desc" : u?.status === "pending" ? "users.disable_pending_desc" : "users.disable_desc")}
         destructive={!disabled}
         onConfirm={async () => {
           await (disabled ? users.enable : users.disable)([id]);

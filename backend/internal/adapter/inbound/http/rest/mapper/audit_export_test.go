@@ -1,4 +1,4 @@
-package audit
+package mapper
 
 import (
 	"encoding/csv"
@@ -22,7 +22,7 @@ func TestCSVDisarmsFormulas(t *testing.T) {
 		t.Fatalf("rows %v %v", rows, err)
 	}
 	got := rows[1]
-	if got[0] != "2026-11-08T12:00:00Z" || got[2] != `'=HYPERLINK("http://x")` || got[3] != "a@acme.io" || got[5] != "'+1" || got[7] != `{"n":1}` {
+	if got[0] != "2026-11-08T12:00:00Z" || got[2] != `'=HYPERLINK("http://x")` || got[3] != "a@acme.io" || got[5] != "'+1" || got[8] != `{"n":1}` {
 		t.Fatalf("row %q", got)
 	}
 }

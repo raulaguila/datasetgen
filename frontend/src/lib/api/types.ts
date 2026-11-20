@@ -250,6 +250,8 @@ export interface AuditRecord {
   /** A collection target's address: /target_owner/target_slug. */
   target_owner?: string;
   target_slug?: string;
+  /** The collection a record entry belongs to. */
+  collection_name?: string;
   details: Record<string, unknown>;
 }
 

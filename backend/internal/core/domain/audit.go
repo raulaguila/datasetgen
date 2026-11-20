@@ -39,5 +39,7 @@ type AuditRecord struct {
 	// The address of a collection target (/owner/slug); empty for other targets.
 	TargetOwner string
 	TargetSlug  string
-	Details     map[string]any
+	// The collection a record entry belongs to, so the whole log says where the record lives.
+	CollectionName string
+	Details        map[string]any
 }

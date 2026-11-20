@@ -144,7 +144,8 @@ export function CollectionPage({ section, description, countRecords = false, act
 
   return (
     <>
-      <PageHeader title={t(section)} description={subtitle} action={collection && action?.(collection)} />
+      {/* A mistyped address lands here too: the tab should not read as one of its sections. */}
+      <PageHeader title={t(gone ? "error.page_not_found" : section)} description={subtitle} action={collection && action?.(collection)} />
       <PageBody width={width}>
         {loading || detail.isPending ? (
           <ListSkeleton rows={3} />

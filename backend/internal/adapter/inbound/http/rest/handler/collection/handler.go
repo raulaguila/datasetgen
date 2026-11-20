@@ -38,6 +38,7 @@ func (h *Handler) Routes(r, at fiber.Router, authz input.Authorizer) {
 	at.Patch("/members/:userId", h.SetMemberRole)
 	at.Delete("/members/:userId", h.RemoveMember)
 	at.Get("/audit", h.AuditLog)
+	at.Get("/audit/export", h.AuditExport)
 	at.Get("/quality", h.Quality)
 	at.Post("/quality", h.StartQuality)
 	at.Post("/quality/fix", h.Fix)
@@ -456,19 +457,21 @@ func (h *Handler) RemoveMember(c fiber.Ctx) error {
 
 // auditDTO mirrors the audit log's records (handler/audit).
 type auditDTO struct {
-	ID          string         `json:"id"`
-	CreatedAt   time.Time      `json:"created_at"`
-	ActorID     string         `json:"actor_id,omitempty"`
-	ActorName   string         `json:"actor_name,omitempty"`
-	ActorEmail  string         `json:"actor_email,omitempty"`
-	RequestID   string         `json:"request_id,omitempty"`
-	Action      string         `json:"action" example:"record.update"`
-	TargetID    string         `json:"target_id,omitempty"`
-	TargetLabel string         `json:"target_label,omitempty"`
-	TargetGone  bool           `json:"target_gone,omitempty"`
-	TargetOwner string         `json:"target_owner,omitempty" example:"ana"` // a collection target's address: /target_owner/target_slug
-	TargetSlug  string         `json:"target_slug,omitempty" example:"livros"`
-	Details     map[string]any `json:"details"`
+	ID          string    `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	ActorID     string    `json:"actor_id,omitempty"`
+	ActorName   string    `json:"actor_name,omitempty"`
+	ActorEmail  string    `json:"actor_email,omitempty"`
+	RequestID   string    `json:"request_id,omitempty"`
+	Action      string    `json:"action" example:"record.update"`
+	TargetID    string    `json:"target_id,omitempty"`
+	TargetLabel string    `json:"target_label,omitempty"`
+	TargetGone  bool      `json:"target_gone,omitempty"`
+	TargetOwner string    `json:"target_owner,omitempty" example:"ana"` // a collection target's address: /target_owner/target_slug
+	TargetSlug  string    `json:"target_slug,omitempty" example:"livros"`
+	// The collection a record entry belongs to.
+	CollectionName string         `json:"collection_name,omitempty" example:"Pedidos"`
+	Details        map[string]any `json:"details"`
 } // @name CollectionAuditEntry
 
 // @Summary A collection's audit log: its changes, its records' and its members'; owners only
@@ -505,6 +508,31 @@ func (h *Handler) AuditLog(c fiber.Ctx) error {
 		out = append(out, auditDTO(r))
 	}
 	return c.JSON(fiber.Map{"items": out, "pagination": mapper.Pagination(filter.Page, total)})
+}
+
+// @Summary Download a collection's audit log as CSV, newest first, with the filters of the list; owners only
+// @Tags Audit
+// @Produce text/csv
+// @Param owner path string true "Owner's username"
+// @Param slug path string true "Collection slug"
+// @Param action query string false "Action prefix, such as record. or collection.member"
+// @Param user_id query string false "The actor or the target"
+// @Param from query string false "From this time on (RFC 3339)"
+// @Param to query string false "Before this time (RFC 3339)"
+// @Security BearerAuth
+// @Success 200 {string} string "CSV with a header row"
+// @Failure 400 {object} mapper.errorBody "bad filter, or more than 10000 records"
+// @Failure 401 {object} mapper.errorBody
+// @Failure 403 {object} mapper.errorBody
+// @Failure 404 {object} mapper.errorBody
+// @Failure 429 {object} mapper.errorBody
+// @ID collectionAuditExport
+// @Router /v1/collections/{owner}/{slug}/audit/export [get]
+func (h *Handler) AuditExport(c fiber.Ctx) error {
+	id := middleware.CollectionID(c)
+	return mapper.AuditExport(c, func(ctx context.Context, f domain.AuditFilter) ([]domain.AuditRecord, int64, error) {
+		return h.svc.AuditLog(ctx, id, f)
+	})
 }
 
 type invalidRecordDTO struct {

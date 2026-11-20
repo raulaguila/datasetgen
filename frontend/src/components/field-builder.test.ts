@@ -303,3 +303,11 @@ describe("fields with saved values", () => {
     expect(schemaChanges(s, changed)).toEqual([{ kind: "display", name: "Nome", risky: false }]);
   });
 });
+
+it("names a record by a required name, then a unique code, then any text", async () => {
+  const { recordTitle } = await import("@/components/field-builder");
+  const schema = { required: ["nome"], properties: { n: { type: "integer", "x-unique": true }, d: { type: "string", format: "date" }, obs: { type: "string" }, nome: { type: "string" } } };
+  expect(recordTitle(schema, { n: 1025, d: "2026-01-02", obs: "Obs", nome: "Ana" })).toBe("Ana");
+  expect(recordTitle(schema, { n: 1025, obs: "Obs" })).toBe("1025");
+  expect(recordTitle(schema, { obs: "Obs" })).toBe("Obs");
+});

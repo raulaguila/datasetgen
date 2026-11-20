@@ -134,6 +134,7 @@ Every query reads only what its caller uses. A hot path pays for each extra colu
 | POST | `/v1/users/unlock`, body `{"ids": [...]}` (1 to 100), all or none: ends the lock, puts a `locked` account back to `active` and drops the counted failures of the email window (`users:update`) |
 | GET | `/v1/audit`, newest first; `action` prefix, `user_id` (actor or target), `from`/`to` (RFC 3339) and pagination (`audit:read`) |
 | GET | `/v1/audit/export`, the same filters as CSV, up to 10 000 records (more is 400); cells that start like a formula get a `'` (`audit:read`) |
+| GET | `/v1/collections/:owner/:slug/audit/export`, a collection's log as CSV under the same filters and limit (owners); both exports share `mapper.AuditExport`, and record entries carry `collection_name` |
 | GET, POST | `/v1/collections/:owner/:slug/records` (list, create), also `sort=data.<field>` (`NULLS LAST`, then id) and `ids` (up to 100, comma separated); Bearer or API key |
 | GET, PUT | `/v1/records/:id`; PUT replaces the whole `data` (with `version` to catch a concurrent edit); viewer reads, editor writes; Bearer or API key |
 | GET | `/v1/collections/options`: every collection the caller reaches (up to 1000, by name) as id, name, role and membership, without counts, for pickers |

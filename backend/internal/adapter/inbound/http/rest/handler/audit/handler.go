@@ -1,9 +1,6 @@
 package audit
 
 import (
-	"bytes"
-	"encoding/csv"
-	"encoding/json"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -12,7 +9,6 @@ import (
 	"github.com/raulaguila/dataset/internal/adapter/inbound/http/rest/middleware"
 	"github.com/raulaguila/dataset/internal/core/domain"
 	"github.com/raulaguila/dataset/internal/core/port/input"
-	"github.com/raulaguila/dataset/pkg/apperror"
 )
 
 type Handler struct {
@@ -31,19 +27,21 @@ func (h *Handler) Routes(r fiber.Router, authz input.Authorizer) {
 }
 
 type recordDTO struct {
-	ID          string         `json:"id"`
-	CreatedAt   time.Time      `json:"created_at"`
-	ActorID     string         `json:"actor_id,omitempty"`
-	ActorName   string         `json:"actor_name,omitempty"`
-	ActorEmail  string         `json:"actor_email,omitempty"`
-	RequestID   string         `json:"request_id,omitempty"`
-	Action      string         `json:"action" example:"role.update"`
-	TargetID    string         `json:"target_id,omitempty"`
-	TargetLabel string         `json:"target_label,omitempty"`
-	TargetGone  bool           `json:"target_gone,omitempty"`
-	TargetOwner string         `json:"target_owner,omitempty" example:"ana"` // a collection target's address: /target_owner/target_slug
-	TargetSlug  string         `json:"target_slug,omitempty" example:"livros"`
-	Details     map[string]any `json:"details"`
+	ID          string    `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	ActorID     string    `json:"actor_id,omitempty"`
+	ActorName   string    `json:"actor_name,omitempty"`
+	ActorEmail  string    `json:"actor_email,omitempty"`
+	RequestID   string    `json:"request_id,omitempty"`
+	Action      string    `json:"action" example:"role.update"`
+	TargetID    string    `json:"target_id,omitempty"`
+	TargetLabel string    `json:"target_label,omitempty"`
+	TargetGone  bool      `json:"target_gone,omitempty"`
+	TargetOwner string    `json:"target_owner,omitempty" example:"ana"` // a collection target's address: /target_owner/target_slug
+	TargetSlug  string    `json:"target_slug,omitempty" example:"livros"`
+	// The collection a record entry belongs to.
+	CollectionName string         `json:"collection_name,omitempty" example:"Pedidos"`
+	Details        map[string]any `json:"details"`
 } // @name AuditEntry
 
 // @Summary List the audit log, newest first
@@ -79,9 +77,6 @@ func (h *Handler) List(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{"items": out, "pagination": mapper.Pagination(filter.Page, total)})
 }
 
-// maxExport caps one file; past it the caller narrows the filters.
-const maxExport = 10_000
-
 // @Summary Download the audit log as CSV, newest first, with the filters of the list
 // @Tags Audit
 // @Produce text/csv
@@ -98,47 +93,5 @@ const maxExport = 10_000
 // @ID auditExport
 // @Router /v1/audit/export [get]
 func (h *Handler) Export(c fiber.Ctx) error {
-	// A one-row page first: refusing must not cost the 10000 rows.
-	filter, err := mapper.AuditFilter(c, domain.Page{Number: 1, Limit: 1})
-	if err != nil {
-		return mapper.WriteError(c, err)
-	}
-	_, total, err := h.svc.List(c.Context(), filter)
-	if err != nil {
-		return mapper.WriteError(c, err)
-	}
-	if total > maxExport {
-		return mapper.WriteError(c, apperror.New(apperror.CodeInvalidInput, "more than 10000 records: narrow the filters"))
-	}
-	filter.Page.Limit = maxExport
-	records, _, err := h.svc.List(c.Context(), filter)
-	if err != nil {
-		return mapper.WriteError(c, err)
-	}
-	body, err := auditCSV(records)
-	if err != nil {
-		return mapper.WriteError(c, err)
-	}
-	c.Set(fiber.HeaderContentType, "text/csv; charset=utf-8")
-	c.Set(fiber.HeaderContentDisposition, `attachment; filename="audit-`+time.Now().UTC().Format("20060102-150405")+`.csv"`)
-	return c.Send(body)
-}
-
-func auditCSV(records []domain.AuditRecord) ([]byte, error) {
-	var buf bytes.Buffer
-	buf.WriteString("\uFEFF") // BOM: spreadsheets then read the accents as UTF-8
-	w := csv.NewWriter(&buf)
-	_ = w.Write([]string{"created_at", "action", "actor_name", "actor_email", "actor_id", "target", "target_id", "details", "request_id"})
-	for _, r := range records {
-		details, err := json.Marshal(r.Details)
-		if err != nil {
-			return nil, err
-		}
-		_ = w.Write([]string{
-			r.CreatedAt.UTC().Format(time.RFC3339), r.Action, mapper.CSVCell(r.ActorName), mapper.CSVCell(r.ActorEmail), r.ActorID,
-			mapper.CSVCell(r.TargetLabel), r.TargetID, mapper.CSVCell(string(details)), mapper.CSVCell(r.RequestID),
-		})
-	}
-	w.Flush()
-	return buf.Bytes(), w.Error()
+	return mapper.AuditExport(c, h.svc.List)
 }

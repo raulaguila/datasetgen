@@ -1411,6 +1411,101 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/collections/{owner}/{slug}/audit/export": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "Audit"
+                ],
+                "summary": "Download a collection's audit log as CSV, newest first, with the filters of the list; owners only",
+                "operationId": "collectionAuditExport",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Owner's username",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Collection slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Action prefix, such as record. or collection.member",
+                        "name": "action",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "The actor or the target",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "From this time on (RFC 3339)",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Before this time (RFC 3339)",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "CSV with a header row",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "bad filter, or more than 10000 records",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/Error"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/collections/{owner}/{slug}/automations": {
             "get": {
                 "security": [
@@ -9000,6 +9095,11 @@ const docTemplate = `{
                 "actor_name": {
                     "type": "string"
                 },
+                "collection_name": {
+                    "description": "The collection a record entry belongs to.",
+                    "type": "string",
+                    "example": "Pedidos"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -9222,6 +9322,11 @@ const docTemplate = `{
                 },
                 "actor_name": {
                     "type": "string"
+                },
+                "collection_name": {
+                    "description": "The collection a record entry belongs to.",
+                    "type": "string",
+                    "example": "Pedidos"
                 },
                 "created_at": {
                     "type": "string"

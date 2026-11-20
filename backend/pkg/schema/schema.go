@@ -191,33 +191,68 @@ func PropertyOrder(raw []byte) []string {
 // maxTitle caps the title an audit entry keeps for a record.
 const maxTitle = 120
 
-// Title is what a record reads as: its first top-level plain text value, in
-// the schema's field order, as the app shows it (recordTitle in the web app).
+// Title is what a record reads as, the same rule as recordTitle in the web app,
+// each step in the schema's field order: a required plain text value (a name),
+// else a unique text or whole number (an order number), else any plain text.
 // Plain text is a string field with no format, no reference and no list of
-// options, so a date, a referenced record's id or a status never names a record. "" when it has none.
+// options, so a date, a referenced record's id or a status never names a
+// record. "" when it has none.
 func Title(raw, data []byte) string {
 	var fields map[string]json.RawMessage
 	var doc struct {
+		Required   []string `json:"required"`
 		Properties map[string]struct {
 			Type   any             `json:"type"`
 			Format string          `json:"format"`
 			Ref    json.RawMessage `json:"x-ref"`
 			Enum   json.RawMessage `json:"enum"`
+			Unique bool            `json:"x-unique"`
 		} `json:"properties"`
 	}
 	if json.Unmarshal(data, &fields) != nil || json.Unmarshal(raw, &doc) != nil {
 		return ""
 	}
-	for _, key := range PropertyOrder(raw) {
-		if p := doc.Properties[key]; p.Type != "string" || p.Format != "" || p.Ref != nil || p.Enum != nil {
+	order := PropertyOrder(raw)
+	plain := func(key string) bool {
+		p := doc.Properties[key]
+		return p.Type == "string" && p.Format == "" && p.Ref == nil && p.Enum == nil
+	}
+	text := func(key string) string {
+		var s string
+		if json.Unmarshal(fields[key], &s) != nil || strings.TrimSpace(s) == "" {
+			return ""
+		}
+		if r := []rune(s); len(r) > maxTitle {
+			return string(r[:maxTitle-1]) + "…"
+		}
+		return s
+	}
+	for _, key := range order {
+		if plain(key) && slices.Contains(doc.Required, key) {
+			if s := text(key); s != "" {
+				return s
+			}
+		}
+	}
+	for _, key := range order {
+		p := doc.Properties[key]
+		if !p.Unique || p.Ref != nil {
 			continue
 		}
-		var s string
-		if json.Unmarshal(fields[key], &s) == nil && strings.TrimSpace(s) != "" {
-			if r := []rune(s); len(r) > maxTitle {
-				return string(r[:maxTitle-1]) + "…"
+		if p.Type == "integer" {
+			var n json.Number
+			if json.Unmarshal(fields[key], &n) == nil && n != "" {
+				return n.String()
 			}
+		} else if s := text(key); p.Type == "string" && s != "" {
 			return s
+		}
+	}
+	for _, key := range order {
+		if plain(key) {
+			if s := text(key); s != "" {
+				return s
+			}
 		}
 	}
 	return ""

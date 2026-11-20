@@ -49,6 +49,7 @@ type recordRow struct {
 	TargetGone  bool      `gorm:"column:target_gone"`
 	TargetOwner *string   `gorm:"column:target_owner"`
 	TargetSlug  *string   `gorm:"column:target_slug"`
+	Collection  *string   `gorm:"column:collection_name"`
 	Details     []byte    `gorm:"column:details"`
 }
 
@@ -99,6 +100,8 @@ func (r *Repository) List(ctx context.Context, filter domain.AuditFilter) ([]dom
 		       EXISTS (SELECT 1 FROM sys.audit_log d WHERE d.target_id = a.target_id
 		         AND d.action IN ('record.delete', 'collection.delete', 'role.delete')) AS target_gone,
 		       tco.username AS target_owner, tc.slug AS target_slug,
+		       -- A record entry names its collection; only those carry collection_id and are not the collection itself.
+		       CASE WHEN a.action LIKE 'record.%' THEN rc.name END AS collection_name,
 		       a.details
 		FROM sys.audit_log a
 		LEFT JOIN usr.usr_user au ON au.id = a.actor_id
@@ -107,6 +110,7 @@ func (r *Repository) List(ctx context.Context, filter domain.AuditFilter) ([]dom
 		-- A collection target's address, so the log links to /owner/slug.
 		LEFT JOIN app.collection tc ON tc.id = a.target_id AND tc.deleted_at IS NULL
 		LEFT JOIN usr.usr_user tco ON tco.id = tc.owner_id
+		LEFT JOIN app.collection rc ON a.action LIKE 'record.%' AND rc.id::text = a.details->>'collection_id'
 		WHERE `+where+`
 		ORDER BY a.created_at DESC, a.id
 		LIMIT ? OFFSET ?
@@ -120,7 +124,7 @@ func (r *Repository) List(ctx context.Context, filter domain.AuditFilter) ([]dom
 			ID: m.ID, CreatedAt: m.CreatedAt, Action: m.Action,
 			ActorID: deref(m.ActorID), ActorName: deref(m.ActorName), ActorEmail: deref(m.ActorEmail),
 			RequestID: deref(m.RequestID), TargetID: deref(m.TargetID), TargetLabel: deref(m.TargetLabel), TargetGone: m.TargetGone,
-			TargetOwner: deref(m.TargetOwner), TargetSlug: deref(m.TargetSlug),
+			TargetOwner: deref(m.TargetOwner), TargetSlug: deref(m.TargetSlug), CollectionName: deref(m.Collection),
 		}
 		if err := json.Unmarshal(m.Details, &rec.Details); err != nil {
 			return nil, 0, shared.WrapError(err, "audit log")

@@ -73,6 +73,9 @@ function useRefLabels(columns: FieldRow[], items: DataRecord[], schema: Record<s
   return labels;
 }
 
+/** Numbers line up on the right, digit under digit, so a column of amounts compares at a glance. */
+const isNumber = (r: FieldRow) => r.field.type === "number" || r.field.type === "integer";
+
 /** The "no grouping" choice; a field key is never this. */
 const NO_GROUP = "\u0000none";
 
@@ -232,13 +235,13 @@ function RecordList({ collection }: { collection: Collection }) {
 
   return (
     <>
-      {/* Search, then the tools; phones get them two by two, the quality count left to the Quality page. */}
+      {/* Search, then the tools; phones get them in one row, the quality count left to the Quality page. */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-0 basis-full sm:min-w-56 sm:max-w-xs sm:flex-1 sm:basis-auto">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input type="search" aria-label={t("common.search")} placeholder={t("records.search")} className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); set({ q: e.target.value.trim(), page: 1 }); }} />
         </div>
-        <div className="toolbar-tools flex flex-wrap items-center gap-2 max-sm:w-full max-sm:justify-between sm:contents">
+        <div data-one-row className="toolbar-tools flex flex-wrap items-center gap-2 max-sm:w-full max-sm:justify-between sm:contents">
           <RecordRules collection={collection} fields={rows} value={where} onChange={setWhere} count={{ search: q || undefined }} saveView bar={bar} summary={outOf} />
           {layout === "table" && <ColumnPicker fields={rows} value={columns} onChange={(keys) => set({ cols: keys.join(",") })} />}
           <div className="hidden items-center gap-2 lg:flex">{viewControls}</div>
@@ -294,7 +297,7 @@ function RecordList({ collection }: { collection: Collection }) {
                 {/* The first column, the record's name, gets the room; the others what is left. */}
                 {columns.length ? columns.map((c, i) => c.field.type === "file" || c.field.type === "files"
                   ? <TableHead key={c.key} className={i === 0 ? "w-[40%]" : undefined}><span className="inline-flex items-center gap-1">{(() => { const I = TYPE_ICONS[c.field.type]; return <I className="size-3.5 opacity-60" aria-hidden />; })()}{c.field.name}</span></TableHead>
-                  : <SortHead key={c.key} field={`data.${c.key}`} label={c.field.name} icon={TYPE_ICONS[c.field.type]} className={i === 0 ? "w-[40%]" : undefined} {...sortProps} />) : <TableHead>{t("records.record")}</TableHead>}
+                  : <SortHead key={c.key} field={`data.${c.key}`} label={c.field.name} icon={TYPE_ICONS[c.field.type]} className={i === 0 ? "w-[40%]" : isNumber(c) ? "text-right" : undefined} {...sortProps} />) : <TableHead>{t("records.record")}</TableHead>}
                 <SortHead field="updated_at" label={t("common.updated_at")} className="w-32" {...sortProps} />
               </TableRow>
             </TableHeader>
@@ -307,7 +310,7 @@ function RecordList({ collection }: { collection: Collection }) {
                   <TableRow key={r.id} className={cn("cursor-pointer hover:bg-muted/60", isInvalid(r.id, r.updated_at) && "[&>td:first-child]:shadow-[inset_3px_0_0_var(--warn)]")} onClick={() => router.push(recordPath(collection, r.id))}>
                     <SelectCell selection={selection} id={r.id} label={cells[0].text} />
                     {cells.map((c, i) => { const cell = (
-                      <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : "field"} className={cn(i === 0 ? "max-w-0 min-w-40" : "max-w-0 min-w-24 text-muted-foreground", i > 0 && c.row?.field.unique && "font-mono text-xs xl:min-w-48")} title={c.row?.field.type === "url" ? String(data[c.key] ?? "") : undefined}>
+                      <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : "field"} className={cn(i === 0 ? "max-w-0 min-w-40" : "max-w-0 min-w-24 text-muted-foreground", i > 0 && c.row?.field.unique && "font-mono text-xs xl:min-w-48", i > 0 && c.row && isNumber(c.row) && "text-right tabular-nums")} title={c.row?.field.type === "url" ? String(data[c.key] ?? "") : undefined}>
                         {i === 0 ? (
                           <span className="flex min-w-0 items-center gap-1.5">
                             {isInvalid(r.id, r.updated_at) && (

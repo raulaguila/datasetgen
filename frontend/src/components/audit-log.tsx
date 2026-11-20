@@ -222,7 +222,7 @@ export function AuditLog({ collection }: { collection?: CollectionRef }) {
   const members = useQuery({ queryKey: ["collections", "members", collectionId], queryFn: () => collections.members(collection!), enabled: !!user && !!collectionId });
   const pickedEmail = collectionId ? members.data?.items.find((m) => m.user_id === user)?.email : picked.data?.email;
   const download = useMutation({
-    mutationFn: () => audit.export(filters),
+    mutationFn: () => (collection ? collections.auditExport(collection, filters) : audit.export(filters)),
     onError: (err) => toast.error(errorMessage(err, "audit.export_failed", t)),
   });
   const fallback = list.isPlaceholderData ? null : emptyPageFallback(page, limit, list.data);
@@ -271,11 +271,9 @@ export function AuditLog({ collection }: { collection?: CollectionRef }) {
               </button>
             </Badge>
           )}
-          {!collectionId && (
-            <Button variant="outline" className="ml-auto max-sm:col-span-2" disabled={download.isPending || !list.data?.items.length} onClick={() => download.mutate()}>
-              <Download className="size-4" />{t("audit.export")}
-            </Button>
-          )}
+          <Button variant="outline" className="ml-auto max-sm:col-span-2" disabled={download.isPending || !list.data?.items.length} onClick={() => download.mutate()}>
+            <Download className="size-4" />{t("audit.export")}
+          </Button>
         </div>
 
         {list.isPending ? (
@@ -348,6 +346,8 @@ export function AuditLog({ collection }: { collection?: CollectionRef }) {
                       {showTarget && <TableCell data-label={t("audit.target")} data-cell="sub">
                         {self ? <span className="text-muted-foreground">{t("audit.this_collection")}</span> : (
                           <span className={cn("block truncate lg:max-w-56 2xl:max-w-80", r.target_gone && "text-muted-foreground line-through")} title={r.target_gone ? `${target} · ${t("audit.target_gone")}` : target}>
+                            {/* The whole log says which collection a record lives in; a collection's own log is that collection. */}
+                            {!collectionId && r.collection_name && <span className="text-muted-foreground">{r.collection_name} · </span>}
                             {href ? <Link href={href} className="hover:underline" onClick={(e) => e.stopPropagation()}>{target}</Link> : target}
                           </span>
                         )}

@@ -325,15 +325,24 @@ export const propsOf = (schema: Schema) => (schema.properties ?? {}) as Props;
 export const requiredOf = (schema: Schema) => (Array.isArray(schema.required) ? (schema.required as string[]) : []);
 
 /**
- * The first plain text value a record has, in field order, to name it in lists and titles:
- * a string field with no format, no reference and no options, as Title in backend/pkg/schema reads it.
+ * What a record reads as in lists and titles, as Title in backend/pkg/schema, each step in field order:
+ * a required plain text value (a name), else a unique text or whole number (an order number), else any plain text.
+ * Plain text is a string field with no format, no reference and no options, so dates, ids and statuses never name a record.
  */
 export function recordTitle(schema: Schema | null, data: unknown): string | undefined {
   const obj = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
-  const v = Object.entries(schema ? propsOf(schema) : {})
-    .filter(([, p]) => p?.type === "string" && !p.format && p[REF] === undefined && p.enum === undefined)
-    .map(([k]) => obj[k]).find((x) => typeof x === "string" && x.trim());
-  return typeof v === "string" ? v : undefined;
+  const props = Object.entries(schema ? propsOf(schema) : {});
+  const required = schema ? requiredOf(schema) : [];
+  const plain = (p: Record<string, unknown>) => p?.type === "string" && !p.format && p[REF] === undefined && p.enum === undefined;
+  const text = (k: string) => (typeof obj[k] === "string" && (obj[k] as string).trim() ? (obj[k] as string) : undefined);
+  for (const [k, p] of props) if (plain(p) && required.includes(k) && text(k)) return text(k);
+  for (const [k, p] of props) {
+    if (p?.[UNIQUE] !== true || p[REF] !== undefined) continue;
+    if (p.type === "integer" && Number.isInteger(obj[k])) return String(obj[k]);
+    if (p.type === "string" && text(k)) return text(k);
+  }
+  for (const [k, p] of props) if (plain(p) && text(k)) return text(k);
+  return undefined;
 }
 
 export function fieldsOf(schema: Schema | null): FieldRow[] {

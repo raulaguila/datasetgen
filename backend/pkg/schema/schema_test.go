@@ -129,6 +129,14 @@ func TestTitleFollowsFieldOrder(t *testing.T) {
 	if got := Title(raw, []byte(`{"d":"2026-01-02","c":"0198","s":"Pago","o":"Obs"}`)); got != "Obs" {
 		t.Fatalf("Title = %q, want Obs (date, reference and option skipped)", got)
 	}
+	// A required name wins over a unique code, which wins over loose text.
+	raw = []byte(`{"required":["nome"],"properties":{"n":{"type":"integer","x-unique":true},"obs":{"type":"string"},"nome":{"type":"string"}}}`)
+	if got := Title(raw, []byte(`{"n":1025,"obs":"Obs","nome":"Ana"}`)); got != "Ana" {
+		t.Fatalf("Title = %q, want Ana (required text first)", got)
+	}
+	if got := Title(raw, []byte(`{"n":1025,"obs":"Obs"}`)); got != "1025" {
+		t.Fatalf("Title = %q, want 1025 (unique number next)", got)
+	}
 }
 
 func TestFieldChanges(t *testing.T) {
