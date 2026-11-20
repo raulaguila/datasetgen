@@ -73,15 +73,10 @@ define require_env_file
 	@test -f config/.env || (echo "$(RED)config/.env not found. Run make init first.$(RESET)" && exit 1)
 endef
 
-# Share the Postgres container's network so migrations work without a published port.
 define run_migrate
 	$(call require_env_file)
-	@set -e; . ./config/.env; \
-	postgres_id="$$($(COMPOSE_SERVICE) ps -q postgres)"; \
-	test -n "$$postgres_id" || { echo "Postgres is not running. Start it with make compose-services."; exit 1; }; \
-	PGPASSWORD="$$POSTGRES_PASS" $(DOCKER) run --rm -i --network "container:$$postgres_id" -e PGPASSWORD \
-		-v "$(CURDIR)/$(MIGRATIONS_DIR):/migrations:ro" migrate/migrate:$(MIGRATE_VERSION) \
-		-path /migrations -database "postgres://$$POSTGRES_USER@127.0.0.1:$$POSTGRES_PORT/$$POSTGRES_BASE?sslmode=disable" $(1)
+	@. ./config/.env; \
+	PGPASSWORD="$$POSTGRES_PASS" $(MIGRATE_BIN) -path $(MIGRATIONS_DIR) -database "postgres://$$POSTGRES_USER@localhost:$$POSTGRES_PORT/$$POSTGRES_BASE?sslmode=disable" $(1)
 endef
 
 # $(1) name  $(2) binary  $(3) version args (empty = do not run)
