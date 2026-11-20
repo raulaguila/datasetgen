@@ -390,12 +390,6 @@ func (r *Repository) RemoveMember(ctx context.Context, id, userID string) error 
 		DELETE FROM app.collection_member WHERE collection_id = ? AND user_id = ?`, id, userID, id, userID))
 }
 
-func (r *Repository) HasMembership(ctx context.Context, userID string) (bool, error) {
-	var found bool
-	err := r.db.WithContext(ctx).Raw(`SELECT EXISTS (SELECT 1 FROM app.collection_member WHERE user_id = ?)`, userID).Take(&found).Error
-	return found, shared.WrapError(err, "member")
-}
-
 func (r *Repository) Owners(ctx context.Context, id string) (int64, error) {
 	var n int64
 	err := r.db.WithContext(ctx).Raw(`SELECT count(*) FROM app.collection_member WHERE collection_id = ? AND role = 'owner'`, id).Take(&n).Error

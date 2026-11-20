@@ -58,8 +58,6 @@ type CollectionRepository interface {
 	// FinishQuality stores the result of the running check, unless a later start
 	// replaced it (token no longer current; "" always stores).
 	FinishQuality(ctx context.Context, id, token string, run domain.QualityRun) error
-	// HasMembership reports whether userID belongs to any collection.
-	HasMembership(ctx context.Context, userID string) (bool, error)
 	// Owners counts the collection's owner members.
 	Owners(ctx context.Context, id string) (int64, error)
 }
