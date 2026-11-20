@@ -96,7 +96,6 @@ export interface User {
   updated_at: string;
 }
 
-/** The user list's size: everyone it shows, and those waiting on an action. */
 /** A collection as pickers need it: GET /v1/collections/options, up to 1000 by name. */
 export interface CollectionOption {
   id: string;

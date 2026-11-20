@@ -309,6 +309,13 @@ export function typeOf(p: unknown): FieldType | undefined {
   return undefined;
 }
 
+/** Field types a public form leaves out: picking a record or uploading needs a session. */
+export const SESSION_ONLY = new Set(["reference", "references", "file", "files", "lookup", "rollup"]);
+
+/** The required fields a public form cannot ask for, by name, so the owner hears it before sharing. */
+export const publicFormGaps = (schema: Schema | null) =>
+  fieldsOf(schema).filter((r) => r.field.required && SESSION_ONLY.has(r.field.type)).map((r) => r.field.name);
+
 /** JSON with object keys sorted, so a reordered property compares equal. */
 export function canonical(v: unknown): string {
   return JSON.stringify(v, (_, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => a.localeCompare(b))) : x));
@@ -317,10 +324,15 @@ export function canonical(v: unknown): string {
 export const propsOf = (schema: Schema) => (schema.properties ?? {}) as Props;
 export const requiredOf = (schema: Schema) => (Array.isArray(schema.required) ? (schema.required as string[]) : []);
 
-/** The first plain text value a record has, in field order, to name it in lists and titles. */
+/**
+ * The first plain text value a record has, in field order, to name it in lists and titles:
+ * a string field with no format, no reference and no options, as Title in backend/pkg/schema reads it.
+ */
 export function recordTitle(schema: Schema | null, data: unknown): string | undefined {
   const obj = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
-  const v = fieldsOf(schema).filter((r) => !r.advanced).map((r) => obj[r.key]).find((x) => typeof x === "string" && x.trim());
+  const v = Object.entries(schema ? propsOf(schema) : {})
+    .filter(([, p]) => p?.type === "string" && !p.format && p[REF] === undefined && p.enum === undefined)
+    .map(([k]) => obj[k]).find((x) => typeof x === "string" && x.trim());
   return typeof v === "string" ? v : undefined;
 }
 

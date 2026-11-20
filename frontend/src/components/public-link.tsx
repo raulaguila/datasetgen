@@ -7,9 +7,10 @@ import type Form from "@rjsf/core";
 import { CheckCircle2, ChevronLeft, ChevronRight, LinkIcon, Loader2 } from "lucide-react";
 import { FormError, useDocumentTitle } from "@/components/bits";
 import { EmptyState } from "@/components/empty-state";
-import { fieldsOf, typeOf, type FieldRow } from "@/components/field-builder";
+import { fieldsOf, SESSION_ONLY, typeOf, type FieldRow } from "@/components/field-builder";
 import { PublicControls } from "@/components/public-controls";
-import { pickColumns } from "@/components/record-grid";
+import { showable } from "@/components/record-grid";
+import { Value } from "@/components/record-view";
 import { ListSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,10 +31,7 @@ const SchemaForm = dynamic(() => import("@/components/schema-form").then((m) => 
  */
 function fillable(schema: Record<string, unknown>): Record<string, unknown> {
   const props = { ...((schema.properties ?? {}) as Record<string, unknown>) };
-  for (const [key, p] of Object.entries(props)) {
-    const type = typeOf(p);
-    if (type === "reference" || type === "references" || type === "file" || type === "files" || type === "lookup" || type === "rollup") delete props[key];
-  }
+  for (const [key, p] of Object.entries(props)) if (SESSION_ONLY.has(typeOf(p) ?? "")) delete props[key];
   const required = Array.isArray(schema.required) ? (schema.required as string[]).filter((k) => k in props) : undefined;
   return { ...schema, properties: props, ...(required ? { required } : {}) };
 }
@@ -112,8 +110,9 @@ function PublicForm({ token, link }: { token: string; link: PublicLink }) {
     );
   }
   return (
-    <Shell title={link.name} description={[link.description?.trim(), t("records.required_legend")].filter(Boolean).join(" ")}>
+    <Shell title={link.name} description={link.description?.trim()}>
       <form noValidate onSubmit={submit} className="space-y-4 rounded-lg border p-4 sm:p-6">
+        <p className="text-xs text-muted-foreground">{t("records.required_legend")}</p>
         <SchemaForm schema={schema} data={data} onChange={setData} formRef={formRef} liveValidate={checked} issues={issues} idPrefix="pub" />
         <FormError message={error} />
         <Button type="submit" disabled={pending}>{pending && <Loader2 className="size-4 animate-spin" />}{t("share.send")}</Button>
@@ -125,25 +124,20 @@ function PublicForm({ token, link }: { token: string; link: PublicLink }) {
 const LIMIT = 25;
 
 function PublicList({ token, link }: { token: string; link: PublicLink }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [page, setPage] = useState(1);
   const [q, setQ] = useState("");
   const search = useDebounced(q.trim(), 300);
-  const columns = useMemo(() => {
-    const rows = fieldsOf(link.schema as never).filter((r) => !["file", "files", "reference", "references", "lookup", "rollup"].includes(r.field.type));
-    return pickColumns(rows, "").length ? pickColumns(rows, "") : rows.slice(0, 4);
-  }, [link.schema]);
+  // Every field the link can show, long text included; references stay out, as they would open another collection.
+  const columns = useMemo(() => showable(fieldsOf(link.schema as never)).filter((r) => !SESSION_ONLY.has(r.field.type)).slice(0, 6), [link.schema]);
+  const props = ((link.schema as { properties?: Record<string, Record<string, unknown>> } | undefined)?.properties ?? {});
   const list = useQuery({
     queryKey: ["public", token, "records", page, search],
     queryFn: ({ signal }) => publicLinks.records(token, { page, limit: LIMIT, search: search || undefined }, signal),
     placeholderData: keepPreviousData,
   });
-  const show = (v: unknown, c: FieldRow) => {
-    if (v === undefined || v === null || v === "") return "—";
-    if (typeof v === "boolean") return t(v ? "common.yes" : "common.no");
-    if (c.field.type === "number" || c.field.type === "integer") return typeof v === "number" ? v.toLocaleString(locale) : String(v);
-    return typeof v === "object" ? JSON.stringify(v) : String(v);
-  };
+  // Long text stays one line in a cell; everything else reads as on the record page (dates and money in the reader's locale).
+  const show = (v: unknown, c: FieldRow) => (c.field.type === "text" && typeof v === "string" ? v : <Value schema={props[c.key] ?? {}} value={v} />);
   const pages = list.data?.pagination.total_pages ?? 1;
   return (
     <Shell title={link.name} description={link.description}>

@@ -10,7 +10,7 @@ import { optionCss } from "@/components/option-chip";
 import { groupableOf, useNumberFormat } from "@/components/record-groups";
 import { andWhere, bothWhere, viewWhere, whereText, type Rule, type Where } from "@/components/record-rules";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { records, tools } from "@/lib/api/endpoints";
+import { collections, records, tools } from "@/lib/api/endpoints";
 import type { Collection, FieldProfile, StatsBucket, Widget } from "@/lib/api/types";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
@@ -51,6 +51,25 @@ export function useStats(collection: CollectionRef, where: Where, q: { filled?: 
 function useValueText() {
   const { t } = useI18n();
   return (v: unknown) => (v === null || v === undefined || v === "" ? t("groups.empty") : typeof v === "boolean" ? t(v ? "common.yes" : "common.no") : String(v));
+}
+
+/**
+ * How a breakdown's values read: a reference field's ids as the titles of the
+ * records they point at (one lookup for the ids shown), anything else as useValueText.
+ */
+function useKeyText(row: FieldRow | undefined, keys: unknown[]) {
+  const plain = useValueText();
+  const target = row?.field.type === "reference" ? row.field.ref : "";
+  const ids = target ? keys.filter((k): k is string => typeof k === "string" && /^[0-9a-f-]{36}$/i.test(k)) : [];
+  const meta = useQuery({ queryKey: ["collections", "detail", target], queryFn: ({ signal }) => collections.byID(target, signal), enabled: ids.length > 0, retry: false });
+  const found = useQuery({
+    queryKey: ["records", target, "ids", ids.join(",")],
+    queryFn: async ({ signal }) => records.list(await collections.at(target), { page: 1, limit: 100, ids: ids.join(",") }, signal),
+    enabled: ids.length > 0,
+    retry: false,
+  });
+  const titles = new Map((found.data?.items ?? []).map((r) => [r.id, recordTitle(meta.data?.schema ?? null, r.data) ?? r.id.slice(0, 8)]));
+  return (v: unknown) => (typeof v === "string" && titles.get(v)) || plain(v);
 }
 
 /** Counts by value, largest first, the tail folded into "others". */
@@ -265,7 +284,7 @@ export const isPlain = (profile?: FieldProfile) => {
 export function FieldStats({ row, profile, total, bucket }: { row: FieldRow; profile?: FieldProfile; total: number; bucket: StatsBucket }) {
   const { t, locale } = useI18n();
   const num = useNumberFormat();
-  const label = useValueText();
+  const label = useKeyText(row, (profile?.top ?? []).map((x) => x.key));
   const type = row.field.type;
   const n = profile?.filled ?? 0;
   const pct = total ? (n / total) * 100 : 0;
@@ -288,9 +307,9 @@ export function FieldStats({ row, profile, total, bucket }: { row: FieldRow; pro
         <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary/70" style={{ width: `${pct}%` }} /></div>
       </div>
       {profile?.sum !== undefined && (
-        <Figures items={[[t("analysis.min"), fig(profile.min ?? 0)], [t("analysis.max"), fig(profile.max ?? 0)], [t("analysis.avg"), fig(profile.avg ?? 0)],
-          // A sum of codes or revisions means nothing.
-          ...(mostlyDistinct(distinct, n) ? [] : [[t("analysis.sum"), fig(profile.sum)] as [string, string]])]} />
+        <Figures items={[[t("analysis.min"), fig(profile.min ?? 0)], [t("analysis.max"), fig(profile.max ?? 0)],
+          // An average or a sum of codes (unique, or nearly every record its own) means nothing.
+          ...(row.field.unique || mostlyDistinct(distinct, n) ? [] : [[t("analysis.avg"), fig(profile.avg ?? 0)], [t("analysis.sum"), fig(profile.sum)]] as [string, string][])]} />
       )}
       {profile?.first && (
         <>
@@ -358,7 +377,6 @@ export const change = (now: number | undefined, before: number | undefined) => (
 export function WidgetView({ collection, widget, rows, scope, head }: { collection: Collection; widget: Widget; rows: FieldRow[]; scope?: Where; head?: React.ReactNode }) {
   const { t, locale } = useI18n();
   const num = useNumberFormat();
-  const label = useValueText();
   const joined = scope ? bothWhere(asWhere(widget.where), scope) : asWhere(widget.where);
   const base = joined ?? asWhere(widget.where);
   const field = rows.find((r) => r.key === widget.field);
@@ -412,6 +430,7 @@ export function WidgetView({ collection, widget, rows, scope, head }: { collecti
   // Shares of a sum add up; averages do not, so they show no share and no "others".
   const measuredTotal = fn === "sum" ? measured.reduce((n, g) => n + g.count, 0) : 0;
   const breakdown = measure ? measured : p?.top ?? [];
+  const label = useKeyText(field, breakdown.map((g) => g.key));
   const breakdownTotal = measure ? measuredTotal : total;
   const fmt = measure ? (n: number) => shown(n, measure) : undefined;
   return (

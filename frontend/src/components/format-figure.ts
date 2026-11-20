@@ -13,7 +13,8 @@ export function formatFigure(v: number, locale: string, format: Widget["format"]
 
 
 /** A number field's value as its own format reads it; `fallback` when the field sets none. */
-export function fieldFigure(f: { numberFormat: string; decimals: string } | undefined, v: number, locale: string, fallback: (v: number) => string): string {
-  if (!f || (!f.numberFormat && !f.decimals)) return fallback(v);
+export function fieldFigure(f: { numberFormat: string; decimals: string; type?: string } | undefined, v: number, locale: string, fallback: (v: number) => string): string {
+  // Whole numbers of an integer field are often codes (an order number), where a thousands separator misleads.
+  if (!f || (!f.numberFormat && !f.decimals)) return f?.type === "integer" && Number.isInteger(v) ? String(v) : fallback(v);
   return formatFigure(v, locale, (f.numberFormat || "number") as Widget["format"], f.decimals ? Number(f.decimals) : undefined);
 }

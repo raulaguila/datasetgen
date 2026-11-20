@@ -65,30 +65,15 @@ type roleRow struct {
 	CreatedAt   time.Time      `gorm:"column:created_at"`
 	Resource    *string        `gorm:"column:resource"`
 	Actions     *domain.Action `gorm:"column:actions"`
-	MemberCount int64          `gorm:"column:member_count"`
 }
 
-// memberCount counts the members of role s the API may see. It visits every
-// member, and the default role holds nearly every user: only screens that show
-// the number ask for it.
-const memberCount = `(SELECT count(*) FROM usr.usr_user_role m
-	WHERE m.role_id = s.id AND m.user_id NOT IN (` + shared.ProtectedIDs + `))`
-
 // load reads the roles of source with their permissions in one round trip, in
-// the given order of the alias r. MemberCount stays 0 unless members is set.
-func (r *Repository) load(ctx context.Context, members bool, source, order string, args ...any) ([]domain.Role, error) {
-	count := "0"
-	if members {
-		count = memberCount
-	}
+// the given order of the alias r.
+func (r *Repository) load(ctx context.Context, source, order string, args ...any) ([]domain.Role, error) {
 	var rows []roleRow
 	err := r.db.WithContext(ctx).Raw(`
-		WITH r AS MATERIALIZED ( -- one count per role, not one per permission row
-			SELECT s.id, s.name, s.enabled, s.is_default, s.is_superuser, s.created_at, `+count+` AS member_count
-			FROM `+source+` s
-		)
-		SELECT r.id::text AS id, r.name, r.enabled, r.is_default, r.is_superuser, r.created_at, p.resource, p.actions, r.member_count
-		FROM r
+		SELECT r.id::text AS id, r.name, r.enabled, r.is_default, r.is_superuser, r.created_at, p.resource, p.actions
+		FROM `+source+` r
 		LEFT JOIN usr.usr_role_permission p ON p.role_id = r.id
 		ORDER BY `+order+`, r.id, p.resource
 	`, args...).Find(&rows).Error
@@ -101,7 +86,6 @@ func (r *Repository) load(ctx context.Context, members bool, source, order strin
 			roles = append(roles, domain.Role{
 				ID: row.ID, Name: row.Name, Enabled: row.Enabled, IsDefault: row.IsDefault,
 				IsSuperuser: row.IsSuperuser, CreatedAt: row.CreatedAt, Permissions: map[string]domain.Action{},
-				MemberCount: row.MemberCount,
 			})
 		}
 		if row.Resource != nil && row.Actions != nil {
@@ -112,7 +96,7 @@ func (r *Repository) load(ctx context.Context, members bool, source, order strin
 }
 
 func (r *Repository) ForUser(ctx context.Context, userID string) ([]domain.Role, error) {
-	return r.load(ctx, false, `(SELECT r.* FROM usr.usr_role r JOIN usr.usr_user_role ur ON ur.role_id = r.id WHERE ur.user_id = ?)`, "r.name", userID)
+	return r.load(ctx, `(SELECT r.* FROM usr.usr_role r JOIN usr.usr_user_role ur ON ur.role_id = r.id WHERE ur.user_id = ?)`, "r.name", userID)
 }
 
 func (r *Repository) Unassign(ctx context.Context, userID, roleID string) error {

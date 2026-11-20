@@ -19,7 +19,6 @@ type Role struct {
 	IsSuperuser bool
 	Permissions map[string]Action
 	CreatedAt   time.Time
-	MemberCount int64 // members the API may see; filled on reads
 }
 
 // Protected reports whether the role is out of reach of the HTTP API: it holds

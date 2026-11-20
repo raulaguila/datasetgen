@@ -1,21 +1,11 @@
 # Overview
 
-Serviço de identidade e autenticação em Go. API `/v1` com Bearer JWT. Inclui módulo exemplo `products` e outbox de e-mail.
+Plataforma de coleções de dados com campos validados por JSON Schema: backend Go (Fiber, Postgres), mailer, CLI de operador e web Next.js (BFF). API `/v1` com Bearer, chaves de API, MCP e links públicos.
 
-## Estado
-
-- **Postgres:** schemas `usr` (identidade), `sys` (outbox), `app` (product exemplo).
-- **Backend:** Fiber + health + `/v1/auth/*` (register → activate → login → refresh → logout → password reset); grava `sys.outbox` nos fluxos de e-mail.
-- **Authz:** use case Authorize (superuser / `*` / CRUD) wired; **ainda sem middleware** nas rotas de domínio.
-- **Mailer:** bootstrap só — consumer de outbox / SMTP send pendente.
-- **Admin CLI:** `main` vazio.
-
-Fonte de verdade de runtime: `ARCHITECTURE.md` e `.specs/existing/overview.md`.
+Fonte de verdade de runtime: `ARCHITECTURE.md`. Rotas: Swagger (`/swagger/index.html` fora de produção), gerado das anotações e conferido por `swagger_test.go`.
 
 ## Binários
 
-- `cmd/backend`: API Fiber; composition (Health, Auth, Authorizer); graceful shutdown.
-- `cmd/mailer`: mesma infra; bloqueia sem loop de outbox.
-- `cmd/admin`: CLI de operador (`promote`, `disable`).
-
-Compose: `dataset_backend`, `dataset_mailer`, `dataset_postgres`.
+- `cmd/backend`: API Fiber, jobs em segundo plano e automações.
+- `cmd/mailer`: consome `sys.outbox` e envia por SMTP.
+- `cmd/admin`: CLI de operador (`bootstrap`, `promote`, `disable`, `enable`, `mfa-reset`).

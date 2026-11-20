@@ -30,4 +30,7 @@ it("formats a number field as it asks", async () => {
   expect(fieldFigure({ numberFormat: "", decimals: "" }, 3, "pt-BR", plain)).toBe("plain 3");
   expect(fieldFigure({ numberFormat: "currency", decimals: "" }, 3, "pt-BR", plain)).toMatch(/R\$\s?3,00/);
   expect(fieldFigure({ numberFormat: "", decimals: "1" }, 3, "en-US", plain)).toBe("3.0");
+  // An integer field's whole numbers are codes: no thousands separator.
+  expect(fieldFigure({ numberFormat: "", decimals: "", type: "integer" }, 1001, "pt-BR", plain)).toBe("1001");
+  expect(fieldFigure({ numberFormat: "", decimals: "", type: "integer" }, 2.5, "pt-BR", plain)).toBe("plain 2.5");
 });

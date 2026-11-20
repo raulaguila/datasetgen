@@ -7,6 +7,7 @@ import { ExternalLink, KeyRound, Link2, Pause, Pencil, Play, Plug, Send, Trash2,
 import { toast } from "sonner";
 import { FormError, FormSection, FormSections, IconAction, useFormatDate } from "@/components/bits";
 import { HashTabs } from "@/components/hash-tabs";
+import { publicFormGaps } from "@/components/field-builder";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock, CopyButton, Secret } from "@/components/secret";
 import { EmptyState } from "@/components/empty-state";
@@ -96,6 +97,7 @@ function Shares({ collection }: { collection: Collection }) {
   const items = list.data?.items ?? [];
   const urlOf = (s: ShareLink) => `${window.location.origin}/${s.kind === "form" ? "f" : "s"}/${s.token}`;
   const kindName = (k: ShareLink["kind"]) => t(k === "form" ? "share.form" : "share.view");
+  const gaps = publicFormGaps(collection.schema ?? null);
   return (
     <FormSection id="shares" description={`${t("share.desc")} ${t("share.private_note")}`} action={<>
         <Label htmlFor="share-days" className="text-sm font-normal text-muted-foreground">{t("share.validity")}</Label>
@@ -107,6 +109,7 @@ function Shares({ collection }: { collection: Collection }) {
         <Button variant="outline" disabled={create.isPending} onClick={() => create.mutate("view")}><Link2 className="size-4" />{t("share.create_view")}</Button>
       </>}>
       <div className="space-y-3">
+        {gaps.length > 0 && <p role="note" className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-sm">{t("share.form_gaps").replace("{fields}", gaps.join(", "))}</p>}
         {list.isPending ? <ListSkeleton rows={1} /> : list.isError ? <QueryErrorState error={list.error} onRetry={() => void list.refetch()} /> : items.length === 0 ? (
           <EmptyState compact title={t("share.empty")} />
         ) : (

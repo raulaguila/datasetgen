@@ -191,14 +191,27 @@ func PropertyOrder(raw []byte) []string {
 // maxTitle caps the title an audit entry keeps for a record.
 const maxTitle = 120
 
-// Title is what a record reads as: its first top-level text value, in the
-// schema's field order, as the app shows it. "" when it has none.
+// Title is what a record reads as: its first top-level plain text value, in
+// the schema's field order, as the app shows it (recordTitle in the web app).
+// Plain text is a string field with no format, no reference and no list of
+// options, so a date, a referenced record's id or a status never names a record. "" when it has none.
 func Title(raw, data []byte) string {
 	var fields map[string]json.RawMessage
-	if json.Unmarshal(data, &fields) != nil {
+	var doc struct {
+		Properties map[string]struct {
+			Type   any             `json:"type"`
+			Format string          `json:"format"`
+			Ref    json.RawMessage `json:"x-ref"`
+			Enum   json.RawMessage `json:"enum"`
+		} `json:"properties"`
+	}
+	if json.Unmarshal(data, &fields) != nil || json.Unmarshal(raw, &doc) != nil {
 		return ""
 	}
 	for _, key := range PropertyOrder(raw) {
+		if p := doc.Properties[key]; p.Type != "string" || p.Format != "" || p.Ref != nil || p.Enum != nil {
+			continue
+		}
 		var s string
 		if json.Unmarshal(fields[key], &s) == nil && strings.TrimSpace(s) != "" {
 			if r := []rune(s); len(r) > maxTitle {

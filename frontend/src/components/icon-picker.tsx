@@ -78,11 +78,12 @@ export function IconPicker({ value, onChange, label, noneLabel, disabled }: {
           id={`${id}-trigger`}
           type="button"
           disabled={disabled}
-          aria-label={`${label}: ${value || noneLabel}`}
+          aria-label={`${label}: ${value ? t("icon.change") : noneLabel}`}
           className="flex h-9 items-center gap-2 rounded-lg border border-input bg-card px-2.5 text-sm hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-60 dark:bg-transparent"
         >
           {selected ? createElement(selected, { className: "size-4 text-primary" }) : <Ban className="size-4 text-muted-foreground/60" />}
-          <span className={cn("flex-1 truncate text-left text-sm", !value && "text-muted-foreground")}>{value || noneLabel}</span>
+          {/* The drawn icon says which one; its slug is no word in either language. */}
+          <span className={cn("flex-1 truncate text-left text-sm", !value && "text-muted-foreground")}>{value ? t("icon.change") : noneLabel}</span>
           <ChevronDown className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-180")} />
         </Popover.Trigger>
       </div>

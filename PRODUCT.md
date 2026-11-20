@@ -59,7 +59,7 @@ Known expensive-by-design paths (qualitative): Argon2id verify on login; authz P
 - Password Argon2id only; refresh/`usr_token` stored as SHA-256
 - Password login gated by account status and lock expiry; existing sessions remain usable during a login lock
 - RBAC B+C (ADR-004): resource names fixed by a CHECK; actions CRUD bits; admin `is_superuser` and/or `resource='*'`; live authz via view
-- HTTP role administration excludes changes to protected roles; full-access grants and management of users with protected roles go through `cmd/admin`. `roles:update` can change any unprotected role, including the caller's own
+- Platform roles have no HTTP routes; the API never grants `*`. An admin gives or takes the `admin` role on the users screen, confirming with their own password; everything else about a user with a protected role goes through `cmd/admin`
 - Email side effects via `sys.outbox` (backend enqueue; mailer consume)
 
 **Must not (v1)**

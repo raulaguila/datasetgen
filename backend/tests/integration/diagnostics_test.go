@@ -3,8 +3,8 @@ package integration_test
 import (
 	"encoding/json"
 	"io"
-	"strings"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/raulaguila/dataset/internal/infra"

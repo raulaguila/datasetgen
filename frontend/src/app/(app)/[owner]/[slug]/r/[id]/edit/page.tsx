@@ -127,7 +127,8 @@ function RecordForm({ collection, record, editable, next }: { collection: Collec
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
               <h2 id="record-form-title" className="font-heading text-base font-semibold">{t("records.form_title")}</h2>
-              <p className="text-sm text-muted-foreground">{[collection.description.trim(), t("records.required_legend")].filter(Boolean).join(" ")}</p>
+              {collection.description.trim() && <p className="text-sm text-muted-foreground">{collection.description.trim()}</p>}
+              <p className="text-xs text-muted-foreground">{t("records.required_legend")}</p>
             </div>
             <div className="hidden gap-1 rounded-lg border p-0.5 lg:flex" role="group" aria-label={t("records.layout")}>
               {([1, 2] as const).map((n) => (

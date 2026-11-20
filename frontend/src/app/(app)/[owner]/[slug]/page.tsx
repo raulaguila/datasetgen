@@ -163,7 +163,7 @@ function RecordList({ collection }: { collection: Collection }) {
     staleTime: 30_000,
   });
   const outOf = layout === "table" && filtered && list.data && all.data
-    ? t("rules.filtered").replace("{n}", list.data.pagination.total_items.toLocaleString()).replace("{total}", all.data.pagination.total_items.toLocaleString())
+    ? t("rules.filtered").replace("{n}", num(list.data.pagination.total_items)).replace("{total}", num(all.data.pagination.total_items))
     : null;
   const [bar, setBar] = useState<HTMLDivElement | null>(null);
   const scope = { collection, search: q || undefined, where: whereText };

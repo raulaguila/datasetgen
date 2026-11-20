@@ -124,6 +124,11 @@ func TestTitleFollowsFieldOrder(t *testing.T) {
 	if got := Title(raw, []byte(`{"n":1}`)); got != "" {
 		t.Fatalf("Title = %q, want empty", got)
 	}
+	// A date, a reference and an option hold strings but never name the record.
+	raw = []byte(`{"properties":{"d":{"type":"string","format":"date"},"c":{"type":"string","x-ref":"x"},"s":{"type":"string","enum":["Pago"]},"o":{"type":"string"}}}`)
+	if got := Title(raw, []byte(`{"d":"2026-01-02","c":"0198","s":"Pago","o":"Obs"}`)); got != "Obs" {
+		t.Fatalf("Title = %q, want Obs (date, reference and option skipped)", got)
+	}
 }
 
 func TestFieldChanges(t *testing.T) {

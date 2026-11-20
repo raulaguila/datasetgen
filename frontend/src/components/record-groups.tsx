@@ -18,7 +18,9 @@ export const groupableOf = (rows: FieldRow[]) => rows.filter((r) => !r.advanced 
 export function useNumberFormat() {
   const { locale } = useI18n();
   const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
-  return (n: number) => nf.format(n);
+  // A fraction always shows two places, so 1.234,5 and 4.430,42 line up in one column.
+  const frac = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (n: number) => (Number.isInteger(n) ? nf : frac).format(n);
 }
 
 /** The selection's records counted by one field, largest first; picking one filters the list to it. */
