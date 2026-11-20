@@ -14,6 +14,7 @@ import { collections, records, tools } from "@/lib/api/endpoints";
 import type { Collection, FieldProfile, StatsBucket, Widget } from "@/lib/api/types";
 import type { MessageKey } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/provider";
+import { plural } from "@/lib/i18n/plural";
 import { cn } from "@/lib/utils";
 import { formatFigure } from "@/components/format-figure";
 import { collectionPath, recordPath } from "@/lib/paths";
@@ -324,7 +325,7 @@ export function FieldStats({ row, profile, total, bucket }: { row: FieldRow; pro
         <p className="text-xs text-muted-foreground">{t("analysis.mostly_distinct").replace("{n}", num(distinct))}</p>
       ) : (
         <>
-          <p className="text-xs text-muted-foreground">{t("analysis.distinct").replace("{n}", num(distinct))}</p>
+          <p className="text-xs text-muted-foreground">{plural(t("analysis.distinct"), distinct, num(distinct))}</p>
           <Bars items={top} total={total} label={label} color={(k) => optionCss(typeof k === "string" ? row.field.colors[k] : undefined)} />
         </>
       ))}

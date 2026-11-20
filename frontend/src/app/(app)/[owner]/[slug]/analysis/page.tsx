@@ -38,9 +38,9 @@ function Analysis({ collection }: { collection: Collection }) {
       <div className="flex flex-wrap items-center gap-2">
         <RecordRules collection={collection} fields={fieldsOf(collection.schema ?? null)} value={where} onChange={(w: Where) => set({ where: whereText(w) })} />
         <ViewConditions collection={collection} onPick={(w) => set({ where: whereText(w) })} />
-        <span className="text-xs text-muted-foreground">{t("analysis.filter_hint")}</span>
-        <p className="ml-auto text-sm text-muted-foreground" role="status">
-          {st.isPending ? "…" : t(text ? "analysis.records_matching" : "analysis.records").replace("{n}", num(n))}
+        {/* The count sits by the conditions it sums up. */}
+        <p className="text-xs text-muted-foreground">
+          {t("analysis.filter_hint")} · <span className="font-medium text-foreground" role="status">{st.isPending ? "…" : t(text ? "analysis.records_matching" : "analysis.records").replace("{n}", num(n))}</span>
         </p>
       </div>
       <CollectionDashboard collection={collection} scope={whereEmpty(where) ? undefined : where} />
@@ -56,12 +56,9 @@ function Analysis({ collection }: { collection: Collection }) {
         </div>
         {st.isError ? <QueryErrorState error={st.error} onRetry={() => void st.refetch()} /> : st.isPending ? <ListSkeleton rows={4} /> : (
           <>
-            {/* Fields with figures or bars first; those with only a fill rate share smaller cards after them. */}
-            <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-              {rows.filter((r) => !isPlain(st.data.fields[r.key])).map((r) => <FieldStats key={r.key} row={r} profile={st.data.fields[r.key]} total={n} bucket={bucket} />)}
-            </div>
-            <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-              {rows.filter((r) => isPlain(st.data.fields[r.key])).map((r) => <FieldStats key={r.key} row={r} profile={st.data.fields[r.key]} total={n} bucket={bucket} />)}
+            {/* One grid, cards of one width: fields with figures or bars first, those with only a fill rate after them. */}
+            <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {[...rows.filter((r) => !isPlain(st.data.fields[r.key])), ...rows.filter((r) => isPlain(st.data.fields[r.key]))].map((r) => <FieldStats key={r.key} row={r} profile={st.data.fields[r.key]} total={n} bucket={bucket} />)}
             </div>
           </>
         )}

@@ -57,13 +57,13 @@ test("field analysis and a dashboard", async ({ page }) => {
   await expect(panel).toBeHidden();
   await board.getByRole("button", { name: "Adicionar widget" }).click();
   panel = page.getByRole("dialog", { name: "Adicionar widget" });
-  await panel.getByRole("button", { name: "Gráfico de barras", exact: true }).click();
+  await panel.getByRole("button", { name: "Por categoria", exact: true }).click();
   await panel.getByLabel("Agrupar por").click();
   await page.getByRole("option", { name: "Tipo" }).click();
   await panel.getByRole("button", { name: "Adicionar widget" }).click();
   // A sum per value: the price of each kind.
   await board.getByRole("button", { name: "Adicionar widget" }).click();
-  await panel.getByRole("button", { name: "Gráfico de barras", exact: true }).click();
+  await panel.getByRole("button", { name: "Por categoria", exact: true }).click();
   await panel.getByLabel("Agrupar por").click();
   await page.getByRole("option", { name: "Tipo" }).click();
   await panel.getByLabel("Medida").click();
@@ -71,7 +71,7 @@ test("field analysis and a dashboard", async ({ page }) => {
   await panel.getByRole("button", { name: "Adicionar widget" }).click();
   await board.getByRole("button", { name: "Salvar" }).click();
   await expect(board.getByRole("region", { name: "Gatilhos" })).toContainText("2");
-  await expect(board.getByRole("region", { name: "Gráfico de barras: Tipo" })).toContainText("efeito");
+  await expect(board.getByRole("region", { name: "Por categoria: Tipo" })).toContainText("efeito");
   await expect(board.getByRole("region", { name: "Soma: Preço × Tipo" })).toContainText("gatilho40");
   // One filter for the page: it narrows the dashboard and the fields alike.
   await page.getByRole("button", { name: "Condições" }).first().click();
@@ -82,7 +82,7 @@ test("field analysis and a dashboard", async ({ page }) => {
   await page.getByRole("option", { name: "efeito" }).click();
   await pageRules.getByRole("button", { name: "Aplicar" }).click();
   await expect(page.getByRole("status").first()).toHaveText(/^1 registros? nas condições/);
-  await expect(board.getByRole("region", { name: "Gráfico de barras: Tipo" })).not.toContainText("gatilho");
+  await expect(board.getByRole("region", { name: "Por categoria: Tipo" })).not.toContainText("gatilho");
   await page.goto(`${await pageOf(page, id)}/analysis`);
   // Saved: a reload keeps it.
   await page.reload();

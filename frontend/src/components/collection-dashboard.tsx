@@ -1,8 +1,9 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useUnsavedGuard } from "@/lib/hooks/use-unsaved-guard";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, BarChart3, Copy, GripVertical, Hash, List, Maximize2, Minimize2, MoreHorizontal, MoveDown, MoveUp, Pencil, Plus, Sigma, SquareDivide, Trash2, TrendingUp, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowUp, BarChart3, ChartColumn, ChartLine, ChartPie, Copy, GripVertical, Hash, List, Maximize2, Minimize2, MoreHorizontal, MoveDown, MoveUp, Pencil, Plus, Sigma, SquareDivide, Table2, Trash2, TrendingUp, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { ViewConditions, WIDGET_KINDS, WidgetView, fieldsFor, isDate, isNumeric } from "@/components/collection-stats";
 import { BUCKETS } from "@/components/collection-stats";
@@ -10,7 +11,7 @@ import { fieldsOf } from "@/components/field-builder";
 import { SidePanel } from "@/components/fields-editor";
 import { RecordRules, type Where } from "@/components/record-rules";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,6 +29,12 @@ const FORMATS: NonNullable<Widget["format"]>[] = ["number", "compact", "currency
 /** The drawings a kind offers, its default first. */
 const VISUALS: Partial<Record<Widget["kind"], NonNullable<Widget["visual"]>[]>> = { bars: ["bars", "donut", "table"], timeline: ["columns", "line"] };
 const KIND_ICONS: Record<Widget["kind"], LucideIcon> = { count: Hash, sum: Sigma, avg: SquareDivide, min: MoveDown, max: MoveUp, bars: BarChart3, timeline: TrendingUp, list: List };
+const VISUAL_ICONS: Record<NonNullable<Widget["visual"]>, LucideIcon> = { bars: BarChart3, donut: ChartPie, table: Table2, columns: ChartColumn, line: ChartLine };
+/** The gallery: each kind, and the bar kind's other drawings as cards of their own, so a donut or a table is found by name. */
+const GALLERY: { kind: Widget["kind"]; visual?: Widget["visual"]; label: MessageKey; hint: MessageKey; icon: LucideIcon }[] = WIDGET_KINDS.flatMap((k) => [
+  { kind: k, label: `dashboard.kind.${k}` as MessageKey, hint: `dashboard.kind_hint.${k}` as MessageKey, icon: KIND_ICONS[k] },
+  ...(k === "bars" ? (["donut", "table"] as const).map((v) => ({ kind: k, visual: v, label: `dashboard.gallery.${v}` as MessageKey, hint: `dashboard.gallery_hint.${v}` as MessageKey, icon: VISUAL_ICONS[v] })) : []),
+]);
 const PERIODS = [7, 30, 90, 365];
 const NONE = "none";
 
@@ -45,23 +52,44 @@ function Pick({ id, label, value, items, placeholder, onChange }: { id: string; 
 }
 
 /** The kinds of widget, as cards with an icon and what each shows. */
-function KindGallery({ onPick }: { onPick: (k: Widget["kind"]) => void }) {
+function KindGallery({ onPick }: { onPick: (k: Widget["kind"], visual?: Widget["visual"]) => void }) {
   const { t } = useI18n();
   return (
     <div className="grid gap-1.5 sm:grid-cols-2">
-      {WIDGET_KINDS.map((k) => {
-        const Icon = KIND_ICONS[k];
+      {GALLERY.map(({ kind: k, visual, label, hint, icon: Icon }) => {
         return (
-          <button key={k} type="button" aria-label={t(`dashboard.kind.${k}` as MessageKey)} onClick={() => onPick(k)}
+          <button key={`${k}-${visual ?? ""}`} type="button" aria-label={t(label)} onClick={() => onPick(k, visual)}
             className="flex items-start gap-2.5 rounded-md border px-3 py-2 text-left outline-none transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring">
             <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="min-w-0">
-              <span className="block text-sm font-medium">{t(`dashboard.kind.${k}` as MessageKey)}</span>
-              <span className="block text-xs text-muted-foreground">{t(`dashboard.kind_hint.${k}` as MessageKey)}</span>
+              <span className="block text-sm font-medium">{t(label)}</span>
+              <span className="block text-xs text-muted-foreground">{t(hint)}</span>
             </span>
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/** How a widget draws its numbers, as buttons with a picture of each: easier to find than a list. */
+function VisualPick({ label, value, options, onChange }: { label: string; value: NonNullable<Widget["visual"]>; options: NonNullable<Widget["visual"]>[]; onChange: (v: NonNullable<Widget["visual"]>) => void }) {
+  const { t } = useI18n();
+  const id = useId();
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p id={id} className="text-sm leading-5 font-medium">{label}</p>
+      <div role="group" aria-labelledby={id} className="flex gap-1.5">
+        {options.map((v) => {
+          const Icon = VISUAL_ICONS[v];
+          return (
+            <Button key={v} type="button" variant="outline" aria-pressed={v === value} onClick={() => onChange(v)}
+              className={cn("flex-1", v === value && "border-primary bg-primary/10 text-foreground")}>
+              <Icon className="size-4" aria-hidden />{t(`dashboard.visual.${v}` as MessageKey)}
+            </Button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -109,10 +137,10 @@ function WidgetForm({ formId, collection, initial, onSave }: { formId: string; c
     <form id={formId} className="space-y-5" onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); if (ready) onSave(build()); }}>
       <div className="grid gap-4 @sm:grid-cols-2">
         <Pick id={`${id}-kind`} label={t("dashboard.kind")} value={kind} items={kinds} onChange={(v) => { setKind(v as Widget["kind"]); setField(""); setVisual(undefined); setMeasure(NONE); }} />
+        {visuals.length > 0 && <VisualPick label={t("dashboard.visual")} value={visual && visuals.includes(visual) ? visual : visuals[0]} options={visuals} onChange={setVisual} />}
         {fit && <Pick id={`${id}-field`} label={t(kind === "bars" ? "dashboard.group_by" : "dashboard.field")} value={field} items={Object.fromEntries(fit.map((r) => [r.key, r.field.name]))} placeholder={t(fit.length ? "fix.pick" : "dashboard.no_fields")} onChange={setField} />}
         {kind === "bars" && <Pick id={`${id}-measure`} label={t("dashboard.measure")} value={measure} items={measures} onChange={setMeasure} />}
         {kind === "timeline" && <Pick id={`${id}-bucket`} label={t("analysis.bucket")} value={bucket} items={Object.fromEntries(BUCKETS.map((b) => [b, t(`analysis.bucket.${b}` as MessageKey)]))} onChange={(v) => setBucket(v as StatsBucket)} />}
-        {visuals.length > 0 && <Pick id={`${id}-visual`} label={t("dashboard.visual")} value={visual && visuals.includes(visual) ? visual : visuals[0]} items={Object.fromEntries(visuals.map((v) => [v, t(`dashboard.visual.${v}` as MessageKey)]))} onChange={(v) => setVisual(v as Widget["visual"])} />}
         {(numeric || measureRow) && (
           <>
             <Pick id={`${id}-format`} label={t("dashboard.format")} value={format} items={formats} onChange={setFormat} />
@@ -188,7 +216,7 @@ export function CollectionDashboard({ collection, scope, readOnly = false }: {
   const q = useQuery({ queryKey: key, queryFn: ({ signal }) => tools.dashboard(collection, signal) });
   const [draft, setDraft] = useState<Widget[] | null>(null);
   // A new widget starts in the gallery (kind null), then its form.
-  const [editing, setEditing] = useState<{ widget: Widget | null; kind: Widget["kind"] | null } | null>(null);
+  const [editing, setEditing] = useState<{ widget: Widget | null; kind: Widget["kind"] | null; visual?: Widget["visual"] } | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const save = useMutation({
     mutationFn: (widgets: Widget[]) => tools.saveDashboard(collection, widgets),
@@ -197,6 +225,8 @@ export function CollectionDashboard({ collection, scope, readOnly = false }: {
   });
   const rows = fieldsOf(collection.schema ?? null);
   const widgets = draft ?? q.data?.widgets ?? [];
+  // Leaving with unsaved widgets asks first, as the Fields page does.
+  useUnsavedGuard(draft !== null && JSON.stringify(draft) !== JSON.stringify(q.data?.widgets ?? []), t("roles.leave_unsaved"));
   const span = spanOf(widgets);
   if (q.isPending || q.isError) return null;
   if (!widgets.length && !draft && (!owner || readOnly)) return null;
@@ -217,6 +247,16 @@ export function CollectionDashboard({ collection, scope, readOnly = false }: {
         <DropdownMenuItem disabled={i === 0} onClick={() => move(i, i - 1)}><ArrowUp className="size-4" />{t("dashboard.move_up")}</DropdownMenuItem>
         <DropdownMenuItem disabled={i === widgets.length - 1} onClick={() => move(i, i + 1)}><ArrowDown className="size-4" />{t("dashboard.move_down")}</DropdownMenuItem>
         <DropdownMenuItem disabled={widgets.length >= MAX} onClick={() => duplicate(w)}><Copy className="size-4" />{t("dashboard.duplicate")}</DropdownMenuItem>
+        {VISUALS[w.kind] && (
+          <>
+            <DropdownMenuSeparator />
+            {/* Try another drawing without opening the form; the first one is the default and is not stored. */}
+            <DropdownMenuRadioGroup value={w.visual ?? VISUALS[w.kind]![0]} onValueChange={(v) => put({ ...w, visual: v === VISUALS[w.kind]![0] ? undefined : (v as Widget["visual"]) })}>
+              <DropdownMenuLabel>{t("dashboard.view_as")}</DropdownMenuLabel>
+              {VISUALS[w.kind]!.map((v) => { const Icon = VISUAL_ICONS[v]; return <DropdownMenuRadioItem key={v} value={v}><Icon className="size-4" />{t(`dashboard.visual.${v}` as MessageKey)}</DropdownMenuRadioItem>; })}
+            </DropdownMenuRadioGroup>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={() => setDraft((list) => (list ?? []).filter((x) => x.id !== w.id))}><Trash2 className="size-4" />{t("dashboard.remove")}</DropdownMenuItem>
       </DropdownMenuContent>
@@ -271,10 +311,10 @@ export function CollectionDashboard({ collection, scope, readOnly = false }: {
           </div>
         )}
       >
-        {editing && !kind && <KindGallery onPick={(k) => setEditing({ widget: null, kind: k })} />}
+        {editing && !kind && <KindGallery onPick={(k, visual) => setEditing({ widget: null, kind: k, visual })} />}
         {editing && kind && (
-          <WidgetForm key={editing.widget?.id ?? `new-${kind}`} formId={formId} collection={collection}
-            initial={editing.widget ?? { id: newId(), kind, title: "" }} onSave={put} />
+          <WidgetForm key={editing.widget?.id ?? `new-${kind}-${editing.visual ?? ""}`} formId={formId} collection={collection}
+            initial={editing.widget ?? { id: newId(), kind, title: "", ...(editing.visual ? { visual: editing.visual } : {}) }} onSave={put} />
         )}
       </SidePanel>
     </section>
