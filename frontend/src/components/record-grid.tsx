@@ -21,12 +21,16 @@ export const editsInline = (r: FieldRow) => !r.advanced && INLINE.includes(r.fie
 /** Fields a list can show as a column (their value fits a cell). */
 export const showable = (rows: FieldRow[]) => rows.filter((r) => !r.advanced && !["group", "objects", "json"].includes(r.field.type));
 
-/** The columns shown: those in cols (in field order), or the first four. */
-export function pickColumns(rows: FieldRow[], cols: string): FieldRow[] {
+/**
+ * The columns shown: those in cols (in field order), or the first four short ones.
+ * The field that titles records leads either way: the first column is the record's name.
+ */
+export function pickColumns(rows: FieldRow[], cols: string, title?: string): FieldRow[] {
   const all = showable(rows);
-  if (!cols) return all.filter((r) => r.field.type !== "strings" && r.field.type !== "text").slice(0, 4);
-  const keys = cols.split(",");
-  return all.filter((r) => keys.includes(r.key));
+  const keys = cols ? cols.split(",") : null;
+  const picked = keys ? all.filter((r) => keys.includes(r.key)) : all.filter((r) => r.key === title || (r.field.type !== "strings" && r.field.type !== "text"));
+  const named = [...picked.filter((r) => r.key === title), ...picked.filter((r) => r.key !== title)];
+  return keys ? named : named.slice(0, 4);
 }
 
 /** Chooses the list's columns; kept in the URL, so a saved view keeps them too. */

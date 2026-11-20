@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { useRelativeTime } from "@/components/bits";
 import { EmptyState } from "@/components/empty-state";
 import { BulkEditDialog } from "@/components/bulk-edit-dialog";
-import { fieldsOf, fileRefs, recordTitle, REF, type FieldRow } from "@/components/field-builder";
+import { fieldsOf, fileRefs, recordTitle, REF, titleCandidates, type FieldRow } from "@/components/field-builder";
 import { SavedViews } from "@/components/saved-views";
 import { ColumnPicker, EditableCell, editsInline, pickColumns, useSaveField } from "@/components/record-grid";
 import { RecordGroups, groupableOf, useNumberFormat } from "@/components/record-groups";
@@ -75,6 +75,7 @@ function useRefLabels(columns: FieldRow[], items: DataRecord[], schema: Record<s
 
 /** Numbers line up on the right, digit under digit, so a column of amounts compares at a glance. */
 const isNumber = (r: FieldRow) => r.field.type === "number" || r.field.type === "integer";
+const fits = (r: FieldRow) => isNumber(r) || ["boolean", "enum", "date", "datetime", "autonumber"].includes(r.field.type);
 
 /** The "no grouping" choice; a field key is never this. */
 const NO_GROUP = "\u0000none";
@@ -88,7 +89,9 @@ function RecordList({ collection }: { collection: Collection }) {
   const [params, set] = useListParams({ page: 1, limit: 25, q: "", sort: "updated_at", order: "desc", filter: "", where: "", group: "", cols: "", layout: "table", by: "" });
   const { page, limit } = params;
   const rows = fieldsOf(collection.schema ?? null);
-  const columns = pickColumns(rows, params.cols);
+  const columns = pickColumns(rows, params.cols, titleCandidates(collection.schema ?? null)[0]);
+  // Short values (options, numbers, dates) take their own width; the name and text share the rest.
+  const nameWidth = columns.slice(1).some((c) => !fits(c)) ? "w-[40%]" : undefined;
   const where = andWhere(parseWhere(params.where), params.filter ? legacyRules(params.filter) : []);
   const whereText = toWhereText(where) || undefined;
   const setWhere = (w: Where) => set({ where: toWhereText(w), filter: "", page: 1 });
@@ -296,8 +299,8 @@ function RecordList({ collection }: { collection: Collection }) {
                 <SelectAllHead selection={selection} />
                 {/* The first column, the record's name, gets the room; the others what is left. */}
                 {columns.length ? columns.map((c, i) => c.field.type === "file" || c.field.type === "files"
-                  ? <TableHead key={c.key} className={i === 0 ? "w-[40%]" : undefined}><span className="inline-flex items-center gap-1">{(() => { const I = TYPE_ICONS[c.field.type]; return <I className="size-3.5 opacity-60" aria-hidden />; })()}{c.field.name}</span></TableHead>
-                  : <SortHead key={c.key} field={`data.${c.key}`} label={c.field.name} icon={TYPE_ICONS[c.field.type]} className={i === 0 ? "w-[40%]" : isNumber(c) ? "text-right" : undefined} {...sortProps} />) : <TableHead>{t("records.record")}</TableHead>}
+                  ? <TableHead key={c.key} className={i === 0 ? nameWidth : undefined}><span className="inline-flex items-center gap-1">{(() => { const I = TYPE_ICONS[c.field.type]; return <I className="size-3.5 opacity-60" aria-hidden />; })()}{c.field.name}</span></TableHead>
+                  : <SortHead key={c.key} field={`data.${c.key}`} label={c.field.name} icon={TYPE_ICONS[c.field.type]} className={i === 0 ? nameWidth : cn(fits(c) && "w-px whitespace-nowrap", isNumber(c) && "text-right")} {...sortProps} />) : <TableHead>{t("records.record")}</TableHead>}
                 <SortHead field="updated_at" label={t("common.updated_at")} className="w-32" {...sortProps} />
               </TableRow>
             </TableHeader>
@@ -310,7 +313,7 @@ function RecordList({ collection }: { collection: Collection }) {
                   <TableRow key={r.id} className={cn("cursor-pointer hover:bg-muted/60", isInvalid(r.id, r.updated_at) && "[&>td:first-child]:shadow-[inset_3px_0_0_var(--warn)]")} onClick={() => router.push(recordPath(collection, r.id))}>
                     <SelectCell selection={selection} id={r.id} label={cells[0].text} />
                     {cells.map((c, i) => { const cell = (
-                      <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : "field"} className={cn(i === 0 ? "max-w-0 min-w-40" : "max-w-0 min-w-24 text-muted-foreground", i > 0 && c.row?.field.unique && "font-mono text-xs xl:min-w-48", i > 0 && c.row && isNumber(c.row) && "text-right tabular-nums")} title={c.row?.field.type === "url" ? String(data[c.key] ?? "") : undefined}>
+                      <TableCell key={c.key} data-label={c.label} data-cell={i === 0 ? "name" : "field"} className={cn(i === 0 ? "max-w-0 min-w-40" : c.row && fits(c.row) ? "whitespace-nowrap text-muted-foreground" : "max-w-0 min-w-24 text-muted-foreground", i > 0 && c.row?.field.unique && "font-mono text-xs xl:min-w-48", i > 0 && c.row && isNumber(c.row) && "text-right tabular-nums")} title={c.row?.field.type === "url" ? String(data[c.key] ?? "") : undefined}>
                         {i === 0 ? (
                           <span className="flex min-w-0 items-center gap-1.5">
                             {isInvalid(r.id, r.updated_at) && (
@@ -338,10 +341,8 @@ function RecordList({ collection }: { collection: Collection }) {
               })}
             </TableBody>
           </Table>
-          {/* One page of the smallest size needs no paging controls, only the total. */}
-          {page === 1 && list.data.pagination.total_items <= Math.min(limit, 10) ? (
-            outOf ? null : <p className="border-t px-4 py-2.5 text-xs text-muted-foreground">{t(list.data.pagination.total_items === 1 ? "nav.record_one" : "nav.record_many").replace("{n}", String(list.data.pagination.total_items))}</p>
-          ) : (
+          {/* One page of the smallest size needs no paging controls; the header already says the total. */}
+          {page === 1 && list.data.pagination.total_items <= Math.min(limit, 10) ? null : (
             <TablePagination page={page} pageSize={limit} totalItems={list.data.pagination.total_items} onPageChange={(n) => set({ page: n })} onPageSizeChange={(n) => set({ limit: n, page: 1 })} />
           )}
         </Card>
