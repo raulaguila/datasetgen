@@ -25,10 +25,13 @@ export function PageHeader({
   description,
   action,
   tabTitle,
+  badge,
 }: {
   title: string;
   description?: string;
   action?: React.ReactNode;
+  /** A short label next to the title (a user's admin role). */
+  badge?: React.ReactNode;
   /** The browser tab's name when it should differ from the heading (an edit screen). */
   tabTitle?: string;
 }) {
@@ -37,7 +40,10 @@ export function PageHeader({
     <div data-ui-page-header className="px-[var(--space-page)] py-3 md:pb-5">
       <div className="flex w-full flex-col gap-[var(--space-row)] sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
       <div className="min-w-0 max-w-full flex-1 sm:basis-64">
-        <h1 className="font-heading text-xl font-semibold tracking-tight md:text-2xl">{title}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="font-heading text-xl font-semibold tracking-tight md:text-2xl">{title}</h1>
+          {badge}
+        </div>
         {description && <p className="mt-1 max-w-[75ch] text-sm text-muted-foreground">{description}</p>}
       </div>
       {action && <div className="flex max-w-full flex-wrap items-center gap-2 [&>*]:max-w-full [&>*]:flex-wrap">{action}</div>}

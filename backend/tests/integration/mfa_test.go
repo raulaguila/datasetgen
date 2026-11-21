@@ -46,6 +46,10 @@ func TestTwoStepLogin(t *testing.T) {
 	if err != nil || len(recovery) != 10 {
 		t.Fatalf("enable: %v %v", recovery, err)
 	}
+	// The admin's user screen sees it.
+	if a, err := e.store.Users().Access(context.Background(), e.userID(t, addr), e.clock.now, e.clock.now); err != nil || !a.MFAEnabled {
+		t.Fatalf("access after enable: %+v %v", a, err)
+	}
 	if st, _ := e.svc.MFAStatus(me); !st.Enabled || st.RecoveryLeft != 10 {
 		t.Fatalf("status: %+v", st)
 	}

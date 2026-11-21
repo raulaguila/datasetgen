@@ -62,6 +62,7 @@ func (r *Repository) Access(ctx context.Context, id string, failuresSince, now t
 		ActiveSessions int        `gorm:"column:active_sessions"`
 		// One live token per user and purpose (uq_usr_token_live), so the subquery reads one row.
 		ActivationExpiresAt *time.Time `gorm:"column:activation_expires_at"`
+		MFAEnabled          bool       `gorm:"column:mfa_enabled"`
 	}
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT c.last_login_at, c.failed_login_attempts, c.locked_until,
@@ -70,7 +71,8 @@ func (r *Repository) Access(ctx context.Context, id string, failuresSince, now t
 		       (SELECT count(*) FROM usr.usr_session s
 		         WHERE s.user_id = u.id AND s.revoked_at IS NULL AND s.expires_at > ?) AS active_sessions,
 		       (SELECT t.expires_at FROM usr.usr_token t
-		         WHERE t.user_id = u.id AND t.purpose = ? AND t.used_at IS NULL) AS activation_expires_at
+		         WHERE t.user_id = u.id AND t.purpose = ? AND t.used_at IS NULL) AS activation_expires_at,
+		       EXISTS (SELECT 1 FROM usr.usr_mfa m WHERE m.user_id = u.id AND m.enabled_at IS NOT NULL) AS mfa_enabled
 		FROM usr.usr_user u JOIN usr.usr_credential c ON c.user_id = u.id
 		WHERE u.id = ?
 	`, failuresSince, now, domain.TokenPurposeActivation, id).Take(&out).Error

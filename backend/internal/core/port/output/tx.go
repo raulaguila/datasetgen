@@ -45,4 +45,5 @@ type IdentityStore interface {
 	Users() UserRepository
 	Roles() RoleRepository
 	Credentials() CredentialRepository // the actor's password, checked before an admin change
+	Collections() CollectionRepository // a user's memberships, on the detail screen
 }

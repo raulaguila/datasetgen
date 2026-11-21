@@ -83,6 +83,10 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.UserDetails, erro
 	if details.Access, err = s.UOW.Users().Access(ctx, details.ID, now.Add(-s.FailureWindow), now); err != nil {
 		return nil, err
 	}
+	// shortcut: the screen lists the first 100 by name; page it if people join hundreds of collections.
+	if details.Collections, err = s.UOW.Collections().Memberships(ctx, details.ID, 100); err != nil {
+		return nil, err
+	}
 	return details, nil
 }
 

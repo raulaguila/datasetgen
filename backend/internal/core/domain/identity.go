@@ -55,6 +55,20 @@ type UserDetails struct {
 	User
 	Roles  []Role
 	Access *UserAccess // only the detail screen loads it
+	// Collections the user belongs to; only the detail screen loads them.
+	Collections []UserMembership
+}
+
+// UserMembership is one collection a user belongs to, as the admin's user screen shows it.
+type UserMembership struct {
+	CollectionID string
+	Owner        string // username in the collection's address
+	Slug         string
+	Name         string
+	Role         MemberRole
+	// SoleOwner: no other owner with an enabled account, so disabling this user
+	// leaves the collection without anyone who can manage it.
+	SoleOwner bool
 }
 
 // UserAccess says why a user may fail to sign in.
@@ -66,6 +80,7 @@ type UserAccess struct {
 	ActiveSessions int
 	// ActivationExpiresAt is when the live activation link stops working; nil when there is none.
 	ActivationExpiresAt *time.Time
+	MFAEnabled          bool // two-step sign-in is on
 }
 
 // Credential is 1:1 with User.

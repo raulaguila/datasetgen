@@ -67,7 +67,19 @@ type detailsDTO struct {
 	userDTO
 	Roles  []roleDTO  `json:"roles"`
 	Access *accessDTO `json:"access,omitempty"`
+	// Collections the user belongs to, by name, up to 100.
+	Collections []membershipDTO `json:"collections"`
 } // @name UserDetails
+
+type membershipDTO struct {
+	CollectionID string `json:"collection_id"`
+	Owner        string `json:"owner" example:"ana"` // username in the collection's address
+	Slug         string `json:"slug" example:"pedidos"`
+	Name         string `json:"name" example:"Pedidos"`
+	Role         string `json:"role" enums:"owner,editor,viewer"`
+	// SoleOwner: no other owner with an enabled account; disabling the user leaves the collection unmanaged.
+	SoleOwner bool `json:"sole_owner"`
+} // @name UserMembership
 
 type accessDTO struct {
 	LastLoginAt    *time.Time `json:"last_login_at"`
@@ -77,6 +89,7 @@ type accessDTO struct {
 	ActiveSessions int        `json:"active_sessions" example:"2"`
 	// ActivationExpiresAt is when the live activation link stops working; null when there is none.
 	ActivationExpiresAt *time.Time `json:"activation_expires_at"`
+	MFAEnabled          bool       `json:"mfa_enabled"` // two-step sign-in is on
 } // @name UserAccess
 
 func toDTO(u domain.User) userDTO {
@@ -139,12 +152,15 @@ func (h *Handler) Get(c fiber.Ctx) error {
 	if err != nil {
 		return mapper.WriteError(c, err)
 	}
-	out := detailsDTO{userDTO: toDTO(user.User), Roles: make([]roleDTO, 0, len(user.Roles))}
+	out := detailsDTO{userDTO: toDTO(user.User), Roles: make([]roleDTO, 0, len(user.Roles)), Collections: make([]membershipDTO, 0, len(user.Collections))}
+	for _, m := range user.Collections {
+		out.Collections = append(out.Collections, membershipDTO{m.CollectionID, m.Owner, m.Slug, m.Name, string(m.Role), m.SoleOwner})
+	}
 	for _, r := range user.Roles {
 		out.Roles = append(out.Roles, roleDTO{ID: r.ID, Name: r.Name})
 	}
 	if a := user.Access; a != nil {
-		out.Access = &accessDTO{a.LastLoginAt, a.FailedLogins, a.LockedUntil, a.RecentFailures, a.ActiveSessions, a.ActivationExpiresAt}
+		out.Access = &accessDTO{a.LastLoginAt, a.FailedLogins, a.LockedUntil, a.RecentFailures, a.ActiveSessions, a.ActivationExpiresAt, a.MFAEnabled}
 	}
 	return c.JSON(out)
 }

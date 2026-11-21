@@ -118,7 +118,21 @@ export interface UserDetails extends User {
     active_sessions: number;
     /** When the live activation link stops working; null when there is none. */
     activation_expires_at: string | null;
+    /** Two-step sign-in is on. */
+    mfa_enabled: boolean;
   };
+  /** Collections the user belongs to, by name, up to 100. */
+  collections: UserMembership[];
+}
+
+/** One collection a user belongs to; sole_owner: no other owner with an enabled account. */
+export interface UserMembership {
+  collection_id: string;
+  owner: string;
+  slug: string;
+  name: string;
+  role: MemberRole;
+  sole_owner: boolean;
 }
 
 export interface Collection {

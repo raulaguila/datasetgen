@@ -145,6 +145,14 @@ func TestCollectionMembersDecideAccess(t *testing.T) {
 	}
 	wantCode(t, ignore(records.Create(helper, input.CreateRecordCommand{CollectionID: c.ID, Data: json.RawMessage(`{}`)})), apperror.CodeForbidden)
 	helperID := e.userID(t, helperAddr)
+	// The admin's user screen: the owner is the only one who can manage it, the viewer is not.
+	ownerOf, err := e.store.Collections().Memberships(context.Background(), e.userID(t, ownerAddr), 100)
+	if err != nil || len(ownerOf) != 1 || ownerOf[0].CollectionID != c.ID || ownerOf[0].Role != domain.RoleOwner || !ownerOf[0].SoleOwner || ownerOf[0].Slug == "" || ownerOf[0].Owner == "" {
+		t.Fatalf("owner memberships: %+v %v", ownerOf, err)
+	}
+	if got, err := e.store.Collections().Memberships(context.Background(), helperID, 100); err != nil || len(got) != 1 || got[0].Role != domain.RoleViewer || got[0].SoleOwner {
+		t.Fatalf("viewer memberships: %+v %v", got, err)
+	}
 	wantCode(t, collections.SetMemberRole(helper, c.ID, helperID, domain.RoleOwner), apperror.CodeForbidden)
 	if err := collections.SetMemberRole(owner, c.ID, helperID, domain.RoleEditor); err != nil {
 		t.Fatal(err)

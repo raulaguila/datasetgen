@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Loader2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
-import { DangerZone, FieldNote, FormError, FormSection, FormSections, SaveBar, PageBody, PageHeader, StatusBadge, useFormatDate } from "@/components/bits";
+import { DangerZone, FieldNote, FormError, FormSection, FormSections, SaveBar, PageBody, PageHeader, StatusBadge, useFormatDate, useRelativeTime } from "@/components/bits";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -27,6 +27,8 @@ import { useCrumb } from "@/lib/store/crumb";
 import { useI18n } from "@/lib/i18n/provider";
 import { email as emailRule, personName, ready } from "@/lib/validation";
 import { can } from "@/lib/permissions";
+import { collectionPath } from "@/lib/paths";
+import { plural } from "@/lib/i18n/plural";
 import { copyText } from "@/lib/utils";
 
 /** Creates a pending account; the person gets the activation email. */
@@ -119,6 +121,7 @@ function InvitePage() {
 function UserDetail({ id }: { id: string }) {
   const { t } = useI18n();
   const format = useFormatDate();
+  const ago = useRelativeTime();
   const { user: me } = useMe();
   const client = useQueryClient();
   const detail = useQuery({ queryKey: ["users", "detail", id], queryFn: () => users.get(id) });
@@ -137,6 +140,12 @@ function UserDetail({ id }: { id: string }) {
   const a = u?.access;
   const locked = !!a?.locked_until && new Date(a.locked_until) > new Date();
   const blocked = u?.status === "locked" || locked || (a?.recent_failures ?? 0) > 0;
+  const audit = u && can(me, "audit", "read") ? `/admin/audit?user=${u.id}` : null;
+  // Disabling leaves these without anyone who can manage them: said before the click, not after.
+  const sole = u?.collections.filter((c) => c.sole_owner).length ?? 0;
+  const disableDesc = `${t(u?.status === "pending" ? "users.disable_pending_desc" : "users.disable_desc")}${sole ? ` ${plural(t("users.sole_owner_warn"), sole)}` : ""}`;
+  // Relative for a glance, the full date on hover.
+  const when = (iso: string) => { const r = ago(iso); return <time dateTime={iso} title={r.abs}>{r.rel}</time>; };
   const reinvite = useMutation({
     mutationFn: () => users.reinvite(id),
     onSuccess: async (res) => {
@@ -160,12 +169,10 @@ function UserDetail({ id }: { id: string }) {
     <>
       <PageHeader
         title={u?.name ?? t("nav.users")}
-        description={u?.email}
+        description={u && `@${u.username} · ${u.email}`}
+        badge={u?.admin && <Badge variant="secondary">{t("roles.builtin.admin")}</Badge>}
         action={u && (
           <div className="flex flex-wrap gap-2">
-            {can(me, "audit", "read") && (
-              <Button variant="outline" nativeButton={false} render={<Link href={`/admin/audit?user=${u.id}`} />}>{t("users.view_audit")}</Button>
-            )}
             {canToggle && blocked && (
               <Button variant="outline" onClick={() => setUnlocking(true)}>{t("users.unlock")}</Button>
             )}
@@ -189,7 +196,7 @@ function UserDetail({ id }: { id: string }) {
           </div>
         )}
       />
-      <PageBody width="form">
+      <PageBody>
         {detail.isPending ? (
           <ListSkeleton rows={3} />
         ) : detail.error instanceof ApiError && detail.error.code === "NOT_FOUND" ? (
@@ -208,22 +215,24 @@ function UserDetail({ id }: { id: string }) {
           <FormSection title={t("users.details")} description={t("users.details_desc")}>
               <dl className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-4 gap-y-3 text-sm sm:grid-cols-[10rem_1fr] sm:gap-x-6 sm:gap-y-4">
                 <dt className="text-muted-foreground">{t("users.status")}</dt>
-                <dd className="flex flex-wrap items-center gap-2"><StatusBadge status={detail.data.status} />{detail.data.admin && <Badge variant="secondary">{t("roles.builtin.admin")}</Badge>}</dd>
+                <dd className="flex flex-wrap items-center gap-2"><StatusBadge status={detail.data.status} /></dd>
                 <dt className="text-muted-foreground">{t("common.created_at")}</dt>
-                <dd>{format(detail.data.created_at)}</dd>
-                <dt className="text-muted-foreground">{t("common.updated_at")}</dt>
-                <dd>{format(detail.data.updated_at)}</dd>
+                <dd>{when(detail.data.created_at)}</dd>
               </dl>
-              {a && (
-                <>
-                  <h3 className="mt-6 mb-3 text-sm font-semibold">{t("users.access")}</h3>
+          </FormSection>
+          {a && (
+            <FormSection title={t("users.access")} description={t("users.access_desc")}>
                   <dl className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-4 gap-y-3 text-sm sm:grid-cols-[10rem_1fr] sm:gap-x-6 sm:gap-y-4">
                     <dt className="text-muted-foreground">{t("users.last_login")}</dt>
-                    <dd>{a.last_login_at ? format(a.last_login_at) : t("users.never")}</dd>
+                    <dd>{a.last_login_at ? when(a.last_login_at) : t("users.never")}</dd>
+                    <dt className="text-muted-foreground">{t("users.mfa")}</dt>
+                    <dd>{a.mfa_enabled ? <Badge variant="secondary" className="bg-success/15 text-success">{t("users.mfa_on")}</Badge> : <span className="text-muted-foreground">{t("users.mfa_off")}</span>}</dd>
                     <dt className="text-muted-foreground">{t("users.active_sessions")}</dt>
                     <dd className="tabular-nums">{a.active_sessions}</dd>
                     <dt className="text-muted-foreground">{t("users.recent_failures")}</dt>
-                    <dd className="tabular-nums" title={t("users.recent_failures_hint")}>{a.recent_failures}</dd>
+                    <dd className="tabular-nums" title={t("users.recent_failures_hint")}>
+                      {a.recent_failures > 0 && audit ? <Link href={audit} className="text-warn underline-offset-4 hover:underline">{a.recent_failures}</Link> : a.recent_failures}
+                    </dd>
                     {u?.status === "pending" && (
                       <>
                         <dt className="text-muted-foreground">{t("users.link_title")}</dt>
@@ -237,8 +246,24 @@ function UserDetail({ id }: { id: string }) {
                       </>
                     )}
                   </dl>
-                </>
-              )}
+                  {audit && <Link href={audit} className="mt-4 inline-block text-sm text-primary underline-offset-4 hover:underline">{t("users.view_activity")}</Link>}
+            </FormSection>
+          )}
+          <FormSection title={t("users.collections")} description={t("users.collections_desc")}>
+            {detail.data.collections.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t("users.collections_none")}</p>
+            ) : (
+              <ul className="divide-y rounded-lg border">
+                {detail.data.collections.map((c) => (
+                  <li key={c.collection_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
+                    <Link href={collectionPath(c, "overview")} className="min-w-0 flex-1 truncate font-medium hover:underline">{c.name}</Link>
+                    <span className="font-mono text-xs text-muted-foreground max-sm:hidden">/{c.owner}/{c.slug}</span>
+                    {c.sole_owner && <Badge variant="outline" className="border-warn/40 text-warn" title={t("users.sole_owner_hint")}>{t("users.sole_owner")}</Badge>}
+                    <Badge variant="outline" className="text-foreground/80">{t(`members.role.${c.role}`)}</Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
           </FormSection>
           {canSetAdmin && (
             <FormSection title={t("users.admin_section")} description={t(u.admin ? "users.admin_on_desc" : "users.admin_off_desc")}>
@@ -253,7 +278,7 @@ function UserDetail({ id }: { id: string }) {
           )}
           </FormSections>
           {canToggle && !disabled && (
-            <DangerZone description={t(u.status === "pending" ? "users.disable_pending_desc" : "users.disable_desc")} label={t("users.disable")} onClick={() => setConfirm(true)} />
+            <DangerZone description={disableDesc} label={t("users.disable")} onClick={() => setConfirm(true)} />
           )}
           </>
         )}
@@ -262,7 +287,7 @@ function UserDetail({ id }: { id: string }) {
         open={confirm}
         onOpenChange={setConfirm}
         title={t(disabled ? "users.enable" : "users.disable")}
-        description={t(disabled ? "users.enable_desc" : u?.status === "pending" ? "users.disable_pending_desc" : "users.disable_desc")}
+        description={disabled ? t("users.enable_desc") : disableDesc}
         destructive={!disabled}
         onConfirm={async () => {
           await (disabled ? users.enable : users.disable)([id]);

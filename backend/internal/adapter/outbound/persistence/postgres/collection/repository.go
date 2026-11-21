@@ -369,6 +369,37 @@ func (r *Repository) Members(ctx context.Context, id string) ([]domain.Collectio
 	return out, nil
 }
 
+func (r *Repository) Memberships(ctx context.Context, userID string, limit int) ([]domain.UserMembership, error) {
+	var rows []struct {
+		CollectionID uuid.UUID `gorm:"column:id"`
+		Owner        string    `gorm:"column:owner"`
+		Slug         string    `gorm:"column:slug"`
+		Name         string    `gorm:"column:name"`
+		Role         string    `gorm:"column:role"`
+		SoleOwner    bool      `gorm:"column:sole_owner"`
+	}
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT c.id, o.username AS owner, c.slug, c.name, m.role,
+		       m.role = 'owner' AND NOT EXISTS (
+		         SELECT 1 FROM app.collection_member x JOIN usr.usr_user xu ON xu.id = x.user_id
+		         WHERE x.collection_id = c.id AND x.role = 'owner' AND x.user_id <> m.user_id AND xu.status <> ?) AS sole_owner
+		FROM app.collection_member m
+		JOIN app.collection c ON c.id = m.collection_id AND c.deleted_at IS NULL
+		JOIN usr.usr_user o ON o.id = c.owner_id
+		WHERE m.user_id = ?
+		ORDER BY c.name, c.id
+		LIMIT ?
+	`, domain.UserStatusDisabled, userID, limit).Find(&rows).Error
+	if err != nil {
+		return nil, shared.WrapError(err, "member")
+	}
+	out := make([]domain.UserMembership, 0, len(rows))
+	for _, m := range rows {
+		out = append(out, domain.UserMembership{CollectionID: m.CollectionID.String(), Owner: m.Owner, Slug: m.Slug, Name: m.Name, Role: domain.MemberRole(m.Role), SoleOwner: m.SoleOwner})
+	}
+	return out, nil
+}
+
 func (r *Repository) AddMember(ctx context.Context, id, userID string, role domain.MemberRole) error {
 	err := r.db.WithContext(ctx).Exec(`INSERT INTO app.collection_member (collection_id, user_id, role) VALUES (?, ?, ?)`, id, userID, string(role)).Error
 	return shared.WrapError(err, "member")

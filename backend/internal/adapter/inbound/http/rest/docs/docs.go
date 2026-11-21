@@ -11011,6 +11011,10 @@ const docTemplate = `{
                     "description": "past or null: not locked",
                     "type": "string"
                 },
+                "mfa_enabled": {
+                    "description": "two-step sign-in is on",
+                    "type": "boolean"
+                },
                 "recent_failures": {
                     "description": "inside the login email window",
                     "type": "integer"
@@ -11026,6 +11030,13 @@ const docTemplate = `{
                 "admin": {
                     "description": "holds a protected role: read only here, except SetAdmin",
                     "type": "boolean"
+                },
+                "collections": {
+                    "description": "Collections the user belongs to, by name, up to 100.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/UserMembership"
+                    }
                 },
                 "created_at": {
                     "type": "string"
@@ -11066,6 +11077,39 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "UserMembership": {
+            "type": "object",
+            "properties": {
+                "collection_id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Pedidos"
+                },
+                "owner": {
+                    "description": "username in the collection's address",
+                    "type": "string",
+                    "example": "ana"
+                },
+                "role": {
+                    "type": "string",
+                    "enum": [
+                        "owner",
+                        "editor",
+                        "viewer"
+                    ]
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "pedidos"
+                },
+                "sole_owner": {
+                    "description": "SoleOwner: no other owner with an enabled account; disabling the user leaves the collection unmanaged.",
+                    "type": "boolean"
                 }
             }
         },
