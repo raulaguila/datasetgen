@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 import { Loader2, Monitor, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import QRCode from "qrcode";
-import { FieldNote, FormError, FormSection, FormSections, PageBody, SaveBar, PageHeader, initials, useFormatDate } from "@/components/bits";
+import { FieldNote, FormError, FormSection, FormSections, PageBody, SaveBar, PageHeader, initials, useRelativeTime } from "@/components/bits";
 import { HashTabs } from "@/components/hash-tabs";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PasswordInput } from "@/components/password-input";
@@ -32,8 +32,8 @@ import { squareImage } from "@/lib/image";
 import { passwordScore } from "@/lib/password";
 import { cn } from "@/lib/utils";
 
-function ProfileHeader() {
-  const { t, locale } = useI18n();
+function PhotoCard() {
+  const { t } = useI18n();
   const { user } = useMe();
   const client = useQueryClient();
   const picker = useRef<HTMLInputElement>(null);
@@ -62,21 +62,13 @@ function ProfileHeader() {
   if (!user) return null;
   const busy = upload.isPending || remove.isPending;
   return (
+    <FormSection title={t("profile.photo")} description={t("profile.photo_desc")}>
     <div className="flex flex-wrap items-center gap-4">
       <Avatar className="size-14">
         {user.avatar_at && <AvatarImage src={account.avatarUrl(user.avatar_at)} alt="" />}
         <AvatarFallback className="text-lg">{initials(user.name)}</AvatarFallback>
       </Avatar>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-lg font-semibold">{user.name}</div>
-        <div className="text-sm break-all text-muted-foreground">{user.email}</div>
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          {/* The highest role only: an admin is a user too. The two built-in roles read in the app language. */}
-          {(user.roles.includes("admin") ? ["admin"] : user.roles.length > 1 ? user.roles.filter((r) => r !== "user") : user.roles).map((r) => <Badge key={r} variant="secondary">{r === "admin" ? t("roles.builtin.admin") : r === "user" ? t("roles.builtin.user") : r}</Badge>)}
-          <span>{t("profile.member_since")} {new Date(user.created_at).toLocaleDateString(locale, { dateStyle: "medium" })}</span>
-        </div>
-      </div>
-      <div className="flex basis-full flex-wrap gap-2 pl-[4.5rem] sm:basis-auto sm:pl-0">
+      <div className="flex flex-wrap gap-2">
         <input
           ref={picker}
           type="file"
@@ -101,6 +93,7 @@ function ProfileHeader() {
         )}
       </div>
     </div>
+    </FormSection>
   );
 }
 
@@ -124,7 +117,7 @@ function StrengthMeter({ password }: { password: string }) {
 }
 
 function NameCard() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { user } = useMe();
   const client = useQueryClient();
   const [name, setName] = useState(user?.name ?? "");
@@ -147,7 +140,7 @@ function NameCard() {
   const dirty = nameChanged || handleChanged;
   const preview = handle.trim().toLowerCase() || user?.username || "";
   return (
-    <FormSection description={t("profile.account_desc")}>
+    <FormSection title={t("profile.identity")} description={t("profile.account_desc")}>
     <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="max-w-xl space-y-6">
           <div className="space-y-2">
             <Label htmlFor="name">{t("auth.name")}</Label>
@@ -160,6 +153,7 @@ function NameCard() {
               className="font-mono" aria-invalid={!!usernameRule(handle)} aria-describedby="username-note" value={handle} onChange={(e) => setHandle(e.target.value)} />
             <FieldNote id="username-note" error={usernameRule(handle) && t(usernameRule(handle)!)} hint={t("profile.username_hint").replace("{username}", preview)} />
           </div>
+          {user && <p className="text-xs text-muted-foreground">{t("profile.member_since")} {new Date(user.created_at).toLocaleDateString(locale, { dateStyle: "medium" })}</p>}
     {dirty && (
       <SaveBar
         submit
@@ -202,7 +196,7 @@ function PasswordCard() {
   };
   return (
     <FormSection title={t("profile.password")} description={t("profile.password_hint")}>
-        <form className="space-y-4" onSubmit={submit}>
+        <form className="max-w-xl space-y-4" onSubmit={submit}>
           <FormError message={error} />
           <div className="space-y-2">
             <Label htmlFor="current">{t("profile.current_password")}</Label>
@@ -283,7 +277,7 @@ function TwoStepCard() {
     body = (
       <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); disable.mutate(); }}>
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <Badge variant="secondary">{t("profile.mfa_enabled")}</Badge>
+          <Badge variant="secondary" className="bg-success/15 text-success">{t("profile.mfa_enabled")}</Badge>
           <span className="text-muted-foreground">{t("profile.mfa_recovery_left").replace("{n}", String(status.data.recovery_left))}</span>
         </div>
         {recovery && (
@@ -341,7 +335,7 @@ function TwoStepCard() {
   }
   return (
     <FormSection title={t("profile.mfa")} description={t("profile.mfa_hint")}>
-      <div className="space-y-4">
+      <div className="max-w-xl space-y-4">
         <FormError message={error} />
         {body}
       </div>
@@ -359,7 +353,7 @@ function PreferencesCard() {
   const languages = Object.fromEntries(LOCALES.map((l) => [l.value, l.label])) as Record<Language, string>;
   if (!user) return null;
   return (
-    <FormSection description={t("profile.preferences_desc")}>
+    <FormSection title={t("profile.preferences")} description={t("profile.preferences_desc")}>
       <div className="grid max-w-xl gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label id="pref-theme">{t("common.theme")}</Label>
@@ -403,7 +397,7 @@ const SESSIONS_SHOWN = 5;
 
 function SessionsCard() {
   const { t } = useI18n();
-  const format = useFormatDate();
+  const ago = useRelativeTime();
   const client = useQueryClient();
   const sessions = useQuery({ queryKey: SESSIONS_KEY, queryFn: account.sessions });
   const [confirmOthers, setConfirmOthers] = useState(false);
@@ -440,7 +434,7 @@ function SessionsCard() {
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium" title={s.user_agent ?? undefined}>{device.label ?? t("profile.unknown_device")}</div>
                         <div className="text-xs text-muted-foreground">
-                          {s.ip_address ?? "-"} · {t("profile.last_seen")} {format(s.last_seen_at)}
+                          {s.ip_address ?? "-"} · {t("profile.last_seen")} <time dateTime={s.last_seen_at} title={ago(s.last_seen_at).abs}>{ago(s.last_seen_at).rel}</time>
                         </div>
                       </div>
                     </>
@@ -482,19 +476,22 @@ function SessionsCard() {
 export default function ProfilePage() {
   const { t } = useI18n();
   const { user } = useMe();
+  // The highest role only: an admin is a user too. The two built-in roles read in the app language.
+  const role = user && (user.roles.includes("admin") ? "admin" : user.roles.find((r) => r !== "user") ?? user.roles[0]);
   return (
     <>
-      <PageHeader title={t("nav.profile")} description={t("profile.subtitle")} />
-      <PageBody width="form">
+      <PageHeader
+        title={user?.name ?? t("nav.profile")}
+        tabTitle={t("nav.profile")}
+        description={user ? `@${user.username} · ${user.email}` : undefined}
+        badge={role && <Badge variant="secondary">{role === "admin" ? t("roles.builtin.admin") : role === "user" ? t("roles.builtin.user") : role}</Badge>}
+      />
+      <PageBody>
         {user ? (
-          <>
-            <ProfileHeader />
-            <HashTabs label={t("profile.sections")} tabs={[
-              { id: "account", title: t("profile.account"), panel: <FormSections><NameCard /></FormSections> },
-              { id: "security", title: t("profile.security"), panel: <FormSections><PasswordCard /><TwoStepCard /><SessionsCard /></FormSections> },
-              { id: "preferences", title: t("profile.preferences"), panel: <FormSections><PreferencesCard /></FormSections> },
-            ]} />
-          </>
+          <HashTabs label={t("profile.sections")} tabs={[
+            { id: "account", title: t("profile.account"), panel: <FormSections><PhotoCard /><NameCard /><PreferencesCard /></FormSections> },
+            { id: "security", title: t("profile.security"), panel: <FormSections><PasswordCard /><TwoStepCard /><SessionsCard /></FormSections> },
+          ]} />
         ) : (
           <ListSkeleton rows={4} />
         )}

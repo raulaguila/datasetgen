@@ -109,7 +109,7 @@ export function useRelativeTime() {
     const secs = (Date.parse(iso) - Date.now()) / 1000;
     const steps: [Intl.RelativeTimeFormatUnit, number][] = [["year", 31536000], ["month", 2592000], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]];
     const [unit, size] = steps.find(([, s]) => Math.abs(secs) >= s) ?? ["second", 1];
-    return { rel: unit === "second" ? rtf.format(0, "minute") : rtf.format(Math.round(secs / size), unit), abs: new Date(iso).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) };
+    return { rel: unit === "second" ? rtf.format(0, "second") : rtf.format(Math.round(secs / size), unit), abs: new Date(iso).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }) };
   };
 }
 

@@ -124,6 +124,7 @@ export default function UsersPage() {
                         <Link href={`/admin/users/${u.id}`} className="truncate font-medium hover:underline" title={u.name}>{u.name}</Link>
                         {u.admin && <Badge variant="secondary" className="shrink-0">{t("roles.builtin.admin")}</Badge>}
                       </div>
+                      <span className="block truncate text-xs text-muted-foreground" title={`@${u.username}`}>@{u.username}</span>
                     </TableCell>
                     <TableCell data-label={t("auth.email")} data-cell="sub" className="w-1/2 max-w-0 text-muted-foreground lg:text-foreground"><span className="block truncate" title={u.email}>{u.email}</span></TableCell>
                     <TableCell data-label={t("users.status")} data-cell="status"><StatusBadge status={u.status} /></TableCell>
